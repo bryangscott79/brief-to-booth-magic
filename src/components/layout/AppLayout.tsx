@@ -1,15 +1,25 @@
 import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Upload, 
   FileSearch, 
-  Layers, 
   Grid3X3, 
   FileText, 
   Download,
   Sparkles,
-  Home
+  FolderOpen,
+  LogOut,
+  User
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -17,8 +27,8 @@ interface AppLayoutProps {
 }
 
 const navItems = [
-  { path: "/", label: "Home", icon: Home },
-  { path: "/upload", label: "Upload Brief", icon: Upload },
+  { path: "/projects", label: "Projects", icon: FolderOpen },
+  { path: "/upload", label: "Upload", icon: Upload },
   { path: "/review", label: "Review", icon: FileSearch },
   { path: "/generate", label: "Generate", icon: Sparkles },
   { path: "/spatial", label: "Spatial", icon: Grid3X3 },
@@ -28,6 +38,13 @@ const navItems = [
 
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,7 +53,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <Layers className="h-5 w-5 text-primary-foreground" />
+              <Grid3X3 className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-lg font-semibold tracking-tight">
               BriefEngine
@@ -64,6 +81,27 @@ export function AppLayout({ children }: AppLayoutProps) {
               );
             })}
           </nav>
+
+          {/* User Menu */}
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <User className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  {user.email}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </header>
 

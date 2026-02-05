@@ -14,7 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      projects: {
+        Row: {
+          adjacent_activations: Json | null
+          big_idea: Json | null
+          brief_file_name: string | null
+          brief_text: string | null
+          budget_logic: Json | null
+          created_at: string
+          digital_storytelling: Json | null
+          experience_framework: Json | null
+          hero_prompt: string | null
+          hero_style_confirmed: boolean | null
+          human_connection: Json | null
+          id: string
+          interactive_mechanics: Json | null
+          name: string
+          parsed_brief: Json | null
+          render_prompts: Json | null
+          spatial_strategy: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          adjacent_activations?: Json | null
+          big_idea?: Json | null
+          brief_file_name?: string | null
+          brief_text?: string | null
+          budget_logic?: Json | null
+          created_at?: string
+          digital_storytelling?: Json | null
+          experience_framework?: Json | null
+          hero_prompt?: string | null
+          hero_style_confirmed?: boolean | null
+          human_connection?: Json | null
+          id?: string
+          interactive_mechanics?: Json | null
+          name: string
+          parsed_brief?: Json | null
+          render_prompts?: Json | null
+          spatial_strategy?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          adjacent_activations?: Json | null
+          big_idea?: Json | null
+          brief_file_name?: string | null
+          brief_text?: string | null
+          budget_logic?: Json | null
+          created_at?: string
+          digital_storytelling?: Json | null
+          experience_framework?: Json | null
+          hero_prompt?: string | null
+          hero_style_confirmed?: boolean | null
+          human_connection?: Json | null
+          id?: string
+          interactive_mechanics?: Json | null
+          name?: string
+          parsed_brief?: Json | null
+          render_prompts?: Json | null
+          spatial_strategy?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

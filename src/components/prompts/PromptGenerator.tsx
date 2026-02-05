@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { 
@@ -11,8 +11,8 @@ import {
   ChevronRight,
   Camera,
   Sparkles,
-  Download,
-  Eye
+  CheckCircle2,
+  ArrowRight
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +33,8 @@ export function PromptGenerator() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [heroPrompt, setHeroPrompt] = useState<string>("");
+  const [styleConfirmed, setStyleConfirmed] = useState(false);
   const [generatedPrompts, setGeneratedPrompts] = useState<Record<string, string>>({});
 
   const brief = currentProject?.parsedBrief;
@@ -105,20 +107,17 @@ ${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversatura
 Aspect ratio: ${angle.aspectRatio}`;
   };
 
-  const handleGenerateAll = () => {
-    const prompts: Record<string, string> = {};
-    ANGLE_CONFIG.forEach(angle => {
-      prompts[angle.id] = generatePrompt(angle.id);
-    });
-    setGeneratedPrompts(prompts);
+  const handleGenerateHeroPrompt = () => {
+    const prompt = generatePrompt("hero_34");
+    setHeroPrompt(prompt);
     toast({
-      title: "All prompts generated",
-      description: "8 render prompts ready for AI image generation",
+      title: "Hero prompt generated",
+      description: "Copy this prompt to Nano Banana and generate your style",
     });
   };
 
   const handleCopy = async (angleId: string) => {
-    const prompt = generatedPrompts[angleId] || generatePrompt(angleId);
+    const prompt = angleId === "hero_34" ? heroPrompt : (generatedPrompts[angleId] || generatePrompt(angleId));
     await navigator.clipboard.writeText(prompt);
     setCopiedId(angleId);
     setTimeout(() => setCopiedId(null), 2000);
@@ -128,31 +127,130 @@ Aspect ratio: ${angle.aspectRatio}`;
     });
   };
 
+  const handleConfirmStyle = () => {
+    setStyleConfirmed(true);
+    // Generate all remaining prompts
+    const prompts: Record<string, string> = {};
+    ANGLE_CONFIG.filter(a => a.id !== "hero_34").forEach(angle => {
+      prompts[angle.id] = generatePrompt(angle.id);
+    });
+    setGeneratedPrompts(prompts);
+    toast({
+      title: "Style confirmed!",
+      description: "All 7 additional angle prompts have been generated",
+    });
+  };
+
   const handleContinue = () => {
     setActiveStep("export");
     navigate("/export");
   };
 
+  // Phase 1: Hero Prompt Generation
+  if (!styleConfirmed) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-semibold">Step 1: Generate Hero Style</h2>
+          <p className="text-muted-foreground">
+            First, we'll create the hero prompt for Nano Banana. Once you're happy with the style, 
+            we'll generate the remaining 7 coordinated views.
+          </p>
+        </div>
+
+        {/* Hero Card */}
+        <Card className="element-card">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-primary" />
+                  3/4 Hero View
+                </CardTitle>
+                <CardDescription>
+                  Primary marketing shot — 45° front-left perspective
+                </CardDescription>
+              </div>
+              <Badge variant="secondary">16:9</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!heroPrompt ? (
+              <Button onClick={handleGenerateHeroPrompt} className="w-full btn-glow">
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate Hero Prompt
+              </Button>
+            ) : (
+              <>
+                <Textarea
+                  value={heroPrompt}
+                  readOnly
+                  className="min-h-[300px] text-sm font-mono"
+                />
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleCopy("hero_34")}
+                    className="flex-1"
+                  >
+                    {copiedId === "hero_34" ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy Prompt
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Instructions */}
+        {heroPrompt && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <h3 className="font-semibold">Next Steps:</h3>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                  <li>Copy the prompt above</li>
+                  <li>Paste into Nano Banana (or your preferred AI image generator)</li>
+                  <li>Generate images until you find a style you love</li>
+                  <li>Once satisfied, click "Confirm Style" below</li>
+                </ol>
+                <Button onClick={handleConfirmStyle} className="w-full btn-glow">
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  I'm Happy With My Style — Generate All Views
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  // Phase 2: All Views Generated
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Render Prompts</h2>
+          <h2 className="text-2xl font-semibold">All Render Prompts</h2>
           <p className="text-muted-foreground">
-            8 coordinated prompts for AI image generation
+            8 coordinated prompts matching your chosen style
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button onClick={handleGenerateAll} variant="outline">
-            <Sparkles className="mr-2 h-4 w-4" />
-            Generate All Prompts
-          </Button>
-          <Button onClick={handleContinue} className="btn-glow">
-            Export Package
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-        </div>
+        <Button onClick={handleContinue} className="btn-glow">
+          Export Package
+          <ChevronRight className="ml-2 h-4 w-4" />
+        </Button>
       </div>
 
       {/* Consistency Tokens */}
@@ -204,75 +302,98 @@ Aspect ratio: ${angle.aspectRatio}`;
         </CardContent>
       </Card>
 
-      {/* Prompt Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {ANGLE_CONFIG.map((angle) => (
+      {/* Hero Card - Highlighted */}
+      <Card className="prompt-card border-primary/30 bg-primary/5">
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Camera className="h-4 w-4 text-primary" />
+                3/4 Hero View
+                <Badge className="bg-primary/20 text-primary">Style Reference</Badge>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Primary marketing shot — 45° front-left perspective
+              </p>
+            </div>
+            <Badge variant="secondary" className="text-xs">16:9</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <Textarea
+              value={heroPrompt}
+              readOnly
+              className="min-h-[120px] text-xs font-mono"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleCopy("hero_34")}
+              className="w-full"
+            >
+              {copiedId === "hero_34" ? (
+                <>
+                  <Check className="mr-2 h-3 w-3" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-3 w-3" />
+                  Copy Prompt
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Other Prompt Cards Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {ANGLE_CONFIG.filter(a => a.id !== "hero_34").map((angle) => (
           <Card key={angle.id} className="prompt-card">
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Camera className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Camera className="h-4 w-4 text-muted-foreground" />
                     {angle.name}
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
                     {angle.description}
                   </p>
                 </div>
-                <div className="flex gap-1">
-                  <Badge variant="secondary" className="text-xs">
-                    {angle.aspectRatio}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    P{angle.priority}
-                  </Badge>
-                </div>
+                <Badge variant="outline" className="text-xs">
+                  {angle.aspectRatio}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent>
-              {generatedPrompts[angle.id] ? (
-                <div className="space-y-3">
-                  <Textarea
-                    value={generatedPrompts[angle.id]}
-                    readOnly
-                    className="min-h-[120px] text-xs font-mono"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCopy(angle.id)}
-                      className="flex-1"
-                    >
-                      {copiedId === angle.id ? (
-                        <>
-                          <Check className="mr-2 h-3 w-3" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="mr-2 h-3 w-3" />
-                          Copy Prompt
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
+              <div className="space-y-3">
+                <Textarea
+                  value={generatedPrompts[angle.id] || ""}
+                  readOnly
+                  className="min-h-[100px] text-xs font-mono"
+                />
                 <Button
-                  variant="ghost"
-                  className="w-full h-24 border-2 border-dashed border-border"
-                  onClick={() => {
-                    setGeneratedPrompts(prev => ({
-                      ...prev,
-                      [angle.id]: generatePrompt(angle.id)
-                    }));
-                  }}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopy(angle.id)}
+                  className="w-full"
                 >
-                  <Eye className="mr-2 h-4 w-4" />
-                  Generate Prompt
+                  {copiedId === angle.id ? (
+                    <>
+                      <Check className="mr-2 h-3 w-3" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-3 w-3" />
+                      Copy Prompt
+                    </>
+                  )}
                 </Button>
-              )}
+              </div>
             </CardContent>
           </Card>
         ))}

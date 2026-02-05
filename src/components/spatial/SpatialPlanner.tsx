@@ -3,15 +3,24 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
   ChevronRight, 
   ZoomIn, 
   ZoomOut,
   Maximize2,
-  Download
+  Download,
+  Eye,
+  EyeOff,
+  TrendingUp,
+  Layers
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
+import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
+import { LayoutVariations, LayoutReasoning, generateLayoutVariations, type LayoutVariation } from "./LayoutVariations";
+import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
 
 const ZONE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   hero: { bg: "bg-zone-hero/30", border: "border-zone-hero", text: "text-zone-hero" },
@@ -27,10 +36,40 @@ export function SpatialPlanner() {
   const navigate = useNavigate();
   const [activeFootprint, setActiveFootprint] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [showFlow, setShowFlow] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [activeVariation, setActiveVariation] = useState("balanced");
+  const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
+  const [activeTab, setActiveTab] = useState<"layout" | "metrics">("layout");
 
   const spatialData = currentProject?.elements.spatialStrategy.data;
+  const currentConfig = spatialData?.configs?.[activeFootprint];
   
-  if (!spatialData?.configs) {
+  // Generate layout variations - must be before conditional return
+  const variations = useMemo(() => {
+    if (!currentConfig?.zones) return [];
+    return generateLayoutVariations(currentConfig.zones, currentConfig.footprintSize);
+  }, [currentConfig]);
+  
+  // Get active layout and its metrics
+  const activeLayout = useMemo(() => 
+    variations.find(v => v.id === activeVariation) || variations[0],
+    [variations, activeVariation]
+  );
+  
+  const metrics = useMemo(() => {
+    if (!activeLayout?.zones) return null;
+    return generateLayoutMetrics(activeLayout.zones, activeLayout.type);
+  }, [activeLayout]);
+  
+  // Generate flow paths
+  const flowPaths = useMemo(() => {
+    if (!activeLayout?.zones) return [];
+    return generateFlowPaths(activeLayout.zones);
+  }, [activeLayout?.zones]);
+  
+  // Early return after all hooks
+  if (!spatialData?.configs || !currentConfig || !activeLayout || !metrics) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">No spatial data available</p>
@@ -40,8 +79,6 @@ export function SpatialPlanner() {
       </div>
     );
   }
-
-  const currentConfig = spatialData.configs[activeFootprint];
 
   const handleContinue = () => {
     setActiveStep("prompts");
@@ -55,7 +92,7 @@ export function SpatialPlanner() {
         <div>
           <h2 className="text-2xl font-semibold">Spatial Strategy</h2>
           <p className="text-muted-foreground">
-            Floor plan visualization and zone allocation
+            Floor plan visualization, flow analysis, and zone optimization
           </p>
         </div>
         <div className="flex gap-3">
@@ -71,31 +108,58 @@ export function SpatialPlanner() {
       </div>
 
       {/* Footprint Selector */}
-      <div className="flex gap-2">
-        {spatialData.configs.map((config: any, index: number) => (
-          <button
-            key={config.footprintSize}
-            onClick={() => setActiveFootprint(index)}
-            className={cn(
-              "px-4 py-2 rounded-lg border text-sm font-medium transition-all",
-              activeFootprint === index
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card border-border hover:border-primary/30"
-            )}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          {spatialData.configs.map((config: any, index: number) => (
+            <button
+              key={config.footprintSize}
+              onClick={() => setActiveFootprint(index)}
+              className={cn(
+                "px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+                activeFootprint === index
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card border-border hover:border-primary/30"
+              )}
+            >
+              {config.footprintSize}
+              <span className="text-xs opacity-70 ml-2">
+                ({config.totalSqft} sq ft)
+              </span>
+            </button>
+          ))}
+        </div>
+        
+        {/* View toggles */}
+        <div className="flex gap-2">
+          <Button
+            variant={showFlow ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setShowFlow(!showFlow)}
           >
-            {config.footprintSize}
-            <span className="text-xs opacity-70 ml-2">
-              ({config.totalSqft} sq ft)
-            </span>
-          </button>
-        ))}
+            {showFlow ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+            Flow
+          </Button>
+          <Button
+            variant={showHeatmap ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setShowHeatmap(!showHeatmap)}
+          >
+            <TrendingUp className="h-4 w-4 mr-1" />
+            Heatmap
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Floor Plan */}
         <Card className="lg:col-span-2 element-card overflow-hidden">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Floor Plan — {currentConfig.footprintSize}</CardTitle>
+            <div>
+              <CardTitle className="text-base">Floor Plan — {currentConfig.footprintSize}</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                {activeLayout.name} • {metrics.flowEfficiency}% flow efficiency
+              </p>
+            </div>
             <div className="flex gap-1">
               <Button 
                 variant="ghost" 
@@ -137,13 +201,24 @@ export function SpatialPlanner() {
                   transition: "all 0.3s ease"
                 }}
               >
-                {currentConfig.zones.map((zone: any) => {
+                {/* Flow overlay */}
+                {showFlow && (
+                  <FlowOverlay 
+                    paths={flowPaths} 
+                    showHeatmap={showHeatmap}
+                    zones={activeLayout.zones}
+                  />
+                )}
+                
+                {activeLayout.zones.map((zone: any) => {
                   const colors = ZONE_COLORS[zone.id] || ZONE_COLORS.service;
+                  const zoneMetric = metrics.zoneMetrics.find(m => m.zoneId === zone.id);
+                  
                   return (
                     <div
                       key={zone.id}
                       className={cn(
-                        "absolute rounded border-2 flex items-center justify-center p-2 transition-all cursor-pointer hover:opacity-90",
+                        "absolute rounded border-2 flex items-center justify-center p-2 transition-all cursor-pointer hover:opacity-90 group",
                         colors.bg,
                         colors.border
                       )}
@@ -161,6 +236,12 @@ export function SpatialPlanner() {
                         <div className="text-2xs text-muted-foreground">
                           {zone.sqft} sq ft
                         </div>
+                        {/* Hover metrics */}
+                        {zoneMetric && (
+                          <div className="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded-md px-2 py-1 text-2xs shadow-md whitespace-nowrap z-10">
+                            {zoneMetric.engagementScore}% engagement • {Math.round(zoneMetric.avgDwellTime / 60)}min avg
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -175,30 +256,67 @@ export function SpatialPlanner() {
           </CardContent>
         </Card>
 
-        {/* Zone Legend */}
+        {/* Right Panel - Tabbed */}
         <div className="space-y-4">
-          <Card className="element-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Zone Allocation</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {currentConfig.zones.map((zone: any) => {
-                const colors = ZONE_COLORS[zone.id] || ZONE_COLORS.service;
-                return (
-                  <div key={zone.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-3 h-3 rounded", colors.bg, colors.border, "border")} />
-                      <span className="text-sm">{zone.name}</span>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {zone.percentage}%
-                    </Badge>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+            <TabsList className="w-full">
+              <TabsTrigger value="layout" className="flex-1">
+                <Layers className="h-4 w-4 mr-1" />
+                Layout
+              </TabsTrigger>
+              <TabsTrigger value="metrics" className="flex-1">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                Metrics
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="layout" className="space-y-4 mt-4">
+              {/* Layout Variations */}
+              <LayoutVariations 
+                variations={variations}
+                activeVariation={activeVariation}
+                onSelect={setActiveVariation}
+              />
+              
+              {/* Layout Reasoning */}
+              <LayoutReasoning variation={activeLayout} />
+              
+              {/* Zone Legend */}
+              <Card className="element-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Zone Allocation</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {activeLayout.zones.map((zone: any) => {
+                    const colors = ZONE_COLORS[zone.id] || ZONE_COLORS.service;
+                    return (
+                      <div key={zone.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-3 h-3 rounded", colors.bg, colors.border, "border")} />
+                          <span className="text-sm">{zone.name}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {zone.percentage}%
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="metrics" className="space-y-4 mt-4">
+              <LayoutMetrics metrics={metrics} />
+            </TabsContent>
+          </Tabs>
+          
+          {/* Inspiration Images - Always visible */}
+          <InspirationUpload 
+            images={inspirationImages}
+            onImagesChange={setInspirationImages}
+          />
+          
+          {/* Materials & Mood */}
           <Card className="element-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Materials & Mood</CardTitle>
@@ -212,23 +330,6 @@ export function SpatialPlanner() {
                   </p>
                 </div>
               ))}
-            </CardContent>
-          </Card>
-
-          <Card className="element-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Scaling Strategy</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p className="text-muted-foreground">
-                {spatialData.scalingStrategy?.conceptIntegrity}
-              </p>
-              <div className="pt-2">
-                <span className="text-xs font-medium text-status-complete">Scales down:</span>
-                <p className="text-xs text-muted-foreground">
-                  {spatialData.scalingStrategy?.whatScalesDown?.join(", ")}
-                </p>
-              </div>
             </CardContent>
           </Card>
         </div>

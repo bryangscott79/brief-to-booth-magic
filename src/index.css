@@ -287,6 +287,15 @@
     50% { opacity: 0.6; }
   }
 
+  @keyframes flowDash {
+    0% { stroke-dashoffset: 24; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  .animate-flow {
+    animation: flowDash 1.5s linear infinite;
+  }
+
   /* Glass effect */
   .glass {
     backdrop-filter: blur(12px);

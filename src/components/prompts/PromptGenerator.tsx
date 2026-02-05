@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,14 @@ import {
   Camera,
   Sparkles,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  ImageIcon,
+  X
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useDropzone } from "react-dropzone";
 
 const ANGLE_CONFIG = [
   { id: "hero_34", name: "3/4 Hero View", priority: 1, aspectRatio: "16:9", description: "Primary marketing shot — 45° front-left perspective" },
@@ -36,6 +40,37 @@ export function PromptGenerator() {
   const [heroPrompt, setHeroPrompt] = useState<string>("");
   const [styleConfirmed, setStyleConfirmed] = useState(false);
   const [generatedPrompts, setGeneratedPrompts] = useState<Record<string, string>>({});
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [referenceImageName, setReferenceImageName] = useState<string>("");
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setReferenceImage(reader.result as string);
+        setReferenceImageName(file.name);
+      };
+      reader.readAsDataURL(file);
+      toast({
+        title: "Image uploaded",
+        description: "Your reference image has been added",
+      });
+    }
+  }, [toast]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp']
+    },
+    maxFiles: 1,
+  });
+
+  const removeReferenceImage = () => {
+    setReferenceImage(null);
+    setReferenceImageName("");
+  };
 
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
@@ -152,24 +187,24 @@ Aspect ratio: ${angle.aspectRatio}`;
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">Step 1: Generate Hero Style</h2>
-          <p className="text-muted-foreground">
-            First, we'll create the hero prompt for Nano Banana. Once you're happy with the style, 
-            we'll generate the remaining 7 coordinated views.
+          <h2 className="text-2xl font-semibold">Generate Render Prompts</h2>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Create a hero image in Nano Banana, upload it as your style reference, 
+            then generate 7 additional coordinated views.
           </p>
         </div>
 
-        {/* Hero Card */}
+        {/* Step 1: Hero Card */}
         <Card className="element-card">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Camera className="h-5 w-5 text-primary" />
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">1</span>
                   3/4 Hero View
                 </CardTitle>
                 <CardDescription>
-                  Primary marketing shot — 45° front-left perspective
+                  Generate the hero prompt, then use it in Nano Banana to create your reference image
                 </CardDescription>
               </div>
               <Badge variant="secondary">16:9</Badge>
@@ -212,25 +247,100 @@ Aspect ratio: ${angle.aspectRatio}`;
           </CardContent>
         </Card>
 
-        {/* Instructions */}
+        {/* Instructions & Image Upload */}
         {heroPrompt && (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                <h3 className="font-semibold">Next Steps:</h3>
-                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                  <li>Copy the prompt above</li>
-                  <li>Paste into Nano Banana (or your preferred AI image generator)</li>
-                  <li>Generate images until you find a style you love</li>
-                  <li>Once satisfied, click "Confirm Style" below</li>
-                </ol>
-                <Button onClick={handleConfirmStyle} className="w-full btn-glow">
+          <>
+            {/* Step 2: Upload Reference Image */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">2</span>
+                  Upload Your Reference Image
+                </CardTitle>
+                <CardDescription>
+                  After generating your hero image in Nano Banana, upload it here. This will be used to generate consistent views of the same scene.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!referenceImage ? (
+                  <div
+                    {...getRootProps()}
+                    className={cn(
+                      "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+                      isDragActive 
+                        ? "border-primary bg-primary/10" 
+                        : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"
+                    )}
+                  >
+                    <input {...getInputProps()} />
+                    <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                    {isDragActive ? (
+                      <p className="text-primary font-medium">Drop your image here...</p>
+                    ) : (
+                      <>
+                        <p className="font-medium">Drag & drop your Nano Banana image</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          or click to browse • PNG, JPG, WebP
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative rounded-lg overflow-hidden border bg-muted">
+                      <img 
+                        src={referenceImage} 
+                        alt="Reference" 
+                        className="w-full h-auto max-h-[300px] object-contain"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-8 w-8"
+                        onClick={removeReferenceImage}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <ImageIcon className="h-4 w-4" />
+                      <span className="truncate">{referenceImageName}</span>
+                      <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Step 3: Generate All Views */}
+            <Card className={cn(
+              "border-primary/20 transition-opacity",
+              referenceImage ? "opacity-100" : "opacity-50"
+            )}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">3</span>
+                  Generate All Views
+                </CardTitle>
+                <CardDescription>
+                  {referenceImage 
+                    ? "Ready! We'll generate 7 additional prompts designed to create consistent views of your scene."
+                    : "Upload your reference image first to enable this step."
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={handleConfirmStyle} 
+                  className="w-full btn-glow"
+                  disabled={!referenceImage}
+                >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  I'm Happy With My Style — Generate All Views
+                  Generate All 7 Additional Views
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
     );
@@ -244,7 +354,7 @@ Aspect ratio: ${angle.aspectRatio}`;
         <div>
           <h2 className="text-2xl font-semibold">All Render Prompts</h2>
           <p className="text-muted-foreground">
-            8 coordinated prompts matching your chosen style
+            8 coordinated prompts based on your reference image
           </p>
         </div>
         <Button onClick={handleContinue} className="btn-glow">
@@ -253,13 +363,39 @@ Aspect ratio: ${angle.aspectRatio}`;
         </Button>
       </div>
 
-      {/* Consistency Tokens */}
-      <Card className="element-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Consistency Tokens</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+      {/* Reference Image & Consistency Tokens */}
+      <div className="grid gap-4 md:grid-cols-[300px,1fr]">
+        {/* Reference Image */}
+        {referenceImage && (
+          <Card className="element-card border-primary/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-primary" />
+                Style Reference
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg overflow-hidden border">
+                <img 
+                  src={referenceImage} 
+                  alt="Reference" 
+                  className="w-full h-auto object-contain"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 truncate">
+                {referenceImageName}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Consistency Tokens */}
+        <Card className="element-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Consistency Tokens</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
             <div>
               <span className="text-xs text-muted-foreground">Colors</span>
               <div className="flex flex-wrap gap-1 mt-1">
@@ -301,6 +437,7 @@ Aspect ratio: ${angle.aspectRatio}`;
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Hero Card - Highlighted */}
       <Card className="prompt-card border-primary/30 bg-primary/5">

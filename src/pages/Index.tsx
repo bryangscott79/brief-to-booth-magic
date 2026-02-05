@@ -29,12 +29,12 @@ export default function Index() {
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-4">
-            <Link to="/upload" className="text-sm text-white/70 hover:text-white transition-colors">
-              Upload
+            <Link to="/projects" className="text-sm text-white/70 hover:text-white transition-colors">
+              Projects
             </Link>
-            <Link to="/upload">
+            <Link to="/auth">
               <Button size="sm" className="btn-glow">
-                Get Started
+                Sign In
               </Button>
             </Link>
           </nav>
@@ -72,16 +72,13 @@ export default function Index() {
               all coordinated for seamless 3D model creation.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Link to="/upload">
+            <div className="flex justify-center pt-4">
+              <Link to="/projects">
                 <Button size="lg" className="btn-glow text-base px-8">
                   <Upload className="mr-2 h-5 w-5" />
-                  Upload Brief
+                  Get Started
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white/10">
-                Watch Demo
-              </Button>
             </div>
           </div>
         </div>
@@ -186,7 +183,7 @@ export default function Index() {
               Stop spending weeks on RFP responses. Generate comprehensive, 
               visually-coordinated proposals in a single day.
             </p>
-            <Link to="/upload">
+            <Link to="/projects">
               <Button size="lg" className="btn-glow">
                 Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />

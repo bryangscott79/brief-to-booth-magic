@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { 
   Copy, 
   Check, 
@@ -12,14 +13,17 @@ import {
   Camera,
   Sparkles,
   CheckCircle2,
-  ArrowRight,
   Upload,
   ImageIcon,
-  X
+  X,
+  Loader2,
+  Download,
+  RefreshCw
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
+import { supabase } from "@/integrations/supabase/client";
 
 const ANGLE_CONFIG = [
   { id: "hero_34", name: "3/4 Hero View", priority: 1, aspectRatio: "16:9", description: "Primary marketing shot — 45° front-left perspective" },
@@ -32,6 +36,12 @@ const ANGLE_CONFIG = [
   { id: "detail_lounge", name: "Lounge Detail", priority: 8, aspectRatio: "4:3", description: "Medium shot focused on human connection zone" },
 ];
 
+interface GeneratedImage {
+  url: string;
+  status: "pending" | "generating" | "complete" | "error";
+  error?: string;
+}
+
 export function PromptGenerator() {
   const { currentProject, setActiveStep } = useProjectStore();
   const navigate = useNavigate();
@@ -42,6 +52,10 @@ export function PromptGenerator() {
   const [generatedPrompts, setGeneratedPrompts] = useState<Record<string, string>>({});
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceImageName, setReferenceImageName] = useState<string>("");
+  const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [currentlyGenerating, setCurrentlyGenerating] = useState<string | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -162,24 +176,167 @@ Aspect ratio: ${angle.aspectRatio}`;
     });
   };
 
-  const handleConfirmStyle = () => {
+  const generateSingleView = async (angleId: string, prompt: string, aspectRatio: string): Promise<string | null> => {
+    if (!referenceImage) return null;
+
+    const angle = ANGLE_CONFIG.find(a => a.id === angleId);
+    if (!angle) return null;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-view', {
+        body: {
+          referenceImageUrl: referenceImage,
+          viewPrompt: prompt,
+          viewName: angle.name,
+          aspectRatio: aspectRatio,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      
+      return data.imageUrl;
+    } catch (error) {
+      console.error(`Error generating ${angleId}:`, error);
+      throw error;
+    }
+  };
+
+  const handleConfirmAndGenerate = async () => {
     setStyleConfirmed(true);
-    // Generate all remaining prompts
+    
+    // Generate all prompts first
     const prompts: Record<string, string> = {};
-    ANGLE_CONFIG.filter(a => a.id !== "hero_34").forEach(angle => {
+    const viewsToGenerate = ANGLE_CONFIG.filter(a => a.id !== "hero_34");
+    viewsToGenerate.forEach(angle => {
       prompts[angle.id] = generatePrompt(angle.id);
     });
     setGeneratedPrompts(prompts);
-    toast({
-      title: "Style confirmed!",
-      description: "All 7 additional angle prompts have been generated",
+
+    // Set hero image as already complete
+    setGeneratedImages({
+      hero_34: { url: referenceImage!, status: "complete" },
     });
+
+    // Start generating images
+    setIsGenerating(true);
+    setGenerationProgress(0);
+
+    // Initialize all views as pending
+    const initialImages: Record<string, GeneratedImage> = {
+      hero_34: { url: referenceImage!, status: "complete" },
+    };
+    viewsToGenerate.forEach(angle => {
+      initialImages[angle.id] = { url: "", status: "pending" };
+    });
+    setGeneratedImages(initialImages);
+
+    // Generate each view sequentially to avoid rate limits
+    for (let i = 0; i < viewsToGenerate.length; i++) {
+      const angle = viewsToGenerate[i];
+      setCurrentlyGenerating(angle.id);
+      setGeneratedImages(prev => ({
+        ...prev,
+        [angle.id]: { url: "", status: "generating" },
+      }));
+
+      try {
+        const imageUrl = await generateSingleView(angle.id, prompts[angle.id], angle.aspectRatio);
+        
+        setGeneratedImages(prev => ({
+          ...prev,
+          [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
+        }));
+
+        setGenerationProgress(((i + 1) / viewsToGenerate.length) * 100);
+        
+        toast({
+          title: `${angle.name} generated`,
+          description: `${i + 1} of ${viewsToGenerate.length} views complete`,
+        });
+      } catch (error) {
+        setGeneratedImages(prev => ({
+          ...prev,
+          [angle.id]: { 
+            url: "", 
+            status: "error", 
+            error: error instanceof Error ? error.message : "Failed to generate" 
+          },
+        }));
+        
+        toast({
+          title: `Error generating ${angle.name}`,
+          description: error instanceof Error ? error.message : "Please try again",
+          variant: "destructive",
+        });
+      }
+    }
+
+    setIsGenerating(false);
+    setCurrentlyGenerating(null);
+    
+    toast({
+      title: "All views generated!",
+      description: "Your coordinated booth renders are ready",
+    });
+  };
+
+  const regenerateView = async (angleId: string) => {
+    const angle = ANGLE_CONFIG.find(a => a.id === angleId);
+    if (!angle || !referenceImage) return;
+
+    setGeneratedImages(prev => ({
+      ...prev,
+      [angleId]: { url: "", status: "generating" },
+    }));
+
+    try {
+      const prompt = generatedPrompts[angleId] || generatePrompt(angleId);
+      const imageUrl = await generateSingleView(angleId, prompt, angle.aspectRatio);
+      
+      setGeneratedImages(prev => ({
+        ...prev,
+        [angleId]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
+      }));
+
+      toast({
+        title: `${angle.name} regenerated`,
+        description: "New view generated successfully",
+      });
+    } catch (error) {
+      setGeneratedImages(prev => ({
+        ...prev,
+        [angleId]: { 
+          url: "", 
+          status: "error", 
+          error: error instanceof Error ? error.message : "Failed to generate" 
+        },
+      }));
+      
+      toast({
+        title: "Regeneration failed",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadImage = (url: string, name: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${name.replace(/\s+/g, '_').toLowerCase()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleContinue = () => {
     setActiveStep("export");
     navigate("/export");
   };
+
+  const completedCount = Object.values(generatedImages).filter(img => img.status === "complete").length;
+  const totalViews = ANGLE_CONFIG.length;
 
   // Phase 1: Hero Prompt Generation
   if (!styleConfirmed) {
@@ -190,7 +347,7 @@ Aspect ratio: ${angle.aspectRatio}`;
           <h2 className="text-2xl font-semibold">Generate Render Prompts</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
             Create a hero image in Nano Banana, upload it as your style reference, 
-            then generate 7 additional coordinated views.
+            then we'll automatically generate all 7 additional views.
           </p>
         </div>
 
@@ -320,24 +477,27 @@ Aspect ratio: ${angle.aspectRatio}`;
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">3</span>
-                  Generate All Views
+                  Generate All Views with AI
                 </CardTitle>
                 <CardDescription>
                   {referenceImage 
-                    ? "Ready! We'll generate 7 additional prompts designed to create consistent views of your scene."
+                    ? "Ready! Nano Banana will generate 7 additional views matching your reference image style."
                     : "Upload your reference image first to enable this step."
                   }
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button 
-                  onClick={handleConfirmStyle} 
+                  onClick={handleConfirmAndGenerate} 
                   className="w-full btn-glow"
                   disabled={!referenceImage}
                 >
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Generate All 7 Additional Views
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate All 7 Views Automatically
                 </Button>
+                <p className="text-xs text-muted-foreground text-center mt-3">
+                  This will use AI to create consistent renders for each angle
+                </p>
               </CardContent>
             </Card>
           </>
@@ -346,194 +506,189 @@ Aspect ratio: ${angle.aspectRatio}`;
     );
   }
 
-  // Phase 2: All Views Generated
+  // Phase 2: All Views Generated / Generating
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">All Render Prompts</h2>
+          <h2 className="text-2xl font-semibold">Generated Renders</h2>
           <p className="text-muted-foreground">
-            8 coordinated prompts based on your reference image
+            {isGenerating 
+              ? `Generating views... ${completedCount} of ${totalViews} complete`
+              : `${completedCount} coordinated renders based on your reference`
+            }
           </p>
         </div>
-        <Button onClick={handleContinue} className="btn-glow">
+        <Button onClick={handleContinue} className="btn-glow" disabled={isGenerating}>
           Export Package
           <ChevronRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
 
-      {/* Reference Image & Consistency Tokens */}
-      <div className="grid gap-4 md:grid-cols-[300px,1fr]">
-        {/* Reference Image */}
-        {referenceImage && (
-          <Card className="element-card border-primary/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-primary" />
-                Style Reference
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg overflow-hidden border">
-                <img 
-                  src={referenceImage} 
-                  alt="Reference" 
-                  className="w-full h-auto object-contain"
-                />
+      {/* Progress Bar */}
+      {isGenerating && (
+        <Card className="element-card border-primary/30">
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Generating {currentlyGenerating && ANGLE_CONFIG.find(a => a.id === currentlyGenerating)?.name}...
+                </span>
+                <span className="text-muted-foreground">{Math.round(generationProgress)}%</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-2 truncate">
-                {referenceImageName}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+              <Progress value={generationProgress} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Consistency Tokens */}
-        <Card className="element-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Consistency Tokens</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-            <div>
-              <span className="text-xs text-muted-foreground">Colors</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {brief.brand.visualIdentity.colors.map((c: string) => (
-                  <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
-                ))}
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Materials</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {spatialData.materialsAndMood?.slice(0, 3).map((m: any) => (
-                  <Badge key={m.material} variant="outline" className="text-xs">{m.material}</Badge>
-                ))}
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Lighting</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                <Badge variant="outline" className="text-xs">ambient</Badge>
-                <Badge variant="outline" className="text-xs">editorial</Badge>
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Style</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                <Badge variant="outline" className="text-xs">photorealistic</Badge>
-                <Badge variant="outline" className="text-xs">architectural</Badge>
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Avoid</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {brief.brand.visualIdentity.avoidImagery.slice(0, 2).map((a: string) => (
-                  <Badge key={a} variant="outline" className="text-xs text-destructive">{a}</Badge>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      </div>
-
-      {/* Hero Card - Highlighted */}
-      <Card className="prompt-card border-primary/30 bg-primary/5">
+      {/* Reference Image */}
+      <Card className="element-card border-primary/30">
         <CardHeader className="pb-2">
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Camera className="h-4 w-4 text-primary" />
-                3/4 Hero View
-                <Badge className="bg-primary/20 text-primary">Style Reference</Badge>
-              </CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Primary marketing shot — 45° front-left perspective
-              </p>
-            </div>
-            <Badge variant="secondary" className="text-xs">16:9</Badge>
-          </div>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ImageIcon className="h-4 w-4 text-primary" />
+            Style Reference (3/4 Hero View)
+            <Badge className="bg-primary/20 text-primary ml-2">Source</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <Textarea
-              value={heroPrompt}
-              readOnly
-              className="min-h-[120px] text-xs font-mono"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleCopy("hero_34")}
-              className="w-full"
-            >
-              {copiedId === "hero_34" ? (
-                <>
-                  <Check className="mr-2 h-3 w-3" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="mr-2 h-3 w-3" />
+          <div className="grid md:grid-cols-[400px,1fr] gap-4">
+            <div className="rounded-lg overflow-hidden border">
+              <img 
+                src={referenceImage!} 
+                alt="Reference" 
+                className="w-full h-auto object-contain"
+              />
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Consistency Tokens</h4>
+                <div className="flex flex-wrap gap-2">
+                  {brief.brand.visualIdentity.colors.map((c: string) => (
+                    <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
+                  ))}
+                  {spatialData.materialsAndMood?.slice(0, 3).map((m: any) => (
+                    <Badge key={m.material} variant="secondary" className="text-xs">{m.material}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => handleCopy("hero_34")}>
+                  <Copy className="h-3 w-3 mr-2" />
                   Copy Prompt
-                </>
-              )}
-            </Button>
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => downloadImage(referenceImage!, "hero_view")}>
+                  <Download className="h-3 w-3 mr-2" />
+                  Download
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Other Prompt Cards Grid */}
+      {/* Generated Views Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {ANGLE_CONFIG.filter(a => a.id !== "hero_34").map((angle) => (
-          <Card key={angle.id} className="prompt-card">
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Camera className="h-4 w-4 text-muted-foreground" />
-                    {angle.name}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {angle.description}
-                  </p>
+        {ANGLE_CONFIG.filter(a => a.id !== "hero_34").map((angle) => {
+          const imageData = generatedImages[angle.id];
+          const prompt = generatedPrompts[angle.id] || "";
+          
+          return (
+            <Card key={angle.id} className={cn(
+              "prompt-card overflow-hidden transition-all",
+              imageData?.status === "generating" && "ring-2 ring-primary/50",
+              imageData?.status === "complete" && "ring-1 ring-primary/20"
+            )}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Camera className="h-4 w-4 text-muted-foreground" />
+                      {angle.name}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {angle.description}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {angle.aspectRatio}
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {angle.aspectRatio}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <Textarea
-                  value={generatedPrompts[angle.id] || ""}
-                  readOnly
-                  className="min-h-[100px] text-xs font-mono"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleCopy(angle.id)}
-                  className="w-full"
-                >
-                  {copiedId === angle.id ? (
-                    <>
-                      <Check className="mr-2 h-3 w-3" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="mr-2 h-3 w-3" />
-                      Copy Prompt
-                    </>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* Image Display */}
+                <div className={cn(
+                  "aspect-video rounded-lg overflow-hidden border bg-muted flex items-center justify-center",
+                  imageData?.status === "generating" && "animate-pulse"
+                )}>
+                  {imageData?.status === "pending" && (
+                    <div className="text-center text-muted-foreground">
+                      <Camera className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Waiting...</p>
+                    </div>
                   )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  {imageData?.status === "generating" && (
+                    <div className="text-center text-primary">
+                      <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                      <p className="text-xs">Generating...</p>
+                    </div>
+                  )}
+                  {imageData?.status === "complete" && imageData.url && (
+                    <img 
+                      src={imageData.url} 
+                      alt={angle.name}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                  {imageData?.status === "error" && (
+                    <div className="text-center text-destructive">
+                      <X className="h-8 w-8 mx-auto mb-2" />
+                      <p className="text-xs">{imageData.error || "Failed"}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopy(angle.id)}
+                    className="flex-1"
+                    disabled={!prompt}
+                  >
+                    {copiedId === angle.id ? (
+                      <Check className="h-3 w-3" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </Button>
+                  {imageData?.status === "complete" && imageData.url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadImage(imageData.url, angle.name)}
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  )}
+                  {(imageData?.status === "error" || imageData?.status === "complete") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => regenerateView(angle.id)}
+                      disabled={isGenerating}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,4 +1,7 @@
 project_id = "kjbamfitkaxnfyppplaq"
 
+[functions.generate-hero]
+verify_jwt = false
+
 [functions.generate-view]
 verify_jwt = false

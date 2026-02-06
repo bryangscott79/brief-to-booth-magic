@@ -13,16 +13,15 @@ import {
   Camera,
   Sparkles,
   CheckCircle2,
-  Upload,
   ImageIcon,
   X,
   Loader2,
   Download,
-  RefreshCw
+  RefreshCw,
+  MessageSquare
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { useDropzone } from "react-dropzone";
 import { supabase } from "@/integrations/supabase/client";
 
 const ANGLE_CONFIG = [
@@ -42,49 +41,24 @@ interface GeneratedImage {
   error?: string;
 }
 
+type WorkflowPhase = "prompt" | "hero-generation" | "hero-review" | "all-views";
+
 export function PromptGenerator() {
   const { currentProject, setActiveStep } = useProjectStore();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [heroPrompt, setHeroPrompt] = useState<string>("");
-  const [styleConfirmed, setStyleConfirmed] = useState(false);
+  const [phase, setPhase] = useState<WorkflowPhase>("prompt");
   const [generatedPrompts, setGeneratedPrompts] = useState<Record<string, string>>({});
-  const [referenceImage, setReferenceImage] = useState<string | null>(null);
-  const [referenceImageName, setReferenceImageName] = useState<string>("");
+  const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [heroFeedback, setHeroFeedback] = useState<string>("");
   const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
+  const [isGeneratingHero, setIsGeneratingHero] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [currentlyGenerating, setCurrentlyGenerating] = useState<string | null>(null);
-
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setReferenceImage(reader.result as string);
-        setReferenceImageName(file.name);
-      };
-      reader.readAsDataURL(file);
-      toast({
-        title: "Image uploaded",
-        description: "Your reference image has been added",
-      });
-    }
-  }, [toast]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp']
-    },
-    maxFiles: 1,
-  });
-
-  const removeReferenceImage = () => {
-    setReferenceImage(null);
-    setReferenceImageName("");
-  };
+  const [heroIterations, setHeroIterations] = useState<string[]>([]);
 
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
@@ -156,13 +130,57 @@ ${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversatura
 Aspect ratio: ${angle.aspectRatio}`;
   };
 
-  const handleGenerateHeroPrompt = () => {
-    const prompt = generatePrompt("hero_34");
-    setHeroPrompt(prompt);
-    toast({
-      title: "Hero prompt generated",
-      description: "Copy this prompt to Nano Banana and generate your style",
-    });
+  const handleGenerateHeroImage = async () => {
+    const prompt = heroPrompt || generatePrompt("hero_34");
+    if (!heroPrompt) setHeroPrompt(prompt);
+    
+    setPhase("hero-generation");
+    setIsGeneratingHero(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-hero', {
+        body: {
+          prompt,
+          feedback: heroFeedback || undefined,
+          previousImageUrl: heroImage || undefined,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      
+      setHeroImage(data.imageUrl);
+      setHeroIterations(prev => [...prev, data.imageUrl]);
+      setPhase("hero-review");
+      setHeroFeedback("");
+      
+      toast({
+        title: "Hero image generated",
+        description: "Review the image and provide feedback or proceed to generate all views",
+      });
+    } catch (error) {
+      console.error("Error generating hero:", error);
+      setPhase("prompt");
+      toast({
+        title: "Generation failed",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingHero(false);
+    }
+  };
+
+  const handleRegenerateWithFeedback = async () => {
+    if (!heroFeedback.trim()) {
+      toast({
+        title: "Feedback required",
+        description: "Please enter feedback to refine the image",
+        variant: "destructive",
+      });
+      return;
+    }
+    await handleGenerateHeroImage();
   };
 
   const handleCopy = async (angleId: string) => {
@@ -172,12 +190,12 @@ Aspect ratio: ${angle.aspectRatio}`;
     setTimeout(() => setCopiedId(null), 2000);
     toast({
       title: "Copied to clipboard",
-      description: "Paste into Nano Banana or your preferred AI image generator",
+      description: "Prompt copied successfully",
     });
   };
 
   const generateSingleView = async (angleId: string, prompt: string, aspectRatio: string): Promise<string | null> => {
-    if (!referenceImage) return null;
+    if (!heroImage) return null;
 
     const angle = ANGLE_CONFIG.find(a => a.id === angleId);
     if (!angle) return null;
@@ -185,7 +203,7 @@ Aspect ratio: ${angle.aspectRatio}`;
     try {
       const { data, error } = await supabase.functions.invoke('generate-view', {
         body: {
-          referenceImageUrl: referenceImage,
+          referenceImageUrl: heroImage,
           viewPrompt: prompt,
           viewName: angle.name,
           aspectRatio: aspectRatio,
@@ -202,8 +220,8 @@ Aspect ratio: ${angle.aspectRatio}`;
     }
   };
 
-  const handleConfirmAndGenerate = async () => {
-    setStyleConfirmed(true);
+  const handleGenerateAllViews = async () => {
+    setPhase("all-views");
     
     // Generate all prompts first
     const prompts: Record<string, string> = {};
@@ -215,7 +233,7 @@ Aspect ratio: ${angle.aspectRatio}`;
 
     // Set hero image as already complete
     setGeneratedImages({
-      hero_34: { url: referenceImage!, status: "complete" },
+      hero_34: { url: heroImage!, status: "complete" },
     });
 
     // Start generating images
@@ -224,7 +242,7 @@ Aspect ratio: ${angle.aspectRatio}`;
 
     // Initialize all views as pending
     const initialImages: Record<string, GeneratedImage> = {
-      hero_34: { url: referenceImage!, status: "complete" },
+      hero_34: { url: heroImage!, status: "complete" },
     };
     viewsToGenerate.forEach(angle => {
       initialImages[angle.id] = { url: "", status: "pending" };
@@ -283,7 +301,7 @@ Aspect ratio: ${angle.aspectRatio}`;
 
   const regenerateView = async (angleId: string) => {
     const angle = ANGLE_CONFIG.find(a => a.id === angleId);
-    if (!angle || !referenceImage) return;
+    if (!angle || !heroImage) return;
 
     setGeneratedImages(prev => ({
       ...prev,
@@ -338,175 +356,213 @@ Aspect ratio: ${angle.aspectRatio}`;
   const completedCount = Object.values(generatedImages).filter(img => img.status === "complete").length;
   const totalViews = ANGLE_CONFIG.length;
 
-  // Phase 1: Hero Prompt Generation
-  if (!styleConfirmed) {
+  // Phase 1: Generate Hero Image
+  if (phase === "prompt" || phase === "hero-generation") {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">Generate Render Prompts</h2>
+          <h2 className="text-2xl font-semibold">Generate Booth Renders</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Create a hero image in Nano Banana, upload it as your style reference, 
-            then we'll automatically generate all 7 additional views.
+            We'll generate a hero image first, then you can refine it with feedback 
+            before we create all coordinated views.
           </p>
         </div>
 
-        {/* Step 1: Hero Card */}
+        {/* Step 1: Generate Hero */}
         <Card className="element-card">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">1</span>
-                  3/4 Hero View
+                  Generate 3/4 Hero View
                 </CardTitle>
                 <CardDescription>
-                  Generate the hero prompt, then use it in Nano Banana to create your reference image
+                  Click to generate the primary hero image for your booth
                 </CardDescription>
               </div>
               <Badge variant="secondary">16:9</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!heroPrompt ? (
-              <Button onClick={handleGenerateHeroPrompt} className="w-full btn-glow">
-                <Sparkles className="mr-2 h-4 w-4" />
-                Generate Hero Prompt
-              </Button>
-            ) : (
-              <>
-                <Textarea
-                  value={heroPrompt}
-                  readOnly
-                  className="min-h-[300px] text-sm font-mono"
-                />
-                <div className="flex gap-3">
+            {heroPrompt && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Prompt Preview</span>
                   <Button
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleCopy("hero_34")}
-                    className="flex-1"
                   >
                     {copiedId === "hero_34" ? (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Copied!
-                      </>
+                      <Check className="h-3 w-3" />
                     ) : (
-                      <>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copy Prompt
-                      </>
+                      <Copy className="h-3 w-3" />
                     )}
                   </Button>
                 </div>
-              </>
+                <Textarea
+                  value={heroPrompt}
+                  readOnly
+                  className="min-h-[200px] text-xs font-mono bg-muted/50"
+                />
+              </div>
+            )}
+            
+            <Button 
+              onClick={handleGenerateHeroImage} 
+              className="w-full btn-glow"
+              disabled={isGeneratingHero}
+            >
+              {isGeneratingHero ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Hero Image...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {heroPrompt ? "Generate Hero Image" : "Generate Hero Prompt & Image"}
+                </>
+              )}
+            </Button>
+
+            {isGeneratingHero && (
+              <p className="text-xs text-muted-foreground text-center">
+                This may take 30-60 seconds...
+              </p>
             )}
           </CardContent>
         </Card>
-
-        {/* Instructions & Image Upload */}
-        {heroPrompt && (
-          <>
-            {/* Step 2: Upload Reference Image */}
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">2</span>
-                  Upload Your Reference Image
-                </CardTitle>
-                <CardDescription>
-                  After generating your hero image in Nano Banana, upload it here. This will be used to generate consistent views of the same scene.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!referenceImage ? (
-                  <div
-                    {...getRootProps()}
-                    className={cn(
-                      "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                      isDragActive 
-                        ? "border-primary bg-primary/10" 
-                        : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"
-                    )}
-                  >
-                    <input {...getInputProps()} />
-                    <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                    {isDragActive ? (
-                      <p className="text-primary font-medium">Drop your image here...</p>
-                    ) : (
-                      <>
-                        <p className="font-medium">Drag & drop your Nano Banana image</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          or click to browse • PNG, JPG, WebP
-                        </p>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="relative rounded-lg overflow-hidden border bg-muted">
-                      <img 
-                        src={referenceImage} 
-                        alt="Reference" 
-                        className="w-full h-auto max-h-[300px] object-contain"
-                      />
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-2 right-2 h-8 w-8"
-                        onClick={removeReferenceImage}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <ImageIcon className="h-4 w-4" />
-                      <span className="truncate">{referenceImageName}</span>
-                      <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Step 3: Generate All Views */}
-            <Card className={cn(
-              "border-primary/20 transition-opacity",
-              referenceImage ? "opacity-100" : "opacity-50"
-            )}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-medium">3</span>
-                  Generate All Views with AI
-                </CardTitle>
-                <CardDescription>
-                  {referenceImage 
-                    ? "Ready! Nano Banana will generate 7 additional views matching your reference image style."
-                    : "Upload your reference image first to enable this step."
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  onClick={handleConfirmAndGenerate} 
-                  className="w-full btn-glow"
-                  disabled={!referenceImage}
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate All 7 Views Automatically
-                </Button>
-                <p className="text-xs text-muted-foreground text-center mt-3">
-                  This will use AI to create consistent renders for each angle
-                </p>
-              </CardContent>
-            </Card>
-          </>
-        )}
       </div>
     );
   }
 
-  // Phase 2: All Views Generated / Generating
+  // Phase 2: Review Hero & Provide Feedback
+  if (phase === "hero-review") {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-semibold">Review Hero Image</h2>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Review the generated image. Provide feedback to refine it, or approve to generate all views.
+          </p>
+        </div>
+
+        {/* Hero Image Card */}
+        <Card className="element-card border-primary/30">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-primary" />
+                3/4 Hero View
+              </CardTitle>
+              <Badge className="bg-primary/20 text-primary">Generated</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Main Image */}
+            <div className="rounded-lg overflow-hidden border bg-muted">
+              <img 
+                src={heroImage!} 
+                alt="Generated Hero" 
+                className="w-full h-auto"
+              />
+            </div>
+
+            {/* Previous Iterations */}
+            {heroIterations.length > 1 && (
+              <div className="space-y-2">
+                <span className="text-sm font-medium text-muted-foreground">Previous Iterations</span>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {heroIterations.slice(0, -1).map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setHeroImage(img)}
+                      className={cn(
+                        "flex-shrink-0 w-24 h-16 rounded border overflow-hidden transition-all",
+                        heroImage === img ? "ring-2 ring-primary" : "opacity-60 hover:opacity-100"
+                      )}
+                    >
+                      <img src={img} alt={`Iteration ${idx + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Feedback Section */}
+            <div className="space-y-3 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Refinement Feedback</span>
+              </div>
+              <Textarea
+                value={heroFeedback}
+                onChange={(e) => setHeroFeedback(e.target.value)}
+                placeholder="Enter feedback to refine the image... (e.g., 'Make the booth more open', 'Add more blue lighting', 'Show more people interacting')"
+                className="min-h-[100px]"
+              />
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleRegenerateWithFeedback}
+                  disabled={isGeneratingHero || !heroFeedback.trim()}
+                  className="flex-1"
+                >
+                  {isGeneratingHero ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Regenerate with Feedback
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setHeroFeedback("");
+                    handleGenerateHeroImage();
+                  }}
+                  disabled={isGeneratingHero}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => downloadImage(heroImage!, "hero_view")}
+                className="flex-1"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+              <Button
+                onClick={handleGenerateAllViews}
+                className="flex-1 btn-glow"
+                disabled={isGeneratingHero}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Approve & Generate All Views
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Phase 3: All Views Generated / Generating
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -516,7 +572,7 @@ Aspect ratio: ${angle.aspectRatio}`;
           <p className="text-muted-foreground">
             {isGenerating 
               ? `Generating views... ${completedCount} of ${totalViews} complete`
-              : `${completedCount} coordinated renders based on your reference`
+              : `${completedCount} coordinated renders based on your hero image`
             }
           </p>
         </div>
@@ -557,7 +613,7 @@ Aspect ratio: ${angle.aspectRatio}`;
           <div className="grid md:grid-cols-[400px,1fr] gap-4">
             <div className="rounded-lg overflow-hidden border">
               <img 
-                src={referenceImage!} 
+                src={heroImage!} 
                 alt="Reference" 
                 className="w-full h-auto object-contain"
               />
@@ -579,9 +635,13 @@ Aspect ratio: ${angle.aspectRatio}`;
                   <Copy className="h-3 w-3 mr-2" />
                   Copy Prompt
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => downloadImage(referenceImage!, "hero_view")}>
+                <Button variant="outline" size="sm" onClick={() => downloadImage(heroImage!, "hero_view")}>
                   <Download className="h-3 w-3 mr-2" />
                   Download
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setPhase("hero-review")}>
+                  <RefreshCw className="h-3 w-3 mr-2" />
+                  Refine Hero
                 </Button>
               </div>
             </div>

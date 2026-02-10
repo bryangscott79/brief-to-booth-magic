@@ -259,13 +259,13 @@ function BigIdeaDetail({ data, onUpdateField }: { data: any; onUpdateField: (pat
             value={data.headline || ""}
             onChange={(v) => onUpdateField("headline", v)}
             as="h1"
-            className="text-3xl font-bold tracking-tight text-foreground"
+            className="text-3xl font-bold tracking-tight text-white"
           />
           <EditableText
             value={data.subheadline || ""}
             onChange={(v) => onUpdateField("subheadline", v)}
             as="h3"
-            className="text-xl text-muted-foreground font-normal"
+            className="text-xl text-white/70 font-normal"
           />
         </div>
       </div>

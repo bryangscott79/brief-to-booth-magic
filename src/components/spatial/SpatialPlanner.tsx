@@ -15,7 +15,7 @@ import {
   TrendingUp,
   Layers
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useState, useMemo } from "react";
 import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
@@ -33,7 +33,7 @@ const ZONE_COLORS: Record<string, { bg: string; border: string; text: string }> 
 
 export function SpatialPlanner() {
   const { currentProject, setActiveStep } = useProjectStore();
-  const navigate = useNavigate();
+  const { navigate } = useProjectNavigate();
   const [activeFootprint, setActiveFootprint] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [showFlow, setShowFlow] = useState(true);

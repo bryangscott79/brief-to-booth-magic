@@ -10,7 +10,7 @@ import {
   Check,
   Package
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import type { ElementType } from "@/types/brief";
@@ -65,7 +65,7 @@ const FILE_STRUCTURE = [
 
 export function ExportPackage() {
   const { currentProject } = useProjectStore();
-  const navigate = useNavigate();
+  const { navigate } = useProjectNavigate();
   const { toast } = useToast();
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(
     new Set(FILE_STRUCTURE.flatMap(f => f.files.map(file => `${f.folder}/${file.name}`)))

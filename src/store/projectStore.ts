@@ -24,6 +24,7 @@ interface ProjectStore {
   
   // Actions
   createProject: (name: string) => void;
+  loadFromDb: (data: { id: string; name: string; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
   setRawBrief: (brief: string) => void;
   setParsedBrief: (brief: ParsedBrief) => void;
   setElementStatus: (type: ElementType, status: ElementState["status"]) => void;
@@ -63,6 +64,27 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       renderPrompts: null,
     };
     set({ currentProject: newProject, activeStep: "upload" });
+  },
+
+  loadFromDb: (data) => {
+    const project: Project = {
+      id: data.id,
+      name: data.name,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      rawBrief: data.rawBrief,
+      parsedBrief: data.parsedBrief,
+      elements: data.elements as Record<ElementType, ElementState>,
+      renderPrompts: data.renderPrompts,
+    };
+    // Determine active step from data
+    const hasElements = Object.values(data.elements).some(e => e.status === "complete");
+    const hasBrief = !!data.parsedBrief;
+    let activeStep: ProjectStore["activeStep"] = "upload";
+    if (hasBrief) activeStep = "review";
+    if (hasElements) activeStep = "generate";
+    if (data.renderPrompts) activeStep = "prompts";
+    set({ currentProject: project, activeStep });
   },
 
   setRawBrief: (brief: string) => {

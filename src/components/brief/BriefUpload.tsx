@@ -7,12 +7,17 @@ import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectStore";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { saveProjectField } from "@/hooks/useProjectSync";
 
-export function BriefUpload() {
+interface BriefUploadProps {
+  projectId: string | null;
+}
+
+export function BriefUpload({ projectId }: BriefUploadProps) {
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const { createProject, setRawBrief, setParsedBrief, setActiveStep } = useProjectStore();
+  const { currentProject, createProject, setRawBrief, setParsedBrief, setActiveStep } = useProjectStore();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -35,7 +40,7 @@ export function BriefUpload() {
         title: "Brief uploaded successfully",
         description: "Review the parsed data before generating elements.",
       });
-      navigate("/review");
+      navigate(projectId ? `/review?project=${projectId}` : "/review");
     } catch (error) {
       toast({
         title: "Upload failed",
@@ -70,7 +75,7 @@ export function BriefUpload() {
         title: "Brief processed successfully",
         description: "Review the parsed data before generating elements.",
       });
-      navigate("/review");
+      navigate(projectId ? `/review?project=${projectId}` : "/review");
     } catch (error) {
       toast({
         title: "Processing failed",
@@ -88,6 +93,7 @@ export function BriefUpload() {
     
     // Mock parsed data based on the NexusVault example
     const mockParsedBrief = {
+      // ... keep existing code (mock data object)
       brand: {
         name: "NexusVault",
         category: "Enterprise Cybersecurity",
@@ -204,6 +210,13 @@ export function BriefUpload() {
     
     setParsedBrief(mockParsedBrief);
     setActiveStep("review");
+
+    // Save to DB
+    if (projectId) {
+      await saveProjectField(projectId, "brief_text", text);
+      await saveProjectField(projectId, "parsed_brief", mockParsedBrief);
+      await saveProjectField(projectId, "status", "reviewed");
+    }
   };
 
   return (

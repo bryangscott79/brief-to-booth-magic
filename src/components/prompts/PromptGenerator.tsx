@@ -36,7 +36,7 @@ const ANGLE_CONFIG = [
   { id: "front", name: "Front Elevation", priority: 3, aspectRatio: "16:9", description: "Primary aisle view — eye-level, centered on entry", isZoneInterior: false },
   { id: "left", name: "Left Side", priority: 4, aspectRatio: "16:9", description: "Side aisle view — eye-level, 90° left", isZoneInterior: false },
   { id: "right", name: "Right Side", priority: 5, aspectRatio: "16:9", description: "Opposite side view — eye-level, 90° right", isZoneInterior: false },
-  { id: "back", name: "Back View", priority: 6, aspectRatio: "16:9", description: "Service/structure view — eye-level, behind booth", isZoneInterior: false },
+  { id: "back", name: "Back View", priority: 6, aspectRatio: "16:9", description: "Rear entry/exit — fully finished, visitor-facing", isZoneInterior: false },
   { id: "detail_hero", name: "Hero Detail", priority: 7, aspectRatio: "4:3", description: "Medium shot focused on hero installation", isZoneInterior: false },
   { id: "detail_lounge", name: "Lounge Detail", priority: 8, aspectRatio: "4:3", description: "Medium shot focused on human connection zone", isZoneInterior: false },
 ];

@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.generate-view]
 verify_jwt = false
+
+[functions.generate-element]
+verify_jwt = false

@@ -223,10 +223,10 @@ export function SpatialPlanner() {
                         colors.border
                       )}
                       style={{
-                        left: `${zone.position.x}%`,
-                        top: `${zone.position.y}%`,
-                        width: `${zone.position.width}%`,
-                        height: `${zone.position.height}%`,
+                        left: `${(zone.position.x <= 1 ? zone.position.x * 100 : zone.position.x)}%`,
+                        top: `${(zone.position.y <= 1 ? zone.position.y * 100 : zone.position.y)}%`,
+                        width: `${(zone.position.width <= 1 ? zone.position.width * 100 : zone.position.width)}%`,
+                        height: `${(zone.position.height <= 1 ? zone.position.height * 100 : zone.position.height)}%`,
                       }}
                     >
                       <div className="text-center">

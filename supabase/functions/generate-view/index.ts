@@ -39,10 +39,31 @@ serve(async (req) => {
       "Lounge Detail": "Camera positioned inside or near the lounge/meeting area, at eye level, showing a medium shot of the seating, conversation space, and hospitality zone.",
     };
 
-    const cameraDir = cameraDirections[viewName] || `Camera showing the ${viewName} perspective of the booth.`;
+    // For zone interiors, check if viewName ends with "Interior"
+    const isInterior = viewName.endsWith("Interior");
+    const cameraDir = cameraDirections[viewName] || (isInterior 
+      ? `Camera is INSIDE the booth, positioned at eye level (5.5 feet) within the "${viewName.replace(' Interior', '')}" zone. The camera looks outward from inside this specific zone, showing the zone's interior details, furnishings, screens, and visitors. The hero installation or other zones may be partially visible in the background. This is a CLOSE-UP INTERIOR shot — NOT the same wide exterior angle as the reference image.`
+      : `Camera showing the ${viewName} perspective of the booth.`);
 
     // Build the prompt for image editing/transformation
-    const editPrompt = `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
+    const editPrompt = isInterior
+      ? `Using this reference image of a trade show booth, generate a NEW image showing an INTERIOR CLOSE-UP perspective from INSIDE the "${viewName.replace(' Interior', '')}" zone.
+
+CAMERA POSITION (CRITICAL — follow exactly):
+${cameraDir}
+
+ZONE-SPECIFIC DETAILS:
+${viewPrompt}
+
+CRITICAL CONSISTENCY RULES:
+- Look at the reference image carefully. Find the "${viewName.replace(' Interior', '')}" zone within it.
+- The interior view MUST match exactly how this zone appears in the reference: same wall colors, same screen content style, same furniture, same lighting fixtures.
+- Maintain the exact same design language, materials, textures, and brand elements.
+- The zone's proportions, layout, and features must match the reference — just shown from an interior close-up camera angle.
+- Show 2-4 visitors naturally engaging with the zone's features.
+
+OUTPUT: A photorealistic ${aspectRatio} interior perspective. This must look like a zoomed-in, inside-the-zone view of what's visible in the reference image — NOT a reimagined space.`
+      : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 
 CAMERA POSITION (CRITICAL — follow exactly):
 ${cameraDir}

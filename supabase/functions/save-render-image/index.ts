@@ -53,18 +53,30 @@ serve(async (req) => {
       });
     }
 
-    // Decode base64 image
+    let binaryData: Uint8Array;
+    let imageType = "png";
+
+    // Handle base64 data URL
     const base64Match = imageDataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!base64Match) {
-      return new Response(JSON.stringify({ error: "Invalid image data URL" }), {
+    if (base64Match) {
+      imageType = base64Match[1];
+      const base64Data = base64Match[2];
+      binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    } else if (imageDataUrl.startsWith("http")) {
+      // Handle regular URL — fetch the image
+      console.log("Fetching image from URL:", imageDataUrl.substring(0, 80));
+      const imgResponse = await fetch(imageDataUrl);
+      if (!imgResponse.ok) throw new Error(`Failed to fetch image: ${imgResponse.status}`);
+      const contentType = imgResponse.headers.get("content-type") || "image/png";
+      imageType = contentType.split("/")[1] || "png";
+      const arrayBuffer = await imgResponse.arrayBuffer();
+      binaryData = new Uint8Array(arrayBuffer);
+    } else {
+      return new Response(JSON.stringify({ error: "Invalid image data — must be base64 data URL or HTTP URL" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const imageType = base64Match[1];
-    const base64Data = base64Match[2];
-    const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
     // Use service role client for storage operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);

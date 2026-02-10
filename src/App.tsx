@@ -13,6 +13,7 @@ import Review from "./pages/Review";
 import Generate from "./pages/Generate";
 import Spatial from "./pages/Spatial";
 import Prompts from "./pages/Prompts";
+import Files from "./pages/Files";
 import Export from "./pages/Export";
 import NotFound from "./pages/NotFound";
 
@@ -56,6 +57,11 @@ const App = () => (
             <Route path="/prompts" element={
               <ProtectedRoute>
                 <Prompts />
+              </ProtectedRoute>
+            } />
+            <Route path="/files" element={
+              <ProtectedRoute>
+                <Files />
               </ProtectedRoute>
             } />
             <Route path="/export" element={

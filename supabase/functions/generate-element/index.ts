@@ -127,10 +127,22 @@ serve(async (req) => {
       userPrompt += `\n\nUser feedback for this regeneration:\n${feedback}`;
     }
 
-    userPrompt += `\n\nGenerate exhaustive, presentation-quality content. Be specific, bold, and strategic. Include industry-trending ideas and data points. This should read like a premium agency pitch deck.`;
+    userPrompt += `\n\nGenerate exhaustive, presentation-quality content. Be specific, bold, and strategic. Include industry-trending ideas and data points. This should read like a premium agency pitch deck. You MUST use the provided tool/function to return your response.`;
 
     // Define the tool schema for structured output
     const toolSchema = getToolSchema(elementType);
+
+    const requestBody: any = {
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
+        { role: "user", content: userPrompt },
+      ],
+      tools: [toolSchema],
+      tool_choice: { type: "function", function: { name: `generate_${elementType}` } },
+    };
+
+    console.log("Calling AI for element:", elementType);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -138,15 +150,7 @@ serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [toolSchema],
-        tool_choice: { type: "function", function: { name: `generate_${elementType}` } },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -166,29 +170,47 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    console.log("AI response structure:", JSON.stringify({
+      hasToolCalls: !!data.choices?.[0]?.message?.tool_calls,
+      hasContent: !!data.choices?.[0]?.message?.content,
+      finishReason: data.choices?.[0]?.finish_reason,
+    }));
+
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
 
-    if (!toolCall) {
-      // Fallback: try to parse content directly
-      const content = data.choices?.[0]?.message?.content;
-      if (content) {
-        try {
-          const parsed = JSON.parse(content);
-          return new Response(JSON.stringify({ data: parsed }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        } catch {
-          return new Response(JSON.stringify({ data: null, rawContent: content }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      }
-      throw new Error("No structured output returned");
+    if (toolCall) {
+      const elementData = JSON.parse(toolCall.function.arguments);
+      return new Response(JSON.stringify({ data: elementData }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const elementData = JSON.parse(toolCall.function.arguments);
+    // Fallback: parse content directly (model may return JSON in content)
+    const content = data.choices?.[0]?.message?.content;
+    if (content) {
+      // Try to extract JSON from markdown code fences or raw content
+      let jsonStr = content;
+      const codeBlockMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+      try {
+        const parsed = JSON.parse(jsonStr);
+        return new Response(JSON.stringify({ data: parsed }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        // If JSON parse fails, return the raw content wrapped in a basic structure
+        console.error("Failed to parse AI content as JSON, content preview:", content.substring(0, 200));
+        return new Response(JSON.stringify({ data: { rawContent: content } }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
-    return new Response(JSON.stringify({ data: elementData }), {
+    console.error("No tool calls or content in response:", JSON.stringify(data).substring(0, 500));
+    return new Response(JSON.stringify({ error: "AI returned empty response. Please try again." }), {
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

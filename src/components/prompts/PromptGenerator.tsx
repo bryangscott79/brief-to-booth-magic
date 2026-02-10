@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useProjectStore } from "@/store/projectStore";
+import { useRenderStore } from "@/store/renderStore";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,7 +27,6 @@ import {
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 
@@ -161,13 +161,7 @@ function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatial
   return parts.join("\n");
 }
 
-interface GeneratedImage {
-  url: string;
-  status: "pending" | "generating" | "complete" | "error";
-  error?: string;
-}
-
-type WorkflowPhase = "prompt" | "hero-generation" | "hero-review" | "all-views";
+import type { GeneratedImage, WorkflowPhase } from "@/store/renderStore";
 
 export function PromptGenerator() {
   const { currentProject, setActiveStep } = useProjectStore();
@@ -176,21 +170,23 @@ export function PromptGenerator() {
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("project");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [heroPrompt, setHeroPrompt] = useState<string>("");
-  const [phase, setPhase] = useState<WorkflowPhase>("prompt");
-  const [generatedPrompts, setGeneratedPrompts] = useState<Record<string, string>>({});
-  const [heroImage, setHeroImage] = useState<string | null>(null);
-  const [heroFeedback, setHeroFeedback] = useState<string>("");
-  const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
-  const [isGeneratingHero, setIsGeneratingHero] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [currentlyGenerating, setCurrentlyGenerating] = useState<string | null>(null);
-  const [heroIterations, setHeroIterations] = useState<string[]>([]);
   const [showGallery, setShowGallery] = useState(false);
+
+  // Global render store — persists across navigation
+  const renderStore = useRenderStore();
+  const {
+    phase, heroPrompt, heroImage, heroFeedback, heroIterations,
+    generatedPrompts, generatedImages, isGeneratingHero, isGenerating,
+    generationProgress, currentlyGenerating, hydratedFromDb,
+  } = renderStore;
 
   const { data: savedImages = [], isLoading: imagesLoading } = useProjectImages(projectId);
   const saveImage = useSaveRenderImage(projectId);
+
+  // Sync project ID to render store
+  useEffect(() => {
+    renderStore.setProjectId(projectId);
+  }, [projectId]);
 
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
@@ -205,34 +201,37 @@ export function PromptGenerator() {
 
   const allAngles = useMemo(() => [...ANGLE_CONFIG, ...zoneInteriorAngles], [zoneInteriorAngles]);
 
-  // Hydrate from saved images when returning to the page
+  // Hydrate from saved images when returning to the page (only if store is empty)
   useEffect(() => {
-    if (savedImages.length > 0 && !heroImage && phase === "prompt") {
-      // Find the current hero image
+    if (savedImages.length > 0 && !heroImage && phase === "prompt" && !hydratedFromDb && !isGeneratingHero && !isGenerating) {
       const savedHero = savedImages.find(img => img.angle_id === "hero_34" && img.is_current);
       if (savedHero) {
-        setHeroImage(savedHero.public_url);
-        setHeroIterations(
-          savedImages
-            .filter(img => img.angle_id === "hero_34")
-            .map(img => img.public_url)
-        );
+        renderStore.setHeroImage(savedHero.public_url);
+        savedImages
+          .filter(img => img.angle_id === "hero_34")
+          .forEach(img => renderStore.addHeroIteration(img.public_url));
 
-        // Restore all saved current images
-        const restoredImages: Record<string, GeneratedImage> = {};
+        const restoredImages: Record<string, { url: string; status: "complete" }> = {};
         savedImages
           .filter(img => img.is_current)
           .forEach(img => {
             restoredImages[img.angle_id] = { url: img.public_url, status: "complete" };
           });
-        setGeneratedImages(restoredImages);
+        renderStore.setGeneratedImages(restoredImages);
 
-        // Jump to the right phase
         const hasOtherViews = savedImages.some(img => img.angle_id !== "hero_34" && img.is_current);
-        setPhase(hasOtherViews ? "all-views" : "hero-review");
+        renderStore.setPhase(hasOtherViews ? "all-views" : "hero-review");
+        renderStore.setHydratedFromDb(true);
       }
     }
-  }, [savedImages, heroImage, phase]);
+  }, [savedImages, heroImage, phase, hydratedFromDb, isGeneratingHero, isGenerating]);
+
+  const doSave = useCallback((angleId: string, angleName: string, imageDataUrl: string) => {
+    saveImage.mutate(
+      { angleId, angleName, imageDataUrl },
+      { onError: (err) => console.error(`Failed to save ${angleName}:`, err) }
+    );
+  }, [saveImage]);
 
   if (!brief || !spatialData || !bigIdea) {
     return (
@@ -306,50 +305,31 @@ ${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversatura
 Aspect ratio: ${angle.aspectRatio}`;
   };
 
+
   const handleGenerateHeroImage = async () => {
     const prompt = heroPrompt || generatePrompt("hero_34");
-    if (!heroPrompt) setHeroPrompt(prompt);
-    
-    setPhase("hero-generation");
-    setIsGeneratingHero(true);
-    
+    if (!heroPrompt) renderStore.setHeroPrompt(prompt);
+
     try {
-      const { data, error } = await supabase.functions.invoke('generate-hero', {
-        body: {
-          prompt,
-          feedback: heroFeedback || undefined,
-          previousImageUrl: heroImage || undefined,
-        },
+      await renderStore.generateHeroImage({
+        prompt,
+        feedback: heroFeedback || undefined,
+        previousImageUrl: heroImage || undefined,
+        projectId: projectId!,
+        onSave: doSave,
       });
 
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      
-      setHeroImage(data.imageUrl);
-      setHeroIterations(prev => [...prev, data.imageUrl]);
-      setPhase("hero-review");
-      setHeroFeedback("");
-
-      // Save hero image to storage
-      saveImage.mutate(
-        { angleId: "hero_34", angleName: "3/4 Hero View", imageDataUrl: data.imageUrl },
-        { onError: (err) => console.error("Failed to save hero image:", err) }
-      );
-      
       toast({
         title: "Hero image generated",
         description: "Review the image and provide feedback or proceed to generate all views",
       });
     } catch (error) {
       console.error("Error generating hero:", error);
-      setPhase("prompt");
       toast({
         title: "Generation failed",
         description: error instanceof Error ? error.message : "Please try again",
         variant: "destructive",
       });
-    } finally {
-      setIsGeneratingHero(false);
     }
   };
 
@@ -376,159 +356,46 @@ Aspect ratio: ${angle.aspectRatio}`;
     });
   };
 
-  const generateSingleView = async (angleId: string, prompt: string, aspectRatio: string): Promise<string | null> => {
-    if (!heroImage) return null;
-
-    const angle = allAngles.find(a => a.id === angleId);
-    if (!angle) return null;
-
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-view', {
-        body: {
-          referenceImageUrl: heroImage,
-          viewPrompt: prompt,
-          viewName: angle.name,
-          aspectRatio: aspectRatio,
-        },
-      });
-
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      
-      return data.imageUrl;
-    } catch (error) {
-      console.error(`Error generating ${angleId}:`, error);
-      throw error;
-    }
-  };
-
   const handleGenerateAllViews = async () => {
-    setPhase("all-views");
-    
-    // Generate all prompts first
     const prompts: Record<string, string> = {};
-    const viewsToGenerate = allAngles.filter(a => a.id !== "hero_34");
-    viewsToGenerate.forEach(angle => {
-      prompts[angle.id] = generatePrompt(angle.id);
-    });
-    setGeneratedPrompts(prompts);
-
-    // Set hero image as already complete
-    setGeneratedImages({
-      hero_34: { url: heroImage!, status: "complete" },
-    });
-
-    // Start generating images
-    setIsGenerating(true);
-    setGenerationProgress(0);
-
-    // Initialize all views as pending
-    const initialImages: Record<string, GeneratedImage> = {
-      hero_34: { url: heroImage!, status: "complete" },
-    };
-    viewsToGenerate.forEach(angle => {
-      initialImages[angle.id] = { url: "", status: "pending" };
-    });
-    setGeneratedImages(initialImages);
-
-    // Generate each view sequentially to avoid rate limits
-    for (let i = 0; i < viewsToGenerate.length; i++) {
-      const angle = viewsToGenerate[i];
-      setCurrentlyGenerating(angle.id);
-      setGeneratedImages(prev => ({
-        ...prev,
-        [angle.id]: { url: "", status: "generating" },
-      }));
-
-      try {
-        const imageUrl = await generateSingleView(angle.id, prompts[angle.id], angle.aspectRatio);
-        
-        setGeneratedImages(prev => ({
-          ...prev,
-          [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
-        }));
-
-        // Save to storage
-        if (imageUrl) {
-          saveImage.mutate(
-            { angleId: angle.id, angleName: angle.name, imageDataUrl: imageUrl },
-            { onError: (err) => console.error(`Failed to save ${angle.name}:`, err) }
-          );
-        }
-
-        setGenerationProgress(((i + 1) / viewsToGenerate.length) * 100);
-        
-        toast({
-          title: `${angle.name} generated`,
-          description: `${i + 1} of ${viewsToGenerate.length} views complete`,
-        });
-      } catch (error) {
-        setGeneratedImages(prev => ({
-          ...prev,
-          [angle.id]: { 
-            url: "", 
-            status: "error", 
-            error: error instanceof Error ? error.message : "Failed to generate" 
-          },
-        }));
-        
-        toast({
-          title: `Error generating ${angle.name}`,
-          description: error instanceof Error ? error.message : "Please try again",
-          variant: "destructive",
-        });
+    allAngles.forEach(angle => {
+      if (angle.id !== "hero_34") {
+        prompts[angle.id] = generatePrompt(angle.id);
       }
-    }
+    });
 
-    setIsGenerating(false);
-    setCurrentlyGenerating(null);
-    
-    toast({
-      title: "All views generated!",
-      description: "Your coordinated booth renders are ready",
+    renderStore.generateAllViews({
+      angles: allAngles,
+      prompts,
+      heroImageUrl: heroImage!,
+      projectId: projectId!,
+      onSave: doSave,
+    }).then(() => {
+      toast({
+        title: "All views generated!",
+        description: "Your coordinated booth renders are ready",
+      });
     });
   };
 
-  const regenerateView = async (angleId: string) => {
+  const handleRegenerateView = async (angleId: string) => {
     const angle = allAngles.find(a => a.id === angleId);
     if (!angle || !heroImage) return;
 
-    setGeneratedImages(prev => ({
-      ...prev,
-      [angleId]: { url: "", status: "generating" },
-    }));
-
     try {
-      const prompt = generatedPrompts[angleId] || generatePrompt(angleId);
-      const imageUrl = await generateSingleView(angleId, prompt, angle.aspectRatio);
-      
-      setGeneratedImages(prev => ({
-        ...prev,
-        [angleId]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
-      }));
-
-      // Save to storage
-      if (imageUrl) {
-        saveImage.mutate(
-          { angleId, angleName: angle.name, imageDataUrl: imageUrl },
-          { onError: (err) => console.error(`Failed to save ${angle.name}:`, err) }
-        );
-      }
+      await renderStore.regenerateView({
+        angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio },
+        prompt: generatedPrompts[angleId] || generatePrompt(angleId),
+        heroImageUrl: heroImage,
+        projectId: projectId!,
+        onSave: doSave,
+      });
 
       toast({
         title: `${angle.name} regenerated`,
         description: "New view generated successfully",
       });
     } catch (error) {
-      setGeneratedImages(prev => ({
-        ...prev,
-        [angleId]: { 
-          url: "", 
-          status: "error", 
-          error: error instanceof Error ? error.message : "Failed to generate" 
-        },
-      }));
-      
       toast({
         title: "Regeneration failed",
         description: error instanceof Error ? error.message : "Please try again",
@@ -678,7 +545,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                   {heroIterations.slice(0, -1).map((img, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setHeroImage(img)}
+                      onClick={() => renderStore.setHeroImage(img)}
                       className={cn(
                         "flex-shrink-0 w-24 h-16 rounded border overflow-hidden transition-all",
                         heroImage === img ? "ring-2 ring-primary" : "opacity-60 hover:opacity-100"
@@ -699,7 +566,7 @@ Aspect ratio: ${angle.aspectRatio}`;
               </div>
               <Textarea
                 value={heroFeedback}
-                onChange={(e) => setHeroFeedback(e.target.value)}
+                onChange={(e) => renderStore.setHeroFeedback(e.target.value)}
                 placeholder="Enter feedback to refine the image... (e.g., 'Make the booth more open', 'Add more blue lighting', 'Show more people interacting')"
                 className="min-h-[100px]"
               />
@@ -725,7 +592,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setHeroFeedback("");
+                    renderStore.setHeroFeedback("");
                     handleGenerateHeroImage();
                   }}
                   disabled={isGeneratingHero}
@@ -909,7 +776,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                   <Download className="h-3 w-3 mr-2" />
                   Download
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setPhase("hero-review")}>
+                <Button variant="outline" size="sm" onClick={() => renderStore.setPhase("hero-review")}>
                   <RefreshCw className="h-3 w-3 mr-2" />
                   Refine Hero
                 </Button>
@@ -1009,7 +876,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => regenerateView(angle.id)}
+                      onClick={() => handleRegenerateView(angle.id)}
                       disabled={isGenerating}
                     >
                       <RefreshCw className="h-3 w-3" />
@@ -1091,7 +958,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                         </Button>
                       )}
                       {(imageData?.status === "error" || imageData?.status === "complete") && (
-                        <Button variant="outline" size="sm" onClick={() => regenerateView(angle.id)} disabled={isGenerating}>
+                        <Button variant="outline" size="sm" onClick={() => handleRegenerateView(angle.id)} disabled={isGenerating}>
                           <RefreshCw className="h-3 w-3" />
                         </Button>
                       )}

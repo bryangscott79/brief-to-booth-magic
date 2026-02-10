@@ -27,19 +27,37 @@ serve(async (req) => {
 
     console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`);
 
+    // Camera direction mapping for strong angle differentiation
+    const cameraDirections: Record<string, string> = {
+      "3/4 Hero View": "Camera positioned at 45 degrees front-left of the booth, at eye level (5.5 feet), looking toward the booth's center. This is a diagonal perspective showing both the front face and the left side of the booth.",
+      "Top-Down View": "Camera positioned directly above the booth looking straight down (bird's eye / plan view). Show the full floor plan layout with all zones visible from overhead. No perspective distortion — orthographic top-down.",
+      "Front Elevation": "Camera positioned directly in front of the booth, centered on the main entrance/aisle, at eye level (5.5 feet). The camera faces the booth head-on. Only the front face of the booth is visible — no side walls.",
+      "Left Side": "Camera positioned to the LEFT side of the booth, at eye level (5.5 feet), facing the booth's left wall at exactly 90 degrees. The viewer is standing in the left aisle. The front of the booth is to the viewer's right. Only the left side face is prominent.",
+      "Right Side": "Camera positioned to the RIGHT side of the booth, at eye level (5.5 feet), facing the booth's right wall at exactly 90 degrees. The viewer is standing in the right aisle. The front of the booth is to the viewer's left. Only the right side face is prominent. This is the OPPOSITE side from the left view.",
+      "Back View": "Camera positioned directly behind the booth, at eye level (5.5 feet), looking at the back/service side. The viewer sees the rear structure, storage, and back panels. The front of the booth faces away from the camera.",
+      "Hero Detail": "Camera positioned close to the hero/centerpiece installation, at eye level, showing a medium close-up shot of the main interactive element with surrounding context.",
+      "Lounge Detail": "Camera positioned inside or near the lounge/meeting area, at eye level, showing a medium shot of the seating, conversation space, and hospitality zone.",
+    };
+
+    const cameraDir = cameraDirections[viewName] || `Camera showing the ${viewName} perspective of the booth.`;
+
     // Build the prompt for image editing/transformation
-    const editPrompt = `Transform this trade show booth image to show a ${viewName} perspective. 
-    
+    const editPrompt = `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
+
+CAMERA POSITION (CRITICAL — follow exactly):
+${cameraDir}
+
+ADDITIONAL VIEW DETAILS:
 ${viewPrompt}
 
-IMPORTANT: Maintain exact consistency with:
-- The booth design, colors, and branding
-- All materials and textures
-- The lighting style and atmosphere
-- The overall aesthetic and mood
-- The same brand signage and logos
+CONSISTENCY RULES (maintain from reference):
+- Identical booth design, structure, colors, and branding
+- Same materials, textures, and finishes
+- Same lighting style and atmosphere
+- Same brand signage, logos, and graphics
+- Same trade show environment
 
-Generate a photorealistic ${aspectRatio} image showing the same booth from the ${viewName} angle.`;
+OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

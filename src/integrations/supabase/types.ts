@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      project_images: {
+        Row: {
+          angle_id: string
+          angle_name: string
+          created_at: string
+          id: string
+          is_current: boolean
+          project_id: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          angle_id: string
+          angle_name: string
+          created_at?: string
+          id?: string
+          is_current?: boolean
+          project_id: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          angle_id?: string
+          angle_name?: string
+          created_at?: string
+          id?: string
+          is_current?: boolean
+          project_id?: string
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_images_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           adjacent_activations: Json | null

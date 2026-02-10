@@ -22,14 +22,35 @@ import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations, type LayoutVariation } from "./LayoutVariations";
 import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
 
-const ZONE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  hero: { bg: "bg-zone-hero/30", border: "border-zone-hero", text: "text-zone-hero" },
-  storytelling: { bg: "bg-zone-storytelling/30", border: "border-zone-storytelling", text: "text-zone-storytelling" },
-  lounge: { bg: "bg-zone-lounge/30", border: "border-zone-lounge", text: "text-zone-lounge" },
-  reception: { bg: "bg-zone-reception/30", border: "border-zone-reception", text: "text-zone-reception" },
-  service: { bg: "bg-zone-service/30", border: "border-zone-service", text: "text-zone-service" },
-  demo: { bg: "bg-pink-500/30", border: "border-pink-500", text: "text-pink-500" },
-};
+// Fallback palette when zones don't have a colorCode from DB
+const ZONE_PALETTE = [
+  { bg: "rgba(0, 71, 171, 0.2)", border: "rgba(0, 71, 171, 0.8)", text: "#0047AB" },
+  { bg: "rgba(70, 130, 180, 0.2)", border: "rgba(70, 130, 180, 0.8)", text: "#4682B4" },
+  { bg: "rgba(176, 196, 222, 0.25)", border: "rgba(100, 140, 180, 0.8)", text: "#4A6D8C" },
+  { bg: "rgba(47, 79, 79, 0.2)", border: "rgba(47, 79, 79, 0.8)", text: "#2F4F4F" },
+  { bg: "rgba(218, 165, 32, 0.2)", border: "rgba(218, 165, 32, 0.8)", text: "#B8860B" },
+  { bg: "rgba(139, 69, 19, 0.2)", border: "rgba(139, 69, 19, 0.8)", text: "#8B4513" },
+  { bg: "rgba(85, 107, 47, 0.2)", border: "rgba(85, 107, 47, 0.8)", text: "#556B2F" },
+  { bg: "rgba(128, 0, 128, 0.2)", border: "rgba(128, 0, 128, 0.8)", text: "#800080" },
+];
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getZoneColors(zone: any, index: number) {
+  if (zone.colorCode) {
+    return {
+      bg: hexToRgba(zone.colorCode, 0.2),
+      border: hexToRgba(zone.colorCode, 0.8),
+      text: zone.colorCode,
+    };
+  }
+  return ZONE_PALETTE[index % ZONE_PALETTE.length];
+}
 
 export function SpatialPlanner() {
   const { currentProject, setActiveStep } = useProjectStore();
@@ -210,35 +231,39 @@ export function SpatialPlanner() {
                   />
                 )}
                 
-                {activeLayout.zones.map((zone: any) => {
-                  const colors = ZONE_COLORS[zone.id] || ZONE_COLORS.service;
+                {activeLayout.zones.map((zone: any, index: number) => {
+                  const colors = getZoneColors(zone, index);
                   const zoneMetric = metrics.zoneMetrics.find(m => m.zoneId === zone.id);
+                  const x = zone.position.x <= 1 ? zone.position.x * 100 : zone.position.x;
+                  const y = zone.position.y <= 1 ? zone.position.y * 100 : zone.position.y;
+                  const w = zone.position.width <= 1 ? zone.position.width * 100 : zone.position.width;
+                  const h = zone.position.height <= 1 ? zone.position.height * 100 : zone.position.height;
                   
                   return (
                     <div
                       key={zone.id}
-                      className={cn(
-                        "absolute rounded border-2 flex items-center justify-center p-2 transition-all cursor-pointer hover:opacity-90 group",
-                        colors.bg,
-                        colors.border
-                      )}
+                      className="absolute rounded-md flex items-center justify-center p-1 transition-all cursor-pointer hover:opacity-90 group overflow-hidden"
                       style={{
-                        left: `${(zone.position.x <= 1 ? zone.position.x * 100 : zone.position.x)}%`,
-                        top: `${(zone.position.y <= 1 ? zone.position.y * 100 : zone.position.y)}%`,
-                        width: `${(zone.position.width <= 1 ? zone.position.width * 100 : zone.position.width)}%`,
-                        height: `${(zone.position.height <= 1 ? zone.position.height * 100 : zone.position.height)}%`,
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        width: `${w}%`,
+                        height: `${h}%`,
+                        backgroundColor: colors.bg,
+                        borderWidth: "2px",
+                        borderStyle: "solid",
+                        borderColor: colors.border,
+                        zIndex: zone.id === "Z5" ? 2 : 1,
                       }}
                     >
-                      <div className="text-center">
-                        <div className={cn("text-xs font-semibold", colors.text)}>
+                      <div className="text-center overflow-hidden">
+                        <div className="font-semibold leading-tight" style={{ color: colors.text, fontSize: `${Math.max(8, Math.min(12, w * 0.4))}px` }}>
                           {zone.name}
                         </div>
-                        <div className="text-2xs text-muted-foreground">
+                        <div className="text-muted-foreground mt-0.5" style={{ fontSize: `${Math.max(7, Math.min(10, w * 0.3))}px` }}>
                           {zone.sqft} sq ft
                         </div>
-                        {/* Hover metrics */}
                         {zoneMetric && (
-                          <div className="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded-md px-2 py-1 text-2xs shadow-md whitespace-nowrap z-10">
+                          <div className="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded-md px-2 py-1 shadow-md whitespace-nowrap z-10" style={{ fontSize: "10px" }}>
                             {zoneMetric.engagementScore}% engagement • {Math.round(zoneMetric.avgDwellTime / 60)}min avg
                           </div>
                         )}
@@ -287,12 +312,12 @@ export function SpatialPlanner() {
                   <CardTitle className="text-base">Zone Allocation</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {activeLayout.zones.map((zone: any) => {
-                    const colors = ZONE_COLORS[zone.id] || ZONE_COLORS.service;
+                  {activeLayout.zones.map((zone: any, index: number) => {
+                    const colors = getZoneColors(zone, index);
                     return (
                       <div key={zone.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className={cn("w-3 h-3 rounded", colors.bg, colors.border, "border")} />
+                          <div className="w-3 h-3 rounded border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
                           <span className="text-sm">{zone.name}</span>
                         </div>
                         <Badge variant="secondary" className="text-xs">

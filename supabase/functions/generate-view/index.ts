@@ -41,28 +41,37 @@ serve(async (req) => {
 
     // For zone interiors, check if viewName ends with "Interior"
     const isInterior = viewName.endsWith("Interior");
+    const zoneName = viewName.replace(' Interior', '');
     const cameraDir = cameraDirections[viewName] || (isInterior 
-      ? `Camera is INSIDE the booth, positioned at eye level (5.5 feet) within the "${viewName.replace(' Interior', '')}" zone. The camera looks outward from inside this specific zone, showing the zone's interior details, furnishings, screens, and visitors. The hero installation or other zones may be partially visible in the background. This is a CLOSE-UP INTERIOR shot — NOT the same wide exterior angle as the reference image.`
+      ? `Camera is DEEP INSIDE the booth, positioned at eye level (5.5 feet) within the "${zoneName}" zone. The camera is surrounded by the zone's walls, ceiling, and furnishings. The booth exterior, convention hall, and outside aisles should NOT be prominently visible. The viewer feels enclosed within this specific zone.`
       : `Camera showing the ${viewName} perspective of the booth.`);
 
     // Build the prompt for image editing/transformation
     const editPrompt = isInterior
-      ? `Using this reference image of a trade show booth, generate a NEW image showing an INTERIOR CLOSE-UP perspective from INSIDE the "${viewName.replace(' Interior', '')}" zone.
+      ? `Generate a photorealistic INTERIOR image showing what it looks like to be STANDING INSIDE the "${zoneName}" zone of this trade show booth.
 
-CAMERA POSITION (CRITICAL — follow exactly):
+CRITICAL CAMERA RULES:
 ${cameraDir}
+- The camera is INSIDE the zone, NOT outside looking at the booth
+- The booth's outer walls, fascia, header signage, and convention hall should be BEHIND the camera or barely visible
+- The viewer should feel ENCLOSED within the space — surrounded by the zone's walls, ceiling panels, and features
+- DO NOT show the full booth exterior or the booth from the aisle perspective
+- Think of this as an interior architectural photo taken from INSIDE a room
 
-ZONE-SPECIFIC DETAILS:
+ZONE: "${zoneName}"
 ${viewPrompt}
 
-CRITICAL CONSISTENCY RULES:
-- Look at the reference image carefully. Find the "${viewName.replace(' Interior', '')}" zone within it.
-- The interior view MUST match exactly how this zone appears in the reference: same wall colors, same screen content style, same furniture, same lighting fixtures.
-- Maintain the exact same design language, materials, textures, and brand elements.
-- The zone's proportions, layout, and features must match the reference — just shown from an interior close-up camera angle.
-- Show 2-4 visitors naturally engaging with the zone's features.
+VISUAL CONSISTENCY:
+- Match the design language, materials, colors, and finishes from the reference image
+- The zone's furniture, screens, and fixtures must match what's visible in the reference
+- Maintain the same brand aesthetic and lighting mood
 
-OUTPUT: A photorealistic ${aspectRatio} interior perspective. This must look like a zoomed-in, inside-the-zone view of what's visible in the reference image — NOT a reimagined space.`
+COMPOSITION:
+- Show 2-4 visitors naturally using the space
+- Include environmental details: ceiling treatment, floor material, wall finishes
+- Depth of field focusing on the zone's key features
+
+OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.`
       : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 
 CAMERA POSITION (CRITICAL — follow exactly):

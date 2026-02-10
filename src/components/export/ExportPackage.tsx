@@ -2,74 +2,91 @@ import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { 
   Download, 
   FileText, 
   Folder,
   Check,
-  Package
+  Package,
+  Hammer,
+  Box,
+  Loader2,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
+import { useProjectImages } from "@/hooks/useProjectImages";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import type { ElementType } from "@/types/brief";
 
-const FILE_STRUCTURE = [
-  {
-    folder: "01_strategy",
-    files: [
-      { name: "big_idea.md", element: "bigIdea" as ElementType },
-      { name: "experience_framework.md", element: "experienceFramework" as ElementType },
-      { name: "interactive_mechanics.md", element: "interactiveMechanics" as ElementType },
-      { name: "digital_storytelling.md", element: "digitalStorytelling" as ElementType },
-      { name: "human_connection.md", element: "humanConnection" as ElementType },
-      { name: "adjacent_activations.md", element: "adjacentActivations" as ElementType },
-      { name: "budget_logic.md", element: "budgetLogic" as ElementType },
-    ],
-  },
-  {
-    folder: "02_spatial",
-    files: [
-      { name: "floor_plan_30x30.svg", element: "spatialStrategy" as ElementType },
-      { name: "floor_plan_20x20.svg", element: "spatialStrategy" as ElementType },
-      { name: "zone_data.json", element: "spatialStrategy" as ElementType },
-      { name: "spatial_strategy.md", element: "spatialStrategy" as ElementType },
-    ],
-  },
-  {
-    folder: "03_prompts",
-    files: [
-      { name: "prompts_30x30.md", element: null },
-      { name: "prompts_20x20.md", element: null },
-      { name: "consistency_tokens.json", element: null },
-    ],
-  },
-  {
-    folder: "04_renders",
-    files: [
-      { name: "hero_34.png", element: null, placeholder: true },
-      { name: "top.png", element: null, placeholder: true },
-      { name: "front.png", element: null, placeholder: true },
-    ],
-  },
-  {
-    folder: "05_3d_ready",
-    files: [
-      { name: "rhino_import_guide.md", element: null },
-      { name: "layer_structure.md", element: null },
-      { name: "materials_spec.md", element: null },
-    ],
-  },
-];
+interface MaterialItem {
+  name: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  totalCost: number;
+}
+
+interface MaterialCategory {
+  name: string;
+  items: MaterialItem[];
+  subtotal: number;
+}
+
+interface MaterialsData {
+  categories: MaterialCategory[];
+  grandTotal: number;
+  notes: string;
+}
+
+interface MeshyPrompt {
+  viewName: string;
+  prompt: string;
+  styleTokens: string;
+  materialHints: string;
+}
+
+interface ModelingBrief {
+  overallDimensions: string;
+  layerStructure: { layerName: string; color: string; contents: string }[];
+  materials: { name: string; application: string; finish: string; rhinoMaterial: string }[];
+  constructionNotes: string;
+  scaleReference: string;
+}
+
+interface ThreeDData {
+  meshyPrompts: MeshyPrompt[];
+  modelingBrief: ModelingBrief;
+}
+
+function formatCurrency(n: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function ExportPackage() {
   const { currentProject } = useProjectStore();
   const { navigate } = useProjectNavigate();
   const { toast } = useToast();
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(
-    new Set(FILE_STRUCTURE.flatMap(f => f.files.map(file => `${f.folder}/${file.name}`)))
-  );
+
+  const projectId = currentProject?.id;
+  const { data: images } = useProjectImages(projectId);
+
+  const [materials, setMaterials] = useState<MaterialsData | null>(null);
+  const [threeDData, setThreeDData] = useState<ThreeDData | null>(null);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [loading3D, setLoading3D] = useState(false);
 
   const brief = currentProject?.parsedBrief;
   const elements = currentProject?.elements;
@@ -85,62 +102,104 @@ export function ExportPackage() {
     );
   }
 
-  const toggleFile = (path: string) => {
-    const newSelected = new Set(selectedFiles);
-    if (newSelected.has(path)) {
-      newSelected.delete(path);
-    } else {
-      newSelected.add(path);
-    }
-    setSelectedFiles(newSelected);
-  };
-
-  const toggleFolder = (folder: string, files: typeof FILE_STRUCTURE[0]["files"]) => {
-    const folderPaths = files.map(f => `${folder}/${f.name}`);
-    const allSelected = folderPaths.every(p => selectedFiles.has(p));
-    
-    const newSelected = new Set(selectedFiles);
-    if (allSelected) {
-      folderPaths.forEach(p => newSelected.delete(p));
-    } else {
-      folderPaths.forEach(p => newSelected.add(p));
-    }
-    setSelectedFiles(newSelected);
-  };
-
-  const handleExport = () => {
-    // In production, this would generate and download a ZIP file
-    toast({
-      title: "Export started",
-      description: `Preparing ${selectedFiles.size} files for download...`,
-    });
-    
-    // Simulate export
-    setTimeout(() => {
-      toast({
-        title: "Export complete",
-        description: "Your package has been downloaded.",
-      });
-    }, 1500);
-  };
-
   const completedElements = Object.values(elements).filter(e => e.status === "complete").length;
   const totalElements = Object.keys(elements).length;
+
+  const handleGenerateMaterials = async () => {
+    setLoadingMaterials(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-materials", {
+        body: {
+          parsedBrief: brief,
+          spatialStrategy: elements.spatialStrategy?.data,
+          budgetLogic: elements.budgetLogic?.data,
+          boothSize: brief.spatial?.footprints?.[0]?.size || "30x30",
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      setMaterials(data.materials);
+      toast({ title: "Materials list generated" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setLoadingMaterials(false);
+    }
+  };
+
+  const handleGenerate3D = async () => {
+    setLoading3D(true);
+    try {
+      const imageUrls = (images || []).filter(i => i.is_current).map(i => ({
+        angle: i.angle_name,
+        url: i.public_url,
+      }));
+      const { data, error } = await supabase.functions.invoke("generate-3d-brief", {
+        body: {
+          parsedBrief: brief,
+          spatialStrategy: elements.spatialStrategy?.data,
+          renderPrompts: currentProject?.renderPrompts,
+          imageUrls,
+          boothSize: brief.spatial?.footprints?.[0]?.size || "30x30",
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      setThreeDData(data.brief);
+      toast({ title: "3D modeling brief generated" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading3D(false);
+    }
+  };
+
+  const downloadMaterialsCSV = () => {
+    if (!materials) return;
+    const rows = ["Category,Item,Description,Qty,Unit,Unit Cost,Total Cost"];
+    for (const cat of materials.categories) {
+      for (const item of cat.items) {
+        rows.push(`"${cat.name}","${item.name}","${item.description}",${item.quantity},"${item.unit}",${item.unitCost},${item.totalCost}`);
+      }
+    }
+    rows.push(`,,,,,,`);
+    rows.push(`"GRAND TOTAL",,,,,,${materials.grandTotal}`);
+    downloadTextFile(`${brief.brand?.name || "project"}_materials.csv`, rows.join("\n"));
+  };
+
+  const download3DBrief = () => {
+    if (!threeDData) return;
+    const lines: string[] = [];
+    lines.push(`# 3D Modeling Brief — ${brief.brand?.name || "Project"}`);
+    lines.push(`\n## Overall Dimensions\n${threeDData.modelingBrief.overallDimensions}`);
+    lines.push(`\n## Scale Reference\n${threeDData.modelingBrief.scaleReference}`);
+    lines.push(`\n## Layer Structure`);
+    for (const l of threeDData.modelingBrief.layerStructure) {
+      lines.push(`- **${l.layerName}** (${l.color}): ${l.contents}`);
+    }
+    lines.push(`\n## Materials Specification`);
+    for (const m of threeDData.modelingBrief.materials) {
+      lines.push(`- **${m.name}** — ${m.application} | Finish: ${m.finish} | Rhino Material: ${m.rhinoMaterial}`);
+    }
+    lines.push(`\n## Construction Notes\n${threeDData.modelingBrief.constructionNotes}`);
+    lines.push(`\n---\n## Meshy.ai Prompts`);
+    for (const p of threeDData.meshyPrompts) {
+      lines.push(`\n### ${p.viewName}`);
+      lines.push(`**Prompt:** ${p.prompt}`);
+      lines.push(`**Style Tokens:** ${p.styleTokens}`);
+      lines.push(`**Material Hints:** ${p.materialHints}`);
+    }
+    downloadTextFile(`${brief.brand?.name || "project"}_3d_brief.md`, lines.join("\n"));
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Export Package</h2>
-          <p className="text-muted-foreground">
-            Download your complete booth response package
-          </p>
-        </div>
-        <Button onClick={handleExport} className="btn-glow">
-          <Download className="mr-2 h-4 w-4" />
-          Download Package
-        </Button>
+      <div>
+        <h2 className="text-2xl font-semibold">Export Package</h2>
+        <p className="text-muted-foreground">
+          Generate materials lists, 3D modeling briefs, and download your complete project
+        </p>
       </div>
 
       {/* Status Summary */}
@@ -154,7 +213,7 @@ export function ExportPackage() {
         <CardContent>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <div className="text-2xl font-semibold">{brief.brand.name}</div>
+              <div className="text-2xl font-semibold">{brief.brand?.name || currentProject?.name}</div>
               <div className="text-sm text-muted-foreground">Project</div>
             </div>
             <div>
@@ -162,97 +221,144 @@ export function ExportPackage() {
               <div className="text-sm text-muted-foreground">Elements Complete</div>
             </div>
             <div>
-              <div className="text-2xl font-semibold">{selectedFiles.size}</div>
-              <div className="text-sm text-muted-foreground">Files Selected</div>
+              <div className="text-2xl font-semibold">{images?.filter(i => i.is_current).length || 0}</div>
+              <div className="text-sm text-muted-foreground">Rendered Views</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* File Selection */}
-      <div className="space-y-4">
-        {FILE_STRUCTURE.map((folder) => {
-          const folderPaths = folder.files.map(f => `${folder.folder}/${f.name}`);
-          const selectedCount = folderPaths.filter(p => selectedFiles.has(p)).length;
-          const allSelected = selectedCount === folder.files.length;
-          
-          return (
-            <Card key={folder.folder} className="element-card">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={() => toggleFolder(folder.folder, folder.files)}
-                    />
-                    <div className="flex items-center gap-2">
-                      <Folder className="h-4 w-4 text-primary" />
-                      <CardTitle className="text-base">{folder.folder}</CardTitle>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {selectedCount}/{folder.files.length} selected
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {folder.files.map((file) => {
-                    const path = `${folder.folder}/${file.name}`;
-                    const isSelected = selectedFiles.has(path);
-                    const isComplete = file.element 
-                      ? elements[file.element]?.status === "complete"
-                      : !file.placeholder;
-                    
-                    return (
-                      <div
-                        key={file.name}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleFile(path)}
-                        />
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm flex-1">{file.name}</span>
-                        {file.placeholder ? (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
-                            Upload
-                          </Badge>
-                        ) : isComplete ? (
-                          <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        ) : (
-                          <Badge variant="outline" className="text-xs text-primary">
-                            Pending
-                          </Badge>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Export Options */}
+      {/* Materials List */}
       <Card className="element-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Export Format</CardTitle>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Hammer className="h-4 w-4 text-primary" />
+              Materials & Cost Estimate
+            </CardTitle>
+            <div className="flex gap-2">
+              {materials && (
+                <Button variant="outline" size="sm" onClick={downloadMaterialsCSV}>
+                  <Download className="mr-1 h-3 w-3" /> CSV
+                </Button>
+              )}
+              <Button size="sm" onClick={handleGenerateMaterials} disabled={loadingMaterials}>
+                {loadingMaterials ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Hammer className="mr-1 h-3 w-3" />}
+                {materials ? "Regenerate" : "Generate"}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex-1">
-              ZIP Archive
-            </Button>
-            <Button variant="ghost" className="flex-1" disabled>
-              PDF Report (Coming Soon)
-            </Button>
-            <Button variant="ghost" className="flex-1" disabled>
-              Google Drive (Coming Soon)
-            </Button>
+          {!materials && !loadingMaterials && (
+            <p className="text-sm text-muted-foreground">
+              AI will analyze your brief, spatial plan, and budget to generate a detailed materials list with estimated costs.
+            </p>
+          )}
+          {loadingMaterials && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Analyzing project data and estimating costs...</p>
+              <Progress value={45} className="h-2" />
+            </div>
+          )}
+          {materials && (
+            <div className="space-y-4">
+              {materials.categories.map((cat) => (
+                <div key={cat.name}>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-sm">{cat.name}</h4>
+                    <span className="text-sm font-semibold">{formatCurrency(cat.subtotal)}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {cat.items.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded hover:bg-muted/50">
+                        <div className="flex-1">
+                          <span className="font-medium">{item.name}</span>
+                          <span className="text-muted-foreground ml-2">{item.description}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-right shrink-0">
+                          <span className="text-muted-foreground w-16">{item.quantity} {item.unit}</span>
+                          <span className="w-20">{formatCurrency(item.totalCost)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div className="border-t pt-3 flex justify-between items-center">
+                <span className="font-semibold">Grand Total</span>
+                <span className="text-xl font-bold text-primary">{formatCurrency(materials.grandTotal)}</span>
+              </div>
+              {materials.notes && (
+                <p className="text-xs text-muted-foreground italic">{materials.notes}</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 3D Modeling Brief */}
+      <Card className="element-card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Box className="h-4 w-4 text-primary" />
+              3D Modeling Brief & Meshy.ai Prompts
+            </CardTitle>
+            <div className="flex gap-2">
+              {threeDData && (
+                <Button variant="outline" size="sm" onClick={download3DBrief}>
+                  <Download className="mr-1 h-3 w-3" /> Download .md
+                </Button>
+              )}
+              <Button size="sm" onClick={handleGenerate3D} disabled={loading3D}>
+                {loading3D ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Box className="mr-1 h-3 w-3" />}
+                {threeDData ? "Regenerate" : "Generate"}
+              </Button>
+            </div>
           </div>
+        </CardHeader>
+        <CardContent>
+          {!threeDData && !loading3D && (
+            <p className="text-sm text-muted-foreground">
+              Generate Meshy.ai-ready image-to-3D prompts and a comprehensive Rhino/SketchUp modeling brief with dimensions, layers, and materials.
+            </p>
+          )}
+          {loading3D && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Creating 3D modeling brief and Meshy.ai prompts...</p>
+              <Progress value={45} className="h-2" />
+            </div>
+          )}
+          {threeDData && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm mb-2">Meshy.ai Prompts</h4>
+                <div className="space-y-2">
+                  {threeDData.meshyPrompts.map((p, i) => (
+                    <div key={i} className="p-3 rounded-lg bg-muted/50 space-y-1">
+                      <div className="font-medium text-sm">{p.viewName}</div>
+                      <p className="text-xs">{p.prompt}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge variant="secondary" className="text-xs">{p.styleTokens}</Badge>
+                        <Badge variant="outline" className="text-xs">{p.materialHints}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="font-medium text-sm mb-2">Modeling Brief</h4>
+                <div className="p-3 rounded-lg bg-muted/50 space-y-2 text-xs">
+                  <div><strong>Dimensions:</strong> {threeDData.modelingBrief.overallDimensions}</div>
+                  <div><strong>Scale:</strong> {threeDData.modelingBrief.scaleReference}</div>
+                  <div><strong>Layers:</strong> {threeDData.modelingBrief.layerStructure.map(l => l.layerName).join(", ")}</div>
+                  <div><strong>Materials:</strong> {threeDData.modelingBrief.materials.map(m => m.name).join(", ")}</div>
+                  <div className="pt-1 border-t"><strong>Construction Notes:</strong> {threeDData.modelingBrief.constructionNotes}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

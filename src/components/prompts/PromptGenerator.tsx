@@ -395,7 +395,7 @@ Aspect ratio: ${angle.aspectRatio}`;
 
     try {
       await renderStore.regenerateView({
-        angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio },
+        angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio, isZoneInterior: !!(angle as any).isZoneInterior },
         prompt: generatedPrompts[angleId] || generatePrompt(angleId),
         heroImageUrl: heroImage,
         projectId: projectId!,

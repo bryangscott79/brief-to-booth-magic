@@ -61,7 +61,7 @@ interface RenderActions {
   }) => Promise<void>;
 
   regenerateView: (params: {
-    angle: { id: string; name: string; aspectRatio: string };
+    angle: { id: string; name: string; aspectRatio: string; isZoneInterior?: boolean };
     prompt: string;
     heroImageUrl: string;
     projectId: string;
@@ -145,7 +145,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   },
 
   generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, onSave }) => {
-    const viewsToGenerate = angles.filter((a) => a.id !== "hero_34");
+    // Split into exterior views first, then interiors — so interiors can reference exterior images
+    const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
+    const interiorViews = angles.filter((a) => a.isZoneInterior);
+    const viewsToGenerate = [...exteriorViews, ...interiorViews];
 
     set({
       phase: "all-views",
@@ -160,7 +163,6 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
     for (let i = 0; i < viewsToGenerate.length; i++) {
       const angle = viewsToGenerate[i];
-      // Abort if project changed
       if (get().projectId !== projectId) return;
 
       set((s) => ({
@@ -168,10 +170,24 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
       }));
 
+      // For interior views, use the best available exterior view as reference
+      let referenceUrl = heroImageUrl;
+      if (angle.isZoneInterior) {
+        const currentImages = get().generatedImages;
+        // Try front, then left, then right as better references for interiors
+        const preferredRefs = ["front", "left", "right", "hero_34"];
+        for (const refId of preferredRefs) {
+          if (currentImages[refId]?.status === "complete" && currentImages[refId]?.url) {
+            referenceUrl = currentImages[refId].url;
+            break;
+          }
+        }
+      }
+
       try {
         const { data, error } = await supabase.functions.invoke("generate-view", {
           body: {
-            referenceImageUrl: heroImageUrl,
+            referenceImageUrl: referenceUrl,
             viewPrompt: prompts[angle.id],
             viewName: angle.name,
             aspectRatio: angle.aspectRatio,
@@ -220,10 +236,23 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
 
+    // For interior views, use the best available exterior view as reference
+    let referenceUrl = heroImageUrl;
+    if (angle.isZoneInterior) {
+      const currentImages = get().generatedImages;
+      const preferredRefs = ["front", "left", "right", "hero_34"];
+      for (const refId of preferredRefs) {
+        if (currentImages[refId]?.status === "complete" && currentImages[refId]?.url) {
+          referenceUrl = currentImages[refId].url;
+          break;
+        }
+      }
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke("generate-view", {
         body: {
-          referenceImageUrl: heroImageUrl,
+          referenceImageUrl: referenceUrl,
           viewPrompt: prompt,
           viewName: angle.name,
           aspectRatio: angle.aspectRatio,

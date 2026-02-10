@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Copy, 
   Check, 
@@ -19,11 +21,14 @@ import {
   Download,
   RefreshCw,
   MessageSquare,
-  Layers
+  Layers,
+  FolderOpen
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
+import { useSearchParams } from "react-router-dom";
 
 const ANGLE_CONFIG = [
   { id: "hero_34", name: "3/4 Hero View", priority: 1, aspectRatio: "16:9", description: "Primary marketing shot — 45° front-left perspective", isZoneInterior: false },
@@ -168,6 +173,8 @@ export function PromptGenerator() {
   const { currentProject, setActiveStep } = useProjectStore();
   const { navigate } = useProjectNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("project");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [heroPrompt, setHeroPrompt] = useState<string>("");
   const [phase, setPhase] = useState<WorkflowPhase>("prompt");
@@ -180,6 +187,10 @@ export function PromptGenerator() {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [currentlyGenerating, setCurrentlyGenerating] = useState<string | null>(null);
   const [heroIterations, setHeroIterations] = useState<string[]>([]);
+  const [showGallery, setShowGallery] = useState(false);
+
+  const { data: savedImages = [], isLoading: imagesLoading } = useProjectImages(projectId);
+  const saveImage = useSaveRenderImage(projectId);
 
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
@@ -289,6 +300,12 @@ Aspect ratio: ${angle.aspectRatio}`;
       setHeroIterations(prev => [...prev, data.imageUrl]);
       setPhase("hero-review");
       setHeroFeedback("");
+
+      // Save hero image to storage
+      saveImage.mutate(
+        { angleId: "hero_34", angleName: "3/4 Hero View", imageDataUrl: data.imageUrl },
+        { onError: (err) => console.error("Failed to save hero image:", err) }
+      );
       
       toast({
         title: "Hero image generated",
@@ -402,6 +419,14 @@ Aspect ratio: ${angle.aspectRatio}`;
           [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
         }));
 
+        // Save to storage
+        if (imageUrl) {
+          saveImage.mutate(
+            { angleId: angle.id, angleName: angle.name, imageDataUrl: imageUrl },
+            { onError: (err) => console.error(`Failed to save ${angle.name}:`, err) }
+          );
+        }
+
         setGenerationProgress(((i + 1) / viewsToGenerate.length) * 100);
         
         toast({
@@ -452,6 +477,14 @@ Aspect ratio: ${angle.aspectRatio}`;
         ...prev,
         [angleId]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
       }));
+
+      // Save to storage
+      if (imageUrl) {
+        saveImage.mutate(
+          { angleId, angleName: angle.name, imageDataUrl: imageUrl },
+          { onError: (err) => console.error(`Failed to save ${angle.name}:`, err) }
+        );
+      }
 
       toast({
         title: `${angle.name} regenerated`,
@@ -712,10 +745,82 @@ Aspect ratio: ${angle.aspectRatio}`;
             }
           </p>
         </div>
-        <Button onClick={handleContinue} className="btn-glow" disabled={isGenerating}>
-          Export Package
-          <ChevronRight className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="flex gap-3">
+          <Dialog open={showGallery} onOpenChange={setShowGallery}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <FolderOpen className="mr-2 h-4 w-4" />
+                All Images ({savedImages.length})
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle>Project Image Gallery</DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="h-[60vh] pr-4">
+                {savedImages.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No images saved yet. Generate renders to populate the gallery.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Group by angle */}
+                    {Object.entries(
+                      savedImages.reduce((acc, img) => {
+                        const key = img.angle_name;
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(img);
+                        return acc;
+                      }, {} as Record<string, typeof savedImages>)
+                    ).map(([angleName, images]) => (
+                      <div key={angleName}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-sm font-semibold">{angleName}</h4>
+                          <Badge variant="secondary" className="text-xs">{images.length} version{images.length > 1 ? "s" : ""}</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {images.map((img) => (
+                            <div key={img.id} className="group relative rounded-lg overflow-hidden border bg-muted">
+                              <img src={img.public_url} alt={img.angle_name} className="w-full aspect-video object-cover" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    const link = document.createElement("a");
+                                    link.href = img.public_url;
+                                    link.download = `${img.angle_name.replace(/\s+/g, "_")}_${new Date(img.created_at).getTime()}.png`;
+                                    link.target = "_blank";
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }}
+                                >
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Download
+                                </Button>
+                              </div>
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-white text-xs">
+                                    {new Date(img.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                  {img.is_current && <Badge className="bg-primary/80 text-xs">Current</Badge>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+          <Button onClick={handleContinue} className="btn-glow" disabled={isGenerating}>
+            Export Package
+            <ChevronRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Progress Bar */}

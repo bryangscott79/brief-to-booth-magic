@@ -21,6 +21,7 @@ import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations, type LayoutVariation } from "./LayoutVariations";
 import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
+import { ZoneDetailPanel } from "./ZoneDetailPanel";
 
 // Fallback palette when zones don't have a colorCode from DB
 const ZONE_PALETTE = [
@@ -62,6 +63,7 @@ export function SpatialPlanner() {
   const [activeVariation, setActiveVariation] = useState("balanced");
   const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
   const [activeTab, setActiveTab] = useState<"layout" | "metrics">("layout");
+  const [selectedZone, setSelectedZone] = useState<{ zone: any; colors: any } | null>(null);
 
   const spatialData = currentProject?.elements.spatialStrategy.data;
   const currentConfig = spatialData?.configs?.[activeFootprint];
@@ -242,7 +244,8 @@ export function SpatialPlanner() {
                   return (
                     <div
                       key={zone.id}
-                      className="absolute rounded-md flex items-center justify-center p-1 transition-all cursor-pointer hover:opacity-90 group overflow-hidden"
+                      className="absolute rounded-md flex items-center justify-center p-1 transition-all cursor-pointer hover:opacity-90 hover:shadow-md group overflow-hidden"
+                      onClick={() => setSelectedZone({ zone, colors })}
                       style={{
                         left: `${x}%`,
                         top: `${y}%`,
@@ -359,6 +362,14 @@ export function SpatialPlanner() {
           </Card>
         </div>
       </div>
+
+      {/* Zone Detail Panel */}
+      <ZoneDetailPanel
+        zone={selectedZone?.zone ?? null}
+        open={!!selectedZone}
+        onClose={() => setSelectedZone(null)}
+        colors={selectedZone?.colors ?? { bg: "", border: "", text: "" }}
+      />
     </div>
   );
 }

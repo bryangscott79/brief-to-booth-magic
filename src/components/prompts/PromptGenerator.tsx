@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,22 +18,143 @@ import {
   Loader2,
   Download,
   RefreshCw,
-  MessageSquare
+  MessageSquare,
+  Layers
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 const ANGLE_CONFIG = [
-  { id: "hero_34", name: "3/4 Hero View", priority: 1, aspectRatio: "16:9", description: "Primary marketing shot — 45° front-left perspective" },
-  { id: "top", name: "Top-Down View", priority: 2, aspectRatio: "1:1", description: "Floor plan validation — directly overhead" },
-  { id: "front", name: "Front Elevation", priority: 3, aspectRatio: "16:9", description: "Primary aisle view — eye-level, centered on entry" },
-  { id: "left", name: "Left Side", priority: 4, aspectRatio: "16:9", description: "Side aisle view — eye-level, 90° left" },
-  { id: "right", name: "Right Side", priority: 5, aspectRatio: "16:9", description: "Opposite side view — eye-level, 90° right" },
-  { id: "back", name: "Back View", priority: 6, aspectRatio: "16:9", description: "Service/structure view — eye-level, behind booth" },
-  { id: "detail_hero", name: "Hero Detail", priority: 7, aspectRatio: "4:3", description: "Medium shot focused on hero installation" },
-  { id: "detail_lounge", name: "Lounge Detail", priority: 8, aspectRatio: "4:3", description: "Medium shot focused on human connection zone" },
+  { id: "hero_34", name: "3/4 Hero View", priority: 1, aspectRatio: "16:9", description: "Primary marketing shot — 45° front-left perspective", isZoneInterior: false },
+  { id: "top", name: "Top-Down View", priority: 2, aspectRatio: "1:1", description: "Floor plan validation — directly overhead", isZoneInterior: false },
+  { id: "front", name: "Front Elevation", priority: 3, aspectRatio: "16:9", description: "Primary aisle view — eye-level, centered on entry", isZoneInterior: false },
+  { id: "left", name: "Left Side", priority: 4, aspectRatio: "16:9", description: "Side aisle view — eye-level, 90° left", isZoneInterior: false },
+  { id: "right", name: "Right Side", priority: 5, aspectRatio: "16:9", description: "Opposite side view — eye-level, 90° right", isZoneInterior: false },
+  { id: "back", name: "Back View", priority: 6, aspectRatio: "16:9", description: "Service/structure view — eye-level, behind booth", isZoneInterior: false },
+  { id: "detail_hero", name: "Hero Detail", priority: 7, aspectRatio: "4:3", description: "Medium shot focused on hero installation", isZoneInterior: false },
+  { id: "detail_lounge", name: "Lounge Detail", priority: 8, aspectRatio: "4:3", description: "Medium shot focused on human connection zone", isZoneInterior: false },
 ];
+
+/** Dynamically generate zone interior angle configs from spatial data */
+function getZoneInteriorAngles(spatialData: any, elements: any) {
+  if (!spatialData?.configs?.[0]?.zones) return [];
+  
+  return spatialData.configs[0].zones.map((zone: any, index: number) => ({
+    id: `zone_interior_${zone.id || index}`,
+    name: `${zone.name} Interior`,
+    priority: 9 + index,
+    aspectRatio: "16:9",
+    description: `Interior perspective inside the ${zone.name} zone — showing featured content and visitor experience`,
+    isZoneInterior: true,
+    zoneData: zone,
+  }));
+}
+
+/** Build a zone-specific interior prompt using content strategy data */
+function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatialData: any, elements: any): string {
+  const zoneName = (zone.name || "").toLowerCase();
+  const parts: string[] = [];
+
+  parts.push(`Generate a photorealistic interior perspective view inside the "${zone.name}" zone of a ${brief.spatial.footprints[0]?.size || ""} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company.`);
+  parts.push(`Camera at eye level, positioned inside the ${zone.name} zone, showing the space as a visitor would experience it.`);
+  parts.push("");
+  parts.push("DESIGN DIRECTION:");
+  parts.push(`${bigIdea.headline}`);
+  parts.push(`${bigIdea.narrative}`);
+
+  // Zone-specific content
+  if (zoneName.includes("hero") || zoneName.includes("experience zone")) {
+    const im = elements.interactiveMechanics?.data;
+    if (im?.hero) {
+      parts.push("");
+      parts.push("HERO INSTALLATION (FEATURED):");
+      parts.push(`${im.hero.name} — ${im.hero.concept}`);
+      if (im.hero.physicalForm) {
+        parts.push(`Structure: ${im.hero.physicalForm.structure}`);
+        parts.push(`Materials: ${im.hero.physicalForm.materials?.join(", ")}`);
+        parts.push(`Visual Language: ${im.hero.physicalForm.visualLanguage}`);
+      }
+      parts.push("Show 3-4 visitors actively engaging with the installation, looking up in wonder.");
+    }
+  }
+
+  if (zoneName.includes("storytelling") || zoneName.includes("theatre") || zoneName.includes("theater")) {
+    const ds = elements.digitalStorytelling?.data;
+    if (ds) {
+      parts.push("");
+      parts.push("CONTENT DISPLAYS (FEATURED):");
+      if (ds.audienceTracks?.length) {
+        ds.audienceTracks.slice(0, 3).forEach((t: any) => {
+          parts.push(`- ${t.trackName}: ${t.format} display showing ${t.contentFocus}`);
+        });
+      }
+      if (ds.contentModules?.length) {
+        parts.push(`Content modules: ${ds.contentModules.map((m: any) => m.title).join(", ")}`);
+      }
+      parts.push("Show 2-3 visitors watching content on displays, intimate theatre-like seating.");
+    }
+  }
+
+  if (zoneName.includes("meeting") || zoneName.includes("pod")) {
+    const hc = elements.humanConnection?.data;
+    if (hc?.configs?.[0]?.zones) {
+      parts.push("");
+      parts.push("MEETING CONFIGURATION (FEATURED):");
+      hc.configs[0].zones.forEach((mz: any) => {
+        parts.push(`- ${mz.name} (${mz.capacity}): ${mz.description}`);
+        if (mz.designFeatures?.length) parts.push(`  Features: ${mz.designFeatures.join(", ")}`);
+      });
+      parts.push("Show a small group in a focused conversation, professional setting.");
+    }
+  }
+
+  if (zoneName.includes("adjacent") || zoneName.includes("vip") || zoneName.includes("lounge")) {
+    const aa = elements.adjacentActivations?.data;
+    if (aa?.activations?.length) {
+      const primary = aa.activations[0];
+      parts.push("");
+      parts.push("VIP/ACTIVATION SPACE (FEATURED):");
+      parts.push(`${primary.name} — ${primary.format}`);
+      parts.push(`Atmosphere: ${primary.atmosphere}`);
+      parts.push("Show exclusive, intimate setting with premium finishes, 2-3 VIP guests.");
+    }
+  }
+
+  if (zoneName.includes("engagement") || zoneName.includes("open")) {
+    const ef = elements.experienceFramework?.data;
+    if (ef?.visitorJourney?.length) {
+      parts.push("");
+      parts.push("VISITOR JOURNEY TOUCHPOINTS (FEATURED):");
+      ef.visitorJourney.forEach((s: any) => {
+        parts.push(`- ${s.stage}: ${s.touchpoints?.join(", ")}`);
+      });
+      parts.push("Show an open, welcoming space with visitors flowing through naturally.");
+    }
+  }
+
+  if (zoneName.includes("welcome") || zoneName.includes("desk") || zoneName.includes("info")) {
+    parts.push("");
+    parts.push("WELCOME AREA (FEATURED):");
+    parts.push("Branded reception desk with digital check-in, staff welcoming visitors.");
+    parts.push("Show 1-2 staff members greeting visitors, clean branded signage visible.");
+  }
+
+  // Common finishing
+  parts.push("");
+  parts.push("MATERIALS AND MOOD:");
+  parts.push(spatialData.materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "");
+  parts.push("");
+  parts.push(`BRANDING: ${brief.brand.name} signage subtly visible. Brand colors: ${brief.brand.visualIdentity.colors.join(", ")}.`);
+  parts.push("");
+  parts.push("STYLE: Architectural visualization quality. Photorealistic materials. Warm, inviting lighting. Eye-level interior perspective showing depth and spatial quality.");
+  parts.push("");
+  parts.push(`NEGATIVE PROMPT: ${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversaturated, empty space, unrealistic, blurry, low quality`);
+  parts.push("");
+  parts.push("Aspect ratio: 16:9");
+
+  return parts.join("\n");
+}
 
 interface GeneratedImage {
   url: string;
@@ -63,6 +184,15 @@ export function PromptGenerator() {
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
   const bigIdea = currentProject?.elements.bigIdea.data;
+  const elements = currentProject?.elements;
+
+  // Build combined angle list: standard + zone interiors
+  const zoneInteriorAngles = useMemo(() => {
+    if (!spatialData || !elements) return [];
+    return getZoneInteriorAngles(spatialData, elements);
+  }, [spatialData, elements]);
+
+  const allAngles = useMemo(() => [...ANGLE_CONFIG, ...zoneInteriorAngles], [zoneInteriorAngles]);
 
   if (!brief || !spatialData || !bigIdea) {
     return (
@@ -76,6 +206,12 @@ export function PromptGenerator() {
   }
 
   const generatePrompt = (angleId: string): string => {
+    // Check for zone interior angles first
+    const zoneAngle = zoneInteriorAngles.find((a: any) => a.id === angleId);
+    if (zoneAngle?.isZoneInterior && zoneAngle.zoneData) {
+      return generateZoneInteriorPrompt(zoneAngle.zoneData, brief, bigIdea, spatialData, elements);
+    }
+
     const angle = ANGLE_CONFIG.find(a => a.id === angleId);
     if (!angle) return "";
 
@@ -197,7 +333,7 @@ Aspect ratio: ${angle.aspectRatio}`;
   const generateSingleView = async (angleId: string, prompt: string, aspectRatio: string): Promise<string | null> => {
     if (!heroImage) return null;
 
-    const angle = ANGLE_CONFIG.find(a => a.id === angleId);
+    const angle = allAngles.find(a => a.id === angleId);
     if (!angle) return null;
 
     try {
@@ -225,7 +361,7 @@ Aspect ratio: ${angle.aspectRatio}`;
     
     // Generate all prompts first
     const prompts: Record<string, string> = {};
-    const viewsToGenerate = ANGLE_CONFIG.filter(a => a.id !== "hero_34");
+    const viewsToGenerate = allAngles.filter(a => a.id !== "hero_34");
     viewsToGenerate.forEach(angle => {
       prompts[angle.id] = generatePrompt(angle.id);
     });
@@ -300,7 +436,7 @@ Aspect ratio: ${angle.aspectRatio}`;
   };
 
   const regenerateView = async (angleId: string) => {
-    const angle = ANGLE_CONFIG.find(a => a.id === angleId);
+    const angle = allAngles.find(a => a.id === angleId);
     if (!angle || !heroImage) return;
 
     setGeneratedImages(prev => ({
@@ -354,7 +490,7 @@ Aspect ratio: ${angle.aspectRatio}`;
   };
 
   const completedCount = Object.values(generatedImages).filter(img => img.status === "complete").length;
-  const totalViews = ANGLE_CONFIG.length;
+  const totalViews = allAngles.length;
 
   // Phase 1: Generate Hero Image
   if (phase === "prompt" || phase === "hero-generation") {
@@ -590,7 +726,7 @@ Aspect ratio: ${angle.aspectRatio}`;
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  Generating {currentlyGenerating && ANGLE_CONFIG.find(a => a.id === currentlyGenerating)?.name}...
+                  Generating {currentlyGenerating && allAngles.find(a => a.id === currentlyGenerating)?.name}...
                 </span>
                 <span className="text-muted-foreground">{Math.round(generationProgress)}%</span>
               </div>
@@ -649,7 +785,8 @@ Aspect ratio: ${angle.aspectRatio}`;
         </CardContent>
       </Card>
 
-      {/* Generated Views Grid */}
+      {/* Standard Views */}
+      <h3 className="text-lg font-semibold mt-2">Exterior Views</h3>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {ANGLE_CONFIG.filter(a => a.id !== "hero_34").map((angle) => {
           const imageData = generatedImages[angle.id];
@@ -750,6 +887,88 @@ Aspect ratio: ${angle.aspectRatio}`;
           );
         })}
       </div>
+
+      {/* Zone Interior Views */}
+      {zoneInteriorAngles.length > 0 && (
+        <>
+          <h3 className="text-lg font-semibold mt-6">Zone Interior Views</h3>
+          <p className="text-sm text-muted-foreground -mt-4">
+            Interior perspectives of each zone, featuring content strategy items
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {zoneInteriorAngles.map((angle: any) => {
+              const imageData = generatedImages[angle.id];
+              const prompt = generatedPrompts[angle.id] || "";
+              
+              return (
+                <Card key={angle.id} className={cn(
+                  "prompt-card overflow-hidden transition-all border-primary/10",
+                  imageData?.status === "generating" && "ring-2 ring-primary/50",
+                  imageData?.status === "complete" && "ring-1 ring-primary/20"
+                )}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-primary" />
+                          {angle.name}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {angle.description}
+                        </p>
+                      </div>
+                      <Badge className="bg-primary/10 text-primary text-xs">Interior</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className={cn(
+                      "aspect-video rounded-lg overflow-hidden border bg-muted flex items-center justify-center",
+                      imageData?.status === "generating" && "animate-pulse"
+                    )}>
+                      {imageData?.status === "pending" && (
+                        <div className="text-center text-muted-foreground">
+                          <Camera className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-xs">Waiting...</p>
+                        </div>
+                      )}
+                      {imageData?.status === "generating" && (
+                        <div className="text-center text-primary">
+                          <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                          <p className="text-xs">Generating...</p>
+                        </div>
+                      )}
+                      {imageData?.status === "complete" && imageData.url && (
+                        <img src={imageData.url} alt={angle.name} className="w-full h-full object-cover" />
+                      )}
+                      {imageData?.status === "error" && (
+                        <div className="text-center text-destructive">
+                          <X className="h-8 w-8 mx-auto mb-2" />
+                          <p className="text-xs">{imageData.error || "Failed"}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleCopy(angle.id)} className="flex-1" disabled={!prompt}>
+                        {copiedId === angle.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      </Button>
+                      {imageData?.status === "complete" && imageData.url && (
+                        <Button variant="outline" size="sm" onClick={() => downloadImage(imageData.url, angle.name)}>
+                          <Download className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {(imageData?.status === "error" || imageData?.status === "complete") && (
+                        <Button variant="outline" size="sm" onClick={() => regenerateView(angle.id)} disabled={isGenerating}>
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

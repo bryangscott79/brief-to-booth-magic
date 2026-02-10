@@ -61,26 +61,36 @@ function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatial
   const zoneName = (zone.name || "").toLowerCase();
   const parts: string[] = [];
 
-  parts.push(`Generate a photorealistic interior perspective view inside the "${zone.name}" zone of a ${brief.spatial.footprints[0]?.size || ""} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company.`);
-  parts.push(`Camera at eye level, positioned inside the ${zone.name} zone, showing the space as a visitor would experience it.`);
+  parts.push(`Generate a photorealistic INTERIOR close-up perspective from INSIDE the "${zone.name}" zone of a ${brief.spatial.footprints[0]?.size || ""} trade show booth for ${brief.brand.name}.`);
+  parts.push("");
+  parts.push("CRITICAL — VISUAL CONSISTENCY:");
+  parts.push("Look at the reference image. Find the exact zone labeled or positioned as the \"" + zone.name + "\" area.");
+  parts.push("The interior view MUST replicate the exact appearance of this zone from the reference:");
+  parts.push("- Same wall panels, colors, and surface materials");
+  parts.push("- Same screen sizes, shapes, and content style");
+  parts.push("- Same furniture types, seating arrangement, and fixtures");
+  parts.push("- Same lighting fixtures and ambient lighting color");
+  parts.push("- Same flooring material and edge details");
+  parts.push("Do NOT redesign or reimagine the zone. Show what's already visible, just from inside.");
+  parts.push("");
+  parts.push("CAMERA: Eye level (5.5 feet), positioned INSIDE this zone, facing into it. Show depth and the zone's spatial quality. Other booth areas may be partially visible in the background.");
   parts.push("");
   parts.push("DESIGN DIRECTION:");
   parts.push(`${bigIdea.headline}`);
   parts.push(`${bigIdea.narrative}`);
 
-  // Zone-specific content
+  // Zone-specific content details
   if (zoneName.includes("hero") || zoneName.includes("experience zone")) {
     const im = elements.interactiveMechanics?.data;
     if (im?.hero) {
       parts.push("");
-      parts.push("HERO INSTALLATION (FEATURED):");
+      parts.push("HERO INSTALLATION (match reference exactly):");
       parts.push(`${im.hero.name} — ${im.hero.concept}`);
       if (im.hero.physicalForm) {
         parts.push(`Structure: ${im.hero.physicalForm.structure}`);
         parts.push(`Materials: ${im.hero.physicalForm.materials?.join(", ")}`);
-        parts.push(`Visual Language: ${im.hero.physicalForm.visualLanguage}`);
       }
-      parts.push("Show 3-4 visitors actively engaging with the installation, looking up in wonder.");
+      parts.push("Show 3-4 visitors actively engaging with the installation.");
     }
   }
 
@@ -88,16 +98,15 @@ function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatial
     const ds = elements.digitalStorytelling?.data;
     if (ds) {
       parts.push("");
-      parts.push("CONTENT DISPLAYS (FEATURED):");
+      parts.push("STORYTELLING ZONE (match reference exactly):");
+      parts.push("This zone has tiered/stepped seating and a large curved or flat display screen.");
+      parts.push("Maintain the exact screen shape, seating layout, and content display style from the reference image.");
       if (ds.audienceTracks?.length) {
         ds.audienceTracks.slice(0, 3).forEach((t: any) => {
           parts.push(`- ${t.trackName}: ${t.format} display showing ${t.contentFocus}`);
         });
       }
-      if (ds.contentModules?.length) {
-        parts.push(`Content modules: ${ds.contentModules.map((m: any) => m.title).join(", ")}`);
-      }
-      parts.push("Show 2-3 visitors watching content on displays, intimate theatre-like seating.");
+      parts.push("Show 2-4 visitors seated watching content, intimate theatre atmosphere.");
     }
   }
 
@@ -180,8 +189,10 @@ export function PromptGenerator() {
     generationProgress, currentlyGenerating, hydratedFromDb,
   } = renderStore;
 
-  const { data: savedImages = [], isLoading: imagesLoading } = useProjectImages(projectId);
-  const saveImage = useSaveRenderImage(projectId);
+  // Use URL projectId, falling back to render store's projectId (persists across navigation)
+  const effectiveProjectId = projectId || renderStore.projectId;
+  const { data: savedImages = [], isLoading: imagesLoading } = useProjectImages(effectiveProjectId);
+  const saveImage = useSaveRenderImage(effectiveProjectId);
 
   // Sync project ID to render store
   useEffect(() => {

@@ -877,7 +877,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                       variant="outline"
                       size="sm"
                       onClick={() => handleRegenerateView(angle.id)}
-                      disabled={isGenerating}
+                      disabled={currentlyGenerating === angle.id}
                     >
                       <RefreshCw className="h-3 w-3" />
                     </Button>
@@ -958,7 +958,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                         </Button>
                       )}
                       {(imageData?.status === "error" || imageData?.status === "complete") && (
-                        <Button variant="outline" size="sm" onClick={() => handleRegenerateView(angle.id)} disabled={isGenerating}>
+                        <Button variant="outline" size="sm" onClick={() => handleRegenerateView(angle.id)} disabled={currentlyGenerating === angle.id}>
                           <RefreshCw className="h-3 w-3" />
                         </Button>
                       )}

@@ -4,11 +4,11 @@ import { Check, X, Edit2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "react-router-dom";
+import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 
-export function BriefReview() {
+export function BriefReview({ projectId }: { projectId: string | null }) {
   const { currentProject, setActiveStep } = useProjectStore();
-  const navigate = useNavigate();
+  const { navigate } = useProjectNavigate();
   const brief = currentProject?.parsedBrief;
 
   if (!brief) {
@@ -24,7 +24,7 @@ export function BriefReview() {
 
   const handleConfirm = () => {
     setActiveStep("generate");
-    navigate("/generate");
+    navigate(projectId ? `/generate?project=${projectId}` : "/generate");
   };
 
   const sections = [

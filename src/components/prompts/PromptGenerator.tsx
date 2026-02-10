@@ -20,7 +20,7 @@ import {
   RefreshCw,
   MessageSquare
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -45,7 +45,7 @@ type WorkflowPhase = "prompt" | "hero-generation" | "hero-review" | "all-views";
 
 export function PromptGenerator() {
   const { currentProject, setActiveStep } = useProjectStore();
-  const navigate = useNavigate();
+  const { navigate } = useProjectNavigate();
   const { toast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [heroPrompt, setHeroPrompt] = useState<string>("");

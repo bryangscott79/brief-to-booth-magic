@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,8 @@ import {
   Sparkles,
   FolderOpen,
   LogOut,
-  User
+  User,
+  ImageIcon
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -33,13 +34,21 @@ const navItems = [
   { path: "/generate", label: "Generate", icon: Sparkles },
   { path: "/spatial", label: "Spatial", icon: Grid3X3 },
   { path: "/prompts", label: "Prompts", icon: FileText },
+  { path: "/files", label: "Files", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("project");
   const { user, signOut } = useAuth();
+
+  const buildPath = (path: string) => {
+    if (path === "/projects") return path;
+    return projectId ? `${path}?project=${projectId}` : path;
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -65,9 +74,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (
-                <Link
+              <Link
                   key={item.path}
-                  to={item.path}
+                  to={buildPath(item.path)}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     isActive 

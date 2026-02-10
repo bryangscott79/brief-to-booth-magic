@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -204,6 +204,35 @@ export function PromptGenerator() {
   }, [spatialData, elements]);
 
   const allAngles = useMemo(() => [...ANGLE_CONFIG, ...zoneInteriorAngles], [zoneInteriorAngles]);
+
+  // Hydrate from saved images when returning to the page
+  useEffect(() => {
+    if (savedImages.length > 0 && !heroImage && phase === "prompt") {
+      // Find the current hero image
+      const savedHero = savedImages.find(img => img.angle_id === "hero_34" && img.is_current);
+      if (savedHero) {
+        setHeroImage(savedHero.public_url);
+        setHeroIterations(
+          savedImages
+            .filter(img => img.angle_id === "hero_34")
+            .map(img => img.public_url)
+        );
+
+        // Restore all saved current images
+        const restoredImages: Record<string, GeneratedImage> = {};
+        savedImages
+          .filter(img => img.is_current)
+          .forEach(img => {
+            restoredImages[img.angle_id] = { url: img.public_url, status: "complete" };
+          });
+        setGeneratedImages(restoredImages);
+
+        // Jump to the right phase
+        const hasOtherViews = savedImages.some(img => img.angle_id !== "hero_34" && img.is_current);
+        setPhase(hasOtherViews ? "all-views" : "hero-review");
+      }
+    }
+  }, [savedImages, heroImage, phase]);
 
   if (!brief || !spatialData || !bigIdea) {
     return (

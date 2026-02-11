@@ -13,6 +13,7 @@ import {
   Box,
   Loader2,
   Presentation,
+  FolderArchive,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useProjectImages } from "@/hooks/useProjectImages";
@@ -90,6 +91,7 @@ export function ExportPackage() {
   const [loading3D, setLoading3D] = useState(false);
   const [loadingPresentation, setLoadingPresentation] = useState(false);
   const [presentationSlides, setPresentationSlides] = useState<any[] | null>(null);
+  const [loadingZip, setLoadingZip] = useState(false);
 
   const brief = currentProject?.parsedBrief;
   const elements = currentProject?.elements;
@@ -497,6 +499,143 @@ export function ExportPackage() {
     pptx.writeFile({ fileName: `${brandName}_Booth_Proposal.pptx` });
   };
 
+  const handleDownloadZip = async () => {
+    setLoadingZip(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const brandName = brief.brand?.name || currentProject?.name || "Project";
+      const currentImages = (images || []).filter(i => i.is_current);
+
+      // ── 1. Download and add all rendered images ──
+      const imgFolder = zip.folder("renders")!;
+      for (const img of currentImages) {
+        try {
+          const response = await fetch(img.public_url);
+          if (response.ok) {
+            const blob = await response.blob();
+            const ext = img.public_url.includes(".png") ? "png" : "jpg";
+            imgFolder.file(`${img.angle_name.replace(/[^a-zA-Z0-9_\- ]/g, "_")}.${ext}`, blob);
+          }
+        } catch {
+          console.warn(`Failed to fetch image: ${img.angle_name}`);
+        }
+      }
+
+      // ── 2. Build structured content markdown ──
+      let content = `# ${brandName} — Trade Show Booth Proposal\n\n---\n\n`;
+
+      const brand = (brief as any).brand || {};
+      content += `## Brand Overview\n`;
+      content += `- **Name:** ${brand.name || "N/A"}\n`;
+      content += `- **Category:** ${brand.category || "N/A"}\n`;
+      content += `- **POV:** ${brand.pov || "N/A"}\n`;
+      content += `- **Personality:** ${(brand.personality || []).join(", ")}\n`;
+      content += `- **Colors:** ${(brand.visualIdentity?.colors || []).join(", ")}\n\n`;
+
+      const obj = (brief as any).objectives || {};
+      content += `## Objectives\n`;
+      content += `- **Primary:** ${obj.primary || "N/A"}\n`;
+      content += `- **Secondary:** ${(obj.secondary || []).join("; ")}\n`;
+      content += `- **Differentiation:** ${(obj.differentiationGoals || []).join("; ")}\n\n`;
+
+      const audiences = brief.audiences || [];
+      if (audiences.length) {
+        content += `## Target Audiences\n`;
+        for (const a of audiences) content += `- **${a.name}** (${a.priority}): ${a.description}\n`;
+        content += `\n`;
+      }
+
+      const shows = brief.events?.shows || [];
+      if (shows.length) {
+        content += `## Events\n`;
+        for (const s of shows) content += `- ${s.name} — ${s.location}\n`;
+        content += `\n`;
+      }
+
+      content += `## Spatial\n- **Booth Size:** ${brief.spatial?.footprints?.[0]?.size || "TBD"} (${brief.spatial?.footprints?.[0]?.sqft || "TBD"} sqft)\n\n`;
+
+      const budget = (brief as any).budget || {};
+      content += `## Budget\n- ${budget.perShow ? `$${budget.perShow.toLocaleString()} per show` : budget.range ? `$${budget.range.min.toLocaleString()} - $${budget.range.max.toLocaleString()}` : "TBD"}\n\n`;
+
+      content += `---\n\n# Strategic Elements\n\n`;
+      const elementKeys = [
+        { key: "bigIdea", label: "Big Idea" },
+        { key: "experienceFramework", label: "Experience Framework" },
+        { key: "interactiveMechanics", label: "Interactive Mechanics" },
+        { key: "digitalStorytelling", label: "Digital Storytelling" },
+        { key: "humanConnection", label: "Human Connection" },
+        { key: "adjacentActivations", label: "Adjacent Activations" },
+        { key: "spatialStrategy", label: "Spatial Strategy" },
+        { key: "budgetLogic", label: "Budget Logic" },
+      ];
+      for (const { key, label } of elementKeys) {
+        const el = (elements as any)[key];
+        if (el?.data) {
+          content += `## ${label}\n\n\`\`\`json\n${JSON.stringify(el.data, null, 2)}\n\`\`\`\n\n`;
+        }
+      }
+
+      if (presentationSlides) {
+        content += `---\n\n# Presentation Slides\n\n`;
+        for (let i = 0; i < presentationSlides.length; i++) {
+          const slide = presentationSlides[i];
+          content += `### Slide ${i + 1}: ${slide.title}\n`;
+          content += `**Type:** ${slide.slideType} | **Subtitle:** ${slide.subtitle}\n`;
+          if (slide.imageAngle) content += `**Image:** ${slide.imageAngle}\n`;
+          if (slide.bodyPoints?.length) {
+            for (const p of slide.bodyPoints) content += `- ${p}\n`;
+          }
+          if (slide.speakerNotes) content += `\n> **Speaker Notes:** ${slide.speakerNotes}\n`;
+          content += `\n`;
+        }
+      }
+
+      content += `---\n\n# Rendered Views\n\n`;
+      for (const img of currentImages) {
+        const ext = img.public_url.includes(".png") ? "png" : "jpg";
+        content += `- **${img.angle_name}**: renders/${img.angle_name.replace(/[^a-zA-Z0-9_\- ]/g, "_")}.${ext}\n`;
+      }
+
+      zip.file("content.md", content);
+
+      // ── 3. JSON version for structured import ──
+      const jsonData = {
+        project: brandName,
+        brand: brief.brand,
+        objectives: brief.objectives,
+        audiences: brief.audiences,
+        events: brief.events,
+        spatial: brief.spatial,
+        budget: brief.budget,
+        elements: Object.fromEntries(
+          elementKeys.filter(({ key }) => (elements as any)[key]?.data).map(({ key, label }) => [key, { label, data: (elements as any)[key].data }])
+        ),
+        slides: presentationSlides || [],
+        images: currentImages.map(img => ({
+          angleId: img.angle_id,
+          angleName: img.angle_name,
+          filename: `renders/${img.angle_name.replace(/[^a-zA-Z0-9_\- ]/g, "_")}.${img.public_url.includes(".png") ? "png" : "jpg"}`,
+        })),
+      };
+      zip.file("content.json", JSON.stringify(jsonData, null, 2));
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${brandName}_Export_Package.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast({ title: "Package downloaded", description: `${currentImages.length} images + content files zipped` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setLoadingZip(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -506,6 +645,32 @@ export function ExportPackage() {
           Generate materials lists, 3D modeling briefs, and download your complete project
         </p>
       </div>
+
+      {/* Download All Assets ZIP */}
+      <Card className="element-card border-primary/30">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FolderArchive className="h-4 w-4 text-primary" />
+              Download All Assets
+            </CardTitle>
+            <Button size="sm" onClick={handleDownloadZip} disabled={loadingZip}>
+              {loadingZip ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Download className="mr-1 h-3 w-3" />}
+              {loadingZip ? "Packaging..." : "Download .zip"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Downloads all rendered images, strategic content (Markdown + JSON), and slide structure into a single .zip file you can take to Google Slides, Keynote, Canva, or any presentation tool.
+          </p>
+          <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><Folder className="h-3 w-3" /> renders/</span>
+            <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> content.md</span>
+            <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> content.json</span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Status Summary */}
       <Card className="element-card">

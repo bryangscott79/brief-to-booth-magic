@@ -12,6 +12,7 @@ import {
   Hammer,
   Box,
   Loader2,
+  Presentation,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useProjectImages } from "@/hooks/useProjectImages";
@@ -87,6 +88,8 @@ export function ExportPackage() {
   const [threeDData, setThreeDData] = useState<ThreeDData | null>(null);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [loading3D, setLoading3D] = useState(false);
+  const [loadingPresentation, setLoadingPresentation] = useState(false);
+  const [presentationSlides, setPresentationSlides] = useState<any[] | null>(null);
 
   const brief = currentProject?.parsedBrief;
   const elements = currentProject?.elements;
@@ -190,6 +193,102 @@ export function ExportPackage() {
       lines.push(`**Material Hints:** ${p.materialHints}`);
     }
     downloadTextFile(`${brief.brand?.name || "project"}_3d_brief.md`, lines.join("\n"));
+  };
+
+  const handleGeneratePresentation = async () => {
+    setLoadingPresentation(true);
+    try {
+      const imageUrls = (images || []).filter(i => i.is_current).map(i => ({
+        angle: i.angle_id,
+        angleName: i.angle_name,
+        url: i.public_url,
+      }));
+      const { data, error } = await supabase.functions.invoke("generate-presentation", {
+        body: {
+          parsedBrief: brief,
+          elements,
+          projectName: brief.brand?.name || currentProject?.name,
+          imageUrls,
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      setPresentationSlides(data.slides);
+      toast({ title: "Presentation content generated", description: "Click Download to get your .pptx file" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setLoadingPresentation(false);
+    }
+  };
+
+  const downloadPresentation = async () => {
+    if (!presentationSlides) return;
+    const PptxGenJS = (await import("pptxgenjs")).default;
+    const pptx = new PptxGenJS();
+
+    const brandName = brief.brand?.name || currentProject?.name || "Project";
+    const brandColors = brief.brand?.visualIdentity?.colors || [];
+    const primaryColor = brandColors[0] || "1a1a2e";
+    const accentColor = brandColors[1] || "e94560";
+
+    pptx.author = "Brief-to-Booth";
+    pptx.title = `${brandName} — Trade Show Booth Proposal`;
+
+    // Map of available images by angle
+    const imageMap: Record<string, string> = {};
+    (images || []).filter(i => i.is_current).forEach(i => {
+      imageMap[i.angle_id] = i.public_url;
+    });
+
+    for (const slide of presentationSlides) {
+      const s = pptx.addSlide();
+
+      if (slide.slideType === "title") {
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: primaryColor } });
+        s.addText(slide.title, { x: 0.5, y: 1.5, w: 9, h: 1.5, fontSize: 36, bold: true, color: "FFFFFF", fontFace: "Arial" });
+        s.addText(slide.subtitle, { x: 0.5, y: 3.2, w: 9, h: 0.8, fontSize: 18, color: "CCCCCC", fontFace: "Arial" });
+        if (imageMap["hero_34"]) {
+          try { s.addImage({ path: imageMap["hero_34"], x: 5.5, y: 0.5, w: 4.2, h: 2.8, rounding: true }); } catch {}
+        }
+      } else if (slide.slideType === "section") {
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: accentColor } });
+        s.addText(slide.title, { x: 0.5, y: 2, w: 9, h: 1.5, fontSize: 32, bold: true, color: "FFFFFF", fontFace: "Arial" });
+        s.addText(slide.subtitle, { x: 0.5, y: 3.5, w: 9, h: 0.8, fontSize: 16, color: "FFFFFFCC", fontFace: "Arial" });
+      } else if (slide.slideType === "imageFeature" && slide.imageAngle && imageMap[slide.imageAngle]) {
+        s.addText(slide.title, { x: 0.5, y: 0.3, w: 9, h: 0.6, fontSize: 22, bold: true, color: "333333", fontFace: "Arial" });
+        try { s.addImage({ path: imageMap[slide.imageAngle], x: 0.5, y: 1, w: 9, h: 4, sizing: { type: "contain", w: 9, h: 4 } }); } catch {}
+        if (slide.bodyPoints?.length) {
+          s.addText(slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 10, color: "666666" } })), { x: 0.5, y: 5.1, w: 9, h: 0.6 });
+        }
+      } else if (slide.slideType === "closing") {
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: primaryColor } });
+        s.addText(slide.title, { x: 0.5, y: 2, w: 9, h: 1, fontSize: 28, bold: true, color: "FFFFFF", fontFace: "Arial" });
+        s.addText(slide.subtitle, { x: 0.5, y: 3.2, w: 9, h: 0.6, fontSize: 16, color: "CCCCCC", fontFace: "Arial" });
+        if (slide.bodyPoints?.length) {
+          s.addText(slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 12, color: "AAAAAA" } })), { x: 0.5, y: 4, w: 9, h: 1.5 });
+        }
+      } else {
+        // content, twoColumn, data — standard layout
+        s.addText(slide.title, { x: 0.5, y: 0.3, w: 9, h: 0.6, fontSize: 24, bold: true, color: primaryColor, fontFace: "Arial" });
+        s.addText(slide.subtitle, { x: 0.5, y: 0.9, w: 9, h: 0.4, fontSize: 12, color: "888888", fontFace: "Arial" });
+        if (slide.bodyPoints?.length) {
+          s.addText(
+            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 13, color: "333333", breakType: "none" as const } })),
+            { x: 0.5, y: 1.5, w: slide.imageAngle && imageMap[slide.imageAngle] ? 5 : 9, h: 3.5, valign: "top", fontFace: "Arial" }
+          );
+        }
+        if (slide.imageAngle && imageMap[slide.imageAngle]) {
+          try { s.addImage({ path: imageMap[slide.imageAngle], x: 5.8, y: 1.5, w: 3.8, h: 3.5, sizing: { type: "contain", w: 3.8, h: 3.5 } }); } catch {}
+        }
+      }
+
+      if (slide.speakerNotes) {
+        s.addNotes(slide.speakerNotes);
+      }
+    }
+
+    pptx.writeFile({ fileName: `${brandName}_Booth_Proposal.pptx` });
   };
 
   return (
@@ -356,6 +455,58 @@ export function ExportPackage() {
                   <div><strong>Materials:</strong> {threeDData.modelingBrief.materials.map(m => m.name).join(", ")}</div>
                   <div className="pt-1 border-t"><strong>Construction Notes:</strong> {threeDData.modelingBrief.constructionNotes}</div>
                 </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Presentation Deck */}
+      <Card className="element-card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Presentation className="h-4 w-4 text-primary" />
+              Presentation Deck
+            </CardTitle>
+            <div className="flex gap-2">
+              {presentationSlides && (
+                <Button variant="outline" size="sm" onClick={downloadPresentation}>
+                  <Download className="mr-1 h-3 w-3" /> Download .pptx
+                </Button>
+              )}
+              <Button size="sm" onClick={handleGeneratePresentation} disabled={loadingPresentation}>
+                {loadingPresentation ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Presentation className="mr-1 h-3 w-3" />}
+                {presentationSlides ? "Regenerate" : "Generate"}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!presentationSlides && !loadingPresentation && (
+            <p className="text-sm text-muted-foreground">
+              AI will compile all strategic elements, spatial plans, budget data, and rendered images into a polished PowerPoint presentation deck ready for client review.
+            </p>
+          )}
+          {loadingPresentation && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Crafting your presentation deck...</p>
+              <Progress value={45} className="h-2" />
+            </div>
+          )}
+          {presentationSlides && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-3">
+                <Check className="h-4 w-4 text-green-500" />
+                <span className="text-sm font-medium">{presentationSlides.length} slides generated</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {presentationSlides.map((slide, i) => (
+                  <div key={i} className="p-2 rounded-lg bg-muted/50 text-center">
+                    <div className="text-xs font-medium truncate">{slide.title}</div>
+                    <Badge variant="outline" className="text-[10px] mt-1">{slide.slideType}</Badge>
+                  </div>
+                ))}
               </div>
             </div>
           )}

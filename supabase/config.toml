@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.generate-3d-brief]
 verify_jwt = false
+
+[functions.generate-presentation]
+verify_jwt = false

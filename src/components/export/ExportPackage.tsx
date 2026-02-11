@@ -229,11 +229,24 @@ export function ExportPackage() {
 
     const brandName = brief.brand?.name || currentProject?.name || "Project";
     const brandColors = brief.brand?.visualIdentity?.colors || [];
-    const primaryColor = brandColors[0] || "1a1a2e";
-    const accentColor = brandColors[1] || "e94560";
+    // Strip # from hex colors for pptxgenjs
+    const cleanColor = (c: string) => c.replace(/^#/, "");
+    const primaryColor = cleanColor(brandColors[0] || "#1a1a2e");
+    const accentColor = cleanColor(brandColors[1] || "#e94560");
+    const darkBg = "0D0D0D";
+    const lightText = "FFFFFF";
+    const mutedText = "AAAAAA";
+    const bodyText = "333333";
+    const subtitleGray = "777777";
 
     pptx.author = "Brief-to-Booth";
     pptx.title = `${brandName} — Trade Show Booth Proposal`;
+    pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 inches
+
+    const W = 13.33;
+    const H = 7.5;
+    const MARGIN = 0.7;
+    const CONTENT_W = W - MARGIN * 2;
 
     // Map of available images by angle
     const imageMap: Record<string, string> = {};
@@ -241,48 +254,241 @@ export function ExportPackage() {
       imageMap[i.angle_id] = i.public_url;
     });
 
-    for (const slide of presentationSlides) {
+    // Helper: add a thin accent bar at top
+    const addAccentBar = (s: any) => {
+      s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.06, fill: { color: accentColor } });
+    };
+
+    // Helper: add brand watermark at bottom-right
+    const addBrandWatermark = (s: any, color = mutedText) => {
+      s.addText(brandName.toUpperCase(), {
+        x: W - 3.5, y: H - 0.6, w: 3, h: 0.4,
+        fontSize: 8, color, fontFace: "Arial",
+        align: "right", italic: true,
+      });
+    };
+
+    // Helper: add slide number
+    const addSlideNumber = (s: any, num: number, total: number, color = mutedText) => {
+      s.addText(`${num} / ${total}`, {
+        x: MARGIN, y: H - 0.6, w: 1.5, h: 0.4,
+        fontSize: 8, color, fontFace: "Arial",
+      });
+    };
+
+    const totalSlides = presentationSlides.length;
+
+    for (let idx = 0; idx < presentationSlides.length; idx++) {
+      const slide = presentationSlides[idx];
       const s = pptx.addSlide();
 
       if (slide.slideType === "title") {
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: primaryColor } });
-        s.addText(slide.title, { x: 0.5, y: 1.5, w: 9, h: 1.5, fontSize: 36, bold: true, color: "FFFFFF", fontFace: "Arial" });
-        s.addText(slide.subtitle, { x: 0.5, y: 3.2, w: 9, h: 0.8, fontSize: 18, color: "CCCCCC", fontFace: "Arial" });
+        // ─── TITLE SLIDE: Full dark bg, large text left, image right ───
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: darkBg } });
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.08, fill: { color: accentColor } });
+
+        // Brand name small at top
+        s.addText(brandName.toUpperCase(), {
+          x: MARGIN, y: 0.5, w: 5, h: 0.4,
+          fontSize: 10, color: accentColor, fontFace: "Arial",
+          bold: true,
+        });
+
+        // Title
+        s.addText(slide.title, {
+          x: MARGIN, y: 1.5, w: 6, h: 2,
+          fontSize: 36, bold: true, color: lightText, fontFace: "Arial",
+          lineSpacingMultiple: 1.1,
+        });
+
+        // Subtitle
+        s.addText(slide.subtitle, {
+          x: MARGIN, y: 3.6, w: 6, h: 0.8,
+          fontSize: 16, color: mutedText, fontFace: "Arial",
+        });
+
+        // Body points as a row at bottom
+        if (slide.bodyPoints?.length) {
+          s.addText(slide.bodyPoints.join("  •  "), {
+            x: MARGIN, y: H - 1.4, w: CONTENT_W, h: 0.5,
+            fontSize: 10, color: mutedText, fontFace: "Arial",
+          });
+        }
+
+        // Hero image on the right side
         if (imageMap["hero_34"]) {
-          try { s.addImage({ path: imageMap["hero_34"], x: 5.5, y: 0.5, w: 4.2, h: 2.8, rounding: true }); } catch {}
+          try {
+            s.addImage({ path: imageMap["hero_34"], x: 7.2, y: 0.8, w: 5.5, h: 5.5, sizing: { type: "cover", w: 5.5, h: 5.5 } });
+          } catch {}
         }
+
       } else if (slide.slideType === "section") {
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: accentColor } });
-        s.addText(slide.title, { x: 0.5, y: 2, w: 9, h: 1.5, fontSize: 32, bold: true, color: "FFFFFF", fontFace: "Arial" });
-        s.addText(slide.subtitle, { x: 0.5, y: 3.5, w: 9, h: 0.8, fontSize: 16, color: "FFFFFFCC", fontFace: "Arial" });
-      } else if (slide.slideType === "imageFeature" && slide.imageAngle && imageMap[slide.imageAngle]) {
-        s.addText(slide.title, { x: 0.5, y: 0.3, w: 9, h: 0.6, fontSize: 22, bold: true, color: "333333", fontFace: "Arial" });
-        try { s.addImage({ path: imageMap[slide.imageAngle], x: 0.5, y: 1, w: 9, h: 4, sizing: { type: "contain", w: 9, h: 4 } }); } catch {}
-        if (slide.bodyPoints?.length) {
-          s.addText(slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 10, color: "666666" } })), { x: 0.5, y: 5.1, w: 9, h: 0.6 });
+        // ─── SECTION DIVIDER: Accent bg, centered text ───
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: primaryColor } });
+        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 3, w: 2, h: 0.06, fill: { color: accentColor } });
+
+        s.addText(slide.title, {
+          x: MARGIN, y: 1.8, w: CONTENT_W, h: 1.2,
+          fontSize: 32, bold: true, color: lightText, fontFace: "Arial",
+        });
+        s.addText(slide.subtitle, {
+          x: MARGIN, y: 3.4, w: CONTENT_W, h: 0.8,
+          fontSize: 16, color: "CCCCCC", fontFace: "Arial",
+        });
+        addSlideNumber(s, idx + 1, totalSlides, "888888");
+
+      } else if (slide.slideType === "imageFeature") {
+        // ─── IMAGE FEATURE: Image fills most of slide, text overlay at bottom ───
+        s.background = { fill: darkBg };
+        addAccentBar(s);
+
+        // Title at top
+        s.addText(slide.title, {
+          x: MARGIN, y: 0.4, w: CONTENT_W, h: 0.6,
+          fontSize: 20, bold: true, color: lightText, fontFace: "Arial",
+        });
+
+        // Large image in center
+        const imgAngle = slide.imageAngle && imageMap[slide.imageAngle] ? slide.imageAngle : "hero_34";
+        if (imageMap[imgAngle]) {
+          try {
+            s.addImage({ path: imageMap[imgAngle], x: MARGIN, y: 1.2, w: CONTENT_W, h: 4.6, sizing: { type: "contain", w: CONTENT_W, h: 4.6 } });
+          } catch {}
         }
-      } else if (slide.slideType === "closing") {
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: primaryColor } });
-        s.addText(slide.title, { x: 0.5, y: 2, w: 9, h: 1, fontSize: 28, bold: true, color: "FFFFFF", fontFace: "Arial" });
-        s.addText(slide.subtitle, { x: 0.5, y: 3.2, w: 9, h: 0.6, fontSize: 16, color: "CCCCCC", fontFace: "Arial" });
-        if (slide.bodyPoints?.length) {
-          s.addText(slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 12, color: "AAAAAA" } })), { x: 0.5, y: 4, w: 9, h: 1.5 });
-        }
-      } else {
-        // content, twoColumn, data — standard layout
-        s.addText(slide.title, { x: 0.5, y: 0.3, w: 9, h: 0.6, fontSize: 24, bold: true, color: primaryColor, fontFace: "Arial" });
-        s.addText(slide.subtitle, { x: 0.5, y: 0.9, w: 9, h: 0.4, fontSize: 12, color: "888888", fontFace: "Arial" });
+
+        // Bullet points below image
         if (slide.bodyPoints?.length) {
           s.addText(
-            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 13, color: "333333", breakType: "none" as const } })),
-            { x: 0.5, y: 1.5, w: slide.imageAngle && imageMap[slide.imageAngle] ? 5 : 9, h: 3.5, valign: "top", fontFace: "Arial" }
+            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 10, color: mutedText } })),
+            { x: MARGIN, y: 6, w: CONTENT_W, h: 1, fontFace: "Arial", valign: "top" }
           );
         }
-        if (slide.imageAngle && imageMap[slide.imageAngle]) {
-          try { s.addImage({ path: imageMap[slide.imageAngle], x: 5.8, y: 1.5, w: 3.8, h: 3.5, sizing: { type: "contain", w: 3.8, h: 3.5 } }); } catch {}
+        addBrandWatermark(s, "555555");
+        addSlideNumber(s, idx + 1, totalSlides, "555555");
+
+      } else if (slide.slideType === "closing") {
+        // ─── CLOSING: Dark bg, centered messaging ───
+        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: darkBg } });
+        s.addShape(pptx.ShapeType.rect, { x: W / 2 - 1, y: 2.5, w: 2, h: 0.06, fill: { color: accentColor } });
+
+        s.addText(slide.title, {
+          x: 1.5, y: 1.2, w: W - 3, h: 1.2,
+          fontSize: 30, bold: true, color: lightText, fontFace: "Arial", align: "center",
+        });
+        s.addText(slide.subtitle, {
+          x: 1.5, y: 2.8, w: W - 3, h: 0.8,
+          fontSize: 16, color: mutedText, fontFace: "Arial", align: "center",
+        });
+        if (slide.bodyPoints?.length) {
+          s.addText(
+            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 12, color: "CCCCCC" } })),
+            { x: 2.5, y: 4, w: W - 5, h: 2, fontFace: "Arial", align: "center", valign: "top" }
+          );
         }
+        addBrandWatermark(s, "555555");
+
+      } else if (slide.slideType === "twoColumn") {
+        // ─── TWO COLUMN: Split layout ───
+        s.background = { fill: "FAFAFA" };
+        addAccentBar(s);
+
+        s.addText(slide.title, {
+          x: MARGIN, y: 0.5, w: CONTENT_W, h: 0.7,
+          fontSize: 22, bold: true, color: primaryColor, fontFace: "Arial",
+        });
+        s.addText(slide.subtitle, {
+          x: MARGIN, y: 1.15, w: CONTENT_W, h: 0.45,
+          fontSize: 12, color: subtitleGray, fontFace: "Arial",
+        });
+
+        // Divider line
+        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 1.7, w: 1.5, h: 0.04, fill: { color: accentColor } });
+
+        const hasImage = slide.imageAngle && imageMap[slide.imageAngle];
+        const textW = hasImage ? 5.5 : CONTENT_W;
+
+        if (slide.bodyPoints?.length) {
+          s.addText(
+            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n\n`, options: { fontSize: 13, color: bodyText, lineSpacingMultiple: 1.3 } })),
+            { x: MARGIN, y: 2, w: textW, h: 4.5, fontFace: "Arial", valign: "top" }
+          );
+        }
+
+        if (hasImage) {
+          try {
+            s.addImage({ path: imageMap[slide.imageAngle], x: 6.8, y: 2, w: 5.8, h: 4.5, sizing: { type: "contain", w: 5.8, h: 4.5 } });
+          } catch {}
+        }
+
+        addBrandWatermark(s);
+        addSlideNumber(s, idx + 1, totalSlides);
+
+      } else if (slide.slideType === "data") {
+        // ─── DATA SLIDE: Clean layout for numbers/stats ───
+        s.background = { fill: "FFFFFF" };
+        addAccentBar(s);
+
+        s.addText(slide.title, {
+          x: MARGIN, y: 0.5, w: CONTENT_W, h: 0.7,
+          fontSize: 22, bold: true, color: primaryColor, fontFace: "Arial",
+        });
+        s.addText(slide.subtitle, {
+          x: MARGIN, y: 1.15, w: CONTENT_W, h: 0.45,
+          fontSize: 12, color: subtitleGray, fontFace: "Arial",
+        });
+        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 1.7, w: 1.5, h: 0.04, fill: { color: accentColor } });
+
+        if (slide.bodyPoints?.length) {
+          s.addText(
+            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n\n`, options: { fontSize: 13, color: bodyText, lineSpacingMultiple: 1.4 } })),
+            { x: MARGIN, y: 2, w: CONTENT_W, h: 4.5, fontFace: "Arial", valign: "top" }
+          );
+        }
+
+        addBrandWatermark(s);
+        addSlideNumber(s, idx + 1, totalSlides);
+
+      } else {
+        // ─── CONTENT (default): Clean white slide with optional image ───
+        s.background = { fill: "FFFFFF" };
+        addAccentBar(s);
+
+        // Title block
+        s.addText(slide.title, {
+          x: MARGIN, y: 0.5, w: CONTENT_W, h: 0.7,
+          fontSize: 22, bold: true, color: primaryColor, fontFace: "Arial",
+        });
+        s.addText(slide.subtitle, {
+          x: MARGIN, y: 1.15, w: CONTENT_W, h: 0.45,
+          fontSize: 12, color: subtitleGray, fontFace: "Arial",
+        });
+
+        // Accent divider
+        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 1.7, w: 1.5, h: 0.04, fill: { color: accentColor } });
+
+        const hasImg = slide.imageAngle && imageMap[slide.imageAngle];
+        const bulletW = hasImg ? 5.5 : CONTENT_W;
+
+        // Body bullets
+        if (slide.bodyPoints?.length) {
+          s.addText(
+            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n\n`, options: { fontSize: 13, color: bodyText, lineSpacingMultiple: 1.3 } })),
+            { x: MARGIN, y: 2, w: bulletW, h: 4.5, fontFace: "Arial", valign: "top" }
+          );
+        }
+
+        // Side image
+        if (hasImg) {
+          try {
+            s.addImage({ path: imageMap[slide.imageAngle], x: 6.8, y: 2, w: 5.8, h: 4.5, sizing: { type: "contain", w: 5.8, h: 4.5 } });
+          } catch {}
+        }
+
+        addBrandWatermark(s);
+        addSlideNumber(s, idx + 1, totalSlides);
       }
 
+      // Speaker notes
       if (slide.speakerNotes) {
         s.addNotes(slide.speakerNotes);
       }

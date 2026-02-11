@@ -151,22 +151,50 @@ Make it persuasive and strategic — this is a pitch deck for creative services.
     }
 
     const aiData = await response.json();
+    console.log("AI response structure:", JSON.stringify({
+      hasChoices: !!aiData.choices,
+      hasToolCalls: !!aiData.choices?.[0]?.message?.tool_calls,
+      contentPreview: (aiData.choices?.[0]?.message?.content || "").substring(0, 200),
+      finishReason: aiData.choices?.[0]?.finish_reason,
+    }));
 
     let slides;
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall?.function?.arguments) {
-      const parsed = JSON.parse(toolCall.function.arguments);
+      const args = typeof toolCall.function.arguments === "string"
+        ? toolCall.function.arguments
+        : JSON.stringify(toolCall.function.arguments);
+      const parsed = JSON.parse(args);
       slides = parsed.slides;
-    } else {
+    }
+
+    if (!slides) {
       // Fallback: try parsing content as JSON
       const content = aiData.choices?.[0]?.message?.content || "";
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
-        slides = parsed.slides || parsed;
-      } else {
-        throw new Error("Could not parse AI response into slides");
+      // Try direct JSON parse first
+      try {
+        const parsed = JSON.parse(content);
+        slides = parsed.slides || (Array.isArray(parsed) ? parsed : null);
+      } catch {
+        // Try extracting from markdown code block
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[1]);
+          slides = parsed.slides || (Array.isArray(parsed) ? parsed : null);
+        }
+        // Try finding a JSON array directly
+        if (!slides) {
+          const arrayMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (arrayMatch) {
+            slides = JSON.parse(arrayMatch[0]);
+          }
+        }
       }
+    }
+
+    if (!slides || !Array.isArray(slides) || slides.length === 0) {
+      console.error("Failed to extract slides. Raw content:", aiData.choices?.[0]?.message?.content?.substring(0, 500));
+      throw new Error("Could not parse AI response into slides");
     }
 
     return new Response(JSON.stringify({ slides }), {

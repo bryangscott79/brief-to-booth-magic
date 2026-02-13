@@ -150,12 +150,14 @@ export default function CompanyProfilePage() {
     };
 
     try {
-      if (editingCost) {
+      if (editingCost && !editingCost.is_preset) {
+        // Update existing user-owned entry
         await updateShowCost.mutateAsync({ id: editingCost.id, ...payload });
         toast({ title: "Show cost updated" });
       } else {
+        // New entry or editing a preset → create user-owned copy
         await addShowCost.mutateAsync(payload);
-        toast({ title: "Show cost added" });
+        toast({ title: editingCost?.is_preset ? "Custom copy created from preset" : "Show cost added" });
       }
       setShowDialog(false);
     } catch (e: any) {
@@ -295,11 +297,11 @@ export default function CompanyProfilePage() {
                         <TableCell className="text-right">{formatCurrency(cost.estimated_drayage_per_cwt)}</TableCell>
                         <TableCell className="text-center">{cost.union_labor_required ? "Yes" : "No"}</TableCell>
                         <TableCell>
-                          {!cost.is_preset && (
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(cost)}>
-                                <Edit className="h-3 w-3" />
-                              </Button>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(cost)}>
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            {!cost.is_preset && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button variant="ghost" size="icon">
@@ -317,8 +319,8 @@ export default function CompanyProfilePage() {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

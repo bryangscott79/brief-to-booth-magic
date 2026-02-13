@@ -20,7 +20,9 @@ import {
   FolderOpen,
   LogOut,
   User,
-  ImageIcon
+  ImageIcon,
+  BookOpen,
+  Building2,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -30,12 +32,14 @@ interface AppLayoutProps {
 const navItems = [
   { path: "/projects", label: "Projects", icon: FolderOpen },
   { path: "/upload", label: "Upload", icon: Upload },
+  { path: "/knowledge-base", label: "KB", icon: BookOpen },
   { path: "/review", label: "Review", icon: FileSearch },
   { path: "/generate", label: "Generate", icon: Sparkles },
   { path: "/spatial", label: "Spatial", icon: Grid3X3 },
   { path: "/prompts", label: "Prompts", icon: FileText },
   { path: "/files", label: "Files", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
+  { path: "/company", label: "Company", icon: Building2 },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {

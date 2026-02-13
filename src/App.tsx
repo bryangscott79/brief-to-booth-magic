@@ -15,6 +15,8 @@ import Spatial from "./pages/Spatial";
 import Prompts from "./pages/Prompts";
 import Files from "./pages/Files";
 import Export from "./pages/Export";
+import KnowledgeBase from "./pages/KnowledgeBase";
+import CompanyProfile from "./pages/CompanyProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +69,16 @@ const App = () => (
             <Route path="/export" element={
               <ProtectedRoute>
                 <Export />
+              </ProtectedRoute>
+            } />
+            <Route path="/knowledge-base" element={
+              <ProtectedRoute>
+                <KnowledgeBase />
+              </ProtectedRoute>
+            } />
+            <Route path="/company" element={
+              <ProtectedRoute>
+                <CompanyProfile />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

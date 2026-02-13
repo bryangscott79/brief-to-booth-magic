@@ -109,7 +109,7 @@ serve(async (req) => {
   }
 
   try {
-    const { elementType, briefData, existingData, feedback } = await req.json();
+    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -118,6 +118,25 @@ serve(async (req) => {
     if (!systemPrompt) throw new Error(`Unknown element type: ${elementType}`);
 
     let userPrompt = `Here is the creative brief data:\n\n${JSON.stringify(briefData, null, 2)}`;
+
+    // Include knowledge base content if available
+    if (knowledgeBaseContent && knowledgeBaseContent.length > 0) {
+      userPrompt += `\n\n--- KNOWLEDGE BASE (reference materials, past projects, inspiration) ---\n`;
+      for (const kb of knowledgeBaseContent) {
+        userPrompt += `\n### ${kb.fileName}\n${kb.content}\n`;
+      }
+      userPrompt += `\n--- END KNOWLEDGE BASE ---\nUse the knowledge base content above to inform and enrich your response. Reference specific insights, pricing data, past project learnings, or inspiration where relevant.`;
+    }
+
+    // Include company profile if available
+    if (companyProfile) {
+      userPrompt += `\n\n--- COMPANY PROFILE ---\n${JSON.stringify(companyProfile, null, 2)}\n--- END COMPANY PROFILE ---\nConsider the company's profile, standard booth sizes, and industry context.`;
+    }
+
+    // Include show cost data if available
+    if (showCosts && showCosts.length > 0) {
+      userPrompt += `\n\n--- SHOW COST DATABASE ---\n${JSON.stringify(showCosts, null, 2)}\n--- END SHOW COST DATABASE ---\nUse real venue/show cost data from this database when discussing budget, logistics, and venue-specific considerations.`;
+    }
 
     if (existingData) {
       userPrompt += `\n\nHere is the current content that needs to be improved or regenerated:\n${JSON.stringify(existingData, null, 2)}`;

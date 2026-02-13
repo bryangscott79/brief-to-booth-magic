@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      company_profiles: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          default_booth_sizes: string[] | null
+          id: string
+          industry: string | null
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          default_booth_sizes?: string[] | null
+          id?: string
+          industry?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          default_booth_sizes?: string[] | null
+          id?: string
+          industry?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      knowledge_base_files: {
+        Row: {
+          created_at: string
+          extracted_text: string | null
+          file_name: string
+          file_size_bytes: number | null
+          file_type: string
+          id: string
+          project_id: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          extracted_text?: string | null
+          file_name: string
+          file_size_bytes?: number | null
+          file_type: string
+          id?: string
+          project_id: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          extracted_text?: string | null
+          file_name?: string
+          file_size_bytes?: number | null
+          file_type?: string
+          id?: string
+          project_id?: string
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_images: {
         Row: {
           angle_id: string
@@ -124,6 +204,69 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      show_costs: {
+        Row: {
+          badge_scan_cost: number | null
+          city: string
+          created_at: string
+          estimated_booth_cost_per_sqft: number | null
+          estimated_drayage_per_cwt: number | null
+          estimated_electrical_per_outlet: number | null
+          estimated_internet_cost: number | null
+          estimated_labor_rate_per_hr: number | null
+          estimated_lead_retrieval_cost: number | null
+          id: string
+          industry: string | null
+          is_preset: boolean | null
+          notes: string | null
+          show_name: string
+          union_labor_required: boolean | null
+          updated_at: string
+          user_id: string
+          venue: string | null
+        }
+        Insert: {
+          badge_scan_cost?: number | null
+          city: string
+          created_at?: string
+          estimated_booth_cost_per_sqft?: number | null
+          estimated_drayage_per_cwt?: number | null
+          estimated_electrical_per_outlet?: number | null
+          estimated_internet_cost?: number | null
+          estimated_labor_rate_per_hr?: number | null
+          estimated_lead_retrieval_cost?: number | null
+          id?: string
+          industry?: string | null
+          is_preset?: boolean | null
+          notes?: string | null
+          show_name: string
+          union_labor_required?: boolean | null
+          updated_at?: string
+          user_id: string
+          venue?: string | null
+        }
+        Update: {
+          badge_scan_cost?: number | null
+          city?: string
+          created_at?: string
+          estimated_booth_cost_per_sqft?: number | null
+          estimated_drayage_per_cwt?: number | null
+          estimated_electrical_per_outlet?: number | null
+          estimated_internet_cost?: number | null
+          estimated_labor_rate_per_hr?: number | null
+          estimated_lead_retrieval_cost?: number | null
+          id?: string
+          industry?: string | null
+          is_preset?: boolean | null
+          notes?: string | null
+          show_name?: string
+          union_labor_required?: boolean | null
+          updated_at?: string
+          user_id?: string
+          venue?: string | null
         }
         Relationships: []
       }

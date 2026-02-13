@@ -50,7 +50,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
 
   const buildPath = (path: string) => {
-    if (path === "/projects") return path;
+    if (path === "/projects" || path === "/company") return path;
     return projectId ? `${path}?project=${projectId}` : path;
   };
 

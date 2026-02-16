@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectStore";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { saveProjectField } from "@/hooks/useProjectSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
@@ -21,7 +20,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const { currentProject, createProject, setRawBrief, setParsedBrief, setActiveStep } = useProjectStore();
+  const { setActiveStep } = useProjectStore();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -60,18 +59,42 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       // Auto-create DB project if needed
       const dbProjectId = await ensureDbProject(sourceName);
 
-      createProject(sourceName);
-      setRawBrief(text);
-
+      // Parse with AI first
       const parsedBrief = await parseBriefWithAI(text);
 
-      setParsedBrief(parsedBrief);
-      setActiveStep("review");
+      // Save all fields to DB in one go
+      const { error: updateError } = await supabase
+        .from("projects")
+        .update({
+          brief_text: text,
+          brief_file_name: sourceName,
+          parsed_brief: parsedBrief as any,
+          status: "reviewed",
+        } as any)
+        .eq("id", dbProjectId);
 
-      // Save to DB
-      await saveProjectField(dbProjectId, "brief_text", text);
-      await saveProjectField(dbProjectId, "parsed_brief", parsedBrief);
-      await saveProjectField(dbProjectId, "status", "reviewed");
+      if (updateError) console.error("Failed to save brief to DB:", updateError);
+
+      // Now hydrate the Zustand store with the correct DB ID
+      const { loadFromDb } = useProjectStore.getState();
+      loadFromDb({
+        id: dbProjectId,
+        name: sourceName,
+        rawBrief: text,
+        parsedBrief,
+        elements: {
+          bigIdea: { type: "bigIdea", status: "pending", data: null },
+          experienceFramework: { type: "experienceFramework", status: "pending", data: null },
+          interactiveMechanics: { type: "interactiveMechanics", status: "pending", data: null },
+          digitalStorytelling: { type: "digitalStorytelling", status: "pending", data: null },
+          humanConnection: { type: "humanConnection", status: "pending", data: null },
+          adjacentActivations: { type: "adjacentActivations", status: "pending", data: null },
+          spatialStrategy: { type: "spatialStrategy", status: "pending", data: null },
+          budgetLogic: { type: "budgetLogic", status: "pending", data: null },
+        },
+        renderPrompts: null,
+      });
+      setActiveStep("review");
 
       toast({
         title: "Brief parsed successfully",
@@ -136,7 +159,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     }
 
     await processBrief(text, file.name.replace(/\.[^/.]+$/, ""));
-  }, [createProject, setRawBrief, setParsedBrief, navigate, toast, projectId]);
+  }, [user, navigate, toast, projectId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

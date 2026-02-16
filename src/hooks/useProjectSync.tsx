@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useProject } from "./useProjects";
 import { useProjectStore } from "@/store/projectStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,11 +37,25 @@ export function useProjectSync() {
   const projectId = searchParams.get("project");
   const { data: dbProject, isLoading } = useProject(projectId ?? undefined);
   const { currentProject, loadFromDb } = useProjectStore();
+  const queryClient = useQueryClient();
   const hasHydrated = useRef(false);
+  const prevProjectId = useRef<string | null>(null);
+
+  // Reset store and caches when projectId changes
+  useEffect(() => {
+    if (prevProjectId.current !== null && prevProjectId.current !== projectId) {
+      // Project changed — wipe store and invalidate old project cache
+      useProjectStore.getState().resetProject();
+      queryClient.removeQueries({ queryKey: ["project", prevProjectId.current] });
+      queryClient.removeQueries({ queryKey: ["kb-files", prevProjectId.current] });
+    }
+    hasHydrated.current = false;
+    prevProjectId.current = projectId;
+  }, [projectId, queryClient]);
 
   // Hydrate zustand from DB on first load
   useEffect(() => {
-    if (dbProject && !hasHydrated.current) {
+    if (dbProject && !hasHydrated.current && dbProject.id === projectId) {
       hasHydrated.current = true;
 
       // Build elements from DB columns
@@ -64,16 +79,7 @@ export function useProjectSync() {
         renderPrompts: dbProject.render_prompts as any,
       });
     }
-  }, [dbProject, loadFromDb]);
-
-  // Reset hydration flag AND clear stale store data when projectId changes
-  useEffect(() => {
-    hasHydrated.current = false;
-    // Clear the old project so components don't render stale data
-    if (currentProject && currentProject.id !== projectId) {
-      useProjectStore.getState().resetProject();
-    }
-  }, [projectId]);
+  }, [dbProject, loadFromDb, projectId]);
 
   return { projectId, isLoading: isLoading && !currentProject, dbProject };
 }

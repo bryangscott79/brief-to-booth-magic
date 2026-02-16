@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useProjectStore } from "@/store/projectStore";
 
 interface AuthContextType {
   user: User | null;
@@ -17,11 +18,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const prevUserId = useRef<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        const newUserId = session?.user?.id ?? null;
+
+        // If user changed (logout or different user), clear all client state
+        if (prevUserId.current && prevUserId.current !== newUserId) {
+          useProjectStore.getState().resetProject();
+        }
+        prevUserId.current = newUserId;
+
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -30,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      prevUserId.current = session?.user?.id ?? null;
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
@@ -58,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    useProjectStore.getState().resetProject();
     await supabase.auth.signOut();
   };
 

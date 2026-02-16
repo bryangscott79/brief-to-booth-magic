@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { useClearCacheOnUserChange } from "@/hooks/useClearCacheOnUserChange";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -21,10 +22,16 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+function CacheClearGuard({ children }: { children: React.ReactNode }) {
+  useClearCacheOnUserChange();
+  return <>{children}</>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
+      <CacheClearGuard>
+        <TooltipProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -86,6 +93,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </CacheClearGuard>
     </AuthProvider>
   </QueryClientProvider>
 );

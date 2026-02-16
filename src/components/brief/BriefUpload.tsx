@@ -41,11 +41,15 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   /** Create a DB project if none exists, returns the project ID */
   const ensureDbProject = async (name: string): Promise<string> => {
     if (projectId) return projectId;
-    if (!user) throw new Error("You must be logged in to create a project");
+
+    // Get fresh auth session to ensure correct user_id
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData?.session?.user?.id;
+    if (!userId) throw new Error("You must be logged in to create a project");
 
     const { data, error } = await supabase
       .from("projects")
-      .insert({ user_id: user.id, name, status: "draft" })
+      .insert({ user_id: userId, name, status: "draft" })
       .select("id")
       .single();
 

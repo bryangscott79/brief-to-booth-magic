@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { saveProjectField } from "@/hooks/useProjectSync";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
 
 interface BriefUploadProps {
@@ -21,6 +22,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const [pasteText, setPasteText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const { currentProject, createProject, setRawBrief, setParsedBrief, setActiveStep } = useProjectStore();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -37,9 +39,27 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     return data.data as ParsedBrief;
   };
 
+  /** Create a DB project if none exists, returns the project ID */
+  const ensureDbProject = async (name: string): Promise<string> => {
+    if (projectId) return projectId;
+    if (!user) throw new Error("You must be logged in to create a project");
+
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({ user_id: user.id, name, status: "draft" })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return data.id;
+  };
+
   const processBrief = async (text: string, sourceName: string) => {
     setIsProcessing(true);
     try {
+      // Auto-create DB project if needed
+      const dbProjectId = await ensureDbProject(sourceName);
+
       createProject(sourceName);
       setRawBrief(text);
 
@@ -49,17 +69,15 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       setActiveStep("review");
 
       // Save to DB
-      if (projectId) {
-        await saveProjectField(projectId, "brief_text", text);
-        await saveProjectField(projectId, "parsed_brief", parsedBrief);
-        await saveProjectField(projectId, "status", "reviewed");
-      }
+      await saveProjectField(dbProjectId, "brief_text", text);
+      await saveProjectField(dbProjectId, "parsed_brief", parsedBrief);
+      await saveProjectField(dbProjectId, "status", "reviewed");
 
       toast({
         title: "Brief parsed successfully",
         description: "Review the extracted data before generating elements.",
       });
-      navigate(projectId ? `/review?project=${projectId}` : "/review");
+      navigate(`/review?project=${dbProjectId}`);
     } catch (error) {
       console.error("Brief parsing error:", error);
       toast({

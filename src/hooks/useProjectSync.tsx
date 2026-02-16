@@ -66,9 +66,13 @@ export function useProjectSync() {
     }
   }, [dbProject, loadFromDb]);
 
-  // Reset hydration flag when projectId changes
+  // Reset hydration flag AND clear stale store data when projectId changes
   useEffect(() => {
     hasHydrated.current = false;
+    // Clear the old project so components don't render stale data
+    if (currentProject && currentProject.id !== projectId) {
+      useProjectStore.getState().resetProject();
+    }
   }, [projectId]);
 
   return { projectId, isLoading: isLoading && !currentProject, dbProject };

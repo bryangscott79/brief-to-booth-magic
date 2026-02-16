@@ -118,20 +118,40 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     const zip = await JSZip.loadAsync(file);
     const docXml = await zip.file("word/document.xml")?.async("string");
     if (!docXml) throw new Error("Could not read document.xml from DOCX");
-    // Strip XML tags to get plain text, preserve paragraph breaks
-    const text = docXml
-      .replace(/<\/w:p[^>]*>/g, "\n")   // paragraph breaks
-      .replace(/<\/w:r>/g, " ")          // run breaks → space
-      .replace(/<[^>]+>/g, "")           // strip all XML tags
+    
+    // Extract only text content from w:t elements for cleaner output
+    const textParts: string[] = [];
+    let currentParagraph = "";
+    
+    // Match w:t elements which contain actual text content
+    const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    const paraEndRegex = /<\/w:p>/g;
+    
+    // Process the XML by splitting on paragraph boundaries
+    const paragraphs = docXml.split(/<\/w:p[^>]*>/);
+    for (const para of paragraphs) {
+      const texts: string[] = [];
+      let match;
+      const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      while ((match = regex.exec(para)) !== null) {
+        texts.push(match[1]);
+      }
+      if (texts.length > 0) {
+        textParts.push(texts.join(""));
+      }
+    }
+    
+    const text = textParts
+      .join("\n")
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
-      .replace(/[ \t]+/g, " ")          // collapse whitespace
-      .replace(/\n /g, "\n")
-      .replace(/\n{3,}/g, "\n\n")       // collapse blank lines
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
+    
+    console.log("Extracted DOCX text length:", text.length, "preview:", text.substring(0, 200));
     return text;
   };
 

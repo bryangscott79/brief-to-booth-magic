@@ -240,8 +240,16 @@ serve(async (req) => {
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
 
+    console.log("AI response:", JSON.stringify({
+      hasToolCalls: !!toolCall,
+      hasContent: !!data.choices?.[0]?.message?.content,
+      finishReason: data.choices?.[0]?.finish_reason,
+      toolArgs: toolCall ? toolCall.function.arguments.substring(0, 500) : null,
+    }));
+
     if (toolCall) {
       const parsed = JSON.parse(toolCall.function.arguments);
+      console.log("Parsed brand name:", parsed.brand?.name, "objectives:", parsed.objectives?.primary?.substring(0, 100));
       return new Response(JSON.stringify({ data: parsed }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -156,7 +156,7 @@ serve(async (req) => {
     const toolSchema = getToolSchema(elementType);
 
     const requestBody: any = {
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-2.5-pro",
       temperature: existingData || feedback ? 1.2 : 0.9,
       messages: [
         { role: "system", content: systemPrompt + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },

@@ -1,10 +1,65 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+/** Extract readable text from a DOCX file (base64 encoded) */
+function extractDocxText(base64Data: string): string {
+  // Decode base64 to binary
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  // We can't easily use JSZip synchronously in Deno, so parse the XML directly
+  // DOCX is a ZIP file - find the word/document.xml inside
+  // For reliability, let's use a simpler approach: find XML content patterns in the raw data
+  // Actually, let's use the async version properly
+  return ""; // placeholder - will use async version
+}
+
+/** Async DOCX text extraction using JSZip */
+async function extractDocxTextAsync(base64Data: string): Promise<string> {
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  const zip = await JSZip.loadAsync(bytes);
+  const docXml = await zip.file("word/document.xml")?.async("string");
+  if (!docXml) throw new Error("Could not read document.xml from DOCX");
+  
+  // Extract text from w:t elements, split by paragraphs
+  const textParts: string[] = [];
+  const paragraphs = docXml.split(/<\/w:p[^>]*>/);
+  for (const para of paragraphs) {
+    const texts: string[] = [];
+    const regex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    let match;
+    while ((match = regex.exec(para)) !== null) {
+      if (match[1]) texts.push(match[1]);
+    }
+    if (texts.length > 0) {
+      textParts.push(texts.join(""));
+    }
+  }
+  
+  return textParts
+    .join("\n")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 const PARSE_SYSTEM_PROMPT = `You are an expert trade show brief analyst. Given raw brief text, extract structured data into the exact schema provided via the tool call.
 
@@ -27,7 +82,15 @@ serve(async (req) => {
   }
 
   try {
-    const { briefText } = await req.json();
+    const body = await req.json();
+    let briefText = body.briefText;
+    
+    // Handle DOCX files sent as base64
+    if (body.fileBase64 && body.fileType === "docx") {
+      console.log("Received DOCX file as base64, extracting text...");
+      briefText = await extractDocxTextAsync(body.fileBase64);
+      console.log("Extracted DOCX text length:", briefText.length, "preview:", briefText.substring(0, 300));
+    }
 
     if (!briefText || typeof briefText !== "string" || briefText.trim().length < 20) {
       return new Response(

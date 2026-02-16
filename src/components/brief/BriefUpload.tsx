@@ -26,10 +26,17 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { toast } = useToast();
 
   /** Send brief text to AI-powered parser edge function */
-  const parseBriefWithAI = async (text: string): Promise<ParsedBrief> => {
-    const { data, error } = await supabase.functions.invoke("parse-brief", {
-      body: { briefText: text },
-    });
+  /** Send brief to AI-powered parser edge function. Supports raw text or base64 DOCX. */
+  const parseBriefWithAI = async (text: string, fileBase64?: string, fileType?: string): Promise<ParsedBrief> => {
+    const body: Record<string, any> = {};
+    if (fileBase64 && fileType) {
+      body.fileBase64 = fileBase64;
+      body.fileType = fileType;
+    } else {
+      body.briefText = text;
+    }
+
+    const { data, error } = await supabase.functions.invoke("parse-brief", { body });
 
     if (error) throw new Error(error.message || "Failed to parse brief");
     if (data?.error) throw new Error(data.error);
@@ -57,14 +64,15 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     return data.id;
   };
 
-  const processBrief = async (text: string, sourceName: string) => {
+  const processBrief = async (text: string, sourceName: string, fileBase64?: string, fileType?: string) => {
     setIsProcessing(true);
+    console.log("[Brief] Processing brief, text length:", text.length, "hasFile:", !!fileBase64);
     try {
       // Auto-create DB project if needed
       const dbProjectId = await ensureDbProject(sourceName);
 
-      // Parse with AI first
-      const parsedBrief = await parseBriefWithAI(text);
+      // Parse with AI — send file directly if available for server-side extraction
+      const parsedBrief = await parseBriefWithAI(text, fileBase64, fileType);
 
       // Save all fields to DB in one go
       const { error: updateError } = await supabase
@@ -119,70 +127,96 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
 
   /** Extract readable text from a DOCX file using JSZip */
   const extractDocxText = async (file: File): Promise<string> => {
-    const zip = await JSZip.loadAsync(file);
-    const docXml = await zip.file("word/document.xml")?.async("string");
-    if (!docXml) throw new Error("Could not read document.xml from DOCX");
-    
-    // Extract only text content from w:t elements for cleaner output
-    const textParts: string[] = [];
-    let currentParagraph = "";
-    
-    // Match w:t elements which contain actual text content
-    const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-    const paraEndRegex = /<\/w:p>/g;
-    
-    // Process the XML by splitting on paragraph boundaries
-    const paragraphs = docXml.split(/<\/w:p[^>]*>/);
-    for (const para of paragraphs) {
-      const texts: string[] = [];
-      let match;
-      const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-      while ((match = regex.exec(para)) !== null) {
-        texts.push(match[1]);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      const docXml = await zip.file("word/document.xml")?.async("string");
+      if (!docXml) throw new Error("Could not read document.xml from DOCX");
+      
+      // Extract only text content from w:t elements for cleaner output
+      const textParts: string[] = [];
+      
+      // Split by paragraph boundaries, then extract w:t text from each
+      const paragraphs = docXml.split(/<\/w:p[^>]*>/);
+      for (const para of paragraphs) {
+        const texts: string[] = [];
+        // Match all w:t elements - they contain the actual visible text
+        const regex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+        let match;
+        while ((match = regex.exec(para)) !== null) {
+          if (match[1]) texts.push(match[1]);
+        }
+        if (texts.length > 0) {
+          textParts.push(texts.join(""));
+        }
       }
-      if (texts.length > 0) {
-        textParts.push(texts.join(""));
+      
+      let text = textParts
+        .join("\n")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      
+      console.log("[DOCX] w:t extraction result - length:", text.length, "first 300 chars:", text.substring(0, 300));
+      
+      // If w:t extraction failed or got very little, fall back to stripping all tags
+      if (text.length < 50) {
+        console.warn("[DOCX] w:t extraction got too little text, falling back to tag stripping");
+        text = docXml
+          .replace(/<\/w:p[^>]*>/g, "\n")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .replace(/\n\s+/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        console.log("[DOCX] Fallback extraction - length:", text.length);
       }
+      
+      return text;
+    } catch (err) {
+      console.error("[DOCX] Extraction failed:", err);
+      // Last resort: try raw text read
+      const rawText = await file.text();
+      console.log("[DOCX] Raw text fallback - length:", rawText.length);
+      return rawText;
     }
-    
-    const text = textParts
-      .join("\n")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-    
-    console.log("Extracted DOCX text length:", text.length, "preview:", text.substring(0, 200));
-    return text;
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
 
-    let text: string;
     const ext = file.name.split(".").pop()?.toLowerCase();
+    const sourceName = file.name.replace(/\.[^/.]+$/, "");
 
     if (ext === "docx") {
-      text = await extractDocxText(file);
+      // Send DOCX as base64 to the edge function for server-side extraction
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const fileBase64 = btoa(binary);
+      console.log("[DOCX] Sending file as base64, size:", fileBase64.length);
+      await processBrief("", sourceName, fileBase64, "docx");
     } else {
-      // TXT and PDF fallback (PDF will be raw text — works for text-based PDFs)
-      text = await file.text();
+      // TXT and PDF: read as text
+      const text = await file.text();
+      if (!text || text.trim().length < 20) {
+        toast({
+          title: "Could not extract text",
+          description: "The file appears empty or unreadable. Try pasting the text instead.",
+          variant: "destructive",
+        });
+        return;
+      }
+      await processBrief(text, sourceName);
     }
-
-    if (!text || text.trim().length < 20) {
-      toast({
-        title: "Could not extract text",
-        description: "The file appears empty or unreadable. Try pasting the text instead.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    await processBrief(text, file.name.replace(/\.[^/.]+$/, ""));
   }, [user, navigate, toast, projectId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

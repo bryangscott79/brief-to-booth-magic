@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, FileText, Copy, Loader2, AlertCircle } from "lucide-react";
+import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -71,11 +72,51 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     }
   };
 
+  /** Extract readable text from a DOCX file using JSZip */
+  const extractDocxText = async (file: File): Promise<string> => {
+    const zip = await JSZip.loadAsync(file);
+    const docXml = await zip.file("word/document.xml")?.async("string");
+    if (!docXml) throw new Error("Could not read document.xml from DOCX");
+    // Strip XML tags to get plain text, preserve paragraph breaks
+    const text = docXml
+      .replace(/<\/w:p[^>]*>/g, "\n")   // paragraph breaks
+      .replace(/<\/w:r>/g, " ")          // run breaks → space
+      .replace(/<[^>]+>/g, "")           // strip all XML tags
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/[ \t]+/g, " ")          // collapse whitespace
+      .replace(/\n /g, "\n")
+      .replace(/\n{3,}/g, "\n\n")       // collapse blank lines
+      .trim();
+    return text;
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
 
-    const text = await file.text();
+    let text: string;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+
+    if (ext === "docx") {
+      text = await extractDocxText(file);
+    } else {
+      // TXT and PDF fallback (PDF will be raw text — works for text-based PDFs)
+      text = await file.text();
+    }
+
+    if (!text || text.trim().length < 20) {
+      toast({
+        title: "Could not extract text",
+        description: "The file appears empty or unreadable. Try pasting the text instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     await processBrief(text, file.name.replace(/\.[^/.]+$/, ""));
   }, [createProject, setRawBrief, setParsedBrief, navigate, toast, projectId]);
 

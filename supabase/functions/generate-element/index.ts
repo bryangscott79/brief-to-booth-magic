@@ -146,6 +146,10 @@ serve(async (req) => {
       userPrompt += `\n\nUser feedback for this regeneration:\n${feedback}`;
     }
 
+    if (existingData || feedback) {
+      userPrompt += `\n\nIMPORTANT: This is a REGENERATION request. You MUST create a completely NEW and DIFFERENT concept from the existing content. Do NOT repeat or closely resemble the previous headline, narrative, or ideas. Take a fresh creative direction, explore a different angle, metaphor, or strategic position. Be boldly original.`;
+    }
+
     userPrompt += `\n\nGenerate exhaustive, presentation-quality content. Be specific, bold, and strategic. Include industry-trending ideas and data points. This should read like a premium agency pitch deck. You MUST use the provided tool/function to return your response.`;
 
     // Define the tool schema for structured output
@@ -153,6 +157,7 @@ serve(async (req) => {
 
     const requestBody: any = {
       model: "google/gemini-2.5-flash",
+      temperature: existingData || feedback ? 1.2 : 0.9,
       messages: [
         { role: "system", content: systemPrompt + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
         { role: "user", content: userPrompt },

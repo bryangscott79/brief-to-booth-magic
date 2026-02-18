@@ -114,10 +114,13 @@ export function SpatialPlanner() {
   }, [activeLayout?.zones]);
 
   const handleGenerateFloorPlan = useCallback(async () => {
-    if (!brief || !currentConfig || !activeLayout) return;
+    if (!currentConfig || !activeLayout) {
+      toast({ title: "Missing data", description: "Spatial layout data is required to generate a floor plan.", variant: "destructive" });
+      return;
+    }
     setIsGeneratingFloorPlan(true);
 
-    const footprint = brief.spatial?.footprints?.[0]?.size || currentConfig.footprintSize;
+    const footprint = brief?.spatial?.footprints?.[0]?.size || currentConfig.footprintSize;
     const fpMatch = footprint.match(/(\d+)\s*[x×X]\s*(\d+)/);
     const w = fpMatch ? parseInt(fpMatch[1], 10) : 30;
     const d = fpMatch ? parseInt(fpMatch[2], 10) : 30;
@@ -129,7 +132,7 @@ export function SpatialPlanner() {
     const heroName = currentProject?.elements.interactiveMechanics?.data?.hero?.name || "Hero installation";
     const materials = spatialData?.materialsAndMood?.map((m: any) => `${m.material}: ${m.feel}`).join(", ") || "";
 
-    const prompt = `Generate a professional top-down 2D architectural floor plan rendering for a ${w}' × ${d}' trade show booth for ${brief.brand?.name || "client"}.
+    const prompt = `Generate a professional top-down 2D architectural floor plan rendering for a ${w}' × ${d}' trade show booth for ${brief?.brand?.name || "client"}.
 
 STYLE: Clean architectural floor plan — bird's-eye view, looking STRAIGHT DOWN. This should look like a professionally drawn exhibit floor plan with labeled zones, furniture footprints, and dimensional annotations. NOT a 3D view.
 
@@ -149,7 +152,7 @@ INCLUDE IN THE FLOOR PLAN:
 
 ${bigIdea ? `DESIGN THEME: "${bigIdea.headline}" — ${bigIdea.narrative?.slice(0, 150)}` : ""}
 MATERIALS: ${materials}
-BRAND: ${brief.brand?.name || ""} — colors: ${brief.brand?.visualIdentity?.colors?.join(", ") || "neutral"}
+BRAND: ${brief?.brand?.name || ""} — colors: ${brief?.brand?.visualIdentity?.colors?.join(", ") || "neutral"}
 
 RENDERING STYLE: Clean, professional architectural plan rendering. Subtle color fills per zone. White/light background. Crisp lines. Dimensional annotations. Think: professional exhibit design blueprint with a polished, presentation-ready finish.
 

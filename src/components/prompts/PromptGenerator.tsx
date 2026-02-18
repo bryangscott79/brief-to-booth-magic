@@ -329,6 +329,9 @@ ${brief.brand.name} signage visible. Brand colors: ${brief.brand.visualIdentity.
 
 ATMOSPHERE:
 8-12 people naturally distributed throughout the space: some engaging with the hero installation, others in conversation in the lounge area, staff at reception welcoming visitors. Convention center environment visible in background.
+${spatialData.floorPlanAnnotations?.length > 0 ? `
+FLOOR PLAN DESIGN NOTES (apply these spatial decisions from the approved floor plan):
+${spatialData.floorPlanAnnotations.map((a: any, i: number) => `${i + 1}. ${a.comment}`).join("\n")}` : ""}
 
 CAMERA:
 ${cameraInstructions[angleId]}

@@ -25,10 +25,12 @@ import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations, type LayoutVariation } from "./LayoutVariations";
 import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
 import { ZoneDetailPanel } from "./ZoneDetailPanel";
+import { FloorPlanAnnotations, type FloorPlanAnnotation } from "./FloorPlanAnnotations";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { saveProjectField } from "@/hooks/useProjectSync";
 
 // Fallback palette when zones don't have a colorCode from DB
 const ZONE_PALETTE = [
@@ -77,9 +79,15 @@ export function SpatialPlanner() {
   const [floorPlanView, setFloorPlanView] = useState<"blocks" | "render">("blocks");
   const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
+  const [floorPlanAnnotations, setFloorPlanAnnotations] = useState<FloorPlanAnnotation[]>([]);
 
   const { data: savedImages = [] } = useProjectImages(projectId);
   const saveImage = useSaveRenderImage(projectId);
+
+  const spatialData = currentProject?.elements.spatialStrategy.data;
+  const currentConfig = spatialData?.configs?.[activeFootprint];
+  const brief = currentProject?.parsedBrief;
+  const bigIdea = currentProject?.elements.bigIdea.data;
 
   // Hydrate floor plan from saved images
   useMemo(() => {
@@ -87,10 +95,13 @@ export function SpatialPlanner() {
     if (saved && !floorPlanImage) setFloorPlanImage(saved.public_url);
   }, [savedImages]);
 
-  const spatialData = currentProject?.elements.spatialStrategy.data;
-  const currentConfig = spatialData?.configs?.[activeFootprint];
-  const brief = currentProject?.parsedBrief;
-  const bigIdea = currentProject?.elements.bigIdea.data;
+  // Hydrate annotations from spatial data
+  useMemo(() => {
+    const saved = spatialData?.floorPlanAnnotations;
+    if (saved && Array.isArray(saved) && floorPlanAnnotations.length === 0) {
+      setFloorPlanAnnotations(saved);
+    }
+  }, [spatialData]);
   
   // Generate layout variations - must be before conditional return
   const variations = useMemo(() => {
@@ -132,11 +143,24 @@ export function SpatialPlanner() {
     const heroName = currentProject?.elements.interactiveMechanics?.data?.hero?.name || "Hero installation";
     const materials = spatialData?.materialsAndMood?.map((m: any) => `${m.material}: ${m.feel}`).join(", ") || "";
 
+    // Layout variation context
+    const variationContext = `LAYOUT STRATEGY: "${activeLayout.name}" (${activeLayout.score}% match)
+- ${activeLayout.description}
+- Optimized for: ${activeLayout.bestFor.join(", ")}
+- Reasoning: ${activeLayout.reasoning}`;
+
+    // Annotation feedback
+    const annotationBlock = floorPlanAnnotations.length > 0
+      ? `\nUSER FEEDBACK (CRITICAL — apply all of these changes):\n${floorPlanAnnotations.map((a, i) => `${i + 1}. At position (${Math.round(a.x)}% from left, ${Math.round(a.y)}% from top): "${a.comment}"`).join("\n")}\nMake sure every feedback item above is reflected in the updated floor plan.`
+      : "";
+
     const prompt = `Generate a professional top-down 2D booth floor plan for a ${w}' × ${d}' trade show exhibit for ${brief?.brand?.name || "client"}.
 
 STYLE: Black-and-white technical architectural floor plan on a light blue graph-paper / grid background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. NO color fills, NO 3D, NO perspective — purely flat 2D like a hand-drawn exhibit blueprint.
 
 BOOTH DIMENSIONS: ${w} feet wide × ${d} feet deep (${w > d ? "landscape / wider than deep" : d > w ? "portrait / deeper than wide" : "square"}). Draw the booth outline as a bold black rectangle to exact proportions.
+
+${variationContext}
 
 ZONE LAYOUT:
 ${zoneDescriptions}
@@ -155,7 +179,7 @@ BRAND: ${brief?.brand?.name || ""}
 
 RENDERING STYLE: Think professional exhibit design blueprint. Light blue graph-paper grid background. All furniture and walls in clean black line-art. Zone names in bold uppercase. Furniture labels in smaller text. No color fills — only black outlines on grid paper. Crisp, technical, presentation-ready.
 
-The image must be a WIDE landscape format matching the booth's ${w}:${d} proportions.`;
+The image must be a WIDE landscape format matching the booth's ${w}:${d} proportions.${annotationBlock}`;
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-hero", {
@@ -175,14 +199,32 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
         );
       }
 
-      toast({ title: "Floor plan generated", description: "AI-rendered 2D floor plan is ready" });
+      toast({ title: "Floor plan generated", description: floorPlanAnnotations.length > 0 ? `Applied ${floorPlanAnnotations.length} feedback note(s)` : "AI-rendered 2D floor plan is ready" });
     } catch (err) {
       console.error("Floor plan generation error:", err);
       toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
       setIsGeneratingFloorPlan(false);
     }
-  }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject]);
+  }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject, floorPlanAnnotations]);
+
+  // Annotation handlers
+  const handleAddAnnotation = useCallback((annotation: FloorPlanAnnotation) => {
+    const updated = [...floorPlanAnnotations, annotation];
+    setFloorPlanAnnotations(updated);
+    // Persist to DB
+    if (projectId && spatialData) {
+      saveProjectField(projectId, "spatial_strategy", { ...spatialData, floorPlanAnnotations: updated });
+    }
+  }, [floorPlanAnnotations, projectId, spatialData]);
+
+  const handleRemoveAnnotation = useCallback((id: string) => {
+    const updated = floorPlanAnnotations.filter(a => a.id !== id);
+    setFloorPlanAnnotations(updated);
+    if (projectId && spatialData) {
+      saveProjectField(projectId, "spatial_strategy", { ...spatialData, floorPlanAnnotations: updated });
+    }
+  }, [floorPlanAnnotations, projectId, spatialData]);
 
   // Early return after all hooks
   if (!spatialData?.configs || !currentConfig || !activeLayout || !metrics) {
@@ -323,19 +365,21 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
           </CardHeader>
           <CardContent className="p-4">
             {floorPlanView === "render" ? (
-              /* AI-Rendered Floor Plan */
-              <div className="rounded-lg overflow-hidden" style={{ minHeight: "400px" }}>
-                {isGeneratingFloorPlan ? (
+              /* AI-Rendered Floor Plan with Annotations */
+              <div style={{ minHeight: "400px" }}>
+                {isGeneratingFloorPlan && !floorPlanImage ? (
                   <div className="flex flex-col items-center justify-center h-[400px] gap-3">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="text-sm text-muted-foreground">Generating 2D floor plan...</p>
                     <p className="text-xs text-muted-foreground/60">This takes 15-30 seconds</p>
                   </div>
                 ) : floorPlanImage ? (
-                  <img
-                    src={floorPlanImage}
-                    alt="AI-generated 2D floor plan"
-                    className="w-full h-auto rounded-lg border border-border"
+                  <FloorPlanAnnotations
+                    imageUrl={floorPlanImage}
+                    annotations={floorPlanAnnotations}
+                    onAddAnnotation={handleAddAnnotation}
+                    onRemoveAnnotation={handleRemoveAnnotation}
+                    isRegenerating={isGeneratingFloorPlan}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-[400px] gap-3">

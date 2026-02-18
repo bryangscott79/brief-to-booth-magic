@@ -10,6 +10,17 @@ interface GenerateViewRequest {
   viewPrompt: string;
   viewName: string;
   aspectRatio: string;
+  boothSize?: string;
+}
+
+function buildScaleBlock(sizeStr?: string): string {
+  if (!sizeStr) return "";
+  const m = sizeStr.match(/(\d+)\s*[x×X]\s*(\d+)/);
+  if (!m) return "";
+  const w = parseInt(m[1], 10), d = parseInt(m[2], 10), sqft = w * d;
+  const ht = sqft > 1200 ? "16-20" : sqft > 600 ? "12-16" : "8-12";
+  const scale = sqft > 1200 ? "large island" : sqft > 600 ? "mid-size peninsula" : "small inline";
+  return `\nPHYSICAL SCALE (CRITICAL):\n- Booth footprint: ${w}' wide × ${d}' deep (${sqft} sq ft) — ${scale} booth\n- Ceiling/fascia height: ${ht} feet\n- An average person is 5'8". The booth is ${w}' wide — roughly ${Math.round(w / 2)} people shoulder-to-shoulder\n- Do NOT make it look like a mega-exhibit. Keep it ${w}'×${d}' proportional.\n`;
 }
 
 serve(async (req) => {
@@ -18,12 +29,14 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio }: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize }: GenerateViewRequest = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    const scaleBlock = buildScaleBlock(boothSize);
 
     console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`);
 
@@ -71,8 +84,10 @@ COMPOSITION:
 - Include environmental details: ceiling treatment, floor material, wall finishes
 - Depth of field focusing on the zone's key features
 
-OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.`
+OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.
+${scaleBlock}`
       : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
+${scaleBlock}
 
 CAMERA POSITION (CRITICAL — follow exactly):
 ${cameraDir}

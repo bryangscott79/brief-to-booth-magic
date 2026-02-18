@@ -61,7 +61,12 @@ function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatial
   const zoneName = (zone.name || "").toLowerCase();
   const parts: string[] = [];
 
-  parts.push(`Generate a photorealistic INTERIOR close-up perspective from INSIDE the "${zone.name}" zone of a ${brief.spatial.footprints[0]?.size || ""} trade show booth for ${brief.brand.name}.`);
+  const fpSize = brief.spatial.footprints[0]?.size || "";
+  const fpMatch = fpSize.match(/(\d+)\s*[x×X]\s*(\d+)/);
+  const fpW = fpMatch ? parseInt(fpMatch[1], 10) : 30;
+  const fpD = fpMatch ? parseInt(fpMatch[2], 10) : 30;
+  const zoneSqft = zone.sqft || Math.round((fpW * fpD * (zone.percentage || 15)) / 100);
+  parts.push(`Generate a photorealistic INTERIOR close-up perspective from INSIDE the "${zone.name}" zone of a ${fpSize} (${fpW}' wide × ${fpD}' deep) trade show booth for ${brief.brand.name}. This zone is approximately ${zoneSqft} sq ft — keep the space proportional to that size, not larger.`);
   parts.push("");
   parts.push("CRITICAL — VISUAL CONSISTENCY:");
   parts.push("Look at the reference image. Find the exact zone labeled or positioned as the \"" + zone.name + "\" area.");
@@ -255,6 +260,25 @@ export function PromptGenerator() {
     );
   }
 
+  /** Parse "30x50" into {w, d} feet and compute scale cues */
+  const getScaleContext = (sizeStr: string) => {
+    const match = sizeStr?.match(/(\d+)\s*[x×X]\s*(\d+)/);
+    if (!match) return "";
+    const w = parseInt(match[1], 10);
+    const d = parseInt(match[2], 10);
+    const sqft = w * d;
+    const ceilingHt = sqft > 1200 ? "16-20" : sqft > 600 ? "12-16" : "8-12";
+    const scale = sqft > 1200 ? "large island" : sqft > 600 ? "mid-size peninsula" : "small inline";
+    return `
+PHYSICAL SCALE (CRITICAL — the booth must look THIS size, not bigger or smaller):
+- Booth footprint: ${w} feet wide × ${d} feet deep (${sqft} sq ft total) — a ${scale} booth
+- Ceiling/fascia height: ${ceilingHt} feet
+- Human reference: an average person is 5'8". The booth is ${w} feet wide — roughly ${Math.round(w / 2)} people standing shoulder-to-shoulder across the front
+- Aisle width: standard 10-foot convention aisles on each open side
+- The booth must fit naturally within a convention hall alongside neighboring booths of similar or smaller size
+- Do NOT make the booth look like a 100'+ mega-exhibit or a multi-story building. It is ${w}'×${d}' — keep it honest and proportional`;
+  };
+
   const generatePrompt = (angleId: string): string => {
     // Check for zone interior angles first
     const zoneAngle = zoneInteriorAngles.find((a: any) => a.id === angleId);
@@ -267,6 +291,7 @@ export function PromptGenerator() {
 
     const footprint = brief.spatial.footprints[0];
     const config = spatialData.configs[0];
+    const scaleBlock = getScaleContext(footprint?.size);
 
     const cameraInstructions: Record<string, string> = {
       hero_34: "Camera positioned at 45 degrees front-left, eye level, showing the full booth with hero installation as focal point",
@@ -280,6 +305,7 @@ export function PromptGenerator() {
     };
 
     return `Generate a photorealistic ${angle.name.toLowerCase()} of a ${footprint.size} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company. ${cameraInstructions[angleId]}.
+${scaleBlock}
 
 DESIGN DIRECTION:
 ${bigIdea.headline}
@@ -311,7 +337,7 @@ STYLE:
 Architectural visualization quality. Photorealistic materials. Clean, editorial lighting. Professional trade show environment.
 
 NEGATIVE PROMPT:
-${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality
+${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality, oversized booth, mega-exhibit scale
 
 Aspect ratio: ${angle.aspectRatio}`;
   };
@@ -327,6 +353,7 @@ Aspect ratio: ${angle.aspectRatio}`;
         feedback: heroFeedback || undefined,
         previousImageUrl: heroImage || undefined,
         projectId: projectId!,
+        boothSize: brief.spatial.footprints[0]?.size,
         onSave: doSave,
       });
 
@@ -380,6 +407,7 @@ Aspect ratio: ${angle.aspectRatio}`;
       prompts,
       heroImageUrl: heroImage!,
       projectId: projectId!,
+      boothSize: brief.spatial.footprints[0]?.size,
       onSave: doSave,
     }).then(() => {
       toast({
@@ -399,6 +427,7 @@ Aspect ratio: ${angle.aspectRatio}`;
         prompt: generatedPrompts[angleId] || generatePrompt(angleId),
         heroImageUrl: heroImage,
         projectId: projectId!,
+        boothSize: brief.spatial.footprints[0]?.size,
         onSave: doSave,
       });
 

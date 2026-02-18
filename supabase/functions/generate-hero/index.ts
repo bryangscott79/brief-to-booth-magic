@@ -9,6 +9,17 @@ interface GenerateHeroRequest {
   prompt: string;
   feedback?: string;
   previousImageUrl?: string;
+  boothSize?: string;
+}
+
+function buildScaleBlock(sizeStr?: string): string {
+  if (!sizeStr) return "";
+  const m = sizeStr.match(/(\d+)\s*[x×X]\s*(\d+)/);
+  if (!m) return "";
+  const w = parseInt(m[1], 10), d = parseInt(m[2], 10), sqft = w * d;
+  const ht = sqft > 1200 ? "16-20" : sqft > 600 ? "12-16" : "8-12";
+  const scale = sqft > 1200 ? "large island" : sqft > 600 ? "mid-size peninsula" : "small inline";
+  return `\n\nPHYSICAL SCALE (CRITICAL):\n- Booth footprint: ${w}' wide × ${d}' deep (${sqft} sq ft) — ${scale} booth\n- Ceiling/fascia height: ${ht} feet\n- An average person is 5'8". The booth is ${w}' wide — roughly ${Math.round(w / 2)} people shoulder-to-shoulder\n- Standard 10' convention aisles on open sides\n- Do NOT make the booth look like a mega-exhibit. It is ${w}'×${d}' — keep it proportional.`;
 }
 
 serve(async (req) => {
@@ -17,19 +28,19 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize }: GenerateHeroRequest = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl });
+    const scaleBlock = buildScaleBlock(boothSize);
+    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize });
 
     let messages;
 
     if (previousImageUrl && feedback) {
-      // Regenerate with feedback based on previous image
       const refinedPrompt = `Based on this trade show booth image, apply the following feedback and generate an improved version:
 
 FEEDBACK TO APPLY:
@@ -37,34 +48,27 @@ ${feedback}
 
 ORIGINAL DESIGN REQUIREMENTS:
 ${prompt}
+${scaleBlock}
 
-Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall booth concept and brand identity.`;
+Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall booth concept and brand identity. The booth must appear as the correct physical size — not larger.`;
 
       messages = [
         {
           role: "user",
           content: [
-            {
-              type: "text",
-              text: refinedPrompt,
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: previousImageUrl,
-              },
-            },
+            { type: "text", text: refinedPrompt },
+            { type: "image_url", image_url: { url: previousImageUrl } },
           ],
         },
       ];
     } else {
-      // Initial generation from prompt only
       messages = [
         {
           role: "user",
           content: `${prompt}
+${scaleBlock}
 
-Generate a photorealistic 16:9 architectural visualization of this trade show booth.`,
+Generate a photorealistic 16:9 architectural visualization of this trade show booth. The booth must appear as the correct physical size — not a mega-exhibit.`,
         },
       ];
     }

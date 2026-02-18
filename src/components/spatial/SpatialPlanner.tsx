@@ -132,31 +132,30 @@ export function SpatialPlanner() {
     const heroName = currentProject?.elements.interactiveMechanics?.data?.hero?.name || "Hero installation";
     const materials = spatialData?.materialsAndMood?.map((m: any) => `${m.material}: ${m.feel}`).join(", ") || "";
 
-    const prompt = `Generate a professional top-down 2D architectural floor plan rendering for a ${w}' × ${d}' trade show booth for ${brief?.brand?.name || "client"}.
+    const prompt = `Generate a professional top-down 2D booth floor plan for a ${w}' × ${d}' trade show exhibit for ${brief?.brand?.name || "client"}.
 
-STYLE: Clean architectural floor plan — bird's-eye view, looking STRAIGHT DOWN. This should look like a professionally drawn exhibit floor plan with labeled zones, furniture footprints, and dimensional annotations. NOT a 3D view.
+STYLE: Black-and-white technical architectural floor plan on a light blue graph-paper / grid background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. NO color fills, NO 3D, NO perspective — purely flat 2D like a hand-drawn exhibit blueprint.
 
-BOOTH DIMENSIONS: ${w} feet wide × ${d} feet deep. Draw the outline to exact proportions (${w > d ? "wider than deep" : d > w ? "deeper than wide" : "square"}).
+BOOTH DIMENSIONS: ${w} feet wide × ${d} feet deep (${w > d ? "landscape / wider than deep" : d > w ? "portrait / deeper than wide" : "square"}). Draw the booth outline as a bold black rectangle to exact proportions.
 
 ZONE LAYOUT:
 ${zoneDescriptions}
 
-INCLUDE IN THE FLOOR PLAN:
-- Clean booth outline with ${w}' × ${d}' dimension lines
-- Each zone clearly labeled with name and approximate sq ft
-- Furniture footprints (counters, screens, seating shown as simple shapes)
-- Entry points marked with arrows from the main aisle (bottom edge)
-- ${heroName} shown as the focal centerpiece
-- Traffic flow arrows showing primary visitor path
-- Simple material/color coding per zone
+DRAWING REQUIREMENTS:
+- Bold black rectangular booth outline with dimension labels ("${w}'" and "${d}'")
+- Each zone clearly labeled in clean sans-serif text (zone name + sq ft)
+- Individual furniture items drawn as simple black-outline icons/shapes viewed from above: tables as rectangles, chairs as small squares, screens/monitors as thin rectangles, counters as long rectangles, storage units as filled rectangles, display stands as circles or rounded shapes
+- Label every piece of furniture with small text (e.g. "table", "storage unit", "display", "counter", "screen")
+- Thin blue lines or dashed lines separating major zone areas
+- Entry arrows from the main aisle (bottom edge of booth)
+- ${heroName} drawn as the prominent centerpiece feature
 
-${bigIdea ? `DESIGN THEME: "${bigIdea.headline}" — ${bigIdea.narrative?.slice(0, 150)}` : ""}
-MATERIALS: ${materials}
-BRAND: ${brief?.brand?.name || ""} — colors: ${brief?.brand?.visualIdentity?.colors?.join(", ") || "neutral"}
+${bigIdea ? `THEME: "${bigIdea.headline}"` : ""}
+BRAND: ${brief?.brand?.name || ""}
 
-RENDERING STYLE: Clean, professional architectural plan rendering. Subtle color fills per zone. White/light background. Crisp lines. Dimensional annotations. Think: professional exhibit design blueprint with a polished, presentation-ready finish.
+RENDERING STYLE: Think professional exhibit design blueprint. Light blue graph-paper grid background. All furniture and walls in clean black line-art. Zone names in bold uppercase. Furniture labels in smaller text. No color fills — only black outlines on grid paper. Crisp, technical, presentation-ready.
 
-Aspect ratio: 1:1`;
+The image must be a WIDE landscape format matching the booth's ${w}:${d} proportions.`;
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-hero", {

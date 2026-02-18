@@ -49,6 +49,7 @@ interface RenderActions {
     feedback?: string;
     previousImageUrl?: string;
     projectId: string;
+    boothSize?: string;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -57,6 +58,7 @@ interface RenderActions {
     prompts: Record<string, string>;
     heroImageUrl: string;
     projectId: string;
+    boothSize?: string;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -65,6 +67,7 @@ interface RenderActions {
     prompt: string;
     heroImageUrl: string;
     projectId: string;
+    boothSize?: string;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 }
@@ -113,12 +116,12 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setHydratedFromDb: (hydratedFromDb) => set({ hydratedFromDb }),
   resetForProject: (projectId) => set({ ...initialState, projectId }),
 
-  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, onSave }) => {
+  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-hero", {
-        body: { prompt, feedback: feedback || undefined, previousImageUrl: previousImageUrl || undefined },
+        body: { prompt, feedback: feedback || undefined, previousImageUrl: previousImageUrl || undefined, boothSize: boothSize || undefined },
       });
 
       if (error) throw error;
@@ -144,7 +147,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, onSave }) => {
+  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, onSave }) => {
     // Split into exterior views first, then interiors — so interiors can reference exterior images
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
@@ -191,6 +194,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
             viewPrompt: prompts[angle.id],
             viewName: angle.name,
             aspectRatio: angle.aspectRatio,
+            boothSize: boothSize || undefined,
           },
         });
 
@@ -231,7 +235,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, onSave }) => {
+  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -256,6 +260,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           viewPrompt: prompt,
           viewName: angle.name,
           aspectRatio: angle.aspectRatio,
+          boothSize: boothSize || undefined,
         },
       });
 

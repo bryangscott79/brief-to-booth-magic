@@ -13,15 +13,22 @@ import {
   Eye,
   EyeOff,
   TrendingUp,
-  Layers
+  Layers,
+  Sparkles,
+  Loader2,
+  ImageIcon
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations, type LayoutVariation } from "./LayoutVariations";
 import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
 import { ZoneDetailPanel } from "./ZoneDetailPanel";
+import { supabase } from "@/integrations/supabase/client";
+import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
+import { useSearchParams } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 // Fallback palette when zones don't have a colorCode from DB
 const ZONE_PALETTE = [
@@ -56,6 +63,9 @@ function getZoneColors(zone: any, index: number) {
 export function SpatialPlanner() {
   const { currentProject, setActiveStep } = useProjectStore();
   const { navigate } = useProjectNavigate();
+  const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("project");
   const [activeFootprint, setActiveFootprint] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [showFlow, setShowFlow] = useState(true);
@@ -64,9 +74,23 @@ export function SpatialPlanner() {
   const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
   const [activeTab, setActiveTab] = useState<"layout" | "metrics">("layout");
   const [selectedZone, setSelectedZone] = useState<{ zone: any; colors: any } | null>(null);
+  const [floorPlanView, setFloorPlanView] = useState<"blocks" | "render">("blocks");
+  const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
+  const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
+
+  const { data: savedImages = [] } = useProjectImages(projectId);
+  const saveImage = useSaveRenderImage(projectId);
+
+  // Hydrate floor plan from saved images
+  useMemo(() => {
+    const saved = savedImages.find(img => img.angle_id === "floor_plan_2d" && img.is_current);
+    if (saved && !floorPlanImage) setFloorPlanImage(saved.public_url);
+  }, [savedImages]);
 
   const spatialData = currentProject?.elements.spatialStrategy.data;
   const currentConfig = spatialData?.configs?.[activeFootprint];
+  const brief = currentProject?.parsedBrief;
+  const bigIdea = currentProject?.elements.bigIdea.data;
   
   // Generate layout variations - must be before conditional return
   const variations = useMemo(() => {
@@ -74,7 +98,6 @@ export function SpatialPlanner() {
     return generateLayoutVariations(currentConfig.zones, currentConfig.footprintSize);
   }, [currentConfig]);
   
-  // Get active layout and its metrics
   const activeLayout = useMemo(() => 
     variations.find(v => v.id === activeVariation) || variations[0],
     [variations, activeVariation]
@@ -85,12 +108,80 @@ export function SpatialPlanner() {
     return generateLayoutMetrics(activeLayout.zones, activeLayout.type);
   }, [activeLayout]);
   
-  // Generate flow paths
   const flowPaths = useMemo(() => {
     if (!activeLayout?.zones) return [];
     return generateFlowPaths(activeLayout.zones);
   }, [activeLayout?.zones]);
-  
+
+  const handleGenerateFloorPlan = useCallback(async () => {
+    if (!brief || !currentConfig || !activeLayout) return;
+    setIsGeneratingFloorPlan(true);
+
+    const footprint = brief.spatial?.footprints?.[0]?.size || currentConfig.footprintSize;
+    const fpMatch = footprint.match(/(\d+)\s*[x×X]\s*(\d+)/);
+    const w = fpMatch ? parseInt(fpMatch[1], 10) : 30;
+    const d = fpMatch ? parseInt(fpMatch[2], 10) : 30;
+
+    const zoneDescriptions = activeLayout.zones
+      .map((z: any) => `- ${z.name}: ${z.percentage}% (${z.sqft} sq ft) — positioned at ${Math.round((z.position.x <= 1 ? z.position.x * 100 : z.position.x))}% from left, ${Math.round((z.position.y <= 1 ? z.position.y * 100 : z.position.y))}% from top`)
+      .join("\n");
+
+    const heroName = currentProject?.elements.interactiveMechanics?.data?.hero?.name || "Hero installation";
+    const materials = spatialData?.materialsAndMood?.map((m: any) => `${m.material}: ${m.feel}`).join(", ") || "";
+
+    const prompt = `Generate a professional top-down 2D architectural floor plan rendering for a ${w}' × ${d}' trade show booth for ${brief.brand?.name || "client"}.
+
+STYLE: Clean architectural floor plan — bird's-eye view, looking STRAIGHT DOWN. This should look like a professionally drawn exhibit floor plan with labeled zones, furniture footprints, and dimensional annotations. NOT a 3D view.
+
+BOOTH DIMENSIONS: ${w} feet wide × ${d} feet deep. Draw the outline to exact proportions (${w > d ? "wider than deep" : d > w ? "deeper than wide" : "square"}).
+
+ZONE LAYOUT:
+${zoneDescriptions}
+
+INCLUDE IN THE FLOOR PLAN:
+- Clean booth outline with ${w}' × ${d}' dimension lines
+- Each zone clearly labeled with name and approximate sq ft
+- Furniture footprints (counters, screens, seating shown as simple shapes)
+- Entry points marked with arrows from the main aisle (bottom edge)
+- ${heroName} shown as the focal centerpiece
+- Traffic flow arrows showing primary visitor path
+- Simple material/color coding per zone
+
+${bigIdea ? `DESIGN THEME: "${bigIdea.headline}" — ${bigIdea.narrative?.slice(0, 150)}` : ""}
+MATERIALS: ${materials}
+BRAND: ${brief.brand?.name || ""} — colors: ${brief.brand?.visualIdentity?.colors?.join(", ") || "neutral"}
+
+RENDERING STYLE: Clean, professional architectural plan rendering. Subtle color fills per zone. White/light background. Crisp lines. Dimensional annotations. Think: professional exhibit design blueprint with a polished, presentation-ready finish.
+
+Aspect ratio: 1:1`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-hero", {
+        body: { prompt, boothSize: footprint },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      setFloorPlanImage(data.imageUrl);
+      setFloorPlanView("render");
+
+      if (projectId) {
+        saveImage.mutate(
+          { angleId: "floor_plan_2d", angleName: "2D Floor Plan", imageDataUrl: data.imageUrl },
+          { onError: (err) => console.error("Failed to save floor plan:", err) }
+        );
+      }
+
+      toast({ title: "Floor plan generated", description: "AI-rendered 2D floor plan is ready" });
+    } catch (err) {
+      console.error("Floor plan generation error:", err);
+      toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setIsGeneratingFloorPlan(false);
+    }
+  }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject]);
+
   // Early return after all hooks
   if (!spatialData?.configs || !currentConfig || !activeLayout || !metrics) {
     return (
@@ -184,37 +275,83 @@ export function SpatialPlanner() {
               </p>
             </div>
             <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={() => setZoom(z => Math.min(2, z + 0.25))}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={() => setZoom(1)}
-              >
-                <Maximize2 className="h-4 w-4" />
-              </Button>
+              {/* View mode toggle */}
+              <div className="flex rounded-md border border-border mr-2">
+                <button
+                  onClick={() => setFloorPlanView("blocks")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium transition-colors rounded-l-md",
+                    floorPlanView === "blocks" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  )}
+                >
+                  <Layers className="h-3.5 w-3.5 inline mr-1" />
+                  Zones
+                </button>
+                <button
+                  onClick={() => floorPlanImage ? setFloorPlanView("render") : handleGenerateFloorPlan()}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium transition-colors rounded-r-md",
+                    floorPlanView === "render" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  )}
+                >
+                  <ImageIcon className="h-3.5 w-3.5 inline mr-1" />
+                  Render
+                </button>
+              </div>
+              {floorPlanView === "blocks" && (
+                <>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(2, z + 0.25))}>
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              {floorPlanView === "render" && floorPlanImage && (
+                <Button variant="ghost" size="sm" className="h-8" onClick={handleGenerateFloorPlan} disabled={isGeneratingFloorPlan}>
+                  {isGeneratingFloorPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  <span className="ml-1 text-xs">Regenerate</span>
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="p-4">
-            <div 
-              className="grid-pattern rounded-lg p-4 overflow-auto"
-              style={{ minHeight: "400px" }}
-            >
+            {floorPlanView === "render" ? (
+              /* AI-Rendered Floor Plan */
+              <div className="rounded-lg overflow-hidden" style={{ minHeight: "400px" }}>
+                {isGeneratingFloorPlan ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] gap-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Generating 2D floor plan...</p>
+                    <p className="text-xs text-muted-foreground/60">This takes 15-30 seconds</p>
+                  </div>
+                ) : floorPlanImage ? (
+                  <img
+                    src={floorPlanImage}
+                    alt="AI-generated 2D floor plan"
+                    className="w-full h-auto rounded-lg border border-border"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[400px] gap-3">
+                    <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">No rendered floor plan yet</p>
+                    <Button onClick={handleGenerateFloorPlan} disabled={isGeneratingFloorPlan}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Floor Plan
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Zone Blocks View */
+              <div 
+                className="grid-pattern rounded-lg p-4 overflow-auto"
+                style={{ minHeight: "400px" }}
+              >
               <div 
                 className="relative bg-muted/30 rounded border border-dashed border-border"
                 style={{ 
@@ -281,6 +418,7 @@ export function SpatialPlanner() {
                 </div>
               </div>
             </div>
+            )}
           </CardContent>
         </Card>
 

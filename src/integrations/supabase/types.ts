@@ -16,34 +16,64 @@ export type Database = {
     Tables: {
       company_profiles: {
         Row: {
+          address: string | null
+          brand_color: string | null
           company_name: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
           created_at: string
           default_booth_sizes: string[] | null
           id: string
           industry: string | null
+          logo_dark_url: string | null
+          logo_url: string | null
           notes: string | null
+          secondary_color: string | null
+          tagline: string | null
           updated_at: string
           user_id: string
+          website: string | null
         }
         Insert: {
+          address?: string | null
+          brand_color?: string | null
           company_name?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           default_booth_sizes?: string[] | null
           id?: string
           industry?: string | null
+          logo_dark_url?: string | null
+          logo_url?: string | null
           notes?: string | null
+          secondary_color?: string | null
+          tagline?: string | null
           updated_at?: string
           user_id: string
+          website?: string | null
         }
         Update: {
+          address?: string | null
+          brand_color?: string | null
           company_name?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           default_booth_sizes?: string[] | null
           id?: string
           industry?: string | null
+          logo_dark_url?: string | null
+          logo_url?: string | null
           notes?: string | null
+          secondary_color?: string | null
+          tagline?: string | null
           updated_at?: string
           user_id?: string
+          website?: string | null
         }
         Relationships: []
       }

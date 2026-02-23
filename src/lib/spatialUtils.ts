@@ -661,17 +661,109 @@ export function generateZoneDescriptionsForPrompt(
  */
 export function generateScaleContext(footprintStr: string): string {
   const dims = calculateBoothDimensions(footprintStr);
-  const ceilingHt = dims.totalSqft > 1200 ? "16-20" : dims.totalSqft > 600 ? "12-16" : "10-12";
-  const peopleAcross = Math.round(dims.width / 2.5);
   
+  // Ceiling heights by booth size
+  let ceilingHt: string;
+  let structureType: string;
+  let densityGuide: string;
+  
+  if (dims.totalSqft >= 2000) {
+    ceilingHt = "18-22";
+    structureType = "large island exhibit with prominent overhead structure";
+    densityGuide = "15-25 visitors visible, multiple activity clusters";
+  } else if (dims.totalSqft >= 1200) {
+    ceilingHt = "16-18";
+    structureType = "mid-size island with canopy/fascia overhead";
+    densityGuide = "10-15 visitors visible, 2-3 activity zones";
+  } else if (dims.totalSqft >= 600) {
+    ceilingHt = "12-14";
+    structureType = "standard island or large inline with header";
+    densityGuide = "6-10 visitors visible, focused zones";
+  } else if (dims.totalSqft >= 300) {
+    ceilingHt = "10-12";
+    structureType = "inline booth with backwall and modest header";
+    densityGuide = "4-6 visitors visible, compact layout";
+  } else {
+    ceilingHt = "8-10";
+    structureType = "small inline booth with simple backwall";
+    densityGuide = "2-4 visitors visible, minimal elements";
+  }
+  
+  const peopleAcross = Math.round(dims.width / 2.5);
+  const peopleDeep = Math.round(dims.depth / 2.5);
+  
+  // Reference comparisons for common sizes
+  let sizeComparison = "";
+  if (dims.totalSqft <= 400) {
+    sizeComparison = "Size reference: smaller than a 2-car garage. This is intimate, NOT expansive.";
+  } else if (dims.totalSqft <= 900) {
+    sizeComparison = "Size reference: roughly the size of a small apartment or large living room. Comfortable but NOT cavernous.";
+  } else if (dims.totalSqft <= 1600) {
+    sizeComparison = "Size reference: about the size of a small retail store. Spacious but contained.";
+  } else {
+    sizeComparison = "Size reference: approaching small showroom scale. Large but NOT arena-sized.";
+  }
+
   return `
-PHYSICAL SCALE (CRITICAL — render booth at this exact size, not larger):
-- Booth footprint: ${dims.width} feet wide × ${dims.depth} feet deep (${dims.totalSqft} sq ft total)
+PHYSICAL SCALE CONSTRAINTS (CRITICAL — strictly enforce these dimensions):
+
+EXACT DIMENSIONS:
+- Width: ${dims.width} feet (front-to-back when viewed from aisle: ${peopleAcross} people shoulder-to-shoulder)
+- Depth: ${dims.depth} feet (side-to-side: ${peopleDeep} people in a row)
+- Total area: ${dims.totalSqft} square feet
 - This is a ${dims.scaleDescription}
-- Ceiling/fascia height: ${ceilingHt} feet
-- Human reference: average person is 5'8". Booth is ${dims.width}' wide — roughly ${peopleAcross} people shoulder-to-shoulder
-- Standard 10-foot convention aisles on open sides
-- The booth fits naturally within a convention hall — do NOT make it look like a mega-exhibit or multi-story structure`;
+
+STRUCTURE HEIGHT:
+- Maximum fascia/canopy height: ${ceilingHt} feet
+- This is a ${structureType}
+- Convention center ceiling visible above the booth structure
+
+HUMAN SCALE CALIBRATION:
+- Average visitor height: 5'8" (1.7m)
+- Shoulder width: 2 feet per person
+- Standing conversation group: 4-foot diameter circle
+- ${densityGuide}
+
+${sizeComparison}
+
+WHAT TO AVOID:
+- Do NOT render this as a mega-exhibit or CES-scale installation
+- Do NOT make the ceiling/fascia exceed ${ceilingHt} feet
+- Do NOT show more than ${Math.round(dims.totalSqft / 50)} visitors (one per ~50 sqft)
+- Do NOT make architectural elements feel warehouse-scale
+- Do NOT add excessive empty floor space — a ${dims.totalSqft} sqft booth should feel appropriately dense
+
+AISLE CONTEXT:
+- 10-foot wide convention aisles on open sides
+- Adjacent booths visible at edges of frame
+- Convention center environment (not isolated studio shot)`;
+}
+
+/**
+ * Generate enhanced camera-specific scale hints
+ */
+export function generateCameraScaleHints(footprintStr: string, angleId: string): string {
+  const dims = calculateBoothDimensions(footprintStr);
+  
+  const hints: Record<string, string> = {
+    hero_34: `Camera at 45°, positioned ${Math.round(dims.width * 1.5)} feet from booth center. The full ${dims.width}' width should fill ~70% of frame width. Fascia text should be readable.`,
+    
+    front: `Camera centered on ${dims.width}' front face, distance ~${Math.round(dims.width * 1.2)} feet back. Full facade fills frame. Eye level (5.5').`,
+    
+    top: `Orthographic top-down. The ${dims.width}'×${dims.depth}' rectangle should fill the frame with small margin. Zone boundaries clearly visible.`,
+    
+    left: `Camera perpendicular to left side, ~${Math.round(dims.depth * 1.2)} feet away. Full ${dims.depth}' depth visible. Eye level.`,
+    
+    right: `Camera perpendicular to right side, ~${Math.round(dims.depth * 1.2)} feet away. Full ${dims.depth}' depth visible. Eye level.`,
+    
+    back: `Camera behind booth showing ${dims.width}' back face. Service areas visible. Full width in frame.`,
+    
+    detail_hero: `Medium shot from ~15 feet. Hero installation fills 50% of frame. 3-4 visitors for scale.`,
+    
+    detail_lounge: `Medium shot from ~12 feet. Lounge seating fills 60% of frame. 2-3 visitors in conversation.`,
+  };
+  
+  return hints[angleId] || `Standard shot of ${dims.width}'×${dims.depth}' booth.`;
 }
 
 // ============================================
@@ -692,4 +784,5 @@ export default {
   sortZonesByVisibility,
   generateZoneDescriptionsForPrompt,
   generateScaleContext,
+  generateCameraScaleHints,
 };

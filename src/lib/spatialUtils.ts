@@ -513,17 +513,51 @@ export function createLayoutVariation(
       });
     }
   } else if (variationType === 'engagement-first') {
-    // Find lounge/meeting zone and expand it
+    // Compress hero zone first to make room
+    const heroIndex = adjustedZones.findIndex(z =>
+      z.id.toLowerCase().includes('hero') ||
+      z.name.toLowerCase().includes('hero')
+    );
+    
+    if (heroIndex >= 0) {
+      const hero = adjustedZones[heroIndex];
+      const factor = 0.8;
+      const newW = hero.position.width * factor;
+      const newH = hero.position.height * factor;
+      adjustedZones[heroIndex] = {
+        ...hero,
+        position: { ...hero.position, width: newW, height: newH },
+        sqft: Math.round((newW / 100) * (newH / 100) * totalSqft),
+        percentage: Math.round((newW / 100) * (newH / 100) * 100),
+      };
+    }
+
+    // Compress all non-lounge/meeting zones slightly to avoid overlap
     const loungeIndex = adjustedZones.findIndex(z =>
       z.id.toLowerCase().includes('lounge') ||
       z.name.toLowerCase().includes('lounge') ||
       z.name.toLowerCase().includes('meeting') ||
       z.name.toLowerCase().includes('connection')
     );
+
+    adjustedZones = adjustedZones.map((z, i) => {
+      if (i === loungeIndex) return z;
+      if (i === heroIndex) return adjustedZones[heroIndex]; // already handled
+      const factor = 0.88;
+      const newW = z.position.width * factor;
+      const newH = z.position.height * factor;
+      return {
+        ...z,
+        position: { ...z.position, width: newW, height: newH },
+        sqft: Math.round((newW / 100) * (newH / 100) * totalSqft),
+        percentage: Math.round((newW / 100) * (newH / 100) * 100),
+      };
+    });
     
+    // Now expand the lounge zone into freed space
     if (loungeIndex >= 0) {
       const lounge = adjustedZones[loungeIndex];
-      const expansionFactor = 1.2;
+      const expansionFactor = 1.15;
       
       const newWidth = Math.min(lounge.position.width * expansionFactor, 100 - lounge.position.x);
       const newHeight = Math.min(lounge.position.height * expansionFactor, 100 - lounge.position.y);
@@ -533,25 +567,6 @@ export function createLayoutVariation(
         position: { ...lounge.position, width: newWidth, height: newHeight },
         sqft: Math.round((newWidth / 100) * (newHeight / 100) * totalSqft),
         percentage: Math.round((newWidth / 100) * (newHeight / 100) * 100),
-      };
-    }
-    
-    // Compress hero zone
-    const heroIndex = adjustedZones.findIndex(z =>
-      z.id.toLowerCase().includes('hero') ||
-      z.name.toLowerCase().includes('hero')
-    );
-    
-    if (heroIndex >= 0) {
-      const hero = adjustedZones[heroIndex];
-      const factor = 0.85;
-      const newW = hero.position.width * factor;
-      const newH = hero.position.height * factor;
-      adjustedZones[heroIndex] = {
-        ...hero,
-        position: { ...hero.position, width: newW, height: newH },
-        sqft: Math.round((newW / 100) * (newH / 100) * totalSqft),
-        percentage: Math.round((newW / 100) * (newH / 100) * 100),
       };
     }
   }

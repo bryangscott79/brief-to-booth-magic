@@ -36,6 +36,7 @@ import {
   calculateBoothDimensions,
   generateZoneDescriptionsForPrompt,
   generateScaleContext,
+  generateCameraScaleHints,
   type NormalizedZone,
 } from "@/lib/spatialUtils";
 
@@ -296,6 +297,7 @@ export function PromptGenerator() {
     const scaleContext = generateScaleContext(boothDimensions.footprintLabel);
     const zoneDescriptions = generateZoneDescriptionsForPrompt(normalizedZones, boothDimensions.totalSqft, angleId);
     const cameraInstruction = getCameraInstructions(angleId);
+    const cameraScaleHint = generateCameraScaleHints(boothDimensions.footprintLabel, angleId);
 
     const heroInstallation = elements?.interactiveMechanics?.data?.hero;
     const heroDescription = heroInstallation 
@@ -312,6 +314,7 @@ export function PromptGenerator() {
     return `Generate a photorealistic ${angle.name.toLowerCase()} of a ${boothDimensions.footprintLabel} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company.
 
 ${cameraInstruction}
+${cameraScaleHint}
 
 ${scaleContext}
 
@@ -339,14 +342,15 @@ ATMOSPHERE:
 8-12 people naturally distributed: some engaging with the hero installation, others in conversation in the lounge, staff at reception. Convention center environment visible in background.
 ${annotationsBlock}
 
-CAMERA:
+CAMERA FRAMING:
 ${cameraInstruction}
+${cameraScaleHint}
 
 STYLE:
 Architectural visualization quality (Gensler/Rockwell Group level). Photorealistic materials. Clean editorial lighting. Professional trade show environment.
 
 NEGATIVE PROMPT:
-${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality, oversized booth, mega-exhibit scale, warehouse scale
+${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality, oversized booth, mega-exhibit scale, warehouse scale, too large, excessive empty space
 
 Aspect ratio: ${angle.aspectRatio}`;
   };
@@ -444,6 +448,67 @@ Aspect ratio: ${angle.aspectRatio}`;
         description: "New view generated successfully",
       });
     } catch (error) {
+      toast({
+        title: "Regeneration failed",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  /** Regenerate ALL views including hero */
+  const handleRegenerateAll = async () => {
+    // First regenerate the hero image
+    const heroPromptText = heroPrompt || generatePrompt("hero_34");
+    if (!heroPrompt) renderStore.setHeroPrompt(heroPromptText);
+
+    try {
+      toast({
+        title: "Regenerating all renders",
+        description: "Starting with hero image, then all views...",
+      });
+
+      // Generate new hero
+      await renderStore.generateHeroImage({
+        prompt: heroPromptText,
+        feedback: undefined, // Fresh generation
+        previousImageUrl: undefined, // Don't use previous as reference
+        projectId: projectId!,
+        boothSize: boothDimensions.footprintLabel,
+        onSave: doSave,
+      });
+
+      // Small delay to ensure hero is ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Now generate all other views using the new hero
+      const prompts: Record<string, string> = {};
+      allAngles.forEach(angle => {
+        if (angle.id !== "hero_34") {
+          prompts[angle.id] = generatePrompt(angle.id);
+        }
+      });
+
+      const newHeroImage = renderStore.heroImage;
+      if (!newHeroImage) {
+        throw new Error("Hero image generation failed");
+      }
+
+      await renderStore.generateAllViews({
+        angles: allAngles,
+        prompts,
+        heroImageUrl: newHeroImage,
+        projectId: projectId!,
+        boothSize: boothDimensions.footprintLabel,
+        onSave: doSave,
+      });
+
+      toast({
+        title: "All renders regenerated!",
+        description: "Fresh set of coordinated booth views ready",
+      });
+    } catch (error) {
+      console.error("Error regenerating all:", error);
       toast({
         title: "Regeneration failed",
         description: error instanceof Error ? error.message : "Please try again",
@@ -702,6 +767,15 @@ Aspect ratio: ${angle.aspectRatio}`;
           </p>
         </div>
         <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRegenerateAll}
+            disabled={isGenerating || isGeneratingHero}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Regenerate All
+          </Button>
           <Dialog open={showGallery} onOpenChange={setShowGallery}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">

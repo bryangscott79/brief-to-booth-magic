@@ -76,89 +76,178 @@ function generateZoneInteriorPrompt(
   const zoneName = (zone.name || "").toLowerCase();
   const parts: string[] = [];
 
-  parts.push(`Generate a photorealistic INTERIOR close-up perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${boothDimensions.totalSqft} sq ft) trade show booth for ${brief.brand.name}. This zone is approximately ${zone.sqft} sq ft — keep the space proportional to that size.`);
+  // Get hero installation details for visual consistency
+  const heroInstallation = elements?.interactiveMechanics?.data?.hero;
+  const heroPhysicalForm = heroInstallation?.physicalForm;
+  
+  // Extract brand colors
+  const brandColors = brief.brand?.visualIdentity?.colors || [];
+  const primaryColor = brandColors[0] || "brand blue";
+  const secondaryColor = brandColors[1] || "white";
+  
+  // Build visual style description from hero
+  const heroVisualStyle = heroInstallation ? `
+The booth features a central "${heroInstallation.name}" installation:
+- Structure: ${heroPhysicalForm?.structure || heroInstallation.concept}
+- Materials: ${heroPhysicalForm?.materials?.join(", ") || "premium materials"}
+- Lighting: ${heroPhysicalForm?.lighting || "dramatic accent lighting in brand colors"}
+- Scale: ${heroPhysicalForm?.dimensions || "prominent central feature"}` : "";
+
+  parts.push(`Generate a photorealistic INTERIOR perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${boothDimensions.totalSqft} sq ft) trade show booth for ${brief.brand.name}.
+
+THIS IS CRITICAL: This zone is part of the SAME booth as the hero image reference. You must maintain EXACT visual consistency.`);
+
   parts.push("");
-  parts.push("CRITICAL — VISUAL CONSISTENCY:");
-  parts.push(`This zone is positioned at the ${Math.round(zone.position.x)}% from left, ${Math.round(zone.position.y)}% from front.`);
-  parts.push("Match the exact appearance from the reference hero image:");
-  parts.push("- Same wall panels, colors, and surface materials");
-  parts.push("- Same screen sizes, shapes, and content style");
-  parts.push("- Same furniture types, seating arrangement, and fixtures");
-  parts.push("- Same lighting fixtures and ambient lighting color");
-  parts.push("- Same flooring material and edge details");
+  parts.push("═══════════════════════════════════════");
+  parts.push("VISUAL CONSISTENCY REQUIREMENTS (MANDATORY)");
+  parts.push("═══════════════════════════════════════");
   parts.push("");
-  parts.push("CAMERA: Eye level (5.5 feet), positioned INSIDE this zone, facing into it. Show depth and the zone's spatial quality.");
+  parts.push("This zone interior MUST match the hero reference image exactly:");
   parts.push("");
+  parts.push(`BRAND: ${brief.brand.name}`);
+  parts.push(`PRIMARY COLOR: ${primaryColor}`);
+  parts.push(`SECONDARY COLOR: ${secondaryColor}`);
+  parts.push("");
+  parts.push("ARCHITECTURAL ELEMENTS TO MATCH:");
+  parts.push("- Wall panel style (same material, color, finish)");
+  parts.push("- Ceiling/fascia design (same structure, lighting style)");
+  parts.push("- Floor material and color");
+  parts.push("- Lighting fixtures and color temperature");
+  parts.push("- Screen bezels and display styles");
+  parts.push("- Furniture design language");
+  parts.push("");
+  
+  if (heroVisualStyle) {
+    parts.push("HERO INSTALLATION (visible or referenced in background):");
+    parts.push(heroVisualStyle);
+    parts.push("");
+  }
+
   parts.push("DESIGN DIRECTION:");
-  parts.push(`${bigIdea.headline}`);
-  parts.push(`${bigIdea.narrative?.substring(0, 300) || ""}`);
+  parts.push(`"${bigIdea.headline}"`);
+  if (bigIdea.narrative) {
+    parts.push(bigIdea.narrative.substring(0, 400));
+  }
+  parts.push("");
+
+  parts.push("═══════════════════════════════════════");
+  parts.push(`ZONE: ${zone.name}`);
+  parts.push("═══════════════════════════════════════");
+  parts.push("");
+  parts.push(`Size: ${zone.sqft} sq ft (${zone.percentage}% of booth)`);
+  parts.push(`Position: ${Math.round(zone.position.x)}% from left, ${Math.round(zone.position.y)}% from front`);
+  parts.push("");
 
   // Zone-specific content details
-  if (zoneName.includes("hero") || zoneName.includes("experience")) {
+  if (zoneName.includes("hero") || zoneName.includes("experience") || zoneName.includes("apex") || zoneName.includes("digital") || zoneName.includes("core")) {
     const im = elements.interactiveMechanics?.data;
     if (im?.hero) {
-      parts.push("");
-      parts.push("HERO INSTALLATION (featured):");
-      parts.push(`${im.hero.name} — ${im.hero.concept}`);
+      parts.push("ZONE FOCUS: Hero Installation Close-Up");
+      parts.push(`Show the "${im.hero.name}" from an interior perspective.`);
+      parts.push(`Concept: ${im.hero.concept}`);
       if (im.hero.physicalForm) {
         parts.push(`Structure: ${im.hero.physicalForm.structure}`);
         parts.push(`Materials: ${im.hero.physicalForm.materials?.join(", ")}`);
+        parts.push(`Lighting: ${im.hero.physicalForm.lighting || "accent lighting"}`);
       }
       parts.push("Show 3-4 visitors actively engaging with the installation.");
     }
-  }
-
-  if (zoneName.includes("storytelling") || zoneName.includes("theatre") || zoneName.includes("theater")) {
-    const ds = elements.digitalStorytelling?.data;
-    if (ds) {
-      parts.push("");
-      parts.push("STORYTELLING ZONE (featured):");
-      parts.push("Tiered seating and large display screen.");
-      if (ds.audienceTracks?.length) {
-        ds.audienceTracks.slice(0, 2).forEach((t: any) => {
-          parts.push(`- ${t.trackName}: ${t.format} showing ${t.contentFocus}`);
-        });
-      }
-      parts.push("Show 2-4 visitors seated watching content.");
+  } else if (zoneName.includes("lounge") || zoneName.includes("hub") || zoneName.includes("casual")) {
+    parts.push("ZONE FOCUS: Casual Lounge Area");
+    parts.push("Modern lounge seating in brand style visible from hero image.");
+    parts.push("Same furniture design language as the main booth.");
+    parts.push("Subtle brand signage. Warm, inviting atmosphere.");
+    parts.push("Show 3-4 visitors in relaxed conversation.");
+    
+    const hc = elements.humanConnection?.data;
+    if (hc?.hospitalityDetails) {
+      parts.push(`Hospitality: ${hc.hospitalityDetails}`);
     }
-  }
-
-  if (zoneName.includes("lounge") || zoneName.includes("meeting") || zoneName.includes("connection")) {
+  } else if (zoneName.includes("horizon") || zoneName.includes("future") || zoneName.includes("preview") || zoneName.includes("storytelling")) {
+    parts.push("ZONE FOCUS: Future Vision / Storytelling");
+    parts.push("Large display screens showing content. Same screen style as main booth.");
+    parts.push("Theatrical lighting consistent with hero image.");
+    parts.push("Show 2-4 visitors viewing content.");
+    
+    const ds = elements.digitalStorytelling?.data;
+    if (ds?.audienceTracks?.length) {
+      parts.push("Content tracks:");
+      ds.audienceTracks.slice(0, 2).forEach((t: any) => {
+        parts.push(`- ${t.trackName}: ${t.contentFocus}`);
+      });
+    }
+  } else if (zoneName.includes("suite") || zoneName.includes("meeting") || zoneName.includes("bd")) {
+    parts.push("ZONE FOCUS: Private Meeting Suite");
+    parts.push("Semi-enclosed meeting space with glass or frosted panels.");
+    parts.push("SAME architectural style as main booth - not a generic conference room.");
+    parts.push("Brand colors and materials visible. Executive-level finishing.");
+    parts.push("Conference table with 6-10 chairs. Display screen on wall.");
+    parts.push("Show 4-6 professionals in business meeting.");
+    
+    // Extract meeting zone details
     const hc = elements.humanConnection?.data;
     if (hc?.configs?.[0]?.zones) {
-      parts.push("");
-      parts.push("MEETING/LOUNGE CONFIGURATION:");
-      hc.configs[0].zones.slice(0, 2).forEach((mz: any) => {
-        parts.push(`- ${mz.name} (${mz.capacity}): ${mz.description}`);
-      });
-      parts.push("Show a small group in focused conversation, professional setting.");
+      const matchingZone = hc.configs[0].zones.find((mz: any) => 
+        zone.name.toLowerCase().includes(mz.name?.toLowerCase()) ||
+        mz.name?.toLowerCase().includes("suite") ||
+        mz.name?.toLowerCase().includes("meeting")
+      );
+      if (matchingZone) {
+        parts.push(`Capacity: ${matchingZone.capacity}`);
+        parts.push(`Style: ${matchingZone.description || "executive meeting space"}`);
+      }
     }
+  } else if (zoneName.includes("reception") || zoneName.includes("welcome")) {
+    parts.push("ZONE FOCUS: Welcome/Reception");
+    parts.push("Branded reception desk matching booth style.");
+    parts.push("Digital check-in screens. Same design as hero image displays.");
+    parts.push("Staff in professional attire. Clean, welcoming atmosphere.");
+    parts.push("Show 1-2 staff greeting 2-3 visitors.");
+  } else if (zoneName.includes("demo") || zoneName.includes("product")) {
+    parts.push("ZONE FOCUS: Product Demo Station");
+    parts.push("Interactive displays and product samples.");
+    parts.push("Same counter/display style as main booth.");
+    parts.push("Show staff demonstrating to 2-3 engaged visitors.");
+  } else if (zoneName.includes("command") || zoneName.includes("storage") || zoneName.includes("service")) {
+    parts.push("ZONE FOCUS: Command Center / Service Area");
+    parts.push("Functional workspace with same finishes as main booth.");
+    parts.push("Monitors, storage, and operational equipment.");
+    parts.push("Clean and organized. 1-2 staff working.");
+  } else {
+    // Generic zone
+    parts.push("ZONE FOCUS: Supporting Space");
+    parts.push("Functional area matching overall booth aesthetic.");
+    parts.push("Same materials and design language as hero image.");
   }
 
-  if (zoneName.includes("reception") || zoneName.includes("welcome")) {
-    parts.push("");
-    parts.push("WELCOME AREA (featured):");
-    parts.push("Branded reception desk with digital check-in, staff welcoming visitors.");
-    parts.push("Show 1-2 staff members greeting visitors, clean branded signage visible.");
+  parts.push("");
+  parts.push("MATERIALS (from hero image):");
+  if (materialsAndMood?.length > 0) {
+    materialsAndMood.forEach((m: any) => {
+      parts.push(`- ${m.material}: ${m.feel}`);
+    });
+  } else {
+    parts.push("- Premium materials matching hero image");
+    parts.push("- Consistent lighting color temperature");
+    parts.push("- Same flooring throughout");
   }
 
-  if (zoneName.includes("demo")) {
-    parts.push("");
-    parts.push("DEMO STATION (featured):");
-    parts.push("Interactive product demonstration area with screens and hands-on displays.");
-    parts.push("Show 2-3 visitors engaged in product demonstration with a staff member.");
-  }
+  parts.push("");
+  parts.push("CAMERA:");
+  parts.push("Eye level (5.5 feet), positioned INSIDE this zone looking inward.");
+  parts.push("Show the space's depth and connection to the larger booth.");
+  parts.push("Parts of the hero installation or main booth visible in background/periphery.");
 
-  // Materials finishing
   parts.push("");
-  parts.push("MATERIALS AND MOOD:");
-  parts.push(materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "Clean, modern finishes");
+  parts.push("STYLE:");
+  parts.push("Architectural visualization quality. Photorealistic materials.");
+  parts.push("Same lighting style and color temperature as hero image.");
+  parts.push("Professional trade show environment.");
+
   parts.push("");
-  parts.push(`BRANDING: ${brief.brand.name} signage subtly visible. Brand colors: ${brief.brand.visualIdentity?.colors?.join(", ") || "brand colors"}.`);
-  parts.push("");
-  parts.push("STYLE: Architectural visualization quality. Photorealistic materials. Warm, inviting lighting. Eye-level interior perspective showing depth.");
-  parts.push("");
-  parts.push(`NEGATIVE PROMPT: ${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated, empty space, unrealistic, blurry`);
+  parts.push("NEGATIVE PROMPT:");
+  parts.push(`${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic stock photo"}, cartoon style, different color scheme than hero, different lighting than hero, generic conference room, hotel meeting room, different architectural style, inconsistent materials, different floor, different walls, mismatched design`);
+
   parts.push("");
   parts.push("Aspect ratio: 16:9");
 

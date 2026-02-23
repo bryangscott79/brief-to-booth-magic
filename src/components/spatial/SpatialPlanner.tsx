@@ -48,14 +48,14 @@ import {
 
 // Zone color palette
 const ZONE_PALETTE = [
-  { bg: "rgba(0, 71, 171, 0.2)", border: "rgba(0, 71, 171, 0.8)", text: "#0047AB" },
-  { bg: "rgba(70, 130, 180, 0.2)", border: "rgba(70, 130, 180, 0.8)", text: "#4682B4" },
-  { bg: "rgba(176, 196, 222, 0.25)", border: "rgba(100, 140, 180, 0.8)", text: "#4A6D8C" },
-  { bg: "rgba(47, 79, 79, 0.2)", border: "rgba(47, 79, 79, 0.8)", text: "#2F4F4F" },
-  { bg: "rgba(218, 165, 32, 0.2)", border: "rgba(218, 165, 32, 0.8)", text: "#B8860B" },
-  { bg: "rgba(139, 69, 19, 0.2)", border: "rgba(139, 69, 19, 0.8)", text: "#8B4513" },
-  { bg: "rgba(85, 107, 47, 0.2)", border: "rgba(85, 107, 47, 0.8)", text: "#556B2F" },
-  { bg: "rgba(128, 0, 128, 0.2)", border: "rgba(128, 0, 128, 0.8)", text: "#800080" },
+  { bg: "rgba(0, 71, 171, 0.45)", border: "rgba(0, 71, 171, 0.9)", text: "#002D6B" },
+  { bg: "rgba(70, 130, 180, 0.45)", border: "rgba(70, 130, 180, 0.9)", text: "#2A6496" },
+  { bg: "rgba(47, 79, 79, 0.45)", border: "rgba(47, 79, 79, 0.9)", text: "#1A3A3A" },
+  { bg: "rgba(218, 165, 32, 0.45)", border: "rgba(218, 165, 32, 0.9)", text: "#8B6914" },
+  { bg: "rgba(139, 69, 19, 0.45)", border: "rgba(139, 69, 19, 0.9)", text: "#6B3410" },
+  { bg: "rgba(85, 107, 47, 0.45)", border: "rgba(85, 107, 47, 0.9)", text: "#3A4A20" },
+  { bg: "rgba(128, 0, 128, 0.45)", border: "rgba(128, 0, 128, 0.9)", text: "#5C005C" },
+  { bg: "rgba(176, 60, 60, 0.45)", border: "rgba(176, 60, 60, 0.9)", text: "#7A2020" },
 ];
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -69,8 +69,8 @@ function hexToRgba(hex: string, alpha: number): string {
 function getZoneColors(zone: NormalizedZone, index: number) {
   if (zone.colorCode && zone.colorCode.startsWith('#')) {
     return {
-      bg: hexToRgba(zone.colorCode, 0.2),
-      border: hexToRgba(zone.colorCode, 0.8),
+      bg: hexToRgba(zone.colorCode, 0.45),
+      border: hexToRgba(zone.colorCode, 0.9),
       text: zone.colorCode,
     };
   }

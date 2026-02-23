@@ -30,6 +30,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 
+// Import spatial utilities
+import {
+  normalizeZones,
+  calculateBoothDimensions,
+  generateZoneDescriptionsForPrompt,
+  generateScaleContext,
+  type NormalizedZone,
+} from "@/lib/spatialUtils";
+
 const ANGLE_CONFIG = [
   { id: "hero_34", name: "3/4 Hero View", priority: 1, aspectRatio: "16:9", description: "Primary marketing shot — 45° front-left perspective", isZoneInterior: false },
   { id: "top", name: "Top-Down View", priority: 2, aspectRatio: "1:1", description: "Floor plan validation — directly overhead", isZoneInterior: false },
@@ -42,11 +51,9 @@ const ANGLE_CONFIG = [
 ];
 
 /** Dynamically generate zone interior angle configs from spatial data */
-function getZoneInteriorAngles(spatialData: any, elements: any) {
-  if (!spatialData?.configs?.[0]?.zones) return [];
-  
-  return spatialData.configs[0].zones.map((zone: any, index: number) => ({
-    id: `zone_interior_${zone.id || index}`,
+function getZoneInteriorAngles(normalizedZones: NormalizedZone[]) {
+  return normalizedZones.map((zone, index) => ({
+    id: `zone_interior_${zone.id}`,
     name: `${zone.name} Interior`,
     priority: 9 + index,
     aspectRatio: "16:9",
@@ -57,39 +64,40 @@ function getZoneInteriorAngles(spatialData: any, elements: any) {
 }
 
 /** Build a zone-specific interior prompt using content strategy data */
-function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatialData: any, elements: any): string {
+function generateZoneInteriorPrompt(
+  zone: NormalizedZone, 
+  brief: any, 
+  bigIdea: any, 
+  boothDimensions: any,
+  elements: any,
+  materialsAndMood: any[]
+): string {
   const zoneName = (zone.name || "").toLowerCase();
   const parts: string[] = [];
 
-  const fpSize = brief.spatial.footprints[0]?.size || "";
-  const fpMatch = fpSize.match(/(\d+)\s*[x×X]\s*(\d+)/);
-  const fpW = fpMatch ? parseInt(fpMatch[1], 10) : 30;
-  const fpD = fpMatch ? parseInt(fpMatch[2], 10) : 30;
-  const zoneSqft = zone.sqft || Math.round((fpW * fpD * (zone.percentage || 15)) / 100);
-  parts.push(`Generate a photorealistic INTERIOR close-up perspective from INSIDE the "${zone.name}" zone of a ${fpSize} (${fpW}' wide × ${fpD}' deep) trade show booth for ${brief.brand.name}. This zone is approximately ${zoneSqft} sq ft — keep the space proportional to that size, not larger.`);
+  parts.push(`Generate a photorealistic INTERIOR close-up perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${boothDimensions.totalSqft} sq ft) trade show booth for ${brief.brand.name}. This zone is approximately ${zone.sqft} sq ft — keep the space proportional to that size.`);
   parts.push("");
   parts.push("CRITICAL — VISUAL CONSISTENCY:");
-  parts.push("Look at the reference image. Find the exact zone labeled or positioned as the \"" + zone.name + "\" area.");
-  parts.push("The interior view MUST replicate the exact appearance of this zone from the reference:");
+  parts.push(`This zone is positioned at the ${Math.round(zone.position.x)}% from left, ${Math.round(zone.position.y)}% from front.`);
+  parts.push("Match the exact appearance from the reference hero image:");
   parts.push("- Same wall panels, colors, and surface materials");
   parts.push("- Same screen sizes, shapes, and content style");
   parts.push("- Same furniture types, seating arrangement, and fixtures");
   parts.push("- Same lighting fixtures and ambient lighting color");
   parts.push("- Same flooring material and edge details");
-  parts.push("Do NOT redesign or reimagine the zone. Show what's already visible, just from inside.");
   parts.push("");
-  parts.push("CAMERA: Eye level (5.5 feet), positioned INSIDE this zone, facing into it. Show depth and the zone's spatial quality. Other booth areas may be partially visible in the background.");
+  parts.push("CAMERA: Eye level (5.5 feet), positioned INSIDE this zone, facing into it. Show depth and the zone's spatial quality.");
   parts.push("");
   parts.push("DESIGN DIRECTION:");
   parts.push(`${bigIdea.headline}`);
-  parts.push(`${bigIdea.narrative}`);
+  parts.push(`${bigIdea.narrative?.substring(0, 300) || ""}`);
 
   // Zone-specific content details
-  if (zoneName.includes("hero") || zoneName.includes("experience zone")) {
+  if (zoneName.includes("hero") || zoneName.includes("experience")) {
     const im = elements.interactiveMechanics?.data;
     if (im?.hero) {
       parts.push("");
-      parts.push("HERO INSTALLATION (match reference exactly):");
+      parts.push("HERO INSTALLATION (featured):");
       parts.push(`${im.hero.name} — ${im.hero.concept}`);
       if (im.hero.physicalForm) {
         parts.push(`Structure: ${im.hero.physicalForm.structure}`);
@@ -103,72 +111,53 @@ function generateZoneInteriorPrompt(zone: any, brief: any, bigIdea: any, spatial
     const ds = elements.digitalStorytelling?.data;
     if (ds) {
       parts.push("");
-      parts.push("STORYTELLING ZONE (match reference exactly):");
-      parts.push("This zone has tiered/stepped seating and a large curved or flat display screen.");
-      parts.push("Maintain the exact screen shape, seating layout, and content display style from the reference image.");
+      parts.push("STORYTELLING ZONE (featured):");
+      parts.push("Tiered seating and large display screen.");
       if (ds.audienceTracks?.length) {
-        ds.audienceTracks.slice(0, 3).forEach((t: any) => {
-          parts.push(`- ${t.trackName}: ${t.format} display showing ${t.contentFocus}`);
+        ds.audienceTracks.slice(0, 2).forEach((t: any) => {
+          parts.push(`- ${t.trackName}: ${t.format} showing ${t.contentFocus}`);
         });
       }
-      parts.push("Show 2-4 visitors seated watching content, intimate theatre atmosphere.");
+      parts.push("Show 2-4 visitors seated watching content.");
     }
   }
 
-  if (zoneName.includes("meeting") || zoneName.includes("pod")) {
+  if (zoneName.includes("lounge") || zoneName.includes("meeting") || zoneName.includes("connection")) {
     const hc = elements.humanConnection?.data;
     if (hc?.configs?.[0]?.zones) {
       parts.push("");
-      parts.push("MEETING CONFIGURATION (FEATURED):");
-      hc.configs[0].zones.forEach((mz: any) => {
+      parts.push("MEETING/LOUNGE CONFIGURATION:");
+      hc.configs[0].zones.slice(0, 2).forEach((mz: any) => {
         parts.push(`- ${mz.name} (${mz.capacity}): ${mz.description}`);
-        if (mz.designFeatures?.length) parts.push(`  Features: ${mz.designFeatures.join(", ")}`);
       });
-      parts.push("Show a small group in a focused conversation, professional setting.");
+      parts.push("Show a small group in focused conversation, professional setting.");
     }
   }
 
-  if (zoneName.includes("adjacent") || zoneName.includes("vip") || zoneName.includes("lounge")) {
-    const aa = elements.adjacentActivations?.data;
-    if (aa?.activations?.length) {
-      const primary = aa.activations[0];
-      parts.push("");
-      parts.push("VIP/ACTIVATION SPACE (FEATURED):");
-      parts.push(`${primary.name} — ${primary.format}`);
-      parts.push(`Atmosphere: ${primary.atmosphere}`);
-      parts.push("Show exclusive, intimate setting with premium finishes, 2-3 VIP guests.");
-    }
-  }
-
-  if (zoneName.includes("engagement") || zoneName.includes("open")) {
-    const ef = elements.experienceFramework?.data;
-    if (ef?.visitorJourney?.length) {
-      parts.push("");
-      parts.push("VISITOR JOURNEY TOUCHPOINTS (FEATURED):");
-      ef.visitorJourney.forEach((s: any) => {
-        parts.push(`- ${s.stage}: ${s.touchpoints?.join(", ")}`);
-      });
-      parts.push("Show an open, welcoming space with visitors flowing through naturally.");
-    }
-  }
-
-  if (zoneName.includes("welcome") || zoneName.includes("desk") || zoneName.includes("info")) {
+  if (zoneName.includes("reception") || zoneName.includes("welcome")) {
     parts.push("");
-    parts.push("WELCOME AREA (FEATURED):");
+    parts.push("WELCOME AREA (featured):");
     parts.push("Branded reception desk with digital check-in, staff welcoming visitors.");
     parts.push("Show 1-2 staff members greeting visitors, clean branded signage visible.");
   }
 
-  // Common finishing
+  if (zoneName.includes("demo")) {
+    parts.push("");
+    parts.push("DEMO STATION (featured):");
+    parts.push("Interactive product demonstration area with screens and hands-on displays.");
+    parts.push("Show 2-3 visitors engaged in product demonstration with a staff member.");
+  }
+
+  // Materials finishing
   parts.push("");
   parts.push("MATERIALS AND MOOD:");
-  parts.push(spatialData.materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "");
+  parts.push(materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "Clean, modern finishes");
   parts.push("");
-  parts.push(`BRANDING: ${brief.brand.name} signage subtly visible. Brand colors: ${brief.brand.visualIdentity.colors.join(", ")}.`);
+  parts.push(`BRANDING: ${brief.brand.name} signage subtly visible. Brand colors: ${brief.brand.visualIdentity?.colors?.join(", ") || "brand colors"}.`);
   parts.push("");
-  parts.push("STYLE: Architectural visualization quality. Photorealistic materials. Warm, inviting lighting. Eye-level interior perspective showing depth and spatial quality.");
+  parts.push("STYLE: Architectural visualization quality. Photorealistic materials. Warm, inviting lighting. Eye-level interior perspective showing depth.");
   parts.push("");
-  parts.push(`NEGATIVE PROMPT: ${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversaturated, empty space, unrealistic, blurry, low quality`);
+  parts.push(`NEGATIVE PROMPT: ${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated, empty space, unrealistic, blurry`);
   parts.push("");
   parts.push("Aspect ratio: 16:9");
 
@@ -186,7 +175,7 @@ export function PromptGenerator() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showGallery, setShowGallery] = useState(false);
 
-  // Global render store — persists across navigation
+  // Global render store
   const renderStore = useRenderStore();
   const {
     phase, heroPrompt, heroImage, heroFeedback, heroIterations,
@@ -194,12 +183,10 @@ export function PromptGenerator() {
     generationProgress, currentlyGenerating, hydratedFromDb,
   } = renderStore;
 
-  // Use URL projectId, falling back to render store's projectId (persists across navigation)
   const effectiveProjectId = projectId || renderStore.projectId;
   const { data: savedImages = [], isLoading: imagesLoading } = useProjectImages(effectiveProjectId);
   const saveImage = useSaveRenderImage(effectiveProjectId);
 
-  // Sync project ID to render store
   useEffect(() => {
     renderStore.setProjectId(projectId);
   }, [projectId]);
@@ -209,15 +196,28 @@ export function PromptGenerator() {
   const bigIdea = currentProject?.elements.bigIdea.data;
   const elements = currentProject?.elements;
 
+  // Calculate booth dimensions
+  const boothDimensions = useMemo(() => {
+    const footprintStr = spatialData?.configs?.[0]?.footprintSize || 
+      brief?.spatial?.footprints?.[0]?.size || 
+      "30x30";
+    return calculateBoothDimensions(footprintStr);
+  }, [spatialData, brief]);
+
+  // Normalize zones
+  const normalizedZones = useMemo(() => {
+    if (!spatialData?.configs?.[0]?.zones) return [];
+    return normalizeZones(spatialData.configs[0].zones, boothDimensions.totalSqft);
+  }, [spatialData, boothDimensions.totalSqft]);
+
   // Build combined angle list: standard + zone interiors
   const zoneInteriorAngles = useMemo(() => {
-    if (!spatialData || !elements) return [];
-    return getZoneInteriorAngles(spatialData, elements);
-  }, [spatialData, elements]);
+    return getZoneInteriorAngles(normalizedZones);
+  }, [normalizedZones]);
 
   const allAngles = useMemo(() => [...ANGLE_CONFIG, ...zoneInteriorAngles], [zoneInteriorAngles]);
 
-  // Hydrate from saved images when returning to the page (only if store is empty)
+  // Hydrate from saved images
   useEffect(() => {
     if (savedImages.length > 0 && !heroImage && phase === "prompt" && !hydratedFromDb && !isGeneratingHero && !isGenerating) {
       const savedHero = savedImages.find(img => img.angle_id === "hero_34" && img.is_current);
@@ -260,91 +260,96 @@ export function PromptGenerator() {
     );
   }
 
-  /** Parse "30x50" into {w, d} feet and compute scale cues */
-  const getScaleContext = (sizeStr: string) => {
-    const match = sizeStr?.match(/(\d+)\s*[x×X]\s*(\d+)/);
-    if (!match) return "";
-    const w = parseInt(match[1], 10);
-    const d = parseInt(match[2], 10);
-    const sqft = w * d;
-    const ceilingHt = sqft > 1200 ? "16-20" : sqft > 600 ? "12-16" : "8-12";
-    const scale = sqft > 1200 ? "large island" : sqft > 600 ? "mid-size peninsula" : "small inline";
-    return `
-PHYSICAL SCALE (CRITICAL — the booth must look THIS size, not bigger or smaller):
-- Booth footprint: ${w} feet wide × ${d} feet deep (${sqft} sq ft total) — a ${scale} booth
-- Ceiling/fascia height: ${ceilingHt} feet
-- Human reference: an average person is 5'8". The booth is ${w} feet wide — roughly ${Math.round(w / 2)} people standing shoulder-to-shoulder across the front
-- Aisle width: standard 10-foot convention aisles on each open side
-- The booth must fit naturally within a convention hall alongside neighboring booths of similar or smaller size
-- Do NOT make the booth look like a 100'+ mega-exhibit or a multi-story building. It is ${w}'×${d}' — keep it honest and proportional`;
+  /** Generate camera instructions for each angle */
+  const getCameraInstructions = (angleId: string): string => {
+    const instructions: Record<string, string> = {
+      hero_34: `Camera positioned at 45 degrees front-left, eye level (5.5 feet), showing the full ${boothDimensions.width}' × ${boothDimensions.depth}' booth with hero installation as focal point`,
+      top: `Camera directly overhead, looking straight down at the ${boothDimensions.width}' × ${boothDimensions.depth}' floor plan. Perfect orthographic bird's-eye view.`,
+      front: `Camera at eye level (5.5 feet), centered on the main entry, capturing the full ${boothDimensions.width}-foot front facade`,
+      left: `Camera at eye level, positioned at 90 degrees to the left side, showing the full ${boothDimensions.depth}-foot depth`,
+      right: `Camera at eye level, positioned at 90 degrees to the right side, showing the full ${boothDimensions.depth}-foot depth`,
+      back: `Camera at eye level, positioned behind the booth showing service areas and the back of the ${boothDimensions.width}-foot structure`,
+      detail_hero: "Camera at medium distance (15-20 feet), focused on the central hero installation, showing interaction",
+      detail_lounge: "Camera at medium distance (10-15 feet), focused on the lounge/meeting area, showing conversation",
+    };
+    return instructions[angleId] || "Eye-level perspective shot";
   };
 
+  /** Generate prompt with validated spatial data */
   const generatePrompt = (angleId: string): string => {
     // Check for zone interior angles first
     const zoneAngle = zoneInteriorAngles.find((a: any) => a.id === angleId);
     if (zoneAngle?.isZoneInterior && zoneAngle.zoneData) {
-      return generateZoneInteriorPrompt(zoneAngle.zoneData, brief, bigIdea, spatialData, elements);
+      return generateZoneInteriorPrompt(
+        zoneAngle.zoneData, 
+        brief, 
+        bigIdea, 
+        boothDimensions,
+        elements,
+        spatialData.materialsAndMood || []
+      );
     }
 
     const angle = ANGLE_CONFIG.find(a => a.id === angleId);
     if (!angle) return "";
 
-    const footprint = brief.spatial.footprints[0];
-    const config = spatialData.configs[0];
-    const scaleBlock = getScaleContext(footprint?.size);
+    const scaleContext = generateScaleContext(boothDimensions.footprintLabel);
+    const zoneDescriptions = generateZoneDescriptionsForPrompt(normalizedZones, boothDimensions.totalSqft, angleId);
+    const cameraInstruction = getCameraInstructions(angleId);
 
-    const cameraInstructions: Record<string, string> = {
-      hero_34: "Camera positioned at 45 degrees front-left, eye level, showing the full booth with hero installation as focal point",
-      top: "Camera directly overhead, looking straight down at the floor plan",
-      front: "Camera at eye level, centered on the main entry point, capturing the full front facade",
-      left: "Camera at eye level, positioned at 90 degrees left of the main entry",
-      right: "Camera at eye level, positioned at 90 degrees right of the main entry",
-      back: "Camera at eye level, positioned behind the booth showing service areas and structure",
-      detail_hero: "Camera at medium distance, focused on the central hero installation",
-      detail_lounge: "Camera at medium distance, focused on the lounge/meeting area",
-    };
+    const heroInstallation = elements?.interactiveMechanics?.data?.hero;
+    const heroDescription = heroInstallation 
+      ? `${heroInstallation.name} — ${heroInstallation.concept}${heroInstallation.physicalForm?.dimensions ? ` (${heroInstallation.physicalForm.dimensions})` : ''}`
+      : "Central interactive installation";
 
-    return `Generate a photorealistic ${angle.name.toLowerCase()} of a ${footprint.size} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company. ${cameraInstructions[angleId]}.
-${scaleBlock}
+    const materialsBlock = spatialData.materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "Clean modern finishes";
+
+    // Floor plan annotations if any
+    const annotationsBlock = spatialData.floorPlanAnnotations?.length > 0
+      ? `\nFLOOR PLAN DESIGN NOTES (apply these spatial decisions):\n${spatialData.floorPlanAnnotations.map((a: any, i: number) => `${i + 1}. ${a.comment}`).join("\n")}`
+      : "";
+
+    return `Generate a photorealistic ${angle.name.toLowerCase()} of a ${boothDimensions.footprintLabel} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company.
+
+${cameraInstruction}
+
+${scaleContext}
 
 DESIGN DIRECTION:
 ${bigIdea.headline}
-${bigIdea.narrative}
+${bigIdea.narrative?.substring(0, 400) || ""}
 
 CREATIVE CONSTRAINTS:
-Avoid: ${brief.creative.avoid.join(", ")}
-Embrace: ${brief.creative.embrace.join(", ")}
+Avoid: ${brief.creative?.avoid?.join(", ") || "generic looks"}
+Embrace: ${brief.creative?.embrace?.join(", ") || "innovative design"}
 
-SPATIAL LAYOUT:
-${config.zones.map((z: any) => `- ${z.name}: ${z.percentage}% of space (${z.sqft} sq ft) — ${z.notes}`).join("\n")}
+SPATIAL LAYOUT (validated zone positions):
+${zoneDescriptions}
 
 HERO INSTALLATION:
-${currentProject?.elements.interactiveMechanics.data?.hero?.name || "Central interactive installation"} — ${currentProject?.elements.interactiveMechanics.data?.hero?.concept || "A luminous data visualization centerpiece"}
+${heroDescription}
 
 MATERIALS AND MOOD:
-${spatialData.materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n")}
+${materialsBlock}
 
 BRANDING:
-${brief.brand.name} signage visible. Brand colors: ${brief.brand.visualIdentity.colors.join(", ")}. Sophisticated, intelligent aesthetic.
+${brief.brand.name} signage visible. Brand colors: ${brief.brand.visualIdentity?.colors?.join(", ") || "brand colors"}. Sophisticated, intelligent aesthetic.
 
 ATMOSPHERE:
-8-12 people naturally distributed throughout the space: some engaging with the hero installation, others in conversation in the lounge area, staff at reception welcoming visitors. Convention center environment visible in background.
-${spatialData.floorPlanAnnotations?.length > 0 ? `
-FLOOR PLAN DESIGN NOTES (apply these spatial decisions from the approved floor plan):
-${spatialData.floorPlanAnnotations.map((a: any, i: number) => `${i + 1}. ${a.comment}`).join("\n")}` : ""}
+8-12 people naturally distributed: some engaging with the hero installation, others in conversation in the lounge, staff at reception. Convention center environment visible in background.
+${annotationsBlock}
 
 CAMERA:
-${cameraInstructions[angleId]}
+${cameraInstruction}
 
 STYLE:
-Architectural visualization quality. Photorealistic materials. Clean, editorial lighting. Professional trade show environment.
+Architectural visualization quality (Gensler/Rockwell Group level). Photorealistic materials. Clean editorial lighting. Professional trade show environment.
 
 NEGATIVE PROMPT:
-${brief.brand.visualIdentity.avoidImagery.join(", ")}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality, oversized booth, mega-exhibit scale
+${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality, oversized booth, mega-exhibit scale, warehouse scale
 
 Aspect ratio: ${angle.aspectRatio}`;
   };
-
 
   const handleGenerateHeroImage = async () => {
     const prompt = heroPrompt || generatePrompt("hero_34");
@@ -356,7 +361,7 @@ Aspect ratio: ${angle.aspectRatio}`;
         feedback: heroFeedback || undefined,
         previousImageUrl: heroImage || undefined,
         projectId: projectId!,
-        boothSize: brief.spatial.footprints[0]?.size,
+        boothSize: boothDimensions.footprintLabel,
         onSave: doSave,
       });
 
@@ -410,7 +415,7 @@ Aspect ratio: ${angle.aspectRatio}`;
       prompts,
       heroImageUrl: heroImage!,
       projectId: projectId!,
-      boothSize: brief.spatial.footprints[0]?.size,
+      boothSize: boothDimensions.footprintLabel,
       onSave: doSave,
     }).then(() => {
       toast({
@@ -430,7 +435,7 @@ Aspect ratio: ${angle.aspectRatio}`;
         prompt: generatedPrompts[angleId] || generatePrompt(angleId),
         heroImageUrl: heroImage,
         projectId: projectId!,
-        boothSize: brief.spatial.footprints[0]?.size,
+        boothSize: boothDimensions.footprintLabel,
         onSave: doSave,
       });
 
@@ -472,10 +477,29 @@ Aspect ratio: ${angle.aspectRatio}`;
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Generate Booth Renders</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            We'll generate a hero image first, then you can refine it with feedback 
-            before we create all coordinated views.
+            Generating renders for {boothDimensions.footprintLabel} ({boothDimensions.totalSqft} sqft) booth with {normalizedZones.length} zones
           </p>
         </div>
+
+        {/* Booth Info Card */}
+        <Card className="element-card bg-muted/30">
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold">{boothDimensions.footprintLabel}</div>
+                <div className="text-xs text-muted-foreground">Dimensions</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{boothDimensions.totalSqft}</div>
+                <div className="text-xs text-muted-foreground">Square Feet</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{normalizedZones.length}</div>
+                <div className="text-xs text-muted-foreground">Zones</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Step 1: Generate Hero */}
         <Card className="element-card">
@@ -551,15 +575,13 @@ Aspect ratio: ${angle.aspectRatio}`;
   if (phase === "hero-review") {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Review Hero Image</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Review the generated image. Provide feedback to refine it, or approve to generate all views.
+            Review the generated {boothDimensions.footprintLabel} booth. Provide feedback to refine it, or approve to generate all views.
           </p>
         </div>
 
-        {/* Hero Image Card */}
         <Card className="element-card border-primary/30">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -571,7 +593,6 @@ Aspect ratio: ${angle.aspectRatio}`;
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Main Image */}
             <div className="rounded-lg overflow-hidden border bg-muted">
               <img 
                 src={heroImage!} 
@@ -580,7 +601,6 @@ Aspect ratio: ${angle.aspectRatio}`;
               />
             </div>
 
-            {/* Previous Iterations */}
             {heroIterations.length > 1 && (
               <div className="space-y-2">
                 <span className="text-sm font-medium text-muted-foreground">Previous Iterations</span>
@@ -601,7 +621,6 @@ Aspect ratio: ${angle.aspectRatio}`;
               </div>
             )}
 
-            {/* Feedback Section */}
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -645,7 +664,6 @@ Aspect ratio: ${angle.aspectRatio}`;
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-3 pt-4 border-t">
               <Button
                 variant="outline"
@@ -673,14 +691,13 @@ Aspect ratio: ${angle.aspectRatio}`;
   // Phase 3: All Views Generated / Generating
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Generated Renders</h2>
           <p className="text-muted-foreground">
             {isGenerating 
               ? `Generating views... ${completedCount} of ${totalViews} complete`
-              : `${completedCount} coordinated renders based on your hero image`
+              : `${completedCount} coordinated renders for ${boothDimensions.footprintLabel} booth`
             }
           </p>
         </div>
@@ -698,10 +715,9 @@ Aspect ratio: ${angle.aspectRatio}`;
               </DialogHeader>
               <ScrollArea className="h-[60vh] pr-4">
                 {savedImages.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No images saved yet. Generate renders to populate the gallery.</p>
+                  <p className="text-center text-muted-foreground py-8">No images saved yet.</p>
                 ) : (
                   <div className="space-y-6">
-                    {/* Group by angle */}
                     {Object.entries(
                       savedImages.reduce((acc, img) => {
                         const key = img.angle_name;
@@ -719,32 +735,19 @@ Aspect ratio: ${angle.aspectRatio}`;
                           {images.map((img) => (
                             <div key={img.id} className="group relative rounded-lg overflow-hidden border bg-muted">
                               <img src={img.public_url} alt={img.angle_name} className="w-full aspect-video object-cover" />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <Button
                                   variant="secondary"
                                   size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a");
-                                    link.href = img.public_url;
-                                    link.download = `${img.angle_name.replace(/\s+/g, "_")}_${new Date(img.created_at).getTime()}.png`;
-                                    link.target = "_blank";
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                  }}
+                                  onClick={() => downloadImage(img.public_url, img.angle_name)}
                                 >
                                   <Download className="h-3 w-3 mr-1" />
                                   Download
                                 </Button>
                               </div>
-                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-white text-xs">
-                                    {new Date(img.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                  {img.is_current && <Badge className="bg-primary/80 text-xs">Current</Badge>}
-                                </div>
-                              </div>
+                              {img.is_current && (
+                                <Badge className="absolute bottom-2 right-2 bg-primary/80 text-xs">Current</Badge>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -762,7 +765,6 @@ Aspect ratio: ${angle.aspectRatio}`;
         </div>
       </div>
 
-      {/* Progress Bar */}
       {isGenerating && (
         <Card className="element-card border-primary/30">
           <CardContent className="pt-6">
@@ -800,29 +802,35 @@ Aspect ratio: ${angle.aspectRatio}`;
             </div>
             <div className="space-y-4">
               <div>
-                <h4 className="font-medium mb-2">Consistency Tokens</h4>
-                <div className="flex flex-wrap gap-2">
-                  {brief.brand.visualIdentity.colors.map((c: string) => (
-                    <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
-                  ))}
-                  {spatialData.materialsAndMood?.slice(0, 3).map((m: any) => (
-                    <Badge key={m.material} variant="secondary" className="text-xs">{m.material}</Badge>
-                  ))}
+                <h4 className="text-sm font-medium mb-2">Booth Specifications</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Size:</span> {boothDimensions.footprintLabel}
+                  </div>
+                  <div className="p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Area:</span> {boothDimensions.totalSqft} sqft
+                  </div>
+                  <div className="p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Type:</span> {boothDimensions.scaleDescription}
+                  </div>
+                  <div className="p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Zones:</span> {normalizedZones.length}
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleCopy("hero_34")}>
-                  <Copy className="h-3 w-3 mr-2" />
-                  Copy Prompt
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => downloadImage(heroImage!, "hero_view")}>
-                  <Download className="h-3 w-3 mr-2" />
-                  Download
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => renderStore.setPhase("hero-review")}>
-                  <RefreshCw className="h-3 w-3 mr-2" />
-                  Refine Hero
-                </Button>
+              <div>
+                <h4 className="text-sm font-medium mb-2">Zone Allocation</h4>
+                <div className="space-y-1">
+                  {normalizedZones.slice(0, 5).map((zone, i) => (
+                    <div key={zone.id} className="flex items-center justify-between text-xs">
+                      <span>{zone.name}</span>
+                      <span className="text-muted-foreground">{zone.percentage}% ({zone.sqft} sqft)</span>
+                    </div>
+                  ))}
+                  {normalizedZones.length > 5 && (
+                    <div className="text-xs text-muted-foreground">+{normalizedZones.length - 5} more zones</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -830,8 +838,8 @@ Aspect ratio: ${angle.aspectRatio}`;
       </Card>
 
       {/* Standard Views */}
-      <h3 className="text-lg font-semibold mt-2">Exterior Views</h3>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <h3 className="text-lg font-semibold">Standard Views</h3>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {ANGLE_CONFIG.filter(a => a.id !== "hero_34").map((angle) => {
           const imageData = generatedImages[angle.id];
           const prompt = generatedPrompts[angle.id] || "";
@@ -846,7 +854,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <Camera className="h-4 w-4 text-muted-foreground" />
+                      <Camera className="h-4 w-4 text-primary" />
                       {angle.name}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -859,7 +867,6 @@ Aspect ratio: ${angle.aspectRatio}`;
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Image Display */}
                 <div className={cn(
                   "aspect-video rounded-lg overflow-hidden border bg-muted flex items-center justify-center",
                   imageData?.status === "generating" && "animate-pulse"
@@ -891,7 +898,6 @@ Aspect ratio: ${angle.aspectRatio}`;
                   )}
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
@@ -900,11 +906,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                     className="flex-1"
                     disabled={!prompt}
                   >
-                    {copiedId === angle.id ? (
-                      <Check className="h-3 w-3" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
+                    {copiedId === angle.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                   </Button>
                   {imageData?.status === "complete" && imageData.url && (
                     <Button
@@ -958,7 +960,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                           {angle.name}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {angle.description}
+                          {angle.zoneData?.sqft} sqft • {angle.zoneData?.percentage}% of booth
                         </p>
                       </div>
                       <Badge className="bg-primary/10 text-primary text-xs">Interior</Badge>
@@ -969,7 +971,7 @@ Aspect ratio: ${angle.aspectRatio}`;
                       "aspect-video rounded-lg overflow-hidden border bg-muted flex items-center justify-center",
                       imageData?.status === "generating" && "animate-pulse"
                     )}>
-                      {imageData?.status === "pending" && (
+                      {(!imageData || imageData?.status === "pending") && (
                         <div className="text-center text-muted-foreground">
                           <Camera className="h-8 w-8 mx-auto mb-2 opacity-30" />
                           <p className="text-xs">Waiting...</p>

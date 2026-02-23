@@ -78,16 +78,35 @@ Reference current industry trends in experiential design: multi-sensory environm
 - Logistics and production notes
 - Reference trends: exclusive experiences, thought leadership forums, wellness activations, cultural immersion events.`,
 
-  spatialStrategy: `You are an exhibit designer and spatial strategist. Generate detailed "Spatial Strategy" including:
-- Zone configurations for each footprint with: zone IDs, names, percentages, square footage, color codes, position coordinates (x,y,width,height as percentages), requirements, adjacencies, and detailed notes
+  spatialStrategy: `You are an exhibit designer and spatial strategist. Generate detailed "Spatial Strategy" with MATHEMATICALLY CORRECT zone positions.
+
+CRITICAL POSITIONING RULES:
+1. All position values (x, y, width, height) must be PERCENTAGES from 0-100
+2. x = 0 means left edge, x = 100 means right edge
+3. y = 0 means FRONT (aisle side), y = 100 means BACK (rear wall)
+4. For EACH zone: x + width <= 100 AND y + height <= 100 (zones must fit within booth)
+5. Zones should NOT overlap significantly
+6. All zone percentages should sum to approximately 85-100% (leaving room for circulation)
+7. sqft = (width/100) * (height/100) * totalSqft — calculate this correctly!
+
+STANDARD ZONE POSITIONING GUIDE (for reference):
+| Zone Type      | Typical x  | Typical y  | Typical w  | Typical h  |
+|----------------|------------|------------|------------|------------|
+| Reception      | 30-40      | 0-5        | 30-40      | 12-18      |
+| Hero/Center    | 20-30      | 30-45      | 40-55      | 30-40      |
+| Storytelling   | 0-5        | 20-35      | 25-30      | 40-50      |
+| Lounge/Meeting | 65-75      | 25-40      | 25-35      | 40-50      |
+| Demo Stations  | 0-10       | 0-10       | 20-25      | 20-25      |
+| Back of House  | 75-85      | 75-85      | 15-25      | 15-25      |
+
+Include:
+- Zone configurations for EACH footprint in the brief with: zone IDs, names, percentages, square footage, hex color codes, position coordinates, requirements, adjacencies, and detailed notes
 - Scaling strategy: what scales down, what gets eliminated, what stays proportional, concept integrity statement
 - Materials and mood board: 6-8 materials with use case and feel description
 - Traffic flow patterns with from/to/label for 6+ pathways
 - Sightline analysis
 - Lighting zones and strategy
 - ADA compliance notes
-- Rigging and infrastructure requirements
-- Storage and back-of-house planning
 - Reference trends: modular systems, sustainable materials, LED environments, flexible configurations.`,
 
   budgetLogic: `You are a trade show budget strategist and financial analyst. Generate comprehensive "Budget Logic" including:
@@ -119,23 +138,43 @@ serve(async (req) => {
 
     let userPrompt = `Here is the creative brief data:\n\n${JSON.stringify(briefData, null, 2)}`;
 
+    // For spatial strategy, add explicit dimension calculations
+    if (elementType === "spatialStrategy" && briefData?.spatial?.footprints) {
+      userPrompt += `\n\n--- FOOTPRINT CALCULATIONS (use these exact values) ---\n`;
+      for (const fp of briefData.spatial.footprints) {
+        const match = fp.size?.match(/(\d+)\s*[x×X]\s*(\d+)/);
+        if (match) {
+          const w = parseInt(match[1], 10);
+          const d = parseInt(match[2], 10);
+          const sqft = w * d;
+          userPrompt += `\nFootprint: ${fp.size}
+- Width: ${w} feet
+- Depth: ${d} feet  
+- Total: ${sqft} sq ft
+- For a zone that is 30% wide and 40% deep: sqft = ${sqft} * 0.30 * 0.40 = ${Math.round(sqft * 0.30 * 0.40)} sq ft
+`;
+        }
+      }
+      userPrompt += `--- END FOOTPRINT CALCULATIONS ---\n`;
+    }
+
     // Include knowledge base content if available
     if (knowledgeBaseContent && knowledgeBaseContent.length > 0) {
       userPrompt += `\n\n--- KNOWLEDGE BASE (reference materials, past projects, inspiration) ---\n`;
       for (const kb of knowledgeBaseContent) {
         userPrompt += `\n### ${kb.fileName}\n${kb.content}\n`;
       }
-      userPrompt += `\n--- END KNOWLEDGE BASE ---\nUse the knowledge base content above to inform and enrich your response. Reference specific insights, pricing data, past project learnings, or inspiration where relevant.`;
+      userPrompt += `\n--- END KNOWLEDGE BASE ---\nUse the knowledge base content above to inform and enrich your response.`;
     }
 
     // Include company profile if available
     if (companyProfile) {
-      userPrompt += `\n\n--- COMPANY PROFILE ---\n${JSON.stringify(companyProfile, null, 2)}\n--- END COMPANY PROFILE ---\nConsider the company's profile, standard booth sizes, and industry context.`;
+      userPrompt += `\n\n--- COMPANY PROFILE ---\n${JSON.stringify(companyProfile, null, 2)}\n--- END COMPANY PROFILE ---\n`;
     }
 
     // Include show cost data if available
     if (showCosts && showCosts.length > 0) {
-      userPrompt += `\n\n--- SHOW COST DATABASE ---\n${JSON.stringify(showCosts, null, 2)}\n--- END SHOW COST DATABASE ---\nUse real venue/show cost data from this database when discussing budget, logistics, and venue-specific considerations.`;
+      userPrompt += `\n\n--- SHOW COST DATABASE ---\n${JSON.stringify(showCosts, null, 2)}\n--- END SHOW COST DATABASE ---\n`;
     }
 
     if (existingData) {
@@ -147,10 +186,23 @@ serve(async (req) => {
     }
 
     if (existingData || feedback) {
-      userPrompt += `\n\nIMPORTANT: This is a REGENERATION request. You MUST create a completely NEW and DIFFERENT concept from the existing content. Do NOT repeat or closely resemble the previous headline, narrative, or ideas. Take a fresh creative direction, explore a different angle, metaphor, or strategic position. Be boldly original.`;
+      userPrompt += `\n\nIMPORTANT: This is a REGENERATION request. Create a completely NEW and DIFFERENT concept.`;
     }
 
-    userPrompt += `\n\nGenerate exhaustive, presentation-quality content. Be specific, bold, and strategic. Include industry-trending ideas and data points. This should read like a premium agency pitch deck. You MUST use the provided tool/function to return your response.`;
+    // Special instructions for spatial strategy
+    if (elementType === "spatialStrategy") {
+      userPrompt += `\n\nCRITICAL SPATIAL REQUIREMENTS:
+1. Position values are PERCENTAGES (0-100), NOT feet
+2. x=0 is LEFT edge, y=0 is FRONT (aisle side)
+3. Every zone must satisfy: x + width <= 100 AND y + height <= 100
+4. Calculate sqft as: (width/100) * (height/100) * totalSqft
+5. Zones should not overlap
+6. Include a config for EACH footprint mentioned in the brief
+7. Use descriptive zone IDs like "hero", "lounge", "storytelling", "reception", "demo", "service"
+8. Color codes should be hex format like "#0047AB"`;
+    }
+
+    userPrompt += `\n\nGenerate exhaustive, presentation-quality content. Be specific, bold, and strategic. You MUST use the provided tool/function to return your response.`;
 
     // Define the tool schema for structured output
     const toolSchema = getToolSchema(elementType);
@@ -200,23 +252,80 @@ serve(async (req) => {
       finishReason: data.choices?.[0]?.finish_reason,
     }));
 
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    // Extract the tool call response
+    const toolCalls = data.choices?.[0]?.message?.tool_calls;
+    if (toolCalls && toolCalls.length > 0) {
+      const toolCall = toolCalls[0];
+      let parsedData;
+      
+      try {
+        parsedData = typeof toolCall.function.arguments === "string" 
+          ? JSON.parse(toolCall.function.arguments) 
+          : toolCall.function.arguments;
+      } catch (parseError) {
+        console.error("Failed to parse tool arguments:", parseError);
+        throw new Error("Failed to parse AI response");
+      }
 
-    if (toolCall) {
-      const elementData = JSON.parse(toolCall.function.arguments);
-      return new Response(JSON.stringify({ data: elementData }), {
+      // Post-process spatial strategy to validate/fix zone positions
+      if (elementType === "spatialStrategy" && parsedData.configs) {
+        parsedData.configs = parsedData.configs.map((config: any) => {
+          const totalSqft = config.totalSqft || 900;
+          
+          if (config.zones) {
+            config.zones = config.zones.map((zone: any, index: number) => {
+              const pos = zone.position || { x: 0, y: 0, width: 25, height: 25 };
+              
+              // Normalize positions to 0-100 range if they appear to be ratios
+              let x = pos.x, y = pos.y, w = pos.width, h = pos.height;
+              
+              // Detect if values are in 0-1 ratio format
+              if (x <= 1 && y <= 1 && w <= 1 && h <= 1) {
+                x = x * 100;
+                y = y * 100;
+                w = w * 100;
+                h = h * 100;
+              }
+              
+              // Clamp to valid bounds
+              w = Math.max(5, Math.min(w, 100));
+              h = Math.max(5, Math.min(h, 100));
+              x = Math.max(0, Math.min(x, 100 - w));
+              y = Math.max(0, Math.min(y, 100 - h));
+              
+              // Recalculate sqft based on actual dimensions
+              const calculatedSqft = Math.round((w / 100) * (h / 100) * totalSqft);
+              const calculatedPercentage = Math.round((w / 100) * (h / 100) * 100);
+              
+              return {
+                ...zone,
+                id: zone.id || `zone_${index}`,
+                position: { x, y, width: w, height: h },
+                sqft: zone.sqft && Math.abs(zone.sqft - calculatedSqft) < 50 ? zone.sqft : calculatedSqft,
+                percentage: zone.percentage && Math.abs(zone.percentage - calculatedPercentage) < 10 ? zone.percentage : calculatedPercentage,
+                colorCode: zone.colorCode || getDefaultColor(index),
+              };
+            });
+          }
+          
+          return config;
+        });
+      }
+
+      return new Response(JSON.stringify({ data: parsedData }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fallback: parse content directly (model may return JSON in content)
+    // Fallback: try to extract content from message
     const content = data.choices?.[0]?.message?.content;
     if (content) {
-      // Try to extract JSON from markdown code fences or raw content
+      console.log("Falling back to content parsing, content length:", content.length);
+      // Try to parse as JSON
       let jsonStr = content;
-      const codeBlockMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-      if (codeBlockMatch) {
-        jsonStr = codeBlockMatch[1].trim();
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1];
       }
       try {
         const parsed = JSON.parse(jsonStr);
@@ -224,15 +333,14 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch {
-        // If JSON parse fails, return the raw content wrapped in a basic structure
-        console.error("Failed to parse AI content as JSON, content preview:", content.substring(0, 200));
+        console.error("Failed to parse AI content as JSON");
         return new Response(JSON.stringify({ data: { rawContent: content } }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    console.error("No tool calls or content in response:", JSON.stringify(data).substring(0, 500));
+    console.error("No tool calls or content in response");
     return new Response(JSON.stringify({ error: "AI returned empty response. Please try again." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -245,6 +353,11 @@ serve(async (req) => {
     );
   }
 });
+
+function getDefaultColor(index: number): string {
+  const colors = ['#0047AB', '#4682B4', '#2F4F4F', '#DAA520', '#8B4513', '#556B2F', '#800080', '#CD853F'];
+  return colors[index % colors.length];
+}
 
 function getToolSchema(elementType: string) {
   const schemas: Record<string, any> = {
@@ -382,14 +495,88 @@ function getToolSchema(elementType: string) {
       type: "function",
       function: {
         name: "generate_spatialStrategy",
-        description: "Generate Spatial Strategy",
+        description: `Generate Spatial Strategy with MATHEMATICALLY CORRECT zone positions.
+
+RULES:
+- Position values (x, y, width, height) are PERCENTAGES (0-100)
+- x=0 is left edge, y=0 is front/aisle edge
+- For each zone: x + width <= 100 AND y + height <= 100
+- sqft = (width/100) * (height/100) * totalSqft
+- Zones should not overlap`,
         parameters: {
           type: "object",
           properties: {
-            configs: { type: "array", items: { type: "object", properties: { footprintSize: { type: "string" }, totalSqft: { type: "number" }, zones: { type: "array", items: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, percentage: { type: "number" }, sqft: { type: "number" }, colorCode: { type: "string" }, position: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" } }, required: ["x", "y", "width", "height"] }, requirements: { type: "array", items: { type: "string" } }, adjacencies: { type: "array", items: { type: "string" } }, notes: { type: "string" } }, required: ["id", "name", "percentage", "sqft", "colorCode", "position", "requirements"] } } }, required: ["footprintSize", "totalSqft", "zones"] } },
-            scalingStrategy: { type: "object", properties: { whatScalesDown: { type: "array", items: { type: "string" } }, whatEliminates: { type: "array", items: { type: "string" } }, whatStaysProportional: { type: "array", items: { type: "string" } }, conceptIntegrity: { type: "string" } } },
-            materialsAndMood: { type: "array", items: { type: "object", properties: { material: { type: "string" }, use: { type: "string" }, feel: { type: "string" } }, required: ["material", "use", "feel"] } },
-            trafficFlow: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" } }, required: ["from", "to", "label"] } },
+            configs: { 
+              type: "array", 
+              items: { 
+                type: "object", 
+                properties: { 
+                  footprintSize: { type: "string", description: "e.g., '30x30'" }, 
+                  totalSqft: { type: "number", description: "Width × Depth in sq ft" }, 
+                  zones: { 
+                    type: "array", 
+                    items: { 
+                      type: "object", 
+                      properties: { 
+                        id: { type: "string", description: "Zone ID: hero, storytelling, lounge, reception, demo, service" }, 
+                        name: { type: "string", description: "Display name for the zone" }, 
+                        percentage: { type: "number", description: "Percentage of booth (5-40 typical)", minimum: 5, maximum: 50 }, 
+                        sqft: { type: "number", description: "(width/100)*(height/100)*totalSqft" }, 
+                        colorCode: { type: "string", description: "Hex color like #0047AB" }, 
+                        position: { 
+                          type: "object", 
+                          properties: { 
+                            x: { type: "number", description: "Left edge %, 0-95", minimum: 0, maximum: 95 }, 
+                            y: { type: "number", description: "Top edge % (0=aisle), 0-95", minimum: 0, maximum: 95 }, 
+                            width: { type: "number", description: "Width %, 5-60", minimum: 5, maximum: 60 }, 
+                            height: { type: "number", description: "Depth %, 5-60", minimum: 5, maximum: 60 } 
+                          }, 
+                          required: ["x", "y", "width", "height"] 
+                        }, 
+                        requirements: { type: "array", items: { type: "string" } }, 
+                        adjacencies: { type: "array", items: { type: "string" }, description: "IDs of adjacent zones" }, 
+                        notes: { type: "string" } 
+                      }, 
+                      required: ["id", "name", "percentage", "sqft", "colorCode", "position", "requirements"] 
+                    } 
+                  } 
+                }, 
+                required: ["footprintSize", "totalSqft", "zones"] 
+              } 
+            },
+            scalingStrategy: { 
+              type: "object", 
+              properties: { 
+                whatScalesDown: { type: "array", items: { type: "string" } }, 
+                whatEliminates: { type: "array", items: { type: "string" } }, 
+                whatStaysProportional: { type: "array", items: { type: "string" } }, 
+                conceptIntegrity: { type: "string" } 
+              } 
+            },
+            materialsAndMood: { 
+              type: "array", 
+              items: { 
+                type: "object", 
+                properties: { 
+                  material: { type: "string" }, 
+                  use: { type: "string" }, 
+                  feel: { type: "string" } 
+                }, 
+                required: ["material", "use", "feel"] 
+              } 
+            },
+            trafficFlow: { 
+              type: "array", 
+              items: { 
+                type: "object", 
+                properties: { 
+                  from: { type: "string" }, 
+                  to: { type: "string" }, 
+                  label: { type: "string" } 
+                }, 
+                required: ["from", "to", "label"] 
+              } 
+            },
             lightingStrategy: { type: "string" },
             adaCompliance: { type: "string" },
             riggingNotes: { type: "string" },

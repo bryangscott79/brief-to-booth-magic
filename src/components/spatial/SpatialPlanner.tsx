@@ -16,7 +16,10 @@ import {
   Layers,
   Sparkles,
   Loader2,
-  ImageIcon
+  ImageIcon,
+  AlertTriangle,
+  AlertCircle,
+  CheckCircle2
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useState, useMemo, useCallback } from "react";
@@ -32,7 +35,18 @@ import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { saveProjectField } from "@/hooks/useProjectSync";
 
-// Fallback palette when zones don't have a colorCode from DB
+// Import spatial utilities
+import {
+  calculateBoothDimensions,
+  normalizeZones,
+  validateSpatialLayout,
+  generateScaleContext,
+  type NormalizedZone,
+  type ValidationResult,
+  type BoothDimensions,
+} from "@/lib/spatialUtils";
+
+// Zone color palette
 const ZONE_PALETTE = [
   { bg: "rgba(0, 71, 171, 0.2)", border: "rgba(0, 71, 171, 0.8)", text: "#0047AB" },
   { bg: "rgba(70, 130, 180, 0.2)", border: "rgba(70, 130, 180, 0.8)", text: "#4682B4" },
@@ -45,14 +59,15 @@ const ZONE_PALETTE = [
 ];
 
 function hexToRgba(hex: string, alpha: number): string {
+  if (!hex || !hex.startsWith('#')) return `rgba(100, 100, 100, ${alpha})`;
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function getZoneColors(zone: any, index: number) {
-  if (zone.colorCode) {
+function getZoneColors(zone: NormalizedZone, index: number) {
+  if (zone.colorCode && zone.colorCode.startsWith('#')) {
     return {
       bg: hexToRgba(zone.colorCode, 0.2),
       border: hexToRgba(zone.colorCode, 0.8),
@@ -60,6 +75,45 @@ function getZoneColors(zone: any, index: number) {
     };
   }
   return ZONE_PALETTE[index % ZONE_PALETTE.length];
+}
+
+// Validation Panel Component
+function ValidationPanel({ validation }: { validation: ValidationResult }) {
+  if (validation.valid && validation.warnings.length === 0) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-primary p-3 bg-primary/5 rounded-lg border border-primary/20">
+        <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+        <span>Layout validated — {validation.totalPercentage}% allocated across {validation.normalizedZones.length} zones</span>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+      <div className="text-sm font-medium flex items-center gap-2">
+        {validation.errors.length > 0 ? (
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+        ) : (
+          <AlertCircle className="h-4 w-4 text-amber-500" />
+        )}
+        Layout Issues ({validation.errors.length} errors, {validation.warnings.length} warnings)
+      </div>
+      
+      {validation.errors.map((error, i) => (
+        <div key={`e-${i}`} className="flex items-start gap-2 text-sm text-destructive">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      ))}
+      
+      {validation.warnings.map((warning, i) => (
+        <div key={`w-${i}`} className="flex items-start gap-2 text-sm text-amber-600">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+          <span>{warning}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SpatialPlanner() {
@@ -74,8 +128,8 @@ export function SpatialPlanner() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [activeVariation, setActiveVariation] = useState("balanced");
   const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
-  const [activeTab, setActiveTab] = useState<"layout" | "metrics">("layout");
-  const [selectedZone, setSelectedZone] = useState<{ zone: any; colors: any } | null>(null);
+  const [activeTab, setActiveTab] = useState<"layout" | "metrics" | "validation">("layout");
+  const [selectedZone, setSelectedZone] = useState<{ zone: NormalizedZone; colors: any } | null>(null);
   const [floorPlanView, setFloorPlanView] = useState<"blocks" | "render">("blocks");
   const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
@@ -88,6 +142,29 @@ export function SpatialPlanner() {
   const currentConfig = spatialData?.configs?.[activeFootprint];
   const brief = currentProject?.parsedBrief;
   const bigIdea = currentProject?.elements.bigIdea.data;
+
+  // Calculate booth dimensions with proper aspect ratio
+  const boothDimensions: BoothDimensions = useMemo(() => {
+    const footprintStr = currentConfig?.footprintSize || 
+      brief?.spatial?.footprints?.[activeFootprint]?.size || 
+      "30x30";
+    return calculateBoothDimensions(footprintStr);
+  }, [currentConfig, brief, activeFootprint]);
+
+  // Normalize and validate zones
+  const { normalizedZones, validation } = useMemo(() => {
+    if (!currentConfig?.zones) {
+      return { 
+        normalizedZones: [], 
+        validation: { valid: false, errors: ['No zones defined'], warnings: [], normalizedZones: [], totalPercentage: 0, totalSqft: 0 }
+      };
+    }
+    
+    const normalized = normalizeZones(currentConfig.zones, boothDimensions.totalSqft);
+    const validationResult = validateSpatialLayout(normalized, boothDimensions.totalSqft);
+    
+    return { normalizedZones: normalized, validation: validationResult };
+  }, [currentConfig, boothDimensions.totalSqft]);
 
   // Hydrate floor plan from saved images
   useMemo(() => {
@@ -103,11 +180,11 @@ export function SpatialPlanner() {
     }
   }, [spatialData]);
   
-  // Generate layout variations - must be before conditional return
+  // Generate layout variations using normalized zones
   const variations = useMemo(() => {
-    if (!currentConfig?.zones) return [];
-    return generateLayoutVariations(currentConfig.zones, currentConfig.footprintSize);
-  }, [currentConfig]);
+    if (normalizedZones.length === 0) return [];
+    return generateLayoutVariations(normalizedZones, currentConfig?.footprintSize || "30x30", boothDimensions.totalSqft);
+  }, [normalizedZones, currentConfig, boothDimensions.totalSqft]);
   
   const activeLayout = useMemo(() => 
     variations.find(v => v.id === activeVariation) || variations[0],
@@ -131,88 +208,90 @@ export function SpatialPlanner() {
     }
     setIsGeneratingFloorPlan(true);
 
-    const footprint = brief?.spatial?.footprints?.[0]?.size || currentConfig.footprintSize;
-    const fpMatch = footprint.match(/(\d+)\s*[x×X]\s*(\d+)/);
-    const w = fpMatch ? parseInt(fpMatch[1], 10) : 30;
-    const d = fpMatch ? parseInt(fpMatch[2], 10) : 30;
+    const scaleContext = generateScaleContext(boothDimensions.footprintLabel);
 
     const zoneDescriptions = activeLayout.zones
-      .map((z: any) => `- ${z.name}: ${z.percentage}% (${z.sqft} sq ft) — positioned at ${Math.round((z.position.x <= 1 ? z.position.x * 100 : z.position.x))}% from left, ${Math.round((z.position.y <= 1 ? z.position.y * 100 : z.position.y))}% from top`)
+      .map((z: NormalizedZone) => `- ${z.name}: ${z.percentage}% (${z.sqft} sq ft) — positioned at ${Math.round(z.position.x)}% from left, ${Math.round(z.position.y)}% from top, ${Math.round(z.position.width)}% wide × ${Math.round(z.position.height)}% deep`)
       .join("\n");
 
     const heroName = currentProject?.elements.interactiveMechanics?.data?.hero?.name || "Hero installation";
     const materials = spatialData?.materialsAndMood?.map((m: any) => `${m.material}: ${m.feel}`).join(", ") || "";
 
-    // Layout variation context
     const variationContext = `LAYOUT STRATEGY: "${activeLayout.name}" (${activeLayout.score}% match)
 - ${activeLayout.description}
-- Optimized for: ${activeLayout.bestFor.join(", ")}
-- Reasoning: ${activeLayout.reasoning}`;
+- Optimized for: ${activeLayout.bestFor.join(", ")}`;
 
-    // Annotation feedback
     const annotationBlock = floorPlanAnnotations.length > 0
-      ? `\nUSER FEEDBACK (CRITICAL — apply all of these changes):\n${floorPlanAnnotations.map((a, i) => `${i + 1}. At position (${Math.round(a.x)}% from left, ${Math.round(a.y)}% from top): "${a.comment}"`).join("\n")}\nMake sure every feedback item above is reflected in the updated floor plan.`
+      ? `\nUSER FEEDBACK (CRITICAL — apply all of these changes):\n${floorPlanAnnotations.map((a, i) => `${i + 1}. At position (${Math.round(a.x)}% from left, ${Math.round(a.y)}% from top): "${a.comment}"`).join("\n")}`
       : "";
 
-    const prompt = `Generate a professional top-down 2D booth floor plan for a ${w}' × ${d}' trade show exhibit for ${brief?.brand?.name || "client"}.
+    const prompt = `Generate a professional top-down 2D booth floor plan for a ${boothDimensions.width}' × ${boothDimensions.depth}' (${boothDimensions.totalSqft} sq ft) trade show exhibit for ${brief?.brand?.name || "client"}.
 
-STYLE: Black-and-white technical architectural floor plan on a light blue graph-paper / grid background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. NO color fills, NO 3D, NO perspective — purely flat 2D like a hand-drawn exhibit blueprint.
+STYLE: Black-and-white technical architectural floor plan on light blue graph-paper background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. NO color fills, NO 3D, NO perspective — purely flat 2D blueprint.
 
-BOOTH DIMENSIONS: ${w} feet wide × ${d} feet deep (${w > d ? "landscape / wider than deep" : d > w ? "portrait / deeper than wide" : "square"}). Draw the booth outline as a bold black rectangle to exact proportions.
+${scaleContext}
 
 ${variationContext}
 
-ZONE LAYOUT:
+ZONE LAYOUT (with exact positions):
 ${zoneDescriptions}
 
 DRAWING REQUIREMENTS:
-- Bold black rectangular booth outline with dimension labels ("${w}'" and "${d}'")
-- Each zone clearly labeled in clean sans-serif text (zone name + sq ft)
-- Individual furniture items drawn as simple black-outline icons/shapes viewed from above: tables as rectangles, chairs as small squares, screens/monitors as thin rectangles, counters as long rectangles, storage units as filled rectangles, display stands as circles or rounded shapes
-- Label every piece of furniture with small text (e.g. "table", "storage unit", "display", "counter", "screen")
-- Thin blue lines or dashed lines separating major zone areas
-- Entry arrows from the main aisle (bottom edge of booth)
-- ${heroName} drawn as the prominent centerpiece feature
+- Bold black rectangular booth outline with dimension labels ("${boothDimensions.width}'" and "${boothDimensions.depth}'")
+- Each zone clearly labeled with zone name + sq ft
+- Individual furniture items as simple black-outline icons from above
+- Thin lines separating major zone areas
+- Entry points marked with arrows from aisle side
+- The hero "${heroName}" should be drawn as a prominent central fixture
 
-${bigIdea ? `THEME: "${bigIdea.headline}"` : ""}
-BRAND: ${brief?.brand?.name || ""}
+MATERIALS CONTEXT: ${materials}
+${annotationBlock}
 
-RENDERING STYLE: Think professional exhibit design blueprint. Light blue graph-paper grid background. All furniture and walls in clean black line-art. Zone names in bold uppercase. Furniture labels in smaller text. No color fills — only black outlines on grid paper. Crisp, technical, presentation-ready.
-
-The image must be a WIDE landscape format matching the booth's ${w}:${d} proportions.${annotationBlock}`;
+Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
 
     try {
-      const { data, error } = await supabase.functions.invoke("generate-hero", {
-        body: { prompt, boothSize: footprint },
+      const { data, error } = await supabase.functions.invoke("generate-view", {
+        body: {
+          prompt,
+          angleId: "floor_plan_2d",
+          projectId,
+          boothSize: currentConfig.footprintSize,
+        },
       });
 
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if (!data?.imageUrl) throw new Error("No image returned");
 
       setFloorPlanImage(data.imageUrl);
       setFloorPlanView("render");
 
+      // Save to DB
       if (projectId) {
-        saveImage.mutate(
-          { angleId: "floor_plan_2d", angleName: "2D Floor Plan", imageDataUrl: data.imageUrl },
-          { onError: (err) => console.error("Failed to save floor plan:", err) }
-        );
+        await saveImage.mutateAsync({
+          angleId: "floor_plan_2d",
+          angleName: "Floor Plan (2D)",
+          imageDataUrl: data.imageUrl,
+        });
       }
 
-      toast({ title: "Floor plan generated", description: floorPlanAnnotations.length > 0 ? `Applied ${floorPlanAnnotations.length} feedback note(s)` : "AI-rendered 2D floor plan is ready" });
+      toast({ 
+        title: "Floor plan generated", 
+        description: floorPlanAnnotations.length > 0 
+          ? `Applied ${floorPlanAnnotations.length} feedback note(s)` 
+          : "AI-rendered 2D floor plan is ready" 
+      });
     } catch (err) {
       console.error("Floor plan generation error:", err);
       toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
       setIsGeneratingFloorPlan(false);
     }
-  }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject, floorPlanAnnotations]);
+  }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject, floorPlanAnnotations, boothDimensions]);
 
   // Annotation handlers
   const handleAddAnnotation = useCallback((annotation: FloorPlanAnnotation) => {
     const updated = [...floorPlanAnnotations, annotation];
     setFloorPlanAnnotations(updated);
-    // Persist to DB
     if (projectId && spatialData) {
       saveProjectField(projectId, "spatial_strategy", { ...spatialData, floorPlanAnnotations: updated });
     }
@@ -250,7 +329,7 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
         <div>
           <h2 className="text-2xl font-semibold">Spatial Strategy</h2>
           <p className="text-muted-foreground">
-            Floor plan visualization, flow analysis, and zone optimization
+            {boothDimensions.footprintLabel} {boothDimensions.scaleDescription} • {validation.totalPercentage}% zone coverage
           </p>
         </div>
         <div className="flex gap-3">
@@ -264,6 +343,11 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
           </Button>
         </div>
       </div>
+
+      {/* Validation Alert (if issues) */}
+      {(!validation.valid || validation.warnings.length > 0) && (
+        <ValidationPanel validation={validation} />
+      )}
 
       {/* Footprint Selector */}
       <div className="flex items-center justify-between">
@@ -281,7 +365,7 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
             >
               {config.footprintSize}
               <span className="text-xs opacity-70 ml-2">
-                ({config.totalSqft} sq ft)
+                ({config.totalSqft || calculateBoothDimensions(config.footprintSize).totalSqft} sq ft)
               </span>
             </button>
           ))}
@@ -315,7 +399,7 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
             <div>
               <CardTitle className="text-base">Floor Plan — {currentConfig.footprintSize}</CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                {activeLayout.name} • {metrics.flowEfficiency}% flow efficiency
+                {activeLayout.name} • {metrics.flowEfficiency}% flow efficiency • {boothDimensions.width}' × {boothDimensions.depth}'
               </p>
             </div>
             <div className="flex gap-1">
@@ -393,77 +477,105 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
                 )}
               </div>
             ) : (
-              /* Zone Blocks View */
+              /* Zone Blocks View - WITH PROPER ASPECT RATIO */
               <div 
                 className="grid-pattern rounded-lg p-4 overflow-auto"
                 style={{ minHeight: "400px" }}
               >
-              <div 
-                className="relative bg-muted/30 rounded border border-dashed border-border"
-                style={{ 
-                  width: `${300 * zoom}px`, 
-                  height: `${300 * zoom}px`,
-                  margin: "0 auto",
-                  transition: "all 0.3s ease"
-                }}
-              >
-                {/* Flow overlay */}
-                {showFlow && (
-                  <FlowOverlay 
-                    paths={flowPaths} 
-                    showHeatmap={showHeatmap}
-                    zones={activeLayout.zones}
-                  />
-                )}
-                
-                {activeLayout.zones.map((zone: any, index: number) => {
-                  const colors = getZoneColors(zone, index);
-                  const zoneMetric = metrics.zoneMetrics.find(m => m.zoneId === zone.id);
-                  const x = zone.position.x <= 1 ? zone.position.x * 100 : zone.position.x;
-                  const y = zone.position.y <= 1 ? zone.position.y * 100 : zone.position.y;
-                  const w = zone.position.width <= 1 ? zone.position.width * 100 : zone.position.width;
-                  const h = zone.position.height <= 1 ? zone.position.height * 100 : zone.position.height;
+                {/* Booth container with correct aspect ratio */}
+                <div className="relative mx-auto" style={{ width: 'fit-content' }}>
+                  {/* Width label */}
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground font-medium">
+                    {boothDimensions.width}'
+                  </div>
                   
-                  return (
-                    <div
-                      key={zone.id}
-                      className="absolute rounded-md flex items-center justify-center p-1 transition-all cursor-pointer hover:opacity-90 hover:shadow-md group overflow-hidden"
-                      onClick={() => setSelectedZone({ zone, colors })}
-                      style={{
-                        left: `${x}%`,
-                        top: `${y}%`,
-                        width: `${w}%`,
-                        height: `${h}%`,
-                        backgroundColor: colors.bg,
-                        borderWidth: "2px",
-                        borderStyle: "solid",
-                        borderColor: colors.border,
-                        zIndex: zone.id === "Z5" ? 2 : 1,
-                      }}
-                    >
-                      <div className="text-center overflow-hidden">
-                        <div className="font-semibold leading-tight" style={{ color: colors.text, fontSize: `${Math.max(8, Math.min(12, w * 0.4))}px` }}>
-                          {zone.name}
-                        </div>
-                        <div className="text-muted-foreground mt-0.5" style={{ fontSize: `${Math.max(7, Math.min(10, w * 0.3))}px` }}>
-                          {zone.sqft} sq ft
-                        </div>
-                        {zoneMetric && (
-                          <div className="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded-md px-2 py-1 shadow-md whitespace-nowrap z-10" style={{ fontSize: "10px" }}>
-                            {zoneMetric.engagementScore}% engagement • {Math.round(zoneMetric.avgDwellTime / 60)}min avg
+                  {/* Depth label */}
+                  <div 
+                    className="absolute -left-6 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium"
+                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg) translateY(50%)' }}
+                  >
+                    {boothDimensions.depth}'
+                  </div>
+                  
+                  {/* Main floor plan container */}
+                  <div 
+                    className="relative bg-muted/30 rounded border-2 border-dashed border-border"
+                    style={{ 
+                      width: `${boothDimensions.displayWidth * zoom}px`, 
+                      height: `${boothDimensions.displayHeight * zoom}px`,
+                      transition: "all 0.3s ease"
+                    }}
+                  >
+                    {/* Flow overlay */}
+                    {showFlow && (
+                      <FlowOverlay 
+                        paths={flowPaths} 
+                        showHeatmap={showHeatmap}
+                        zones={activeLayout.zones}
+                      />
+                    )}
+                    
+                    {/* Render each zone */}
+                    {activeLayout.zones.map((zone: NormalizedZone, index: number) => {
+                      const colors = getZoneColors(zone, index);
+                      const zoneMetric = metrics.zoneMetrics.find(m => m.zoneId === zone.id);
+                      
+                      // Use already-normalized positions (0-100 scale)
+                      const { x, y, width, height } = zone.position;
+                      
+                      return (
+                        <div
+                          key={zone.id}
+                          className="absolute rounded-md flex items-center justify-center p-1 transition-all cursor-pointer hover:opacity-90 hover:shadow-md group overflow-hidden"
+                          onClick={() => setSelectedZone({ zone, colors })}
+                          style={{
+                            left: `${x}%`,
+                            top: `${y}%`,
+                            width: `${width}%`,
+                            height: `${height}%`,
+                            backgroundColor: colors.bg,
+                            borderWidth: "2px",
+                            borderStyle: "solid",
+                            borderColor: colors.border,
+                            zIndex: zone.id === "hero" ? 2 : 1,
+                          }}
+                        >
+                          <div className="text-center overflow-hidden">
+                            <div 
+                              className="font-semibold leading-tight truncate" 
+                              style={{ 
+                                color: colors.text, 
+                                fontSize: `${Math.max(8, Math.min(12, width * 0.35 * zoom))}px` 
+                              }}
+                            >
+                              {zone.name}
+                            </div>
+                            <div 
+                              className="text-muted-foreground mt-0.5" 
+                              style={{ fontSize: `${Math.max(7, Math.min(10, width * 0.25 * zoom))}px` }}
+                            >
+                              {zone.sqft} sqft
+                            </div>
+                            {zoneMetric && (
+                              <div 
+                                className="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded-md px-2 py-1 shadow-md whitespace-nowrap z-10" 
+                                style={{ fontSize: "10px" }}
+                              >
+                                {zoneMetric.engagementScore}% engagement • {Math.round(zoneMetric.avgDwellTime / 60)}min avg
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Aisle indicator */}
+                    <div className="absolute -bottom-6 left-0 right-0 text-center text-xs text-muted-foreground">
+                      ← Main Aisle →
                     </div>
-                  );
-                })}
-                
-                {/* Aisle indicator */}
-                <div className="absolute -bottom-6 left-0 right-0 text-center text-xs text-muted-foreground">
-                  ← Main Aisle →
+                  </div>
                 </div>
               </div>
-            </div>
             )}
           </CardContent>
         </Card>
@@ -479,6 +591,16 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
               <TabsTrigger value="metrics" className="flex-1">
                 <TrendingUp className="h-4 w-4 mr-1" />
                 Metrics
+              </TabsTrigger>
+              <TabsTrigger value="validation" className="flex-1 relative">
+                {validation.errors.length > 0 ? (
+                  <AlertTriangle className="h-4 w-4 mr-1 text-destructive" />
+                ) : validation.warnings.length > 0 ? (
+                  <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-1 text-primary" />
+                )}
+                Validate
               </TabsTrigger>
             </TabsList>
             
@@ -499,20 +621,34 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
                   <CardTitle className="text-base">Zone Allocation</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {activeLayout.zones.map((zone: any, index: number) => {
+                  {activeLayout.zones.map((zone: NormalizedZone, index: number) => {
                     const colors = getZoneColors(zone, index);
                     return (
                       <div key={zone.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
+                          <div 
+                            className="w-3 h-3 rounded border" 
+                            style={{ backgroundColor: colors.bg, borderColor: colors.border }} 
+                          />
                           <span className="text-sm">{zone.name}</span>
                         </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {zone.percentage}%
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{zone.sqft} sqft</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {zone.percentage}%
+                          </Badge>
+                        </div>
                       </div>
                     );
                   })}
+                  
+                  {/* Total */}
+                  <div className="pt-2 border-t flex items-center justify-between">
+                    <span className="text-sm font-medium">Total</span>
+                    <Badge variant={validation.totalPercentage > 100 ? "destructive" : "default"} className="text-xs">
+                      {validation.totalPercentage}%
+                    </Badge>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -520,9 +656,43 @@ The image must be a WIDE landscape format matching the booth's ${w}:${d} proport
             <TabsContent value="metrics" className="space-y-4 mt-4">
               <LayoutMetrics metrics={metrics} />
             </TabsContent>
+            
+            <TabsContent value="validation" className="space-y-4 mt-4">
+              <Card className="element-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Layout Validation</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Summary stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">{validation.totalPercentage}%</div>
+                      <div className="text-xs text-muted-foreground">Space allocated</div>
+                    </div>
+                    <div className="p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">{normalizedZones.length}</div>
+                      <div className="text-xs text-muted-foreground">Zones defined</div>
+                    </div>
+                  </div>
+                  
+                  {/* Booth dimensions */}
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <div className="text-sm font-medium mb-1">Booth Dimensions</div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>{boothDimensions.footprintLabel} ({boothDimensions.totalSqft} sq ft)</div>
+                      <div>{boothDimensions.scaleDescription}</div>
+                      <div>Aspect ratio: {boothDimensions.aspectRatio.toFixed(2)}:1</div>
+                    </div>
+                  </div>
+                  
+                  {/* Validation results */}
+                  <ValidationPanel validation={validation} />
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
           
-          {/* Inspiration Images - Always visible */}
+          {/* Inspiration Images */}
           <InspirationUpload 
             images={inspirationImages}
             onImagesChange={setInspirationImages}

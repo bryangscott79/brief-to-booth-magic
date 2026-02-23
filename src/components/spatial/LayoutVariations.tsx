@@ -1,8 +1,12 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Sparkles, Target, Users, Zap } from "lucide-react";
+import {
+  type NormalizedZone,
+  createLayoutVariation,
+  validateSpatialLayout,
+} from "@/lib/spatialUtils";
 
 export interface LayoutVariation {
   id: string;
@@ -13,7 +17,9 @@ export interface LayoutVariation {
   bestFor: string[];
   tradeoffs: string[];
   score: number;
-  zones: any[];
+  zones: NormalizedZone[];
+  totalPercentage: number;
+  isValid: boolean;
 }
 
 interface LayoutVariationsProps {
@@ -55,7 +61,8 @@ export function LayoutVariations({ variations, activeVariation, onSelect }: Layo
               key={variation.id}
               className={cn(
                 "cursor-pointer transition-all hover:shadow-md",
-                isActive ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/30"
+                isActive ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/30",
+                !variation.isValid && "opacity-70 border-destructive/30"
               )}
               onClick={() => onSelect(variation.id)}
             >
@@ -92,6 +99,14 @@ export function LayoutVariations({ variations, activeVariation, onSelect }: Layo
                           {tag}
                         </Badge>
                       ))}
+                    </div>
+                    
+                    {/* Show allocation percentage */}
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {variation.totalPercentage}% allocated
+                      {!variation.isValid && (
+                        <span className="text-destructive ml-2">• Has issues</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -146,48 +161,63 @@ export function LayoutReasoning({ variation }: { variation: LayoutVariation }) {
   );
 }
 
-// Generate layout variations from base zones
-export function generateLayoutVariations(baseZones: any[], footprintSize: string): LayoutVariation[] {
-  return [
-    {
-      id: "balanced",
-      name: "Balanced Flow",
-      type: "balanced",
-      description: "Optimized for even visitor distribution and smooth traffic flow",
-      reasoning: "This layout distributes visitors evenly across all zones, preventing bottlenecks and ensuring every element gets attention. The central hero installation draws initial interest while adjacent zones capture overflow traffic naturally.",
-      bestFor: ["High traffic shows", "Brand awareness goals", "Multiple product demos"],
-      tradeoffs: ["Less dramatic hero impact", "Requires more staff"],
-      score: 92,
-      zones: baseZones,
-    },
-    {
-      id: "hero-focused",
-      name: "Hero-Centric",
-      type: "hero-focused",
-      description: "Maximum impact from the central installation with supporting zones",
-      reasoning: "Prioritizes the hero installation as the dominant draw, with all other zones arranged to funnel visitors toward the centerpiece. Best for creating memorable 'wow' moments and strong social media presence.",
-      bestFor: ["Product launches", "Social media impact", "Award submissions"],
-      tradeoffs: ["Longer queue times", "Less lounge capacity"],
-      score: 87,
-      zones: baseZones.map(z => z.id === 'hero' 
-        ? { ...z, position: { ...z.position, width: z.position.width * 1.2, height: z.position.height * 1.2 } }
-        : z
-      ),
-    },
-    {
-      id: "engagement-first",
-      name: "Engagement Maximizer",
-      type: "engagement-first",
-      description: "Optimized for lead capture and meaningful conversations",
-      reasoning: "Expands the lounge and demo areas at the expense of the hero zone, creating more opportunities for 1:1 conversations and product demonstrations. Ideal when lead quality matters more than foot traffic.",
-      bestFor: ["B2B sales focus", "Complex products", "Relationship building"],
-      tradeoffs: ["Lower foot traffic", "Less visual impact from aisle"],
-      score: 84,
-      zones: baseZones.map(z => {
-        if (z.id === 'lounge') return { ...z, position: { ...z.position, width: z.position.width * 1.3 } };
-        if (z.id === 'hero') return { ...z, position: { ...z.position, width: z.position.width * 0.85 } };
-        return z;
-      }),
-    },
-  ];
+/**
+ * Generate layout variations from normalized zones with proper spatial math
+ */
+export function generateLayoutVariations(
+  baseZones: NormalizedZone[], 
+  footprintSize: string,
+  totalSqft: number
+): LayoutVariation[] {
+  // Create balanced (unchanged) variation
+  const balancedValidation = validateSpatialLayout(baseZones, totalSqft);
+  const balanced: LayoutVariation = {
+    id: "balanced",
+    name: "Balanced Flow",
+    type: "balanced",
+    description: "Optimized for even visitor distribution and smooth traffic flow",
+    reasoning: "This layout distributes visitors evenly across all zones, preventing bottlenecks and ensuring every element gets attention. The central hero installation draws initial interest while adjacent zones capture overflow traffic naturally.",
+    bestFor: ["High traffic shows", "Brand awareness goals", "Multiple product demos"],
+    tradeoffs: ["Less dramatic hero impact", "Requires more staff coverage"],
+    score: 92,
+    zones: baseZones,
+    totalPercentage: balancedValidation.totalPercentage,
+    isValid: balancedValidation.valid,
+  };
+
+  // Create hero-focused variation
+  const heroZones = createLayoutVariation(baseZones, totalSqft, 'hero-focused');
+  const heroValidation = validateSpatialLayout(heroZones, totalSqft);
+  const heroFocused: LayoutVariation = {
+    id: "hero-focused",
+    name: "Hero-Centric",
+    type: "hero-focused",
+    description: "Maximum impact from the central installation with supporting zones",
+    reasoning: "Prioritizes the hero installation as the dominant draw, with all other zones arranged to funnel visitors toward the centerpiece. Best for creating memorable 'wow' moments and strong social media presence.",
+    bestFor: ["Product launches", "Social media impact", "Award submissions"],
+    tradeoffs: ["Longer queue times", "Less lounge capacity"],
+    score: 87,
+    zones: heroZones,
+    totalPercentage: heroValidation.totalPercentage,
+    isValid: heroValidation.valid,
+  };
+
+  // Create engagement-first variation
+  const engagementZones = createLayoutVariation(baseZones, totalSqft, 'engagement-first');
+  const engagementValidation = validateSpatialLayout(engagementZones, totalSqft);
+  const engagementFirst: LayoutVariation = {
+    id: "engagement-first",
+    name: "Engagement Maximizer",
+    type: "engagement-first",
+    description: "Optimized for lead capture and meaningful conversations",
+    reasoning: "Expands the lounge and demo areas at the expense of the hero zone, creating more opportunities for 1:1 conversations and product demonstrations. Ideal when lead quality matters more than foot traffic.",
+    bestFor: ["B2B sales focus", "Complex products", "Relationship building"],
+    tradeoffs: ["Lower foot traffic", "Less visual impact from aisle"],
+    score: 84,
+    zones: engagementZones,
+    totalPercentage: engagementValidation.totalPercentage,
+    isValid: engagementValidation.valid,
+  };
+
+  return [balanced, heroFocused, engagementFirst];
 }

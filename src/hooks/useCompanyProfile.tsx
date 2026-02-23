@@ -9,6 +9,17 @@ export interface CompanyProfile {
   industry: string | null;
   default_booth_sizes: string[] | null;
   notes: string | null;
+  // Branding fields for proposals
+  logo_url: string | null;
+  logo_dark_url: string | null;
+  brand_color: string | null;
+  secondary_color: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  address: string | null;
+  website: string | null;
+  tagline: string | null;
   created_at: string;
   updated_at: string;
 }

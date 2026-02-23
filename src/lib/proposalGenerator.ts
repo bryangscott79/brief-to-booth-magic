@@ -1,0 +1,981 @@
+/**
+ * Proposal Generator Utility
+ * 
+ * Compiles all project elements into a formatted proposal document
+ * for PDF or PowerPoint export.
+ */
+
+import { jsPDF } from 'jspdf';
+import PptxGenJS from 'pptxgenjs';
+import {
+  getClearbitLogoUrl,
+  getClientLogoFromBrief,
+  getInitials,
+  generatePlaceholderLogo,
+  imageUrlToBase64,
+} from './logoUtils';
+import { calculateBoothDimensions, normalizeZones } from './spatialUtils';
+
+// Types
+export interface ProposalConfig {
+  clientLogo: string | null;
+  exhibitHouseLogo: string | null;
+  exhibitHouseName: string;
+  exhibitHouseTagline?: string;
+  brandColor: string;
+  secondaryColor: string;
+  contactInfo?: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+}
+
+export interface ProposalData {
+  brief: any;
+  elements: any;
+  images: Array<{ angle_name: string; public_url: string; angle_id: string }>;
+  config: ProposalConfig;
+}
+
+export interface ProposalSection {
+  id: string;
+  title: string;
+  content: any;
+  type: 'cover' | 'text' | 'image' | 'table' | 'grid' | 'mixed';
+}
+
+// ============================================
+// PROPOSAL STRUCTURE BUILDER
+// ============================================
+
+export function buildProposalSections(data: ProposalData): ProposalSection[] {
+  const { brief, elements, images, config } = data;
+  const sections: ProposalSection[] = [];
+  
+  // 1. Cover Page
+  sections.push({
+    id: 'cover',
+    title: 'Cover',
+    type: 'cover',
+    content: {
+      clientName: brief?.brand?.name || 'Client',
+      clientLogo: config.clientLogo,
+      exhibitHouseName: config.exhibitHouseName,
+      exhibitHouseLogo: config.exhibitHouseLogo,
+      projectTitle: elements?.bigIdea?.data?.headline || 'Exhibit Concept Proposal',
+      showName: brief?.eventContext?.showName || '',
+      date: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      footprintSize: brief?.spatial?.footprints?.[0]?.size || '30x30',
+    },
+  });
+  
+  // 2. Executive Summary
+  if (elements?.bigIdea?.data) {
+    const bigIdea = elements.bigIdea.data;
+    sections.push({
+      id: 'executive-summary',
+      title: 'Executive Summary',
+      type: 'text',
+      content: {
+        headline: bigIdea.headline,
+        subheadline: bigIdea.subheadline,
+        narrative: bigIdea.narrative?.substring(0, 800) + '...',
+        strategicPosition: bigIdea.strategicPosition,
+      },
+    });
+  }
+  
+  // 3. Hero Render
+  const heroImage = images.find(i => i.angle_id === 'hero_34');
+  if (heroImage) {
+    sections.push({
+      id: 'hero-render',
+      title: 'Design Vision',
+      type: 'image',
+      content: {
+        imageUrl: heroImage.public_url,
+        caption: `3/4 Hero View — ${brief?.spatial?.footprints?.[0]?.size || '30x30'} Booth`,
+      },
+    });
+  }
+  
+  // 4. Strategic Concept (Big Idea details)
+  if (elements?.bigIdea?.data) {
+    const bigIdea = elements.bigIdea.data;
+    sections.push({
+      id: 'strategic-concept',
+      title: 'Strategic Concept',
+      type: 'mixed',
+      content: {
+        headline: bigIdea.headline,
+        narrative: bigIdea.narrative,
+        differentiation: bigIdea.differentiation,
+        coreTension: bigIdea.coreTension,
+        briefAlignment: bigIdea.briefAlignment || [],
+      },
+    });
+  }
+  
+  // 5. Experience Framework
+  if (elements?.experienceFramework?.data) {
+    const ef = elements.experienceFramework.data;
+    sections.push({
+      id: 'experience-framework',
+      title: 'Experience Framework',
+      type: 'mixed',
+      content: {
+        conceptDescription: ef.conceptDescription,
+        designPrinciples: ef.designPrinciples || [],
+        visitorJourney: ef.visitorJourney || [],
+      },
+    });
+  }
+  
+  // 6. Spatial Design
+  if (elements?.spatialStrategy?.data) {
+    const spatial = elements.spatialStrategy.data;
+    const config0 = spatial.configs?.[0];
+    const dims = config0 ? calculateBoothDimensions(config0.footprintSize) : null;
+    const zones = config0?.zones ? normalizeZones(config0.zones, dims?.totalSqft || 900) : [];
+    
+    // Floor plan image
+    const floorPlanImage = images.find(i => i.angle_id === 'floor_plan_2d' || i.angle_id === 'top');
+    
+    sections.push({
+      id: 'spatial-design',
+      title: 'Spatial Design',
+      type: 'mixed',
+      content: {
+        footprint: config0?.footprintSize || '30x30',
+        totalSqft: dims?.totalSqft || 900,
+        zones: zones.map(z => ({
+          name: z.name,
+          sqft: z.sqft,
+          percentage: z.percentage,
+        })),
+        floorPlanUrl: floorPlanImage?.public_url || null,
+        materialsAndMood: spatial.materialsAndMood || [],
+      },
+    });
+  }
+  
+  // 7. Interactive Mechanics
+  if (elements?.interactiveMechanics?.data) {
+    const im = elements.interactiveMechanics.data;
+    sections.push({
+      id: 'interactive-mechanics',
+      title: 'Interactive Experience',
+      type: 'mixed',
+      content: {
+        hero: im.hero ? {
+          name: im.hero.name,
+          concept: im.hero.concept,
+          physicalForm: im.hero.physicalForm,
+        } : null,
+        secondary: im.secondary || [],
+        technologyStack: im.technologyStack || [],
+      },
+    });
+  }
+  
+  // 8. Digital Storytelling
+  if (elements?.digitalStorytelling?.data) {
+    const ds = elements.digitalStorytelling.data;
+    sections.push({
+      id: 'digital-storytelling',
+      title: 'Content Strategy',
+      type: 'mixed',
+      content: {
+        philosophy: ds.philosophy,
+        audienceTracks: ds.audienceTracks || [],
+        contentModules: (ds.contentModules || []).slice(0, 4),
+      },
+    });
+  }
+  
+  // 9. Multi-View Renders
+  const renderImages = images.filter(i => 
+    i.angle_id !== 'hero_34' && 
+    i.angle_id !== 'floor_plan_2d' &&
+    !i.angle_id.startsWith('zone_interior_')
+  );
+  
+  if (renderImages.length > 0) {
+    sections.push({
+      id: 'renders',
+      title: 'Rendered Views',
+      type: 'grid',
+      content: {
+        images: renderImages.map(img => ({
+          url: img.public_url,
+          caption: img.angle_name,
+        })),
+      },
+    });
+  }
+  
+  // 10. Zone Interiors
+  const zoneInteriors = images.filter(i => i.angle_id.startsWith('zone_interior_'));
+  if (zoneInteriors.length > 0) {
+    sections.push({
+      id: 'zone-interiors',
+      title: 'Zone Details',
+      type: 'grid',
+      content: {
+        images: zoneInteriors.map(img => ({
+          url: img.public_url,
+          caption: img.angle_name,
+        })),
+      },
+    });
+  }
+  
+  // 11. Human Connection
+  if (elements?.humanConnection?.data) {
+    const hc = elements.humanConnection.data;
+    sections.push({
+      id: 'human-connection',
+      title: 'Meeting & Hospitality',
+      type: 'mixed',
+      content: {
+        configs: hc.configs || [],
+        meetingTypes: hc.meetingTypes || [],
+        hospitalityDetails: hc.hospitalityDetails,
+      },
+    });
+  }
+  
+  // 12. Adjacent Activations
+  if (elements?.adjacentActivations?.data) {
+    const aa = elements.adjacentActivations.data;
+    sections.push({
+      id: 'adjacent-activations',
+      title: 'Adjacent Activations',
+      type: 'mixed',
+      content: {
+        activations: aa.activations || [],
+        competitivePositioning: aa.competitivePositioning,
+      },
+    });
+  }
+  
+  // 13. Investment Summary
+  if (elements?.budgetLogic?.data) {
+    const bl = elements.budgetLogic.data;
+    sections.push({
+      id: 'investment',
+      title: 'Investment Summary',
+      type: 'table',
+      content: {
+        totalPerShow: bl.totalPerShow,
+        allocation: bl.allocation || [],
+        roiFramework: bl.roiFramework,
+        amortization: bl.amortization || [],
+      },
+    });
+  }
+  
+  // 14. Next Steps / Contact
+  sections.push({
+    id: 'next-steps',
+    title: 'Next Steps',
+    type: 'text',
+    content: {
+      exhibitHouseName: config.exhibitHouseName,
+      contactInfo: config.contactInfo,
+      callToAction: 'Ready to bring this vision to life? Let\'s schedule a detailed walkthrough.',
+    },
+  });
+  
+  return sections;
+}
+
+// ============================================
+// PDF GENERATOR
+// ============================================
+
+export async function generateProposalPDF(data: ProposalData): Promise<Blob> {
+  const sections = buildProposalSections(data);
+  const pdf = new jsPDF({
+    orientation: 'landscape',
+    unit: 'pt',
+    format: [1920, 1080], // HD presentation format
+  });
+  
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 80;
+  const contentWidth = pageWidth - margin * 2;
+  
+  const brandColor = data.config.brandColor || '#0047AB';
+  const textColor = '#1a1a1a';
+  const mutedColor = '#666666';
+  
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i];
+    
+    if (i > 0) {
+      pdf.addPage();
+    }
+    
+    // Background
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+    
+    // Header bar
+    const [r, g, b] = hexToRgb(brandColor);
+    pdf.setFillColor(r, g, b);
+    pdf.rect(0, 0, pageWidth, 8, 'F');
+    
+    if (section.type === 'cover') {
+      // Cover page layout
+      await renderCoverPage(pdf, section.content, data.config, pageWidth, pageHeight);
+    } else {
+      // Section title
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(42);
+      pdf.setTextColor(r, g, b);
+      pdf.text(section.title, margin, margin + 50);
+      
+      // Underline
+      pdf.setDrawColor(r, g, b);
+      pdf.setLineWidth(3);
+      pdf.line(margin, margin + 65, margin + 200, margin + 65);
+      
+      // Content based on type
+      pdf.setTextColor(...hexToRgb(textColor));
+      
+      switch (section.type) {
+        case 'text':
+          renderTextSection(pdf, section.content, margin, margin + 120, contentWidth);
+          break;
+        case 'image':
+          await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
+          break;
+        case 'mixed':
+          renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
+          break;
+        case 'table':
+          renderTableSection(pdf, section.content, margin, margin + 120, contentWidth);
+          break;
+        case 'grid':
+          await renderGridSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
+          break;
+      }
+    }
+    
+    // Footer
+    if (section.type !== 'cover') {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(...hexToRgb(mutedColor));
+      pdf.text(
+        `${data.config.exhibitHouseName} | ${data.brief?.brand?.name || 'Client'} Proposal`,
+        margin,
+        pageHeight - 30
+      );
+      pdf.text(
+        `Page ${i + 1} of ${sections.length}`,
+        pageWidth - margin - 60,
+        pageHeight - 30
+      );
+    }
+  }
+  
+  return pdf.output('blob');
+}
+
+async function renderCoverPage(
+  pdf: jsPDF, 
+  content: any, 
+  config: ProposalConfig,
+  pageWidth: number,
+  pageHeight: number
+) {
+  const centerX = pageWidth / 2;
+  const brandColor = config.brandColor || '#0047AB';
+  const [r, g, b] = hexToRgb(brandColor);
+  
+  // Large brand color block
+  pdf.setFillColor(r, g, b);
+  pdf.rect(0, 0, pageWidth, pageHeight * 0.45, 'F');
+  
+  // Client logo (top left of color block)
+  if (content.clientLogo) {
+    try {
+      const logoData = await imageUrlToBase64(content.clientLogo);
+      if (logoData) {
+        pdf.addImage(logoData, 'PNG', 80, 60, 180, 60);
+      }
+    } catch (e) {
+      // Logo failed to load, skip
+    }
+  }
+  
+  // Project title
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(72);
+  pdf.setTextColor(255, 255, 255);
+  const titleLines = pdf.splitTextToSize(content.projectTitle || 'Exhibit Concept', pageWidth - 200);
+  pdf.text(titleLines, centerX, pageHeight * 0.25, { align: 'center' });
+  
+  // Show name and footprint
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(28);
+  pdf.setTextColor(255, 255, 255, 200);
+  const subtitle = [content.showName, content.footprintSize].filter(Boolean).join(' | ');
+  pdf.text(subtitle, centerX, pageHeight * 0.38, { align: 'center' });
+  
+  // Bottom section - exhibit house branding
+  pdf.setFillColor(245, 245, 245);
+  pdf.rect(0, pageHeight * 0.85, pageWidth, pageHeight * 0.15, 'F');
+  
+  // Exhibit house logo
+  if (config.exhibitHouseLogo) {
+    try {
+      const logoData = await imageUrlToBase64(config.exhibitHouseLogo);
+      if (logoData) {
+        pdf.addImage(logoData, 'PNG', 80, pageHeight * 0.88, 120, 40);
+      }
+    } catch (e) {
+      // Show name instead
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.setTextColor(50, 50, 50);
+      pdf.text(config.exhibitHouseName, 80, pageHeight * 0.93);
+    }
+  } else {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.setTextColor(50, 50, 50);
+    pdf.text(config.exhibitHouseName, 80, pageHeight * 0.93);
+  }
+  
+  // Date
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(14);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text(content.date, pageWidth - 80, pageHeight * 0.93, { align: 'right' });
+  
+  // Prepared for
+  pdf.setFontSize(12);
+  pdf.text(`Prepared for ${content.clientName}`, centerX, pageHeight * 0.6, { align: 'center' });
+}
+
+function renderTextSection(pdf: jsPDF, content: any, x: number, y: number, width: number) {
+  let currentY = y;
+  
+  if (content.headline) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(28);
+    const lines = pdf.splitTextToSize(content.headline, width);
+    pdf.text(lines, x, currentY);
+    currentY += lines.length * 35 + 20;
+  }
+  
+  if (content.subheadline) {
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(18);
+    pdf.setTextColor(100, 100, 100);
+    const lines = pdf.splitTextToSize(content.subheadline, width);
+    pdf.text(lines, x, currentY);
+    currentY += lines.length * 24 + 20;
+  }
+  
+  if (content.narrative) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(14);
+    pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(content.narrative, width);
+    pdf.text(lines.slice(0, 20), x, currentY); // Limit lines
+  }
+}
+
+async function renderImageSection(
+  pdf: jsPDF, 
+  content: any, 
+  x: number, 
+  y: number, 
+  width: number,
+  maxHeight: number
+) {
+  if (content.imageUrl) {
+    try {
+      const imgData = await imageUrlToBase64(content.imageUrl);
+      if (imgData) {
+        // Calculate dimensions to fit
+        const imgHeight = Math.min(maxHeight - 60, width * 0.5625); // 16:9 max
+        pdf.addImage(imgData, 'PNG', x, y, width, imgHeight);
+        
+        if (content.caption) {
+          pdf.setFont('helvetica', 'italic');
+          pdf.setFontSize(12);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(content.caption, x + width / 2, y + imgHeight + 30, { align: 'center' });
+        }
+      }
+    } catch (e) {
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(14);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text('[Image could not be loaded]', x, y + 50);
+    }
+  }
+}
+
+function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, width: number, pageHeight: number) {
+  let currentY = y;
+  const colWidth = width / 2 - 20;
+  
+  // Main narrative on left
+  if (content.narrative || content.conceptDescription || content.philosophy) {
+    const text = content.narrative || content.conceptDescription || content.philosophy;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(13);
+    pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(text, colWidth);
+    pdf.text(lines.slice(0, 25), x, currentY);
+  }
+  
+  // Right column - key points
+  const rightX = x + colWidth + 40;
+  let rightY = currentY;
+  
+  // Handle different content types
+  if (content.briefAlignment && content.briefAlignment.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(0, 71, 171);
+    pdf.text('Brief Alignment', rightX, rightY);
+    rightY += 25;
+    
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(50, 50, 50);
+    content.briefAlignment.slice(0, 5).forEach((item: string) => {
+      const bullet = `• ${item}`;
+      const lines = pdf.splitTextToSize(bullet, colWidth - 20);
+      pdf.text(lines, rightX, rightY);
+      rightY += lines.length * 16 + 8;
+    });
+  }
+  
+  if (content.designPrinciples && content.designPrinciples.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(0, 71, 171);
+    pdf.text('Design Principles', rightX, rightY);
+    rightY += 25;
+    
+    content.designPrinciples.slice(0, 4).forEach((p: any) => {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text(`• ${p.name}`, rightX, rightY);
+      rightY += 16;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      const lines = pdf.splitTextToSize(p.description, colWidth - 30);
+      pdf.text(lines.slice(0, 2), rightX + 10, rightY);
+      rightY += lines.slice(0, 2).length * 14 + 10;
+      pdf.setTextColor(50, 50, 50);
+    });
+  }
+  
+  if (content.zones && content.zones.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(0, 71, 171);
+    pdf.text('Zone Allocation', rightX, rightY);
+    rightY += 25;
+    
+    content.zones.forEach((z: any) => {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(50, 50, 50);
+      pdf.text(`${z.name}: ${z.sqft} sqft (${z.percentage}%)`, rightX, rightY);
+      rightY += 18;
+    });
+  }
+}
+
+function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, width: number) {
+  let currentY = y;
+  
+  if (content.totalPerShow) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(32);
+    pdf.setTextColor(0, 71, 171);
+    pdf.text(`$${content.totalPerShow.toLocaleString()}`, x, currentY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(14);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Estimated Investment Per Show', x, currentY + 25);
+    currentY += 60;
+  }
+  
+  if (content.allocation && content.allocation.length > 0) {
+    const colWidths = [width * 0.35, width * 0.15, width * 0.2, width * 0.3];
+    const headers = ['Category', '%', 'Amount', 'Description'];
+    
+    // Header row
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(x, currentY, width, 30, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(50, 50, 50);
+    
+    let headerX = x + 10;
+    headers.forEach((h, i) => {
+      pdf.text(h, headerX, currentY + 20);
+      headerX += colWidths[i];
+    });
+    currentY += 35;
+    
+    // Data rows
+    pdf.setFont('helvetica', 'normal');
+    content.allocation.slice(0, 8).forEach((row: any, idx: number) => {
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 248, 248);
+        pdf.rect(x, currentY - 5, width, 25, 'F');
+      }
+      
+      let cellX = x + 10;
+      pdf.text(row.category || '', cellX, currentY + 12);
+      cellX += colWidths[0];
+      pdf.text(`${row.percentage || 0}%`, cellX, currentY + 12);
+      cellX += colWidths[1];
+      pdf.text(`$${(row.amount || 0).toLocaleString()}`, cellX, currentY + 12);
+      cellX += colWidths[2];
+      const descLines = pdf.splitTextToSize(row.description || '', colWidths[3] - 20);
+      pdf.text(descLines[0] || '', cellX, currentY + 12);
+      
+      currentY += 28;
+    });
+  }
+}
+
+async function renderGridSection(
+  pdf: jsPDF, 
+  content: any, 
+  x: number, 
+  y: number, 
+  width: number,
+  maxHeight: number
+) {
+  const images = content.images || [];
+  const cols = images.length <= 2 ? 2 : 3;
+  const gap = 20;
+  const imgWidth = (width - gap * (cols - 1)) / cols;
+  const imgHeight = imgWidth * 0.5625; // 16:9
+  
+  for (let i = 0; i < Math.min(images.length, 6); i++) {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const imgX = x + col * (imgWidth + gap);
+    const imgY = y + row * (imgHeight + gap + 30);
+    
+    try {
+      const imgData = await imageUrlToBase64(images[i].url);
+      if (imgData) {
+        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth, imgHeight);
+        
+        // Caption
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(images[i].caption || '', imgX + imgWidth / 2, imgY + imgHeight + 15, { align: 'center' });
+      }
+    } catch (e) {
+      // Draw placeholder
+      pdf.setFillColor(240, 240, 240);
+      pdf.rect(imgX, imgY, imgWidth, imgHeight, 'F');
+    }
+  }
+}
+
+// ============================================
+// PPTX GENERATOR
+// ============================================
+
+export async function generateProposalPPTX(data: ProposalData): Promise<Blob> {
+  const sections = buildProposalSections(data);
+  const pptx = new PptxGenJS();
+  
+  // Set presentation properties
+  pptx.author = data.config.exhibitHouseName;
+  pptx.title = `${data.brief?.brand?.name || 'Client'} Exhibit Proposal`;
+  pptx.subject = 'Trade Show Exhibit Concept';
+  
+  const brandColor = data.config.brandColor || '0047AB';
+  const brandColorClean = brandColor.replace('#', '');
+  
+  for (const section of sections) {
+    const slide = pptx.addSlide();
+    
+    // Header bar
+    slide.addShape('rect', {
+      x: 0, y: 0, w: '100%', h: 0.1,
+      fill: { color: brandColorClean },
+    });
+    
+    if (section.type === 'cover') {
+      // Cover slide
+      slide.addShape('rect', {
+        x: 0, y: 0, w: '100%', h: '45%',
+        fill: { color: brandColorClean },
+      });
+      
+      // Client logo
+      if (section.content.clientLogo) {
+        try {
+          slide.addImage({
+            path: section.content.clientLogo,
+            x: 0.5, y: 0.3, w: 1.5, h: 0.5,
+          });
+        } catch (e) {}
+      }
+      
+      // Title
+      slide.addText(section.content.projectTitle || 'Exhibit Concept', {
+        x: 0.5, y: 1.5, w: 9, h: 1,
+        fontSize: 44, bold: true, color: 'FFFFFF',
+        align: 'center',
+      });
+      
+      // Subtitle
+      const subtitle = [section.content.showName, section.content.footprintSize].filter(Boolean).join(' | ');
+      slide.addText(subtitle, {
+        x: 0.5, y: 2.3, w: 9, h: 0.5,
+        fontSize: 20, color: 'FFFFFF', align: 'center',
+      });
+      
+      // Prepared for
+      slide.addText(`Prepared for ${section.content.clientName}`, {
+        x: 0.5, y: 3.2, w: 9, h: 0.4,
+        fontSize: 14, color: '333333', align: 'center',
+      });
+      
+      // Footer with exhibit house
+      slide.addText(data.config.exhibitHouseName, {
+        x: 0.5, y: 4.8, w: 4, h: 0.3,
+        fontSize: 12, bold: true, color: '333333',
+      });
+      
+      slide.addText(section.content.date, {
+        x: 5.5, y: 4.8, w: 4, h: 0.3,
+        fontSize: 12, color: '666666', align: 'right',
+      });
+      
+    } else {
+      // Regular slide
+      slide.addText(section.title, {
+        x: 0.5, y: 0.3, w: 9, h: 0.6,
+        fontSize: 32, bold: true, color: brandColorClean,
+      });
+      
+      // Underline
+      slide.addShape('rect', {
+        x: 0.5, y: 0.85, w: 2, h: 0.03,
+        fill: { color: brandColorClean },
+      });
+      
+      // Content based on type
+      switch (section.type) {
+        case 'text':
+          addPptxTextContent(slide, section.content);
+          break;
+        case 'image':
+          addPptxImageContent(slide, section.content);
+          break;
+        case 'mixed':
+          addPptxMixedContent(slide, section.content, brandColorClean);
+          break;
+        case 'table':
+          addPptxTableContent(slide, section.content, brandColorClean);
+          break;
+        case 'grid':
+          addPptxGridContent(slide, section.content);
+          break;
+      }
+      
+      // Footer
+      slide.addText(`${data.config.exhibitHouseName}`, {
+        x: 0.5, y: 5.2, w: 4, h: 0.2,
+        fontSize: 8, color: '999999',
+      });
+    }
+  }
+  
+  return await pptx.write({ outputType: 'blob' }) as Blob;
+}
+
+function addPptxTextContent(slide: any, content: any) {
+  let y = 1.2;
+  
+  if (content.headline) {
+    slide.addText(content.headline, {
+      x: 0.5, y, w: 9, h: 0.6,
+      fontSize: 24, bold: true, color: '1a1a1a',
+    });
+    y += 0.7;
+  }
+  
+  if (content.subheadline) {
+    slide.addText(content.subheadline, {
+      x: 0.5, y, w: 9, h: 0.4,
+      fontSize: 16, italic: true, color: '666666',
+    });
+    y += 0.5;
+  }
+  
+  if (content.narrative) {
+    slide.addText(content.narrative.substring(0, 1200), {
+      x: 0.5, y, w: 9, h: 3,
+      fontSize: 12, color: '333333',
+      valign: 'top',
+    });
+  }
+}
+
+function addPptxImageContent(slide: any, content: any) {
+  if (content.imageUrl) {
+    try {
+      slide.addImage({
+        path: content.imageUrl,
+        x: 0.5, y: 1.2, w: 9, h: 5,
+        sizing: { type: 'contain', w: 9, h: 3.5 },
+      });
+      
+      if (content.caption) {
+        slide.addText(content.caption, {
+          x: 0.5, y: 4.8, w: 9, h: 0.3,
+          fontSize: 10, italic: true, color: '666666', align: 'center',
+        });
+      }
+    } catch (e) {}
+  }
+}
+
+function addPptxMixedContent(slide: any, content: any, brandColor: string) {
+  // Left column - main text
+  const mainText = content.narrative || content.conceptDescription || content.philosophy || '';
+  slide.addText(mainText.substring(0, 800), {
+    x: 0.5, y: 1.2, w: 4.5, h: 3.5,
+    fontSize: 11, color: '333333', valign: 'top',
+  });
+  
+  // Right column - key points
+  let y = 1.2;
+  
+  if (content.briefAlignment?.length > 0) {
+    slide.addText('Brief Alignment', {
+      x: 5.2, y, w: 4.3, h: 0.3,
+      fontSize: 14, bold: true, color: brandColor,
+    });
+    y += 0.35;
+    
+    content.briefAlignment.slice(0, 4).forEach((item: string) => {
+      slide.addText(`• ${item}`, {
+        x: 5.2, y, w: 4.3, h: 0.25,
+        fontSize: 10, color: '333333',
+      });
+      y += 0.28;
+    });
+    y += 0.2;
+  }
+  
+  if (content.zones?.length > 0) {
+    slide.addText('Zone Allocation', {
+      x: 5.2, y, w: 4.3, h: 0.3,
+      fontSize: 14, bold: true, color: brandColor,
+    });
+    y += 0.35;
+    
+    content.zones.forEach((z: any) => {
+      slide.addText(`${z.name}: ${z.sqft} sqft (${z.percentage}%)`, {
+        x: 5.2, y, w: 4.3, h: 0.22,
+        fontSize: 10, color: '333333',
+      });
+      y += 0.25;
+    });
+  }
+}
+
+function addPptxTableContent(slide: any, content: any, brandColor: string) {
+  if (content.totalPerShow) {
+    slide.addText(`$${content.totalPerShow.toLocaleString()}`, {
+      x: 0.5, y: 1.1, w: 4, h: 0.6,
+      fontSize: 36, bold: true, color: brandColor,
+    });
+    slide.addText('Estimated Investment Per Show', {
+      x: 0.5, y: 1.65, w: 4, h: 0.3,
+      fontSize: 12, color: '666666',
+    });
+  }
+  
+  if (content.allocation?.length > 0) {
+    const tableData = [
+      ['Category', '%', 'Amount'],
+      ...content.allocation.slice(0, 6).map((r: any) => [
+        r.category || '',
+        `${r.percentage || 0}%`,
+        `$${(r.amount || 0).toLocaleString()}`,
+      ]),
+    ];
+    
+    slide.addTable(tableData, {
+      x: 0.5, y: 2.1, w: 5,
+      fontSize: 10,
+      color: '333333',
+      fill: { color: 'F8F8F8' },
+      border: { pt: 0.5, color: 'DDDDDD' },
+    });
+  }
+}
+
+function addPptxGridContent(slide: any, content: any) {
+  const images = content.images || [];
+  const cols = images.length <= 2 ? 2 : 3;
+  const imgWidth = 2.8;
+  const imgHeight = 1.6;
+  const gap = 0.2;
+  
+  images.slice(0, 6).forEach((img: any, i: number) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const x = 0.5 + col * (imgWidth + gap);
+    const y = 1.2 + row * (imgHeight + gap + 0.3);
+    
+    try {
+      slide.addImage({
+        path: img.url,
+        x, y, w: imgWidth, h: imgHeight,
+      });
+      
+      slide.addText(img.caption || '', {
+        x, y: y + imgHeight + 0.05, w: imgWidth, h: 0.2,
+        fontSize: 8, color: '666666', align: 'center',
+      });
+    } catch (e) {}
+  });
+}
+
+// ============================================
+// UTILITIES
+// ============================================
+
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  return [r, g, b];
+}
+
+export default {
+  buildProposalSections,
+  generateProposalPDF,
+  generateProposalPPTX,
+};

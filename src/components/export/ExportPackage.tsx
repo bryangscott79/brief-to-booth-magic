@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ElementType } from "@/types/brief";
+import { ProposalExport } from "./ProposalExport";
 
 interface MaterialItem {
   name: string;
@@ -645,6 +646,14 @@ export function ExportPackage() {
           Generate materials lists, 3D modeling briefs, and download your complete project
         </p>
       </div>
+
+      {/* Proposal Export - NEW */}
+      <ProposalExport 
+        brief={brief}
+        elements={elements}
+        images={images || []}
+        projectName={currentProject?.name || brief.brand?.name || 'Project'}
+      />
 
       {/* Download All Assets ZIP */}
       <Card className="element-card border-primary/30">

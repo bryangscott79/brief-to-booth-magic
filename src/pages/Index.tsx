@@ -206,8 +206,8 @@ export default function Index() {
               <a href="#how-it-works">
                 <Button
                   size="lg"
-                  variant="outline"
-                  className="text-base px-8 h-14 rounded-xl border-white/20 text-white/80 hover:text-white hover:bg-white/5 backdrop-blur-sm"
+                  variant="secondary"
+                  className="text-base px-8 h-14 rounded-xl bg-white/15 border border-white/25 text-white hover:bg-white/25 backdrop-blur-sm"
                 >
                   <Play className="mr-2 h-4 w-4" />
                   See How It Works

@@ -12,8 +12,7 @@ dist
 dist-ssr
 *.local
 
-# Environment variables
-.env
+# Environment variables (keep .env tracked for Lovable compatibility)
 .env.local
 .env.development
 .env.production

@@ -173,6 +173,7 @@ export type Database = {
           adjacent_activations: Json | null
           big_idea: Json | null
           brief_file_name: string | null
+          brief_file_url: string | null
           brief_text: string | null
           budget_logic: Json | null
           created_at: string
@@ -195,6 +196,7 @@ export type Database = {
           adjacent_activations?: Json | null
           big_idea?: Json | null
           brief_file_name?: string | null
+          brief_file_url?: string | null
           brief_text?: string | null
           budget_logic?: Json | null
           created_at?: string
@@ -217,6 +219,7 @@ export type Database = {
           adjacent_activations?: Json | null
           big_idea?: Json | null
           brief_file_name?: string | null
+          brief_file_url?: string | null
           brief_text?: string | null
           budget_logic?: Json | null
           created_at?: string

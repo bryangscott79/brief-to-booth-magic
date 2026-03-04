@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
+import { OriginalBrief } from "./OriginalBrief";
+import { useProject } from "@/hooks/useProjects";
 
 export function BriefReview({ projectId }: { projectId: string | null }) {
   const { currentProject, setActiveStep } = useProjectStore();
   const { navigate } = useProjectNavigate();
+  const { data: dbProject } = useProject(projectId ?? undefined);
   const brief = currentProject?.parsedBrief;
 
   if (!brief) {
@@ -223,6 +226,13 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Original Brief */}
+      <OriginalBrief
+        briefText={currentProject?.rawBrief ?? dbProject?.brief_text ?? null}
+        briefFileName={dbProject?.brief_file_name ?? null}
+        briefFileUrl={(dbProject as any)?.brief_file_url ?? null}
+      />
     </div>
   );
 }

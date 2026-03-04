@@ -4,7 +4,7 @@ import { useProjectSync } from "@/hooks/useProjectSync";
 import { Loader2 } from "lucide-react";
 
 export default function SpatialPage() {
-  const { projectId, isLoading } = useProjectSync();
+  const { isLoading } = useProjectSync();
 
   if (isLoading) {
     return (

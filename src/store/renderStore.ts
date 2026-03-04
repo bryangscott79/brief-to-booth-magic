@@ -24,6 +24,12 @@ interface RenderState {
   generationProgress: number;
   currentlyGenerating: string | null;
   hydratedFromDb: boolean;
+  /** Phase 4E: Track generation versions for cascade regeneration */
+  heroVersion: number;
+  viewVersions: Record<string, number>;
+  /** Phase 4: Design context and consistency tokens for enhanced rendering */
+  designContext: Record<string, unknown> | null;
+  consistencyTokens: Record<string, unknown> | null;
 }
 
 interface RenderActions {
@@ -70,6 +76,21 @@ interface RenderActions {
     boothSize?: string;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
+
+  /** Phase 4E: Cascade regenerate all views after hero change */
+  cascadeRegenerateViews: (params: {
+    angles: Array<{ id: string; name: string; aspectRatio: string; isZoneInterior?: boolean }>;
+    prompts: Record<string, string>;
+    newHeroImageUrl: string;
+    projectId: string;
+    boothSize?: string;
+    onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
+  }) => Promise<void>;
+
+  /** Phase 4: Set design context for hero generation */
+  setDesignContext: (ctx: Record<string, unknown> | null) => void;
+  /** Phase 4: Set consistency tokens for view generation */
+  setConsistencyTokens: (tokens: Record<string, unknown> | null) => void;
 }
 
 type RenderStore = RenderState & RenderActions;
@@ -88,6 +109,10 @@ const initialState: RenderState = {
   generationProgress: 0,
   currentlyGenerating: null,
   hydratedFromDb: false,
+  heroVersion: 0,
+  viewVersions: {},
+  designContext: null,
+  consistencyTokens: null,
 };
 
 export const useRenderStore = create<RenderStore>((set, get) => ({
@@ -115,14 +140,26 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setCurrentlyGenerating: (currentlyGenerating) => set({ currentlyGenerating }),
   setHydratedFromDb: (hydratedFromDb) => set({ hydratedFromDb }),
   resetForProject: (projectId) => set({ ...initialState, projectId }),
+  setDesignContext: (designContext) => set({ designContext }),
+  setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
   generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
-      const { data, error } = await supabase.functions.invoke("generate-hero", {
-        body: { prompt, feedback: feedback || undefined, previousImageUrl: previousImageUrl || undefined, boothSize: boothSize || undefined },
-      });
+      // Phase 4: Include designContext if available
+      const { designContext } = get();
+      const body: Record<string, unknown> = {
+        prompt,
+        feedback: feedback || undefined,
+        previousImageUrl: previousImageUrl || undefined,
+        boothSize: boothSize || undefined,
+      };
+      if (designContext) {
+        body.designContext = designContext;
+      }
+
+      const { data, error } = await supabase.functions.invoke("generate-hero", { body });
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -136,6 +173,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         phase: "hero-review",
         heroFeedback: "",
         isGeneratingHero: false,
+        heroVersion: s.heroVersion + 1,
       }));
 
       // Save to storage
@@ -188,15 +226,20 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       }
 
       try {
-        const { data, error } = await supabase.functions.invoke("generate-view", {
-          body: {
-            referenceImageUrl: referenceUrl,
-            viewPrompt: prompts[angle.id],
-            viewName: angle.name,
-            aspectRatio: angle.aspectRatio,
-            boothSize: boothSize || undefined,
-          },
-        });
+        // Phase 4: Include consistency tokens if available
+        const { consistencyTokens } = get();
+        const viewBody: Record<string, unknown> = {
+          referenceImageUrl: referenceUrl,
+          viewPrompt: prompts[angle.id],
+          viewName: angle.name,
+          aspectRatio: angle.aspectRatio,
+          boothSize: boothSize || undefined,
+        };
+        if (consistencyTokens) {
+          viewBody.consistencyTokens = consistencyTokens;
+        }
+
+        const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
         if (error) throw error;
         if (data.error) throw new Error(data.error);
@@ -204,12 +247,14 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         if (get().projectId !== projectId) return;
 
         const imageUrl = data.imageUrl;
+        const currentHeroVersion = get().heroVersion;
         set((s) => ({
           generatedImages: {
             ...s.generatedImages,
             [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
           },
           generationProgress: ((i + 1) / viewsToGenerate.length) * 100,
+          viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
         }));
 
         if (imageUrl) {
@@ -254,15 +299,20 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("generate-view", {
-        body: {
-          referenceImageUrl: referenceUrl,
-          viewPrompt: prompt,
-          viewName: angle.name,
-          aspectRatio: angle.aspectRatio,
-          boothSize: boothSize || undefined,
-        },
-      });
+      // Phase 4: Include consistency tokens if available
+      const { consistencyTokens } = get();
+      const viewBody: Record<string, unknown> = {
+        referenceImageUrl: referenceUrl,
+        viewPrompt: prompt,
+        viewName: angle.name,
+        aspectRatio: angle.aspectRatio,
+        boothSize: boothSize || undefined,
+      };
+      if (consistencyTokens) {
+        viewBody.consistencyTokens = consistencyTokens;
+      }
+
+      const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -270,11 +320,13 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       if (get().projectId !== projectId) return;
 
       const imageUrl = data.imageUrl;
+      const currentHeroVersion = get().heroVersion;
       set((s) => ({
         generatedImages: {
           ...s.generatedImages,
           [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
         },
+        viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
       }));
 
       if (imageUrl) {
@@ -294,5 +346,96 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       }));
       throw error;
     }
+  },
+
+  // Phase 4E: Cascade regenerate all views when hero changes
+  cascadeRegenerateViews: async ({ angles, prompts, newHeroImageUrl, projectId, boothSize, onSave }) => {
+    const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
+    const interiorViews = angles.filter((a) => a.isZoneInterior);
+    const viewsToRegenerate = [...exteriorViews, ...interiorViews];
+
+    set({
+      isGenerating: true,
+      generationProgress: 0,
+      generatedImages: {
+        hero_34: { url: newHeroImageUrl, status: "complete" },
+        ...Object.fromEntries(viewsToRegenerate.map((a) => [a.id, { url: "", status: "pending" as const }])),
+      },
+    });
+
+    for (let i = 0; i < viewsToRegenerate.length; i++) {
+      const angle = viewsToRegenerate[i];
+      if (get().projectId !== projectId) return;
+
+      set((s) => ({
+        currentlyGenerating: angle.id,
+        generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
+      }));
+
+      // For interior views, use best exterior as reference
+      let referenceUrl = newHeroImageUrl;
+      if (angle.isZoneInterior) {
+        const currentImages = get().generatedImages;
+        const preferredRefs = ["front", "left", "right", "hero_34"];
+        for (const refId of preferredRefs) {
+          if (currentImages[refId]?.status === "complete" && currentImages[refId]?.url) {
+            referenceUrl = currentImages[refId].url;
+            break;
+          }
+        }
+      }
+
+      try {
+        const { consistencyTokens } = get();
+        const viewBody: Record<string, unknown> = {
+          referenceImageUrl: referenceUrl,
+          viewPrompt: prompts[angle.id],
+          viewName: angle.name,
+          aspectRatio: angle.aspectRatio,
+          boothSize: boothSize || undefined,
+        };
+        if (consistencyTokens) {
+          viewBody.consistencyTokens = consistencyTokens;
+        }
+
+        const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
+
+        if (error) throw error;
+        if (data.error) throw new Error(data.error);
+
+        if (get().projectId !== projectId) return;
+
+        const imageUrl = data.imageUrl;
+        const currentHeroVersion = get().heroVersion;
+        set((s) => ({
+          generatedImages: {
+            ...s.generatedImages,
+            [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
+          },
+          generationProgress: ((i + 1) / viewsToRegenerate.length) * 100,
+          viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
+        }));
+
+        if (imageUrl) {
+          onSave(angle.id, angle.name, imageUrl);
+        }
+      } catch (_err) {
+        if (get().projectId !== projectId) return;
+        set((s) => ({
+          generatedImages: {
+            ...s.generatedImages,
+            [angle.id]: {
+              url: "",
+              status: "error",
+              error: _err instanceof Error ? _err.message : "Failed to generate",
+            },
+          },
+          generationProgress: ((i + 1) / viewsToRegenerate.length) * 100,
+        }));
+      }
+    }
+
+    if (get().projectId !== projectId) return;
+    set({ isGenerating: false, currentlyGenerating: null });
   },
 }));

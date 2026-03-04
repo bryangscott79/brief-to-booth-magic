@@ -10,6 +10,16 @@ interface GenerateHeroRequest {
   feedback?: string;
   previousImageUrl?: string;
   boothSize?: string;
+  /** Phase 4: Enhanced context for brief-validated rendering */
+  designContext?: {
+    brandColors?: string[];
+    materialsAndMood?: Array<{ material: string; feel: string }>;
+    heroInstallation?: { name: string; dimensions?: string; materials?: string[] };
+    qualityTier?: "standard" | "premium" | "ultra";
+    zoneLayout?: Array<{ name: string; percentage: number; position: string }>;
+    creativeAvoid?: string[];
+    creativeEmbrace?: string[];
+  };
 }
 
 function buildScaleBlock(sizeStr?: string): string {
@@ -22,21 +32,91 @@ function buildScaleBlock(sizeStr?: string): string {
   return `\n\nPHYSICAL SCALE (CRITICAL):\n- Booth footprint: ${w}' wide × ${d}' deep (${sqft} sq ft) — ${scale} booth\n- Ceiling/fascia height: ${ht} feet\n- An average person is 5'8". The booth is ${w}' wide — roughly ${Math.round(w / 2)} people shoulder-to-shoulder\n- Standard 10' convention aisles on open sides\n- Do NOT make the booth look like a mega-exhibit. It is ${w}'×${d}' — keep it proportional.`;
 }
 
+/** Phase 4: Build a design context block from structured brief/element data */
+function buildDesignContextBlock(ctx: GenerateHeroRequest["designContext"]): string {
+  if (!ctx) return "";
+  const parts: string[] = [];
+
+  parts.push("\n\n═══════════════════════════════════════");
+  parts.push("DESIGN CONTEXT (from brief and generated elements)");
+  parts.push("═══════════════════════════════════════\n");
+
+  // Brand colors
+  if (ctx.brandColors?.length) {
+    parts.push(`BRAND COLORS (MUST be prominently visible):`);
+    ctx.brandColors.forEach((c, i) => parts.push(`  ${i === 0 ? "Primary" : i === 1 ? "Secondary" : `Accent ${i}`}: ${c}`));
+    parts.push("");
+  }
+
+  // Quality tier → design complexity guidance
+  if (ctx.qualityTier) {
+    const tierGuide: Record<string, string> = {
+      standard: "Clean, professional design. Simple geometric forms. Modest signage. Cost-effective materials (laminate, fabric, vinyl graphics). Functional lighting.",
+      premium: "Refined, polished design. Custom millwork and formed surfaces. Backlit graphics, integrated AV. Quality materials (wood veneer, metal trim, acrylic). Designed lighting scheme.",
+      ultra: "Dramatic, show-stopping design. Sculptural architecture. Complex rigging, kinetic elements, immersive technology. Premium materials (natural stone, metal mesh, LED-integrated panels, living walls). Theatrical lighting design.",
+    };
+    parts.push(`QUALITY TIER: ${ctx.qualityTier.toUpperCase()}`);
+    parts.push(tierGuide[ctx.qualityTier] || "");
+    parts.push("");
+  }
+
+  // Hero installation
+  if (ctx.heroInstallation) {
+    const h = ctx.heroInstallation;
+    parts.push(`HERO INSTALLATION (MUST be the focal centerpiece):`);
+    parts.push(`  Name: "${h.name}"`);
+    if (h.dimensions) parts.push(`  Physical size: ${h.dimensions}`);
+    if (h.materials?.length) parts.push(`  Key materials: ${h.materials.join(", ")}`);
+    parts.push("  This installation should be the MOST prominent element — visible from the primary aisle.");
+    parts.push("");
+  }
+
+  // Materials and mood
+  if (ctx.materialsAndMood?.length) {
+    parts.push("MATERIALS AND MOOD:");
+    ctx.materialsAndMood.forEach(m => parts.push(`  - ${m.material}: ${m.feel}`));
+    parts.push("");
+  }
+
+  // Zone layout
+  if (ctx.zoneLayout?.length) {
+    parts.push("SPATIAL ZONES (show these areas in the booth):");
+    ctx.zoneLayout.forEach(z => parts.push(`  - ${z.name}: ${z.percentage}% of floor (${z.position})`));
+    parts.push("");
+  }
+
+  // Creative constraints
+  if (ctx.creativeEmbrace?.length) {
+    parts.push(`CREATIVE DIRECTION — EMBRACE: ${ctx.creativeEmbrace.join(", ")}`);
+  }
+  if (ctx.creativeAvoid?.length) {
+    parts.push(`CREATIVE DIRECTION — AVOID: ${ctx.creativeAvoid.join(", ")}`);
+  }
+
+  parts.push("\n═══════════════════════════════════════");
+  return parts.join("\n");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize }: GenerateHeroRequest = await req.json();
-    
+    const { prompt, feedback, previousImageUrl, boothSize, designContext }: GenerateHeroRequest = await req.json();
+
+    if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
+      return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const scaleBlock = buildScaleBlock(boothSize);
-    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize });
+    const designBlock = buildDesignContextBlock(designContext);
+    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext });
 
     let messages;
 
@@ -49,6 +129,7 @@ ${feedback}
 ORIGINAL DESIGN REQUIREMENTS:
 ${prompt}
 ${scaleBlock}
+${designBlock}
 
 Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall booth concept and brand identity. The booth must appear as the correct physical size — not larger.`;
 
@@ -67,6 +148,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
           role: "user",
           content: `${prompt}
 ${scaleBlock}
+${designBlock}
 
 Generate a photorealistic 16:9 architectural visualization of this trade show booth. The booth must appear as the correct physical size — not a mega-exhibit.`,
         },

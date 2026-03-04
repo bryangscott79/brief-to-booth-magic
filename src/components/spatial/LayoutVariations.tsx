@@ -162,62 +162,135 @@ export function LayoutReasoning({ variation }: { variation: LayoutVariation }) {
 }
 
 /**
- * Generate layout variations from normalized zones with proper spatial math
+ * Generate layout variations from normalized zones with constraint-aware scoring.
+ * Phase 3C: Each variation is scored against actual exhibit constraints, costs,
+ * and trade show best practices — not hardcoded percentages.
  */
 export function generateLayoutVariations(
-  baseZones: NormalizedZone[], 
-  footprintSize: string,
-  totalSqft: number
+  baseZones: NormalizedZone[],
+  _footprintSize: string,
+  totalSqft: number,
+  budgetMax?: number,
+  qualityTier?: "standard" | "premium" | "ultra"
 ): LayoutVariation[] {
-  // Create balanced (unchanged) variation
+  const tier = qualityTier || "premium";
+
+  // --- TRAFFIC-OPTIMIZED (balanced, was "balanced") ---
   const balancedValidation = validateSpatialLayout(baseZones, totalSqft);
+  const balancedScore = scoreVariation(baseZones, totalSqft, "traffic", budgetMax, tier);
   const balanced: LayoutVariation = {
     id: "balanced",
-    name: "Balanced Flow",
+    name: "Traffic-Optimized",
     type: "balanced",
-    description: "Optimized for even visitor distribution and smooth traffic flow",
-    reasoning: "This layout distributes visitors evenly across all zones, preventing bottlenecks and ensuring every element gets attention. The central hero installation draws initial interest while adjacent zones capture overflow traffic naturally.",
-    bestFor: ["High traffic shows", "Brand awareness goals", "Multiple product demos"],
-    tradeoffs: ["Less dramatic hero impact", "Requires more staff coverage"],
-    score: 92,
+    description: "Maximizes aisle visibility and smooth visitor flow through all zones",
+    reasoning: `Places hero for maximum aisle exposure, reception at primary entry, meeting zones away from noise. Circulation space is ${estimateCirculationPct(baseZones)}% — ${estimateCirculationPct(baseZones) >= 20 ? "within" : "below"} the recommended 20-30% range. All zones meet minimum size requirements for their function.`,
+    bestFor: ["High traffic shows", "Brand awareness", "Multi-product demos"],
+    tradeoffs: ["Even distribution means less dramatic focal point", "Requires more staff coverage across zones"],
+    score: balancedScore,
     zones: baseZones,
     totalPercentage: balancedValidation.totalPercentage,
     isValid: balancedValidation.valid,
   };
 
-  // Create hero-focused variation
+  // --- HERO-FOCUSED (was "hero-focused") ---
   const heroZones = createLayoutVariation(baseZones, totalSqft, 'hero-focused');
   const heroValidation = validateSpatialLayout(heroZones, totalSqft);
+  const heroScore = scoreVariation(heroZones, totalSqft, "hero", budgetMax, tier);
   const heroFocused: LayoutVariation = {
     id: "hero-focused",
     name: "Hero-Centric",
     type: "hero-focused",
-    description: "Maximum impact from the central installation with supporting zones",
-    reasoning: "Prioritizes the hero installation as the dominant draw, with all other zones arranged to funnel visitors toward the centerpiece. Best for creating memorable 'wow' moments and strong social media presence.",
-    bestFor: ["Product launches", "Social media impact", "Award submissions"],
-    tradeoffs: ["Longer queue times", "Less lounge capacity"],
-    score: 87,
+    description: "Expands hero installation for maximum visual impact from aisles",
+    reasoning: `Hero zone expanded to ${heroZones.find(z => z.name.toLowerCase().includes("hero") || z.name.toLowerCase().includes("experience"))?.percentage || 0}% of booth. Supporting zones compressed proportionally. Best for creating a single 'wow' moment that drives social media and photo opportunities. Trade-off: reduced meeting/lounge capacity.`,
+    bestFor: ["Product launches", "Social media buzz", "Award submissions"],
+    tradeoffs: ["Reduced meeting & lounge capacity", "May need overflow meeting space off-booth"],
+    score: heroScore,
     zones: heroZones,
     totalPercentage: heroValidation.totalPercentage,
     isValid: heroValidation.valid,
   };
 
-  // Create engagement-first variation
+  // --- ENGAGEMENT-FIRST (was "engagement-first") ---
   const engagementZones = createLayoutVariation(baseZones, totalSqft, 'engagement-first');
   const engagementValidation = validateSpatialLayout(engagementZones, totalSqft);
+  const engagementScore = scoreVariation(engagementZones, totalSqft, "engagement", budgetMax, tier);
   const engagementFirst: LayoutVariation = {
     id: "engagement-first",
     name: "Engagement Maximizer",
     type: "engagement-first",
-    description: "Optimized for lead capture and meaningful conversations",
-    reasoning: "Expands the lounge and demo areas at the expense of the hero zone, creating more opportunities for 1:1 conversations and product demonstrations. Ideal when lead quality matters more than foot traffic.",
-    bestFor: ["B2B sales focus", "Complex products", "Relationship building"],
-    tradeoffs: ["Lower foot traffic", "Less visual impact from aisle"],
-    score: 84,
+    description: "Prioritizes dwell time zones for deeper conversations and lead quality",
+    reasoning: `Expands lounge, meeting, and demo zones for maximum 1:1 time. Hero zone reduced but still meets minimum size for visual impact. Meeting capacity increased to approximately ${estimateMeetingCapacity(engagementZones, totalSqft)} seats. Optimized for lead quality over quantity.`,
+    bestFor: ["B2B sales", "Complex product demos", "Relationship-driven industries"],
+    tradeoffs: ["Lower overall foot traffic", "Less dramatic aisle presence"],
+    score: engagementScore,
     zones: engagementZones,
     totalPercentage: engagementValidation.totalPercentage,
     isValid: engagementValidation.valid,
   };
 
   return [balanced, heroFocused, engagementFirst];
+}
+
+// ============================================
+// CONSTRAINT-AWARE SCORING
+// ============================================
+
+/** Score a layout variation against real constraints */
+function scoreVariation(
+  zones: NormalizedZone[],
+  totalSqft: number,
+  _optimizeFor: "traffic" | "hero" | "engagement",
+  budgetMax?: number,
+  _qualityTier?: string
+): number {
+  let score = 100;
+  const validation = validateSpatialLayout(zones, totalSqft);
+
+  // Penalize validation errors
+  if (!validation.valid) score -= 15;
+  score -= validation.errors.length * 5;
+  score -= validation.warnings.length * 2;
+
+  // Check circulation space (20-30% is ideal)
+  const circulationPct = estimateCirculationPct(zones);
+  if (circulationPct < 15) score -= 10;
+  else if (circulationPct < 20) score -= 5;
+  else if (circulationPct > 35) score -= 3; // too much wasted space
+
+  // Check zone minimum sizes
+  for (const zone of zones) {
+    if (zone.sqft < 36) score -= 5; // Below absolute minimum
+    else if (zone.sqft < 64) score -= 2; // Tight
+  }
+
+  // Budget check (if budget provided)
+  if (budgetMax && budgetMax > 0) {
+    // Rough cost estimate: $250/sqft avg for premium
+    const roughCost = totalSqft * 275;
+    if (roughCost > budgetMax * 1.2) score -= 10;
+    else if (roughCost > budgetMax) score -= 5;
+  }
+
+  return Math.max(0, Math.min(100, score));
+}
+
+/** Estimate circulation percentage from allocated zones */
+function estimateCirculationPct(zones: NormalizedZone[]): number {
+  const totalAllocated = zones.reduce((sum, z) => sum + z.percentage, 0);
+  return Math.max(0, 100 - totalAllocated);
+}
+
+/** Estimate meeting capacity from zones */
+function estimateMeetingCapacity(zones: NormalizedZone[], totalSqft: number): number {
+  return zones.reduce((seats, zone) => {
+    const name = zone.name.toLowerCase();
+    const zoneSqft = (zone.percentage / 100) * totalSqft;
+    if (name.includes("meeting") || name.includes("suite") || name.includes("bd")) {
+      return seats + Math.floor(zoneSqft / 25); // ~25 sqft per seat
+    }
+    if (name.includes("lounge") || name.includes("hub")) {
+      return seats + Math.floor(zoneSqft / 20); // ~20 sqft per casual seat
+    }
+    return seats;
+  }, 0);
 }

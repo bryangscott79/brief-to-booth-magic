@@ -82,13 +82,43 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    let briefText = body.briefText;
-    
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return new Response(
+        JSON.stringify({ error: "Request body must be a JSON object" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate fileBase64 if provided
+    if (body.fileBase64 && typeof body.fileBase64 !== "string") {
+      return new Response(
+        JSON.stringify({ error: "fileBase64 must be a string" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (body.fileBase64 && body.fileType !== "docx") {
+      return new Response(
+        JSON.stringify({ error: "Only DOCX file type is supported" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let briefText = body.briefText as string;
+
     // Handle DOCX files sent as base64
     if (body.fileBase64 && body.fileType === "docx") {
       console.log("Received DOCX file as base64, extracting text...");
-      briefText = await extractDocxTextAsync(body.fileBase64);
+      briefText = await extractDocxTextAsync(body.fileBase64 as string);
       console.log("Extracted DOCX text length:", briefText.length, "preview:", briefText.substring(0, 300));
     }
 

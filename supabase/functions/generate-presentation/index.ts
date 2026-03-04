@@ -10,6 +10,14 @@ serve(async (req) => {
 
   try {
     const { parsedBrief, elements, projectName, imageUrls } = await req.json();
+
+    if (!parsedBrief || typeof parsedBrief !== "object") {
+      return new Response(JSON.stringify({ error: "parsedBrief is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (!elements || typeof elements !== "object") {
+      return new Response(JSON.stringify({ error: "elements is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 

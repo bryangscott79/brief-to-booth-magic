@@ -11,6 +11,70 @@ interface GenerateViewRequest {
   viewName: string;
   aspectRatio: string;
   boothSize?: string;
+  /** Phase 4: Structured consistency data to enforce cross-view coherence */
+  consistencyTokens?: {
+    brandColors?: string[];
+    materialKeywords?: string[];
+    lightingKeywords?: string[];
+    styleKeywords?: string[];
+    qualityTier?: "standard" | "premium" | "ultra";
+    heroInstallationName?: string;
+    visibleZones?: string[];
+    avoidKeywords?: string[];
+  };
+}
+
+/** Phase 4: Build consistency enforcement block from structured tokens */
+function buildConsistencyBlock(tokens?: GenerateViewRequest["consistencyTokens"]): string {
+  if (!tokens) return "";
+  const parts: string[] = [];
+
+  parts.push("\n═══════════════════════════════════════");
+  parts.push("CONSISTENCY ENFORCEMENT TOKENS");
+  parts.push("═══════════════════════════════════════\n");
+  parts.push("These tokens MUST be applied to ensure visual coherence across all views.\n");
+
+  if (tokens.brandColors?.length) {
+    parts.push(`BRAND COLORS (match EXACTLY from reference image):`);
+    tokens.brandColors.forEach((c, i) => parts.push(`  ${i === 0 ? "Primary" : i === 1 ? "Secondary" : `Accent ${i}`}: ${c}`));
+    parts.push("");
+  }
+
+  if (tokens.materialKeywords?.length) {
+    parts.push(`MATERIALS (same as reference): ${tokens.materialKeywords.join(", ")}`);
+  }
+
+  if (tokens.lightingKeywords?.length) {
+    parts.push(`LIGHTING: ${tokens.lightingKeywords.join(", ")}`);
+  }
+
+  if (tokens.styleKeywords?.length) {
+    parts.push(`STYLE: ${tokens.styleKeywords.join(", ")}`);
+  }
+
+  if (tokens.qualityTier) {
+    const complexity: Record<string, string> = {
+      standard: "Clean and functional — simple forms, standard materials",
+      premium: "Refined and polished — custom millwork, integrated AV, quality finishes",
+      ultra: "Dramatic and immersive — sculptural architecture, premium materials, theatrical lighting",
+    };
+    parts.push(`DESIGN COMPLEXITY (${tokens.qualityTier}): ${complexity[tokens.qualityTier] || ""}`);
+  }
+
+  if (tokens.heroInstallationName) {
+    parts.push(`HERO INSTALLATION: "${tokens.heroInstallationName}" — maintain as focal point if visible from this angle`);
+  }
+
+  if (tokens.visibleZones?.length) {
+    parts.push(`ZONES VISIBLE FROM THIS ANGLE: ${tokens.visibleZones.join(", ")}`);
+  }
+
+  if (tokens.avoidKeywords?.length) {
+    parts.push(`\nAVOID: ${tokens.avoidKeywords.join(", ")}`);
+  }
+
+  parts.push("\n═══════════════════════════════════════\n");
+  return parts.join("\n");
 }
 
 function buildScaleBlock(sizeStr?: string): string {
@@ -29,16 +93,27 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize }: GenerateViewRequest = await req.json();
-    
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens }: GenerateViewRequest = await req.json();
+
+    if (!referenceImageUrl || typeof referenceImageUrl !== "string") {
+      return new Response(JSON.stringify({ error: "referenceImageUrl is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (!viewPrompt || typeof viewPrompt !== "string") {
+      return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (!viewName || typeof viewName !== "string") {
+      return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const scaleBlock = buildScaleBlock(boothSize);
+    const consistencyBlock = buildConsistencyBlock(consistencyTokens);
 
-    console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`);
+    console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`, { hasConsistencyTokens: !!consistencyTokens });
 
     // Camera direction mapping for strong angle differentiation
     const cameraDirections: Record<string, string> = {
@@ -85,7 +160,8 @@ COMPOSITION:
 - Depth of field focusing on the zone's key features
 
 OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.
-${scaleBlock}`
+${scaleBlock}
+${consistencyBlock}`
       : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 ${scaleBlock}
 
@@ -102,7 +178,8 @@ CONSISTENCY RULES (maintain from reference):
 - Same brand signage, logos, and graphics
 - Same trade show environment
 
-OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.`;
+OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.
+${consistencyBlock}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

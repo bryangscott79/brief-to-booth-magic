@@ -282,7 +282,7 @@ function checkOverlap(a: NormalizedZone, b: NormalizedZone): OverlapInfo | null 
 /**
  * Validate an entire spatial layout
  */
-export function validateSpatialLayout(zones: NormalizedZone[], totalSqft: number): ValidationResult {
+export function validateSpatialLayout(zones: NormalizedZone[], _totalSqft: number): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   
@@ -644,7 +644,7 @@ function getVisibilityScore(zone: NormalizedZone, cameraAngle: string): number {
  */
 export function generateZoneDescriptionsForPrompt(
   zones: NormalizedZone[],
-  totalSqft: number,
+  _totalSqft: number,
   cameraAngle: string = 'hero_34'
 ): string {
   const sortedZones = sortZonesByVisibility(zones, cameraAngle);

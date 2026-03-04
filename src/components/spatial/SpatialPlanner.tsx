@@ -25,10 +25,13 @@ import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useState, useMemo, useCallback } from "react";
 import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
-import { LayoutVariations, LayoutReasoning, generateLayoutVariations, type LayoutVariation } from "./LayoutVariations";
+import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./LayoutVariations";
 import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
 import { ZoneDetailPanel } from "./ZoneDetailPanel";
 import { FloorPlanAnnotations, type FloorPlanAnnotation } from "./FloorPlanAnnotations";
+import { ConstraintPanel } from "./ConstraintPanel";
+import { CostEstimator } from "./CostEstimator";
+import type { QualityTier } from "@/lib/exhibitConstraints";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
@@ -128,12 +131,13 @@ export function SpatialPlanner() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [activeVariation, setActiveVariation] = useState("balanced");
   const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
-  const [activeTab, setActiveTab] = useState<"layout" | "metrics" | "validation">("layout");
+  const [activeTab, setActiveTab] = useState<"layout" | "metrics" | "constraints" | "costs">("layout");
   const [selectedZone, setSelectedZone] = useState<{ zone: NormalizedZone; colors: any } | null>(null);
   const [floorPlanView, setFloorPlanView] = useState<"blocks" | "render">("blocks");
   const [floorPlanImage, setFloorPlanImage] = useState<string | null>(null);
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
   const [floorPlanAnnotations, setFloorPlanAnnotations] = useState<FloorPlanAnnotation[]>([]);
+  const [qualityTier, setQualityTier] = useState<QualityTier>("premium");
 
   const { data: savedImages = [] } = useProjectImages(projectId);
   const saveImage = useSaveRenderImage(projectId);
@@ -180,11 +184,24 @@ export function SpatialPlanner() {
     }
   }, [spatialData]);
   
+  // Extract budget from brief
+  const budgetMax = useMemo(() => {
+    const budgetRange = brief?.budget?.range;
+    const perShow = brief?.budget?.perShow;
+    return perShow || (budgetRange ? budgetRange.max : 0);
+  }, [brief]);
+
   // Generate layout variations using normalized zones
   const variations = useMemo(() => {
     if (normalizedZones.length === 0) return [];
-    return generateLayoutVariations(normalizedZones, currentConfig?.footprintSize || "30x30", boothDimensions.totalSqft);
-  }, [normalizedZones, currentConfig, boothDimensions.totalSqft]);
+    return generateLayoutVariations(
+      normalizedZones,
+      currentConfig?.footprintSize || "30x30",
+      boothDimensions.totalSqft,
+      budgetMax || undefined,
+      qualityTier
+    );
+  }, [normalizedZones, currentConfig, boothDimensions.totalSqft, budgetMax, qualityTier]);
   
   const activeLayout = useMemo(() => 
     variations.find(v => v.id === activeVariation) || variations[0],
@@ -193,8 +210,8 @@ export function SpatialPlanner() {
   
   const metrics = useMemo(() => {
     if (!activeLayout?.zones) return null;
-    return generateLayoutMetrics(activeLayout.zones, activeLayout.type);
-  }, [activeLayout]);
+    return generateLayoutMetrics(activeLayout.zones, activeLayout.type, boothDimensions.totalSqft);
+  }, [activeLayout, boothDimensions.totalSqft]);
   
   const flowPaths = useMemo(() => {
     if (!activeLayout?.zones) return [];
@@ -582,39 +599,43 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
 
         {/* Right Panel - Tabbed */}
         <div className="space-y-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-            <TabsList className="w-full">
-              <TabsTrigger value="layout" className="flex-1">
-                <Layers className="h-4 w-4 mr-1" />
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "layout" | "metrics" | "constraints" | "costs")}>
+            <TabsList className="w-full grid grid-cols-4">
+              <TabsTrigger value="layout">
+                <Layers className="h-3.5 w-3.5 mr-1" />
                 Layout
               </TabsTrigger>
-              <TabsTrigger value="metrics" className="flex-1">
-                <TrendingUp className="h-4 w-4 mr-1" />
+              <TabsTrigger value="metrics">
+                <TrendingUp className="h-3.5 w-3.5 mr-1" />
                 Metrics
               </TabsTrigger>
-              <TabsTrigger value="validation" className="flex-1 relative">
+              <TabsTrigger value="constraints" className="relative">
                 {validation.errors.length > 0 ? (
-                  <AlertTriangle className="h-4 w-4 mr-1 text-destructive" />
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1 text-destructive" />
                 ) : validation.warnings.length > 0 ? (
-                  <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
+                  <AlertCircle className="h-3.5 w-3.5 mr-1 text-amber-500" />
                 ) : (
-                  <CheckCircle2 className="h-4 w-4 mr-1 text-primary" />
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-primary" />
                 )}
                 Validate
               </TabsTrigger>
+              <TabsTrigger value="costs">
+                <span className="mr-1 text-xs">$</span>
+                Costs
+              </TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="layout" className="space-y-4 mt-4">
               {/* Layout Variations */}
-              <LayoutVariations 
+              <LayoutVariations
                 variations={variations}
                 activeVariation={activeVariation}
                 onSelect={setActiveVariation}
               />
-              
+
               {/* Layout Reasoning */}
               <LayoutReasoning variation={activeLayout} />
-              
+
               {/* Zone Legend */}
               <Card className="element-card">
                 <CardHeader className="pb-2">
@@ -626,9 +647,9 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                     return (
                       <div key={zone.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded border" 
-                            style={{ backgroundColor: colors.bg, borderColor: colors.border }} 
+                          <div
+                            className="w-3 h-3 rounded border"
+                            style={{ backgroundColor: colors.bg, borderColor: colors.border }}
                           />
                           <span className="text-sm">{zone.name}</span>
                         </div>
@@ -641,7 +662,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                       </div>
                     );
                   })}
-                  
+
                   {/* Total */}
                   <div className="pt-2 border-t flex items-center justify-between">
                     <span className="text-sm font-medium">Total</span>
@@ -652,43 +673,27 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                 </CardContent>
               </Card>
             </TabsContent>
-            
+
             <TabsContent value="metrics" className="space-y-4 mt-4">
               <LayoutMetrics metrics={metrics} />
             </TabsContent>
-            
-            <TabsContent value="validation" className="space-y-4 mt-4">
-              <Card className="element-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Layout Validation</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Summary stats */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold">{validation.totalPercentage}%</div>
-                      <div className="text-xs text-muted-foreground">Space allocated</div>
-                    </div>
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold">{normalizedZones.length}</div>
-                      <div className="text-xs text-muted-foreground">Zones defined</div>
-                    </div>
-                  </div>
-                  
-                  {/* Booth dimensions */}
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <div className="text-sm font-medium mb-1">Booth Dimensions</div>
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <div>{boothDimensions.footprintLabel} ({boothDimensions.totalSqft} sq ft)</div>
-                      <div>{boothDimensions.scaleDescription}</div>
-                      <div>Aspect ratio: {boothDimensions.aspectRatio.toFixed(2)}:1</div>
-                    </div>
-                  </div>
-                  
-                  {/* Validation results */}
-                  <ValidationPanel validation={validation} />
-                </CardContent>
-              </Card>
+
+            <TabsContent value="constraints" className="space-y-4 mt-4">
+              {/* Full constraint panel with ADA, zone sizing, sightlines, utilities */}
+              <ConstraintPanel
+                zones={activeLayout.zones}
+                boothDimensions={boothDimensions}
+              />
+            </TabsContent>
+
+            <TabsContent value="costs" className="space-y-4 mt-4">
+              {/* Cost estimator with tier selection, budget gauge, per-zone breakdown */}
+              <CostEstimator
+                zones={activeLayout.zones}
+                boothDimensions={boothDimensions}
+                budgetMax={budgetMax}
+                onTierChange={setQualityTier}
+              />
             </TabsContent>
           </Tabs>
           

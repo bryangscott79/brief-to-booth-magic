@@ -128,7 +128,15 @@ serve(async (req) => {
   }
 
   try {
-    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts } = await req.json();
+    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext } = await req.json();
+
+    const validTypes = ["bigIdea", "experienceFramework", "interactiveMechanics", "digitalStorytelling", "humanConnection", "adjacentActivations", "spatialStrategy", "budgetLogic"];
+    if (!elementType || !validTypes.includes(elementType)) {
+      return new Response(JSON.stringify({ error: `Invalid elementType. Must be one of: ${validTypes.join(", ")}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (!briefData || typeof briefData !== "object") {
+      return new Response(JSON.stringify({ error: "briefData is required and must be an object" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -137,6 +145,27 @@ serve(async (req) => {
     if (!systemPrompt) throw new Error(`Unknown element type: ${elementType}`);
 
     let userPrompt = `Here is the creative brief data:\n\n${JSON.stringify(briefData, null, 2)}`;
+
+    // PHASE 2: Inject upstream element context for cascading generation
+    if (upstreamContext && typeof upstreamContext === "object" && Object.keys(upstreamContext).length > 0) {
+      userPrompt += `\n\n═══════════════════════════════════════
+UPSTREAM CONTEXT (from already-generated elements)
+═══════════════════════════════════════
+The following elements have already been generated for this project. Your output MUST be consistent with them.
+Do NOT contradict the Big Idea headline, spatial zone allocations, budget parameters, or experience framework design principles.\n`;
+
+      for (const [key, value] of Object.entries(upstreamContext)) {
+        if (key === "instruction") {
+          userPrompt += `\n${value}\n`;
+        } else if (value && typeof value === "object") {
+          userPrompt += `\n--- ${key} ---\n${JSON.stringify(value, null, 2)}\n`;
+        }
+      }
+
+      userPrompt += `\n═══════════════════════════════════════
+END UPSTREAM CONTEXT
+═══════════════════════════════════════\n`;
+    }
 
     // For spatial strategy, add explicit dimension calculations
     if (elementType === "spatialStrategy" && briefData?.spatial?.footprints) {

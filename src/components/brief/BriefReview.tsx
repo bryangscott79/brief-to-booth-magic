@@ -1,6 +1,6 @@
-import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
+import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
-import { Check, X, Edit2, ChevronRight } from "lucide-react";
+import { Check, Edit2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

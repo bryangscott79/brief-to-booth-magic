@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
 import type { ElementType, ElementState } from "@/types/brief";
 import { cn } from "@/lib/utils";

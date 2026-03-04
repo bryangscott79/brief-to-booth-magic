@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Upload, X, ImageIcon, Sparkles, Plus } from "lucide-react";
+import { X, Sparkles, Plus } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { useToast } from "@/hooks/use-toast";
 

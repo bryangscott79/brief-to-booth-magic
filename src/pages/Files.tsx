@@ -1,10 +1,9 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { useProjectImages } from "@/hooks/useProjectImages";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, ImageIcon, Loader2, FolderOpen } from "lucide-react";
 
 export default function FilesPage() {

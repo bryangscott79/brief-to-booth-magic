@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, FileText, Copy, Loader2, AlertCircle } from "lucide-react";
-import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -122,67 +121,6 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       });
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  /** Extract readable text from a DOCX file using JSZip */
-  const extractDocxText = async (file: File): Promise<string> => {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const zip = await JSZip.loadAsync(arrayBuffer);
-      const docXml = await zip.file("word/document.xml")?.async("string");
-      if (!docXml) throw new Error("Could not read document.xml from DOCX");
-      
-      // Extract only text content from w:t elements for cleaner output
-      const textParts: string[] = [];
-      
-      // Split by paragraph boundaries, then extract w:t text from each
-      const paragraphs = docXml.split(/<\/w:p[^>]*>/);
-      for (const para of paragraphs) {
-        const texts: string[] = [];
-        // Match all w:t elements - they contain the actual visible text
-        const regex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-        let match;
-        while ((match = regex.exec(para)) !== null) {
-          if (match[1]) texts.push(match[1]);
-        }
-        if (texts.length > 0) {
-          textParts.push(texts.join(""));
-        }
-      }
-      
-      let text = textParts
-        .join("\n")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-      
-      console.log("[DOCX] w:t extraction result - length:", text.length, "first 300 chars:", text.substring(0, 300));
-      
-      // If w:t extraction failed or got very little, fall back to stripping all tags
-      if (text.length < 50) {
-        console.warn("[DOCX] w:t extraction got too little text, falling back to tag stripping");
-        text = docXml
-          .replace(/<\/w:p[^>]*>/g, "\n")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .replace(/\n\s+/g, "\n")
-          .replace(/\n{3,}/g, "\n\n")
-          .trim();
-        console.log("[DOCX] Fallback extraction - length:", text.length);
-      }
-      
-      return text;
-    } catch (err) {
-      console.error("[DOCX] Extraction failed:", err);
-      // Last resort: try raw text read
-      const rawText = await file.text();
-      console.log("[DOCX] Raw text fallback - length:", rawText.length);
-      return rawText;
     }
   };
 

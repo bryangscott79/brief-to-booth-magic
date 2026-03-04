@@ -1,4 +1,4 @@
-import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
+import { useProjectStore } from "@/store/projectStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import { useProjectImages } from "@/hooks/useProjectImages";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { ElementType } from "@/types/brief";
 import { ProposalExport } from "./ProposalExport";
 
 interface MaterialItem {

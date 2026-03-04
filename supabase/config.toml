@@ -1,22 +1,28 @@
 project_id = "kjbamfitkaxnfyppplaq"
 
+[functions.parse-brief]
+verify_jwt = true
+
 [functions.generate-hero]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-view]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-element]
-verify_jwt = false
+verify_jwt = true
 
 [functions.save-render-image]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-materials]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-3d-brief]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-presentation]
-verify_jwt = false
+verify_jwt = true
+
+[functions.generate-video]
+verify_jwt = true

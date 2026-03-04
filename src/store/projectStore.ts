@@ -1,17 +1,9 @@
 import { create } from "zustand";
-import type { 
-  Project, 
-  ParsedBrief, 
-  ElementType, 
-  ElementState, 
-  BigIdea,
-  ExperienceFramework,
-  InteractiveMechanics,
-  DigitalStorytelling,
-  HumanConnectionZones,
-  AdjacentActivations,
-  SpatialStrategy,
-  BudgetLogic,
+import type {
+  Project,
+  ParsedBrief,
+  ElementType,
+  ElementState,
   RenderPromptSet
 } from "@/types/brief";
 

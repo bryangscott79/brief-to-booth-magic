@@ -8,10 +8,6 @@
 import { jsPDF } from 'jspdf';
 import PptxGenJS from 'pptxgenjs';
 import {
-  getClearbitLogoUrl,
-  getClientLogoFromBrief,
-  getInitials,
-  generatePlaceholderLogo,
   imageUrlToBase64,
 } from './logoUtils';
 import { calculateBoothDimensions, normalizeZones } from './spatialUtils';
@@ -524,7 +520,7 @@ async function renderImageSection(
   }
 }
 
-function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, width: number, pageHeight: number) {
+function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, width: number, _pageHeight: number) {
   let currentY = y;
   const colWidth = width / 2 - 20;
   
@@ -657,12 +653,12 @@ function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, widt
 }
 
 async function renderGridSection(
-  pdf: jsPDF, 
-  content: any, 
-  x: number, 
-  y: number, 
+  pdf: jsPDF,
+  content: any,
+  x: number,
+  y: number,
   width: number,
-  maxHeight: number
+  _maxHeight: number
 ) {
   const images = content.images || [];
   const cols = images.length <= 2 ? 2 : 3;

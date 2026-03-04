@@ -63,12 +63,28 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     return data.id;
   };
 
-  const processBrief = async (text: string, sourceName: string, fileBase64?: string, fileType?: string) => {
+  const processBrief = async (text: string, sourceName: string, fileBase64?: string, fileType?: string, originalFile?: File) => {
     setIsProcessing(true);
     console.log("[Brief] Processing brief, text length:", text.length, "hasFile:", !!fileBase64);
     try {
       // Auto-create DB project if needed
       const dbProjectId = await ensureDbProject(sourceName);
+
+      // Upload original file to storage if provided
+      let briefFileUrl: string | null = null;
+      if (originalFile && user) {
+        const ext = originalFile.name.split(".").pop()?.toLowerCase();
+        const storagePath = `${user.id}/${dbProjectId}/original.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("briefs")
+          .upload(storagePath, originalFile, { upsert: true });
+        if (!uploadError) {
+          const { data: urlData } = await supabase.storage
+            .from("briefs")
+            .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year signed URL
+          briefFileUrl = urlData?.signedUrl ?? null;
+        }
+      }
 
       // Parse with AI — send file directly if available for server-side extraction
       const parsedBrief = await parseBriefWithAI(text, fileBase64, fileType);
@@ -79,6 +95,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         .update({
           brief_text: text,
           brief_file_name: sourceName,
+          brief_file_url: briefFileUrl,
           parsed_brief: parsedBrief as any,
           status: "reviewed",
         } as any)
@@ -141,7 +158,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       }
       const fileBase64 = btoa(binary);
       console.log("[DOCX] Sending file as base64, size:", fileBase64.length);
-      await processBrief("", sourceName, fileBase64, "docx");
+      await processBrief("", sourceName, fileBase64, "docx", file);
     } else {
       // TXT and PDF: read as text
       const text = await file.text();
@@ -153,7 +170,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         });
         return;
       }
-      await processBrief(text, sourceName);
+      await processBrief(text, sourceName, undefined, undefined, file);
     }
   }, [user, navigate, toast, projectId]);
 

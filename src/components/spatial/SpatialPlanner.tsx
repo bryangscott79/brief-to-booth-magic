@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
   ChevronRight, 
   ZoomIn, 
@@ -237,6 +238,7 @@ export function SpatialPlanner() {
   const [pendingFeedback, setPendingFeedback] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [promptIngredients, setPromptIngredients] = useState<PromptIngredients | null>(null);
+  const [pendingVariation, setPendingVariation] = useState<string | null>(null);
 
   const { data: savedImages = [] } = useProjectImages(projectId);
   const saveImage = useSaveRenderImage(projectId);
@@ -475,6 +477,30 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     setShowIngredientsEditor(false);
     handleGenerateFloorPlan(ingredients, feedback);
   }, [handleGenerateFloorPlan]);
+
+  // Intercept layout variation change when in render mode
+  const handleVariationSelect = useCallback((variationId: string) => {
+    if (floorPlanView === "render" && floorPlanImage) {
+      setPendingVariation(variationId);
+    } else {
+      setActiveVariation(variationId);
+    }
+  }, [floorPlanView, floorPlanImage]);
+
+  const handleLayoutChangeRender = useCallback(() => {
+    if (!pendingVariation) return;
+    setActiveVariation(pendingVariation);
+    setPendingVariation(null);
+    // open ingredients editor to generate with new layout
+    setTimeout(() => handleOpenEditor(), 50);
+  }, [pendingVariation, handleOpenEditor]);
+
+  const handleLayoutChangeZones = useCallback(() => {
+    if (!pendingVariation) return;
+    setActiveVariation(pendingVariation);
+    setPendingVariation(null);
+    setFloorPlanView("blocks");
+  }, [pendingVariation]);
 
   // Annotation handlers
   const handleAddAnnotation = useCallback((annotation: FloorPlanAnnotation) => {
@@ -837,7 +863,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
               <LayoutVariations
                 variations={variations}
                 activeVariation={activeVariation}
-                onSelect={setActiveVariation}
+                onSelect={handleVariationSelect}
               />
 
               {/* Layout Reasoning */}
@@ -947,6 +973,27 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         onFeedbackChange={setFeedbackText}
         isFirstRender={!floorPlanImage}
       />
+
+      {/* Layout change confirmation dialog */}
+      <Dialog open={!!pendingVariation} onOpenChange={(open) => { if (!open) setPendingVariation(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Layout Changed</DialogTitle>
+            <DialogDescription>
+              You switched layout options while viewing a render. Would you like to generate a new render based on this layout?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={handleLayoutChangeZones}>
+              No, just show zones
+            </Button>
+            <Button onClick={handleLayoutChangeRender}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Yes, render this layout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

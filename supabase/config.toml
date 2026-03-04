@@ -7,7 +7,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.generate-view]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-element]
 verify_jwt = true

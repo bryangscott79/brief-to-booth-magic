@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   ChevronRight, 
   ZoomIn, 
@@ -19,10 +22,12 @@ import {
   ImageIcon,
   AlertTriangle,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  History,
+  Clock,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./LayoutVariations";
@@ -37,6 +42,96 @@ import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { saveProjectField } from "@/hooks/useProjectSync";
+
+// Generation progress steps
+const GENERATION_STEPS = [
+  { id: "analyzing", label: "Analyzing layout zones", duration: 4000 },
+  { id: "composing", label: "Composing floor plan", duration: 8000 },
+  { id: "rendering", label: "Rendering architectural details", duration: 10000 },
+  { id: "finalizing", label: "Finalizing output", duration: 5000 },
+];
+
+function GenerationProgress({ isGenerating }: { isGenerating: boolean }) {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setCurrentStep(0);
+      setProgress(0);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      return;
+    }
+
+    let step = 0;
+    let elapsed = 0;
+    const totalDuration = GENERATION_STEPS.reduce((s, st) => s + st.duration, 0);
+
+    intervalRef.current = setInterval(() => {
+      elapsed += 200;
+      const pct = Math.min((elapsed / totalDuration) * 100, 95);
+      setProgress(pct);
+      const cumulative = GENERATION_STEPS.reduce((acc, st, i) => {
+        if (i <= step) return acc + st.duration;
+        return acc;
+      }, 0);
+      if (elapsed >= cumulative && step < GENERATION_STEPS.length - 1) {
+        step += 1;
+        setCurrentStep(step);
+      }
+    }, 200);
+
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isGenerating]);
+
+  if (!isGenerating) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-center h-[400px] gap-6 px-8">
+      <div className="relative">
+        <div className="w-16 h-16 rounded-full border-4 border-primary/20 flex items-center justify-center">
+          <Sparkles className="h-7 w-7 text-primary animate-pulse" />
+        </div>
+        <svg className="absolute inset-0 w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+          <circle
+            cx="32" cy="32" r="28"
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={`${2 * Math.PI * 28}`}
+            strokeDashoffset={`${2 * Math.PI * 28 * (1 - progress / 100)}`}
+            style={{ transition: "stroke-dashoffset 0.3s ease" }}
+          />
+        </svg>
+      </div>
+      <div className="text-center space-y-2 w-full max-w-xs">
+        <p className="text-sm font-medium">{GENERATION_STEPS[currentStep]?.label}</p>
+        <div className="space-y-1.5">
+          {GENERATION_STEPS.map((step, i) => (
+            <div key={step.id} className="flex items-center gap-2 text-xs">
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors",
+                i < currentStep ? "bg-primary" :
+                i === currentStep ? "bg-primary animate-pulse" :
+                "bg-muted-foreground/30"
+              )} />
+              <span className={cn(
+                "transition-colors",
+                i < currentStep ? "text-primary line-through opacity-60" :
+                i === currentStep ? "text-foreground font-medium" :
+                "text-muted-foreground/50"
+              )}>{step.label}</span>
+              {i < currentStep && <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />}
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground/60 pt-2">This takes 20–40 seconds</p>
+      </div>
+    </div>
+  );
+}
 
 // Import spatial utilities
 import {
@@ -138,6 +233,10 @@ export function SpatialPlanner() {
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
   const [floorPlanAnnotations, setFloorPlanAnnotations] = useState<FloorPlanAnnotation[]>([]);
   const [qualityTier, setQualityTier] = useState<QualityTier>("premium");
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [pendingFeedback, setPendingFeedback] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
 
   const { data: savedImages = [] } = useProjectImages(projectId);
   const saveImage = useSaveRenderImage(projectId);
@@ -242,6 +341,10 @@ export function SpatialPlanner() {
       ? `\nUSER FEEDBACK (CRITICAL — apply all of these changes):\n${floorPlanAnnotations.map((a, i) => `${i + 1}. At position (${Math.round(a.x)}% from left, ${Math.round(a.y)}% from top): "${a.comment}"`).join("\n")}`
       : "";
 
+    const feedbackBlock = pendingFeedback
+      ? `\nREGENERATION FEEDBACK (CRITICAL — incorporate this direction):\n${pendingFeedback}`
+      : "";
+
     const prompt = `Generate a professional top-down 2D booth floor plan for a ${boothDimensions.width}' × ${boothDimensions.depth}' (${boothDimensions.totalSqft} sq ft) trade show exhibit for ${brief?.brand?.name || "client"}.
 
 STYLE: Black-and-white technical architectural floor plan on light blue graph-paper background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. NO color fills, NO 3D, NO perspective — purely flat 2D blueprint.
@@ -263,6 +366,7 @@ DRAWING REQUIREMENTS:
 
 MATERIALS CONTEXT: ${materials}
 ${annotationBlock}
+${feedbackBlock}
 
 Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
 
@@ -306,6 +410,17 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       setIsGeneratingFloorPlan(false);
     }
   }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject, floorPlanAnnotations, boothDimensions]);
+
+  const handleRegenerateClick = useCallback(() => {
+    setFeedbackText("");
+    setShowFeedbackDialog(true);
+  }, []);
+
+  const handleConfirmRegenerate = useCallback(() => {
+    setPendingFeedback(feedbackText);
+    setShowFeedbackDialog(false);
+    handleGenerateFloorPlan();
+  }, [feedbackText, handleGenerateFloorPlan]);
 
   // Annotation handlers
   const handleAddAnnotation = useCallback((annotation: FloorPlanAnnotation) => {
@@ -459,23 +574,59 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                 </>
               )}
               {floorPlanView === "render" && floorPlanImage && (
-                <Button variant="ghost" size="sm" className="h-8" onClick={handleGenerateFloorPlan} disabled={isGeneratingFloorPlan}>
-                  {isGeneratingFloorPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  <span className="ml-1 text-xs">Regenerate</span>
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-8" onClick={() => setShowHistory(!showHistory)}>
+                    <History className="h-3.5 w-3.5 mr-1" />
+                    <span className="text-xs">History</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8" onClick={handleRegenerateClick} disabled={isGeneratingFloorPlan}>
+                    {isGeneratingFloorPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    <span className="ml-1 text-xs">Regenerate</span>
+                  </Button>
+                </div>
               )}
             </div>
           </CardHeader>
           <CardContent className="p-4">
+            {/* History panel */}
+            {showHistory && floorPlanView === "render" && (
+              <div className="mb-4 p-3 rounded-lg border bg-muted/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Render History</span>
+                  <span className="text-xs text-muted-foreground">({savedImages.filter(i => i.angle_id === "floor_plan_2d").length} versions)</span>
+                </div>
+                <ScrollArea className="w-full">
+                  <div className="flex gap-2 pb-2">
+                    {savedImages
+                      .filter(img => img.angle_id === "floor_plan_2d")
+                      .map((img, idx, arr) => (
+                        <button
+                          key={img.id}
+                          onClick={() => { setFloorPlanImage(img.public_url); setShowHistory(false); }}
+                          className={cn(
+                            "flex-shrink-0 rounded-md overflow-hidden border-2 transition-all",
+                            img.public_url === floorPlanImage ? "border-primary" : "border-border hover:border-primary/50"
+                          )}
+                        >
+                          <img src={img.public_url} alt={`Version ${arr.length - idx}`} className="w-24 h-16 object-cover" />
+                          <div className="text-center text-xs py-0.5 bg-background">
+                            {img.is_current ? "Current" : `v${arr.length - idx}`}
+                          </div>
+                        </button>
+                      ))}
+                    {savedImages.filter(i => i.angle_id === "floor_plan_2d").length === 0 && (
+                      <p className="text-xs text-muted-foreground py-2">No history yet</p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
             {floorPlanView === "render" ? (
               /* AI-Rendered Floor Plan with Annotations */
               <div style={{ minHeight: "400px" }}>
-                {isGeneratingFloorPlan && !floorPlanImage ? (
-                  <div className="flex flex-col items-center justify-center h-[400px] gap-3">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground">Generating 2D floor plan...</p>
-                    <p className="text-xs text-muted-foreground/60">This takes 15-30 seconds</p>
-                  </div>
+                {isGeneratingFloorPlan ? (
+                  <GenerationProgress isGenerating={isGeneratingFloorPlan} />
                 ) : floorPlanImage ? (
                   <FloorPlanAnnotations
                     imageUrl={floorPlanImage}
@@ -731,6 +882,42 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         onClose={() => setSelectedZone(null)}
         colors={selectedZone?.colors ?? { bg: "", border: "", text: "" }}
       />
+
+      {/* Feedback / Regenerate Dialog */}
+      <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Regenerate Floor Plan
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Optionally provide feedback to guide the next render. Leave blank to regenerate with the same parameters.
+            </p>
+            <Textarea
+              placeholder="e.g. Make the meeting rooms larger, move the lounge to the front-left corner, add more aisle space..."
+              value={feedbackText}
+              onChange={e => setFeedbackText(e.target.value)}
+              rows={4}
+              className="resize-none"
+            />
+            {pendingFeedback && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                <span className="font-medium">Previous feedback applied:</span> {pendingFeedback}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowFeedbackDialog(false)}>Cancel</Button>
+            <Button onClick={handleConfirmRegenerate}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -269,7 +269,9 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     try {
       const { data, error } = await supabase.functions.invoke("generate-view", {
         body: {
-          prompt,
+          viewPrompt: prompt,
+          viewName: "Floor Plan 2D",
+          aspectRatio: boothDimensions.aspectRatio >= 1 ? "4:3" : "3:4",
           angleId: "floor_plan_2d",
           projectId,
           boothSize: currentConfig.footprintSize,

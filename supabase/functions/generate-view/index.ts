@@ -95,9 +95,6 @@ serve(async (req) => {
   try {
     const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens }: GenerateViewRequest = await req.json();
 
-    if (!referenceImageUrl || typeof referenceImageUrl !== "string") {
-      return new Response(JSON.stringify({ error: "referenceImageUrl is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -197,12 +194,12 @@ ${consistencyBlock}`;
                 type: "text",
                 text: editPrompt,
               },
-              {
+              ...(referenceImageUrl ? [{
                 type: "image_url",
                 image_url: {
                   url: referenceImageUrl,
                 },
-              },
+              }] : []),
             ],
           },
         ],

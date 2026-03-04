@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   ChevronRight, 
@@ -36,6 +34,7 @@ import { ZoneDetailPanel } from "./ZoneDetailPanel";
 import { FloorPlanAnnotations, type FloorPlanAnnotation } from "./FloorPlanAnnotations";
 import { ConstraintPanel } from "./ConstraintPanel";
 import { CostEstimator } from "./CostEstimator";
+import { PromptIngredientsEditor, type PromptIngredients } from "./PromptIngredientsEditor";
 import type { QualityTier } from "@/lib/exhibitConstraints";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
@@ -233,10 +232,11 @@ export function SpatialPlanner() {
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
   const [floorPlanAnnotations, setFloorPlanAnnotations] = useState<FloorPlanAnnotation[]>([]);
   const [qualityTier, setQualityTier] = useState<QualityTier>("premium");
-  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+  const [showIngredientsEditor, setShowIngredientsEditor] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [pendingFeedback, setPendingFeedback] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const [promptIngredients, setPromptIngredients] = useState<PromptIngredients | null>(null);
 
   const { data: savedImages = [] } = useProjectImages(projectId);
   const saveImage = useSaveRenderImage(projectId);
@@ -317,7 +317,7 @@ export function SpatialPlanner() {
     return generateFlowPaths(activeLayout.zones);
   }, [activeLayout?.zones]);
 
-  const handleGenerateFloorPlan = useCallback(async () => {
+  const handleGenerateFloorPlan = useCallback(async (ingredients?: PromptIngredients, feedback?: string) => {
     if (!currentConfig || !activeLayout) {
       toast({ title: "Missing data", description: "Spatial layout data is required to generate a floor plan.", variant: "destructive" });
       return;
@@ -341,13 +341,25 @@ export function SpatialPlanner() {
       ? `\nUSER FEEDBACK (CRITICAL — apply all of these changes):\n${floorPlanAnnotations.map((a, i) => `${i + 1}. At position (${Math.round(a.x)}% from left, ${Math.round(a.y)}% from top): "${a.comment}"`).join("\n")}`
       : "";
 
-    const feedbackBlock = pendingFeedback
-      ? `\nREGENERATION FEEDBACK (CRITICAL — incorporate this direction):\n${pendingFeedback}`
+    const feedbackBlock = (feedback || pendingFeedback)
+      ? `\nREGENERATION FEEDBACK (CRITICAL — incorporate this direction):\n${feedback || pendingFeedback}`
       : "";
+
+    const ing = ingredients;
+    const colorsBlock = ing?.brandColors?.length
+      ? `\nBRAND COLORS (include in key/legend at bottom of drawing):\n${ing.brandColors.map(c => `- ${c.name} (${c.hex}): used for ${c.usage}`).join("\n")}\nApply these colors as zone fill hatching or as accent elements in the drawing.`
+      : "";
+
+    const materialsBlock = ing?.materials?.length
+      ? `\nMATERIALS (include in legend):\n${ing.materials.map(m => `- ${m.material}: ${m.feel} — ${m.application}`).join("\n")}`
+      : `\nMATERIALS CONTEXT: ${materials}`;
+
+    const styleBlock = ing?.styleNotes ? `\nSTYLE NOTES: ${ing.styleNotes}` : "";
+    const layoutNotesBlock = ing?.layoutNotes ? `\nLAYOUT NOTES:\n${ing.layoutNotes}` : "";
 
     const prompt = `Generate a professional top-down 2D booth floor plan for a ${boothDimensions.width}' × ${boothDimensions.depth}' (${boothDimensions.totalSqft} sq ft) trade show exhibit for ${brief?.brand?.name || "client"}.
 
-STYLE: Black-and-white technical architectural floor plan on light blue graph-paper background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. NO color fills, NO 3D, NO perspective — purely flat 2D blueprint.
+STYLE: Technical architectural floor plan on light blue graph-paper background. Bird's-eye view looking STRAIGHT DOWN. Clean black outlines. Minimal color — use brand colors ONLY for hatching/fills in zones and the legend key. NO 3D, NO perspective — purely flat 2D blueprint.
 
 ${scaleContext}
 
@@ -363,8 +375,11 @@ DRAWING REQUIREMENTS:
 - Thin lines separating major zone areas
 - Entry points marked with arrows from aisle side
 - The hero "${heroName}" should be drawn as a prominent central fixture
-
-MATERIALS CONTEXT: ${materials}
+- Include a LEGEND/KEY box at the bottom showing brand colors and material hatching patterns
+${colorsBlock}
+${materialsBlock}
+${styleBlock}
+${layoutNotesBlock}
 ${annotationBlock}
 ${feedbackBlock}
 
@@ -411,16 +426,55 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     }
   }, [brief, currentConfig, activeLayout, spatialData, bigIdea, projectId, currentProject, floorPlanAnnotations, boothDimensions]);
 
-  const handleRegenerateClick = useCallback(() => {
-    setFeedbackText("");
-    setShowFeedbackDialog(true);
-  }, []);
+  // Build default ingredients from current project data
+  const buildDefaultIngredients = useCallback((): PromptIngredients => {
+    const brandColorNames: string[] = brief?.brand?.visualIdentity?.colors || [];
+    const brandColors = brandColorNames.map((name: string) => ({
+      name,
+      hex: name.toLowerCase().includes("blue") ? "#0047AB" :
+           name.toLowerCase().includes("purple") ? "#6B2FA0" :
+           name.toLowerCase().includes("black") ? "#1A1A1A" :
+           name.toLowerCase().includes("white") ? "#F5F5F5" :
+           name.toLowerCase().includes("gold") ? "#C8A84B" :
+           "#555555",
+      usage: "Brand accent",
+    }));
 
-  const handleConfirmRegenerate = useCallback(() => {
-    setPendingFeedback(feedbackText);
-    setShowFeedbackDialog(false);
-    handleGenerateFloorPlan();
-  }, [feedbackText, handleGenerateFloorPlan]);
+    const materials = (spatialData?.materialsAndMood || []).map((m: any) => ({
+      material: m.material || "",
+      feel: m.feel || "",
+      application: m.use || "General",
+    }));
+
+    const layoutNotes = activeLayout
+      ? `Strategy: ${activeLayout.name} — ${activeLayout.description}\nOptimized for: ${activeLayout.bestFor?.join(", ")}\nFlow efficiency target: ${activeLayout.score}%`
+      : "";
+
+    return {
+      brandColors,
+      materials,
+      layoutNotes,
+      styleNotes: `Architectural floor plan style. Technical drawing aesthetic with a light graph-paper background.`,
+      customDirectives: pendingFeedback || "",
+    };
+  }, [brief, spatialData, activeLayout, pendingFeedback]);
+
+  const handleOpenEditor = useCallback(() => {
+    setPromptIngredients(buildDefaultIngredients());
+    setFeedbackText(pendingFeedback);
+    setShowIngredientsEditor(true);
+  }, [buildDefaultIngredients, pendingFeedback]);
+
+  const handleRegenerateClick = useCallback(() => {
+    handleOpenEditor();
+  }, [handleOpenEditor]);
+
+  const handleConfirmFromEditor = useCallback((ingredients: PromptIngredients, feedback: string) => {
+    setPromptIngredients(ingredients);
+    setPendingFeedback(feedback);
+    setShowIngredientsEditor(false);
+    handleGenerateFloorPlan(ingredients, feedback);
+  }, [handleGenerateFloorPlan]);
 
   // Annotation handlers
   const handleAddAnnotation = useCallback((annotation: FloorPlanAnnotation) => {
@@ -639,7 +693,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                   <div className="flex flex-col items-center justify-center h-[400px] gap-3">
                     <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">No rendered floor plan yet</p>
-                    <Button onClick={handleGenerateFloorPlan} disabled={isGeneratingFloorPlan}>
+                    <Button onClick={handleOpenEditor} disabled={isGeneratingFloorPlan}>
                       <Sparkles className="mr-2 h-4 w-4" />
                       Generate Floor Plan
                     </Button>
@@ -883,41 +937,16 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         colors={selectedZone?.colors ?? { bg: "", border: "", text: "" }}
       />
 
-      {/* Feedback / Regenerate Dialog */}
-      <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Regenerate Floor Plan
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              Optionally provide feedback to guide the next render. Leave blank to regenerate with the same parameters.
-            </p>
-            <Textarea
-              placeholder="e.g. Make the meeting rooms larger, move the lounge to the front-left corner, add more aisle space..."
-              value={feedbackText}
-              onChange={e => setFeedbackText(e.target.value)}
-              rows={4}
-              className="resize-none"
-            />
-            {pendingFeedback && (
-              <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                <span className="font-medium">Previous feedback applied:</span> {pendingFeedback}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowFeedbackDialog(false)}>Cancel</Button>
-            <Button onClick={handleConfirmRegenerate}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Regenerate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Prompt Ingredients Editor */}
+      <PromptIngredientsEditor
+        open={showIngredientsEditor}
+        onClose={() => setShowIngredientsEditor(false)}
+        onConfirm={handleConfirmFromEditor}
+        initialIngredients={promptIngredients || { brandColors: [], materials: [], layoutNotes: "", styleNotes: "", customDirectives: "" }}
+        feedbackText={feedbackText}
+        onFeedbackChange={setFeedbackText}
+        isFirstRender={!floorPlanImage}
+      />
     </div>
   );
 }

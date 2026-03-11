@@ -16,7 +16,7 @@ interface ProjectStore {
   
   // Actions
   createProject: (name: string) => void;
-  loadFromDb: (data: { id: string; name: string; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
+  loadFromDb: (data: { id: string; name: string; projectType?: string; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
   setRawBrief: (brief: string) => void;
   setParsedBrief: (brief: ParsedBrief) => void;
   setElementStatus: (type: ElementType, status: ElementState["status"]) => void;

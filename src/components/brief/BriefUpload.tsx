@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, FileText, Copy, Loader2, AlertCircle } from "lucide-react";
+import { Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -10,12 +10,19 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
+import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
+import type { ProjectTypeId } from "@/lib/projectTypes";
+import { DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 
 interface BriefUploadProps {
   projectId: string | null;
 }
 
+type UploadStep = "type-select" | "upload";
+
 export function BriefUpload({ projectId }: BriefUploadProps) {
+  const [step, setStep] = useState<UploadStep>("type-select");
+  const [selectedType, setSelectedType] = useState<ProjectTypeId | null>(null);
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -25,7 +32,6 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { toast } = useToast();
 
   /** Send brief text to AI-powered parser edge function */
-  /** Send brief to AI-powered parser edge function. Supports raw text or base64 DOCX. */
   const parseBriefWithAI = async (text: string, fileBase64?: string, fileType?: string): Promise<ParsedBrief> => {
     const body: Record<string, any> = {};
     if (fileBase64 && fileType) {
@@ -45,17 +51,16 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   };
 
   /** Create a DB project if none exists, returns the project ID */
-  const ensureDbProject = async (name: string): Promise<string> => {
+  const ensureDbProject = async (name: string, type: ProjectTypeId): Promise<string> => {
     if (projectId) return projectId;
 
-    // Get fresh auth session to ensure correct user_id
     const { data: sessionData } = await supabase.auth.getSession();
     const userId = sessionData?.session?.user?.id;
     if (!userId) throw new Error("You must be logged in to create a project");
 
     const { data, error } = await supabase
       .from("projects")
-      .insert({ user_id: userId, name, status: "draft" })
+      .insert({ user_id: userId, name, status: "draft", project_type: type } as any)
       .select("id")
       .single();
 
@@ -63,14 +68,18 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     return data.id;
   };
 
-  const processBrief = async (text: string, sourceName: string, fileBase64?: string, fileType?: string, originalFile?: File) => {
+  const processBrief = async (
+    text: string,
+    sourceName: string,
+    fileBase64?: string,
+    fileType?: string,
+    originalFile?: File
+  ) => {
+    const type = selectedType ?? DEFAULT_PROJECT_TYPE;
     setIsProcessing(true);
-    console.log("[Brief] Processing brief, text length:", text.length, "hasFile:", !!fileBase64);
     try {
-      // Auto-create DB project if needed
-      const dbProjectId = await ensureDbProject(sourceName);
+      const dbProjectId = await ensureDbProject(sourceName, type);
 
-      // Upload original file to storage if provided
       let briefFileUrl: string | null = null;
       if (originalFile && user) {
         const ext = originalFile.name.split(".").pop()?.toLowerCase();
@@ -81,15 +90,13 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         if (!uploadError) {
           const { data: urlData } = await supabase.storage
             .from("briefs")
-            .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year signed URL
+            .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
           briefFileUrl = urlData?.signedUrl ?? null;
         }
       }
 
-      // Parse with AI — send file directly if available for server-side extraction
       const parsedBrief = await parseBriefWithAI(text, fileBase64, fileType);
 
-      // Save all fields to DB in one go
       const { error: updateError } = await supabase
         .from("projects")
         .update({
@@ -98,16 +105,17 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
           brief_file_url: briefFileUrl,
           parsed_brief: parsedBrief as any,
           status: "reviewed",
+          project_type: type,
         } as any)
         .eq("id", dbProjectId);
 
       if (updateError) console.error("Failed to save brief to DB:", updateError);
 
-      // Now hydrate the Zustand store with the correct DB ID
       const { loadFromDb } = useProjectStore.getState();
       loadFromDb({
         id: dbProjectId,
         name: sourceName,
+        projectType: type,
         rawBrief: text,
         parsedBrief,
         elements: {
@@ -149,18 +157,13 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     const sourceName = file.name.replace(/\.[^/.]+$/, "");
 
     if (ext === "docx") {
-      // Send DOCX as base64 to the edge function for server-side extraction
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let binary = "";
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const fileBase64 = btoa(binary);
-      console.log("[DOCX] Sending file as base64, size:", fileBase64.length);
       await processBrief("", sourceName, fileBase64, "docx", file);
     } else {
-      // TXT and PDF: read as text
       const text = await file.text();
       if (!text || text.trim().length < 20) {
         toast({
@@ -172,7 +175,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       }
       await processBrief(text, sourceName, undefined, undefined, file);
     }
-  }, [user, navigate, toast, projectId]);
+  }, [user, navigate, toast, projectId, selectedType]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -189,16 +192,49 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     await processBrief(pasteText, "Pasted Brief");
   };
 
+  // ─── STEP 1: Type Selection ──────────────────────────────────────────────
+  if (step === "type-select") {
+    return (
+      <div className="max-w-3xl mx-auto space-y-8">
+        <ProjectTypeSelector
+          selected={selectedType}
+          onSelect={setSelectedType}
+        />
+        <div className="flex justify-end">
+          <Button
+            size="lg"
+            className="btn-glow px-8 h-12 rounded-xl"
+            disabled={!selectedType}
+            onClick={() => setStep("upload")}
+          >
+            Continue
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── STEP 2: Brief Upload ────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Back to type selection */}
+      <button
+        onClick={() => setStep("type-select")}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Change project type
+      </button>
+
       {/* Mode Toggle */}
       <div className="flex gap-2 p-1 bg-muted rounded-lg w-fit">
         <button
           onClick={() => setMode("upload")}
           className={cn(
             "px-4 py-2 rounded-md text-sm font-medium transition-colors",
-            mode === "upload" 
-              ? "bg-card text-foreground shadow-sm" 
+            mode === "upload"
+              ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -209,8 +245,8 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
           onClick={() => setMode("paste")}
           className={cn(
             "px-4 py-2 rounded-md text-sm font-medium transition-colors",
-            mode === "paste" 
-              ? "bg-card text-foreground shadow-sm" 
+            mode === "paste"
+              ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -271,7 +307,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
             className="min-h-[300px] font-mono text-sm"
             disabled={isProcessing}
           />
-          <Button 
+          <Button
             onClick={handlePasteSubmit}
             disabled={!pasteText.trim() || isProcessing}
             className="w-full btn-glow"
@@ -297,9 +333,9 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         <div className="text-sm text-muted-foreground">
           <p className="font-medium text-foreground mb-1">What happens next?</p>
           <p>
-            We'll use AI to parse your brief and extract brand information, objectives, 
-            spatial requirements, and creative constraints. You can review and 
-            edit all extracted data before generating response elements.
+            We'll use AI to parse your brief and extract brand information, objectives,
+            spatial requirements, and creative constraints tailored to your project type.
+            You can review and edit all extracted data before generating strategy elements.
           </p>
         </div>
       </div>

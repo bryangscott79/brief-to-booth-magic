@@ -186,6 +186,7 @@ export type Database = {
           interactive_mechanics: Json | null
           name: string
           parsed_brief: Json | null
+          project_type: string
           render_prompts: Json | null
           spatial_strategy: Json | null
           status: string
@@ -209,6 +210,7 @@ export type Database = {
           interactive_mechanics?: Json | null
           name: string
           parsed_brief?: Json | null
+          project_type?: string
           render_prompts?: Json | null
           spatial_strategy?: Json | null
           status?: string
@@ -232,6 +234,7 @@ export type Database = {
           interactive_mechanics?: Json | null
           name?: string
           parsed_brief?: Json | null
+          project_type?: string
           render_prompts?: Json | null
           spatial_strategy?: Json | null
           status?: string

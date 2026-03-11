@@ -48,6 +48,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const newProject: Project = {
       id: crypto.randomUUID(),
       name,
+      projectType: "trade_show_booth",
       createdAt: new Date(),
       updatedAt: new Date(),
       rawBrief: "",
@@ -62,6 +63,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const project: Project = {
       id: data.id,
       name: data.name,
+      projectType: data.projectType ?? "trade_show_booth",
       createdAt: new Date(),
       updatedAt: new Date(),
       rawBrief: data.rawBrief,

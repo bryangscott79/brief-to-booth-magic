@@ -325,6 +325,7 @@ export interface ElementState {
 export interface Project {
   id: string;
   name: string;
+  projectType: string;
   createdAt: Date;
   updatedAt: Date;
   rawBrief: string;

@@ -16,7 +16,7 @@ interface ProjectStore {
   
   // Actions
   createProject: (name: string) => void;
-  loadFromDb: (data: { id: string; name: string; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
+  loadFromDb: (data: { id: string; name: string; projectType?: string; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
   setRawBrief: (brief: string) => void;
   setParsedBrief: (brief: ParsedBrief) => void;
   setElementStatus: (type: ElementType, status: ElementState["status"]) => void;
@@ -48,6 +48,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const newProject: Project = {
       id: crypto.randomUUID(),
       name,
+      projectType: "trade_show_booth",
       createdAt: new Date(),
       updatedAt: new Date(),
       rawBrief: "",
@@ -62,6 +63,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const project: Project = {
       id: data.id,
       name: data.name,
+      projectType: data.projectType ?? "trade_show_booth",
       createdAt: new Date(),
       updatedAt: new Date(),
       rawBrief: data.rawBrief,

@@ -94,7 +94,59 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
     },
   });
   
-  // 2. Executive Summary
+  // 2. Project Brief Overview — event details, objectives, deliverables, budget
+  {
+    const ev = brief?.events?.shows?.[0] || {};
+    const venue = ev.venue || brief?.venue || '';
+    const dates = ev.dates || brief?.dates || '';
+    const spaceSize = brief?.spatial?.footprints?.[0]?.size || brief?.space?.size || footprintSize;
+    const spaceDetail = brief?.space?.detail || brief?.spatial?.footprints?.[0]?.description || '';
+
+    const budget = brief?.budget || {};
+    const budgetStr = budget.range?.min
+      ? `$${budget.range.min.toLocaleString()} – $${budget.range.max?.toLocaleString()}`
+      : budget.perShow
+      ? `$${budget.perShow.toLocaleString()} per show`
+      : '';
+
+    const objectives: string[] = [
+      ...(brief?.objectives?.primary ? [brief.objectives.primary] : []),
+      ...(brief?.objectives?.secondary || []),
+    ];
+
+    const deliverables: string[] = brief?.deliverables || brief?.requirements?.deliverables || [];
+
+    const brandDirection = brief?.brand?.aestheticDirection || brief?.brand?.notes || '';
+    const constraints: string[] = brief?.constraints || brief?.requirements?.constraints || [];
+
+    const contact = brief?.contacts?.[0] || brief?.contact || {};
+
+    sections.push({
+      id: 'project-brief',
+      title: 'Project Overview',
+      type: 'mixed',
+      content: {
+        eventName: showName,
+        venue,
+        dates,
+        spaceSize,
+        spaceDetail,
+        budgetStr,
+        budgetMin: budget.range?.min,
+        budgetMax: budget.range?.max,
+        budgetPerShow: budget.perShow,
+        proposalDeadline: brief?.proposalDeadline || '',
+        objectives,
+        deliverables,
+        brandDirection,
+        constraints,
+        contactName: contact.name || '',
+        contactEmail: contact.email || '',
+      },
+    });
+  }
+
+  // 3. Executive Summary
   if (elements?.bigIdea?.data) {
     const bigIdea = elements.bigIdea.data;
     sections.push({
@@ -109,8 +161,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 3. Hero Render
+
+  // 4. Hero Render
   const heroImage = images.find(i => i.angle_id === 'hero_34');
   if (heroImage) {
     sections.push({
@@ -119,12 +171,12 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       type: 'image',
       content: {
         imageUrl: heroImage.public_url,
-        caption: `3/4 Hero View — ${brief?.spatial?.footprints?.[0]?.size || '30x30'} Booth`,
+        caption: `3/4 Hero View — ${footprintSize} Activation`,
       },
     });
   }
-  
-  // 4. Strategic Concept (Big Idea details)
+
+  // 5. Strategic Concept (Big Idea details)
   if (elements?.bigIdea?.data) {
     const bigIdea = elements.bigIdea.data;
     sections.push({
@@ -140,8 +192,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 5. Experience Framework
+
+  // 6. Experience Framework
   if (elements?.experienceFramework?.data) {
     const ef = elements.experienceFramework.data;
     sections.push({
@@ -155,23 +207,22 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 6. Spatial Design
+
+  // 7. Spatial Design
   if (elements?.spatialStrategy?.data) {
     const spatial = elements.spatialStrategy.data;
     const config0 = spatial.configs?.[0];
     const dims = config0 ? calculateBoothDimensions(config0.footprintSize) : null;
     const zones = config0?.zones ? normalizeZones(config0.zones, dims?.totalSqft || 900) : [];
-    
-    // Floor plan image
+
     const floorPlanImage = images.find(i => i.angle_id === 'floor_plan_2d' || i.angle_id === 'top');
-    
+
     sections.push({
       id: 'spatial-design',
       title: 'Spatial Design',
       type: 'mixed',
       content: {
-        footprint: config0?.footprintSize || '30x30',
+        footprint: config0?.footprintSize || footprintSize,
         totalSqft: dims?.totalSqft || 900,
         zones: zones.map(z => ({
           name: z.name,
@@ -183,8 +234,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 7. Interactive Mechanics
+
+  // 8. Interactive Mechanics
   if (elements?.interactiveMechanics?.data) {
     const im = elements.interactiveMechanics.data;
     sections.push({
@@ -202,8 +253,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 8. Digital Storytelling
+
+  // 9. Digital Storytelling
   if (elements?.digitalStorytelling?.data) {
     const ds = elements.digitalStorytelling.data;
     sections.push({
@@ -217,14 +268,14 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 9. Multi-View Renders
-  const renderImages = images.filter(i => 
-    i.angle_id !== 'hero_34' && 
+
+  // 10. Multi-View Renders
+  const renderImages = images.filter(i =>
+    i.angle_id !== 'hero_34' &&
     i.angle_id !== 'floor_plan_2d' &&
     !i.angle_id.startsWith('zone_interior_')
   );
-  
+
   if (renderImages.length > 0) {
     sections.push({
       id: 'renders',
@@ -238,8 +289,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 10. Zone Interiors
+
+  // 11. Zone Interiors
   const zoneInteriors = images.filter(i => i.angle_id.startsWith('zone_interior_'));
   if (zoneInteriors.length > 0) {
     sections.push({
@@ -254,8 +305,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 11. Human Connection
+
+  // 12. Human Connection
   if (elements?.humanConnection?.data) {
     const hc = elements.humanConnection.data;
     sections.push({
@@ -269,8 +320,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 12. Adjacent Activations
+
+  // 13. Adjacent Activations
   if (elements?.adjacentActivations?.data) {
     const aa = elements.adjacentActivations.data;
     sections.push({
@@ -283,23 +334,26 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 13. Investment Summary
-  if (elements?.budgetLogic?.data) {
-    const bl = elements.budgetLogic.data;
+
+  // 14. Investment Summary — uses budget range if available, falls back to budgetLogic
+  {
+    const bl = elements?.budgetLogic?.data || {};
+    const budget = brief?.budget || {};
     sections.push({
       id: 'investment',
       title: 'Investment Summary',
       type: 'table',
       content: {
-        totalPerShow: bl.totalPerShow,
+        totalPerShow: bl.totalPerShow || budget.perShow || null,
+        budgetMin: budget.range?.min || null,
+        budgetMax: budget.range?.max || null,
         allocation: bl.allocation || [],
         roiFramework: bl.roiFramework,
         amortization: bl.amortization || [],
       },
     });
   }
-  
+
   // 15. Rhino 3D Comparison (before/after)
   const polishedRhino = (data.rhinoRenders || []).filter(
     (r) => r.polish_status === 'complete' && r.polished_public_url
@@ -363,7 +417,7 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       callToAction: 'Ready to bring this vision to life? Let\'s schedule a detailed walkthrough.',
     },
   });
-  
+
   return sections;
 }
 

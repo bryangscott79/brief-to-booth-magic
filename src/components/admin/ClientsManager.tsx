@@ -4,18 +4,17 @@ import {
   useBrandIntelligence, useUpsertBrandIntelligence, useDeleteBrandIntelligence, useApproveBrandIntelligence,
   type Client, type BrandIntelligenceEntry,
 } from "@/hooks/useClients";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
-  Plus, Trash2, Edit, Building2, Brain, Eye, Palette, Users,
+  Plus, Trash2, Edit, Building2, Brain, Palette,
   ShoppingCart, DollarSign, BookOpen, Star, ChevronRight, Sparkles,
   Check, X, MessageSquare, Loader2, Globe, Search
 } from "lucide-react";

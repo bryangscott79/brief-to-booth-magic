@@ -47,15 +47,42 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     if (fileBase64 && fileType) {
       body.fileBase64 = fileBase64;
       body.fileType = fileType;
-      // Also include brief text as fallback for non-DOCX
       if (text) body.briefText = text;
     } else {
       body.briefText = text;
     }
 
-    const { data, error } = await supabase.functions.invoke("parse-brief", { body });
+    // Use direct fetch with a 90s timeout — supabase.functions.invoke can time out at ~25s
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-    if (error) throw new Error(error.message || "Failed to parse brief");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+
+    let resp: Response;
+    try {
+      resp = await fetch(`${supabaseUrl}/functions/v1/parse-brief`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anonKey,
+          "Authorization": `Bearer ${accessToken || anonKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "Unknown error");
+      throw new Error(`Parse request failed (${resp.status}): ${errText}`);
+    }
+
+    const data = await resp.json();
     if (data?.error) throw new Error(data.error);
     if (!data?.data) throw new Error("No parsed data returned");
 

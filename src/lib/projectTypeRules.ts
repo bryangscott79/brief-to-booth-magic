@@ -277,7 +277,7 @@ ENVIRONMENT:
   // ─── FILM / EVENT PREMIERE ────────────────────────────────────────────────
   film_premiere: {
     structureNoun: "premiere event build",
-    sizeLabel: (w, d, sqft) => sqft > 0 ? `${sqft.toLocaleString()} sq ft premiere build` : `${w}' red carpet`,
+    sizeLabel: (w, _d, sqft) => sqft > 0 ? `${sqft.toLocaleString()} sq ft premiere build` : `${w}' red carpet`,
     scaleBlock: (w, _d, sqft) => `PREMIERE EVENT SCALE:
 
 PHYSICAL SETUP:

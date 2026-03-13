@@ -47,6 +47,8 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     if (fileBase64 && fileType) {
       body.fileBase64 = fileBase64;
       body.fileType = fileType;
+      // Also include brief text as fallback for non-DOCX
+      if (text) body.briefText = text;
     } else {
       body.briefText = text;
     }

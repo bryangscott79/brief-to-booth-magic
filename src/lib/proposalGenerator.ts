@@ -97,27 +97,33 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
   // 2. Project Brief Overview — event details, objectives, deliverables, budget
   {
     const ev = brief?.events?.shows?.[0] || {};
-    const venue = ev.venue || brief?.venue || '';
+    const venue = ev.location || ev.venue || brief?.venue || '';
     const dates = ev.dates || brief?.dates || '';
     const spaceSize = brief?.spatial?.footprints?.[0]?.size || brief?.space?.size || footprintSize;
     const spaceDetail = brief?.space?.detail || brief?.spatial?.footprints?.[0]?.description || '';
 
     const budget = brief?.budget || {};
-    const budgetStr = budget.range?.min
-      ? `$${budget.range.min.toLocaleString()} – $${budget.range.max?.toLocaleString()}`
-      : budget.perShow
-      ? `$${budget.perShow.toLocaleString()} per show`
-      : '';
 
     const objectives: string[] = [
       ...(brief?.objectives?.primary ? [brief.objectives.primary] : []),
       ...(brief?.objectives?.secondary || []),
     ];
 
-    const deliverables: string[] = brief?.deliverables || brief?.requirements?.deliverables || [];
+    // requiredDeliverables is the canonical field from parse-brief schema
+    const deliverables: string[] = brief?.requiredDeliverables || brief?.deliverables || [];
 
-    const brandDirection = brief?.brand?.aestheticDirection || brief?.brand?.notes || '';
-    const constraints: string[] = brief?.constraints || brief?.requirements?.constraints || [];
+    // Brand direction from creative.embrace + moodKeywords, and spatial sustainability notes
+    const embraceItems: string[] = brief?.creative?.embrace || [];
+    const moodKeywords: string[] = brief?.creative?.moodKeywords || [];
+    const brandDirection = brief?.creative?.designPhilosophy ||
+      (embraceItems.length ? embraceItems.join(', ') : '') ||
+      (moodKeywords.length ? moodKeywords.join(', ') : '');
+
+    // Constraints from creative.avoid + spatial sustainability
+    const constraints: string[] = [
+      ...(brief?.creative?.avoid || []),
+      ...(brief?.spatial?.reuseRequirement ? [brief.spatial.reuseRequirement] : []),
+    ];
 
     const contact = brief?.contacts?.[0] || brief?.contact || {};
 
@@ -131,11 +137,10 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
         dates,
         spaceSize,
         spaceDetail,
-        budgetStr,
-        budgetMin: budget.range?.min,
-        budgetMax: budget.range?.max,
-        budgetPerShow: budget.perShow,
-        proposalDeadline: brief?.proposalDeadline || '',
+        budgetMin: budget.range?.min ?? null,
+        budgetMax: budget.range?.max ?? null,
+        budgetPerShow: budget.perShow ?? null,
+        proposalDeadline: brief?.timeline?.proposalDue || '',
         objectives,
         deliverables,
         brandDirection,

@@ -14,9 +14,9 @@ import {
 } from "@/lib/spatialUtils";
 
 import {
-  getRules,
   buildPromptOpener,
   buildComplianceHeader,
+  getRules,
 } from "@/lib/projectTypeRules";
 
 // Re-export types that callers may need

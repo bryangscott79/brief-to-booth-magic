@@ -1133,21 +1133,6 @@ function pptxBulletBlock(
   return y + 0.15;
 }
 
-// Helper: add a key-value row
-function pptxKVRow(
-  slide: any,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-  w: number,
-  brandColor: string
-): number {
-  if (!value) return y;
-  slide.addText(label, { x, y, w, h: 0.18, fontSize: 8, bold: true, color: brandColor });
-  slide.addText(value.substring(0, 200), { x, y: y + 0.18, w, h: 0.26, fontSize: 11, color: '1a1a1a' });
-  return y + 0.5;
-}
 
 function addPptxTextContent(slide: any, content: any, brandColor = '333333') {
   let y = 1.2;

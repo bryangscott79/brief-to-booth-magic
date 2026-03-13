@@ -743,13 +743,150 @@ function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, widt
   }
 }
 
-function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, width: number) {
+function renderProjectBriefSection(
+  pdf: jsPDF,
+  content: any,
+  x: number,
+  y: number,
+  width: number,
+  _pageHeight: number,
+  brandRgb: [number, number, number]
+) {
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let leftY = y;
+  let rightY = y;
+  const [r, g, b] = brandRgb;
+
+  // ── Left column: event & space details ──
+  const addLabel = (label: string, value: string, refY: number, col: 'left' | 'right' = 'left') => {
+    if (!value) return refY;
+    const cx = col === 'left' ? x : rightX;
+    const cw = colWidth;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(r, g, b);
+    pdf.text(label.toUpperCase(), cx, refY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(12);
+    pdf.setTextColor(30, 30, 30);
+    const lines = pdf.splitTextToSize(value, cw);
+    pdf.text(lines.slice(0, 2), cx, refY + 15);
+    return refY + 15 + lines.slice(0, 2).length * 16 + 10;
+  };
+
+  if (content.eventName) leftY = addLabel('Event', content.eventName, leftY);
+  if (content.venue) leftY = addLabel('Venue', content.venue, leftY);
+  if (content.dates) leftY = addLabel('Dates', content.dates, leftY);
+  if (content.spaceSize) leftY = addLabel('Space', content.spaceSize + (content.spaceDetail ? ` — ${content.spaceDetail}` : ''), leftY);
+  if (content.proposalDeadline) leftY = addLabel('Proposal Deadline', content.proposalDeadline, leftY);
+  if (content.contactName) leftY = addLabel('Client Contact', content.contactName + (content.contactEmail ? ` | ${content.contactEmail}` : ''), leftY);
+
+  // Budget display
+  if (content.budgetMin || content.budgetMax || content.budgetPerShow) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(r, g, b);
+    pdf.text('BUDGET RANGE', x, leftY);
+    leftY += 15;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(22);
+    pdf.setTextColor(30, 30, 30);
+    const budgetDisplay = content.budgetMin
+      ? `$${content.budgetMin.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`
+      : `$${content.budgetPerShow?.toLocaleString()} per show`;
+    pdf.text(budgetDisplay, x, leftY + 20);
+    leftY += 45;
+  }
+
+  // ── Right column: objectives ──
+  if (content.objectives?.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Project Objectives', rightX, rightY);
+    rightY += 22;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(30, 30, 30);
+    content.objectives.slice(0, 5).forEach((obj: string) => {
+      const lines = pdf.splitTextToSize(`• ${obj}`, colWidth - 10);
+      pdf.text(lines.slice(0, 2), rightX, rightY);
+      rightY += lines.slice(0, 2).length * 15 + 6;
+    });
+    rightY += 10;
+  }
+
+  // Deliverables
+  if (content.deliverables?.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Required Deliverables', rightX, rightY);
+    rightY += 22;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(30, 30, 30);
+    content.deliverables.slice(0, 6).forEach((d: string) => {
+      const lines = pdf.splitTextToSize(`• ${d}`, colWidth - 10);
+      pdf.text(lines.slice(0, 2), rightX, rightY);
+      rightY += lines.slice(0, 2).length * 15 + 6;
+    });
+    rightY += 10;
+  }
+
+  // Brand direction (below deliverables or left col)
+  const belowY = Math.max(leftY, rightY) + 10;
+  if (content.brandDirection) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Brand Direction', x, belowY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(content.brandDirection, width);
+    pdf.text(lines.slice(0, 3), x, belowY + 18);
+  }
+
+  // Constraints
+  if (content.constraints?.length > 0) {
+    const constraintY = belowY + (content.brandDirection ? 80 : 0);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Special Requirements & Constraints', x, constraintY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(50, 50, 50);
+    let cy = constraintY + 18;
+    content.constraints.slice(0, 4).forEach((c: string) => {
+      const lines = pdf.splitTextToSize(`• ${c}`, width);
+      pdf.text(lines.slice(0, 2), x, cy);
+      cy += lines.slice(0, 2).length * 15 + 6;
+    });
+  }
+}
+
+function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb?: [number, number, number]) {
   let currentY = y;
-  
-  if (content.totalPerShow) {
+  const [r, g, b] = brandRgb || [0, 71, 171];
+
+  // Show budget range if available, otherwise totalPerShow
+  if (content.budgetMin || content.budgetMax) {
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(32);
-    pdf.setTextColor(0, 71, 171);
+    pdf.setTextColor(r, g, b);
+    pdf.text(`$${content.budgetMin?.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`, x, currentY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(14);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Total Budget Range', x, currentY + 25);
+    currentY += 60;
+  } else if (content.totalPerShow) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(32);
+    pdf.setTextColor(r, g, b);
     pdf.text(`$${content.totalPerShow.toLocaleString()}`, x, currentY);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(14);
@@ -757,33 +894,31 @@ function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, widt
     pdf.text('Estimated Investment Per Show', x, currentY + 25);
     currentY += 60;
   }
-  
+
   if (content.allocation && content.allocation.length > 0) {
     const colWidths = [width * 0.35, width * 0.15, width * 0.2, width * 0.3];
     const headers = ['Category', '%', 'Amount', 'Description'];
-    
-    // Header row
+
     pdf.setFillColor(240, 240, 240);
     pdf.rect(x, currentY, width, 30, 'F');
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11);
     pdf.setTextColor(50, 50, 50);
-    
+
     let headerX = x + 10;
     headers.forEach((h, i) => {
       pdf.text(h, headerX, currentY + 20);
       headerX += colWidths[i];
     });
     currentY += 35;
-    
-    // Data rows
+
     pdf.setFont('helvetica', 'normal');
     content.allocation.slice(0, 8).forEach((row: any, idx: number) => {
       if (idx % 2 === 1) {
         pdf.setFillColor(248, 248, 248);
         pdf.rect(x, currentY - 5, width, 25, 'F');
       }
-      
+
       let cellX = x + 10;
       pdf.text(row.category || '', cellX, currentY + 12);
       cellX += colWidths[0];
@@ -793,11 +928,12 @@ function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, widt
       cellX += colWidths[2];
       const descLines = pdf.splitTextToSize(row.description || '', colWidths[3] - 20);
       pdf.text(descLines[0] || '', cellX, currentY + 12);
-      
+
       currentY += 28;
     });
   }
 }
+
 
 async function renderGridSection(
   pdf: jsPDF,

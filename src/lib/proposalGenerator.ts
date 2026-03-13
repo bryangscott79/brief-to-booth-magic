@@ -1240,8 +1240,76 @@ function addPptxBrandIntelContent(slide: any, content: any, brandColor: string) 
   });
 }
 
+function addPptxProjectBriefContent(slide: any, content: any, brandColor: string) {
+  // Left column: event/space/budget details
+  let leftY = 1.2;
+  const addRow = (label: string, value: string, col: 'left' | 'right' = 'left') => {
+    if (!value) return;
+    const x = col === 'left' ? 0.5 : 5.2;
+    slide.addText(label, { x, y: leftY, w: 4.3, h: 0.18, fontSize: 8, bold: true, color: brandColor });
+    slide.addText(value, { x, y: leftY + 0.18, w: 4.3, h: 0.28, fontSize: 11, color: '1a1a1a' });
+    leftY += 0.52;
+  };
+
+  if (content.eventName) addRow('EVENT', content.eventName);
+  if (content.venue) addRow('VENUE', content.venue);
+  if (content.dates) addRow('DATES', content.dates);
+  if (content.spaceSize) addRow('SPACE', content.spaceSize + (content.spaceDetail ? ` — ${content.spaceDetail}` : ''));
+  if (content.proposalDeadline) addRow('PROPOSAL DEADLINE', content.proposalDeadline);
+  if (content.contactName) addRow('CLIENT CONTACT', content.contactName + (content.contactEmail ? ` | ${content.contactEmail}` : ''));
+
+  // Budget — prominent display
+  if (content.budgetMin || content.budgetPerShow) {
+    const budgetStr = content.budgetMin
+      ? `$${content.budgetMin.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`
+      : `$${content.budgetPerShow?.toLocaleString()} per show`;
+    slide.addText('BUDGET RANGE', { x: 0.5, y: leftY, w: 4.3, h: 0.2, fontSize: 8, bold: true, color: brandColor });
+    slide.addText(budgetStr, { x: 0.5, y: leftY + 0.2, w: 4.5, h: 0.45, fontSize: 22, bold: true, color: '1a1a1a' });
+    leftY += 0.8;
+  }
+
+  // Right column: objectives + deliverables
+  let rightY = 1.2;
+  if (content.objectives?.length > 0) {
+    slide.addText('Project Objectives', { x: 5.2, y: rightY, w: 4.3, h: 0.3, fontSize: 13, bold: true, color: brandColor });
+    rightY += 0.35;
+    content.objectives.slice(0, 5).forEach((obj: string) => {
+      slide.addText(`• ${obj}`, { x: 5.2, y: rightY, w: 4.3, h: 0.28, fontSize: 10, color: '333333' });
+      rightY += 0.3;
+    });
+    rightY += 0.15;
+  }
+
+  if (content.deliverables?.length > 0) {
+    slide.addText('Required Deliverables', { x: 5.2, y: rightY, w: 4.3, h: 0.3, fontSize: 13, bold: true, color: brandColor });
+    rightY += 0.35;
+    content.deliverables.slice(0, 6).forEach((d: string) => {
+      slide.addText(`• ${d}`, { x: 5.2, y: rightY, w: 4.3, h: 0.28, fontSize: 10, color: '333333' });
+      rightY += 0.3;
+    });
+  }
+
+  // Brand direction + constraints spanning full width below
+  const belowY = Math.max(leftY, rightY) + 0.1;
+  if (content.brandDirection) {
+    slide.addText('Brand Direction', { x: 0.5, y: belowY, w: 9, h: 0.25, fontSize: 11, bold: true, color: brandColor });
+    slide.addText(content.brandDirection.substring(0, 300), { x: 0.5, y: belowY + 0.27, w: 9, h: 0.45, fontSize: 9, color: '444444' });
+  }
+}
+
 function addPptxTableContent(slide: any, content: any, brandColor: string) {
-  if (content.totalPerShow) {
+  // Show budget range if available, otherwise totalPerShow
+  if (content.budgetMin || content.budgetMax) {
+    const budgetStr = `$${content.budgetMin?.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`;
+    slide.addText(budgetStr, {
+      x: 0.5, y: 1.1, w: 6, h: 0.6,
+      fontSize: 32, bold: true, color: brandColor,
+    });
+    slide.addText('Total Budget Range', {
+      x: 0.5, y: 1.65, w: 4, h: 0.3,
+      fontSize: 12, color: '666666',
+    });
+  } else if (content.totalPerShow) {
     slide.addText(`$${content.totalPerShow.toLocaleString()}`, {
       x: 0.5, y: 1.1, w: 4, h: 0.6,
       fontSize: 36, bold: true, color: brandColor,
@@ -1251,7 +1319,7 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
       fontSize: 12, color: '666666',
     });
   }
-  
+
   if (content.allocation?.length > 0) {
     const tableData = [
       ['Category', '%', 'Amount'],
@@ -1261,7 +1329,7 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
         `$${(r.amount || 0).toLocaleString()}`,
       ]),
     ];
-    
+
     slide.addTable(tableData, {
       x: 0.5, y: 2.1, w: 5,
       fontSize: 10,
@@ -1271,6 +1339,7 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
     });
   }
 }
+
 
 function addPptxGridContent(slide: any, content: any) {
   const images = content.images || [];

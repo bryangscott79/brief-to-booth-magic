@@ -109,7 +109,7 @@ The booth features a central "${heroInstallation.name}" installation:
 - Lighting: ${heroPhysicalForm?.lighting || "dramatic accent lighting in brand colors"}
 - Scale: ${heroPhysicalForm?.dimensions || "prominent central feature"}` : "";
 
-  parts.push(`Generate a photorealistic INTERIOR perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${boothDimensions.totalSqft} sq ft) trade show booth for ${brief.brand.name}.
+  parts.push(`Generate a photorealistic INTERIOR perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${boothDimensions.totalSqft} sq ft) ${rules.structureNoun} for ${brief.brand.name}.
 
 THIS IS CRITICAL: This zone is part of the SAME booth as the hero image reference. You must maintain EXACT visual consistency.`);
 

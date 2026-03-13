@@ -51,8 +51,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const projectId = searchParams.get("project");
   const { user, signOut } = useAuth();
 
+  const noProjectPaths = ["/projects", "/company", "/admin"];
   const buildPath = (path: string) => {
-    if (path === "/projects" || path === "/company") return path;
+    if (noProjectPaths.includes(path)) return path;
     return projectId ? `${path}?project=${projectId}` : path;
   };
 

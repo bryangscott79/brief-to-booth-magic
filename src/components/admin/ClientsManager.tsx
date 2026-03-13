@@ -193,7 +193,7 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
   const { data: entries = [], isLoading } = useBrandIntelligence(client.id);
   const deleteEntry = useDeleteBrandIntelligence();
   const approve = useApproveBrandIntelligence();
-  const deleteClient = useDeleteClient();
+  const _deleteClientUnused = useDeleteClient();
 
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<BrandIntelligenceEntry | null>(null);

@@ -64,7 +64,19 @@ export interface ProposalSection {
 export function buildProposalSections(data: ProposalData): ProposalSection[] {
   const { brief, elements, images, config } = data;
   const sections: ProposalSection[] = [];
-  
+
+  // Helper to get show/event name from multiple possible locations
+  const showName =
+    brief?.eventContext?.showName ||
+    brief?.events?.shows?.[0]?.name ||
+    brief?.show ||
+    '';
+
+  const footprintSize =
+    brief?.spatial?.footprints?.[0]?.size ||
+    brief?.space?.size ||
+    '30x30';
+
   // 1. Cover Page
   sections.push({
     id: 'cover',
@@ -76,13 +88,70 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       exhibitHouseName: config.exhibitHouseName,
       exhibitHouseLogo: config.exhibitHouseLogo,
       projectTitle: elements?.bigIdea?.data?.headline || 'Exhibit Concept Proposal',
-      showName: brief?.eventContext?.showName || '',
+      showName,
       date: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-      footprintSize: brief?.spatial?.footprints?.[0]?.size || '30x30',
+      footprintSize,
     },
   });
   
-  // 2. Executive Summary
+  // 2. Project Brief Overview — event details, objectives, deliverables, budget
+  {
+    const ev = brief?.events?.shows?.[0] || {};
+    const venue = ev.location || ev.venue || brief?.venue || '';
+    const dates = ev.dates || brief?.dates || '';
+    const spaceSize = brief?.spatial?.footprints?.[0]?.size || brief?.space?.size || footprintSize;
+    const spaceDetail = brief?.space?.detail || brief?.spatial?.footprints?.[0]?.description || '';
+
+    const budget = brief?.budget || {};
+
+    const objectives: string[] = [
+      ...(brief?.objectives?.primary ? [brief.objectives.primary] : []),
+      ...(brief?.objectives?.secondary || []),
+    ];
+
+    // requiredDeliverables is the canonical field from parse-brief schema
+    const deliverables: string[] = brief?.requiredDeliverables || brief?.deliverables || [];
+
+    // Brand direction from creative.embrace + moodKeywords, and spatial sustainability notes
+    const embraceItems: string[] = brief?.creative?.embrace || [];
+    const moodKeywords: string[] = brief?.creative?.moodKeywords || [];
+    const brandDirection = brief?.creative?.designPhilosophy ||
+      (embraceItems.length ? embraceItems.join(', ') : '') ||
+      (moodKeywords.length ? moodKeywords.join(', ') : '');
+
+    // Constraints from creative.avoid + spatial sustainability
+    const constraints: string[] = [
+      ...(brief?.creative?.avoid || []),
+      ...(brief?.spatial?.reuseRequirement ? [brief.spatial.reuseRequirement] : []),
+    ];
+
+    const contact = brief?.contacts?.[0] || brief?.contact || {};
+
+    sections.push({
+      id: 'project-brief',
+      title: 'Project Overview',
+      type: 'mixed',
+      content: {
+        eventName: showName,
+        venue,
+        dates,
+        spaceSize,
+        spaceDetail,
+        budgetMin: budget.range?.min ?? null,
+        budgetMax: budget.range?.max ?? null,
+        budgetPerShow: budget.perShow ?? null,
+        proposalDeadline: brief?.timeline?.proposalDue || '',
+        objectives,
+        deliverables,
+        brandDirection,
+        constraints,
+        contactName: contact.name || '',
+        contactEmail: contact.email || '',
+      },
+    });
+  }
+
+  // 3. Executive Summary
   if (elements?.bigIdea?.data) {
     const bigIdea = elements.bigIdea.data;
     sections.push({
@@ -97,8 +166,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 3. Hero Render
+
+  // 4. Hero Render
   const heroImage = images.find(i => i.angle_id === 'hero_34');
   if (heroImage) {
     sections.push({
@@ -107,12 +176,12 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       type: 'image',
       content: {
         imageUrl: heroImage.public_url,
-        caption: `3/4 Hero View — ${brief?.spatial?.footprints?.[0]?.size || '30x30'} Booth`,
+        caption: `3/4 Hero View — ${footprintSize} Activation`,
       },
     });
   }
-  
-  // 4. Strategic Concept (Big Idea details)
+
+  // 5. Strategic Concept (Big Idea details)
   if (elements?.bigIdea?.data) {
     const bigIdea = elements.bigIdea.data;
     sections.push({
@@ -128,8 +197,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 5. Experience Framework
+
+  // 6. Experience Framework
   if (elements?.experienceFramework?.data) {
     const ef = elements.experienceFramework.data;
     sections.push({
@@ -143,23 +212,22 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 6. Spatial Design
+
+  // 7. Spatial Design
   if (elements?.spatialStrategy?.data) {
     const spatial = elements.spatialStrategy.data;
     const config0 = spatial.configs?.[0];
     const dims = config0 ? calculateBoothDimensions(config0.footprintSize) : null;
     const zones = config0?.zones ? normalizeZones(config0.zones, dims?.totalSqft || 900) : [];
-    
-    // Floor plan image
+
     const floorPlanImage = images.find(i => i.angle_id === 'floor_plan_2d' || i.angle_id === 'top');
-    
+
     sections.push({
       id: 'spatial-design',
       title: 'Spatial Design',
       type: 'mixed',
       content: {
-        footprint: config0?.footprintSize || '30x30',
+        footprint: config0?.footprintSize || footprintSize,
         totalSqft: dims?.totalSqft || 900,
         zones: zones.map(z => ({
           name: z.name,
@@ -171,8 +239,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 7. Interactive Mechanics
+
+  // 8. Interactive Mechanics
   if (elements?.interactiveMechanics?.data) {
     const im = elements.interactiveMechanics.data;
     sections.push({
@@ -190,8 +258,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 8. Digital Storytelling
+
+  // 9. Digital Storytelling
   if (elements?.digitalStorytelling?.data) {
     const ds = elements.digitalStorytelling.data;
     sections.push({
@@ -205,14 +273,14 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 9. Multi-View Renders
-  const renderImages = images.filter(i => 
-    i.angle_id !== 'hero_34' && 
+
+  // 10. Multi-View Renders
+  const renderImages = images.filter(i =>
+    i.angle_id !== 'hero_34' &&
     i.angle_id !== 'floor_plan_2d' &&
     !i.angle_id.startsWith('zone_interior_')
   );
-  
+
   if (renderImages.length > 0) {
     sections.push({
       id: 'renders',
@@ -226,8 +294,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 10. Zone Interiors
+
+  // 11. Zone Interiors
   const zoneInteriors = images.filter(i => i.angle_id.startsWith('zone_interior_'));
   if (zoneInteriors.length > 0) {
     sections.push({
@@ -242,8 +310,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 11. Human Connection
+
+  // 12. Human Connection
   if (elements?.humanConnection?.data) {
     const hc = elements.humanConnection.data;
     sections.push({
@@ -257,8 +325,8 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 12. Adjacent Activations
+
+  // 13. Adjacent Activations
   if (elements?.adjacentActivations?.data) {
     const aa = elements.adjacentActivations.data;
     sections.push({
@@ -271,23 +339,26 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       },
     });
   }
-  
-  // 13. Investment Summary
-  if (elements?.budgetLogic?.data) {
-    const bl = elements.budgetLogic.data;
+
+  // 14. Investment Summary — uses budget range if available, falls back to budgetLogic
+  {
+    const bl = elements?.budgetLogic?.data || {};
+    const budget = brief?.budget || {};
     sections.push({
       id: 'investment',
       title: 'Investment Summary',
       type: 'table',
       content: {
-        totalPerShow: bl.totalPerShow,
+        totalPerShow: bl.totalPerShow || budget.perShow || null,
+        budgetMin: budget.range?.min || null,
+        budgetMax: budget.range?.max || null,
         allocation: bl.allocation || [],
         roiFramework: bl.roiFramework,
         amortization: bl.amortization || [],
       },
     });
   }
-  
+
   // 15. Rhino 3D Comparison (before/after)
   const polishedRhino = (data.rhinoRenders || []).filter(
     (r) => r.polish_status === 'complete' && r.polished_public_url
@@ -351,7 +422,7 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       callToAction: 'Ready to bring this vision to life? Let\'s schedule a detailed walkthrough.',
     },
   });
-  
+
   return sections;
 }
 
@@ -419,22 +490,26 @@ export async function generateProposalPDF(
       // Content based on type
       pdf.setTextColor(...hexToRgb(textColor));
       
-      switch (section.type) {
-        case 'text':
-          renderTextSection(pdf, section.content, margin, margin + 120, contentWidth);
-          break;
-        case 'image':
-          await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
-          break;
-        case 'mixed':
-          renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
-          break;
-        case 'table':
-          renderTableSection(pdf, section.content, margin, margin + 120, contentWidth);
-          break;
-        case 'grid':
-          await renderGridSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
-          break;
+      if (section.id === 'project-brief') {
+        renderProjectBriefSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else {
+        switch (section.type) {
+          case 'text':
+            renderTextSection(pdf, section.content, margin, margin + 120, contentWidth);
+            break;
+          case 'image':
+            await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
+            break;
+          case 'mixed':
+            renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
+            break;
+          case 'table':
+            renderTableSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+            break;
+          case 'grid':
+            await renderGridSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
+            break;
+        }
       }
     }
     
@@ -673,13 +748,150 @@ function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, widt
   }
 }
 
-function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, width: number) {
+function renderProjectBriefSection(
+  pdf: jsPDF,
+  content: any,
+  x: number,
+  y: number,
+  width: number,
+  _pageHeight: number,
+  brandRgb: [number, number, number]
+) {
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let leftY = y;
+  let rightY = y;
+  const [r, g, b] = brandRgb;
+
+  // ── Left column: event & space details ──
+  const addLabel = (label: string, value: string, refY: number, col: 'left' | 'right' = 'left') => {
+    if (!value) return refY;
+    const cx = col === 'left' ? x : rightX;
+    const cw = colWidth;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(r, g, b);
+    pdf.text(label.toUpperCase(), cx, refY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(12);
+    pdf.setTextColor(30, 30, 30);
+    const lines = pdf.splitTextToSize(value, cw);
+    pdf.text(lines.slice(0, 2), cx, refY + 15);
+    return refY + 15 + lines.slice(0, 2).length * 16 + 10;
+  };
+
+  if (content.eventName) leftY = addLabel('Event', content.eventName, leftY);
+  if (content.venue) leftY = addLabel('Venue', content.venue, leftY);
+  if (content.dates) leftY = addLabel('Dates', content.dates, leftY);
+  if (content.spaceSize) leftY = addLabel('Space', content.spaceSize + (content.spaceDetail ? ` — ${content.spaceDetail}` : ''), leftY);
+  if (content.proposalDeadline) leftY = addLabel('Proposal Deadline', content.proposalDeadline, leftY);
+  if (content.contactName) leftY = addLabel('Client Contact', content.contactName + (content.contactEmail ? ` | ${content.contactEmail}` : ''), leftY);
+
+  // Budget display
+  if (content.budgetMin || content.budgetMax || content.budgetPerShow) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(r, g, b);
+    pdf.text('BUDGET RANGE', x, leftY);
+    leftY += 15;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(22);
+    pdf.setTextColor(30, 30, 30);
+    const budgetDisplay = content.budgetMin
+      ? `$${content.budgetMin.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`
+      : `$${content.budgetPerShow?.toLocaleString()} per show`;
+    pdf.text(budgetDisplay, x, leftY + 20);
+    leftY += 45;
+  }
+
+  // ── Right column: objectives ──
+  if (content.objectives?.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Project Objectives', rightX, rightY);
+    rightY += 22;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(30, 30, 30);
+    content.objectives.slice(0, 5).forEach((obj: string) => {
+      const lines = pdf.splitTextToSize(`• ${obj}`, colWidth - 10);
+      pdf.text(lines.slice(0, 2), rightX, rightY);
+      rightY += lines.slice(0, 2).length * 15 + 6;
+    });
+    rightY += 10;
+  }
+
+  // Deliverables
+  if (content.deliverables?.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Required Deliverables', rightX, rightY);
+    rightY += 22;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(30, 30, 30);
+    content.deliverables.slice(0, 6).forEach((d: string) => {
+      const lines = pdf.splitTextToSize(`• ${d}`, colWidth - 10);
+      pdf.text(lines.slice(0, 2), rightX, rightY);
+      rightY += lines.slice(0, 2).length * 15 + 6;
+    });
+    rightY += 10;
+  }
+
+  // Brand direction (below deliverables or left col)
+  const belowY = Math.max(leftY, rightY) + 10;
+  if (content.brandDirection) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Brand Direction', x, belowY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(content.brandDirection, width);
+    pdf.text(lines.slice(0, 3), x, belowY + 18);
+  }
+
+  // Constraints
+  if (content.constraints?.length > 0) {
+    const constraintY = belowY + (content.brandDirection ? 80 : 0);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(r, g, b);
+    pdf.text('Special Requirements & Constraints', x, constraintY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(50, 50, 50);
+    let cy = constraintY + 18;
+    content.constraints.slice(0, 4).forEach((c: string) => {
+      const lines = pdf.splitTextToSize(`• ${c}`, width);
+      pdf.text(lines.slice(0, 2), x, cy);
+      cy += lines.slice(0, 2).length * 15 + 6;
+    });
+  }
+}
+
+function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb?: [number, number, number]) {
   let currentY = y;
-  
-  if (content.totalPerShow) {
+  const [r, g, b] = brandRgb || [0, 71, 171];
+
+  // Show budget range if available, otherwise totalPerShow
+  if (content.budgetMin || content.budgetMax) {
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(32);
-    pdf.setTextColor(0, 71, 171);
+    pdf.setTextColor(r, g, b);
+    pdf.text(`$${content.budgetMin?.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`, x, currentY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(14);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Total Budget Range', x, currentY + 25);
+    currentY += 60;
+  } else if (content.totalPerShow) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(32);
+    pdf.setTextColor(r, g, b);
     pdf.text(`$${content.totalPerShow.toLocaleString()}`, x, currentY);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(14);
@@ -687,33 +899,31 @@ function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, widt
     pdf.text('Estimated Investment Per Show', x, currentY + 25);
     currentY += 60;
   }
-  
+
   if (content.allocation && content.allocation.length > 0) {
     const colWidths = [width * 0.35, width * 0.15, width * 0.2, width * 0.3];
     const headers = ['Category', '%', 'Amount', 'Description'];
-    
-    // Header row
+
     pdf.setFillColor(240, 240, 240);
     pdf.rect(x, currentY, width, 30, 'F');
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11);
     pdf.setTextColor(50, 50, 50);
-    
+
     let headerX = x + 10;
     headers.forEach((h, i) => {
       pdf.text(h, headerX, currentY + 20);
       headerX += colWidths[i];
     });
     currentY += 35;
-    
-    // Data rows
+
     pdf.setFont('helvetica', 'normal');
     content.allocation.slice(0, 8).forEach((row: any, idx: number) => {
       if (idx % 2 === 1) {
         pdf.setFillColor(248, 248, 248);
         pdf.rect(x, currentY - 5, width, 25, 'F');
       }
-      
+
       let cellX = x + 10;
       pdf.text(row.category || '', cellX, currentY + 12);
       cellX += colWidths[0];
@@ -723,11 +933,12 @@ function renderTableSection(pdf: jsPDF, content: any, x: number, y: number, widt
       cellX += colWidths[2];
       const descLines = pdf.splitTextToSize(row.description || '', colWidths[3] - 20);
       pdf.text(descLines[0] || '', cellX, currentY + 12);
-      
+
       currentY += 28;
     });
   }
 }
+
 
 async function renderGridSection(
   pdf: jsPDF,
@@ -864,9 +1075,11 @@ export async function generateProposalPPTX(
         fill: { color: brandColorClean },
       });
       
-      // Content based on type — use specialized renderer for brand intelligence
+      // Content based on type — use specialized renderer for known section IDs
       if (section.id === 'brand-intelligence') {
         addPptxBrandIntelContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'project-brief') {
+        addPptxProjectBriefContent(slide, section.content, brandColorClean);
       } else {
         switch (section.type) {
           case 'text':
@@ -1032,8 +1245,76 @@ function addPptxBrandIntelContent(slide: any, content: any, brandColor: string) 
   });
 }
 
+function addPptxProjectBriefContent(slide: any, content: any, brandColor: string) {
+  // Left column: event/space/budget details
+  let leftY = 1.2;
+  const addRow = (label: string, value: string, col: 'left' | 'right' = 'left') => {
+    if (!value) return;
+    const x = col === 'left' ? 0.5 : 5.2;
+    slide.addText(label, { x, y: leftY, w: 4.3, h: 0.18, fontSize: 8, bold: true, color: brandColor });
+    slide.addText(value, { x, y: leftY + 0.18, w: 4.3, h: 0.28, fontSize: 11, color: '1a1a1a' });
+    leftY += 0.52;
+  };
+
+  if (content.eventName) addRow('EVENT', content.eventName);
+  if (content.venue) addRow('VENUE', content.venue);
+  if (content.dates) addRow('DATES', content.dates);
+  if (content.spaceSize) addRow('SPACE', content.spaceSize + (content.spaceDetail ? ` — ${content.spaceDetail}` : ''));
+  if (content.proposalDeadline) addRow('PROPOSAL DEADLINE', content.proposalDeadline);
+  if (content.contactName) addRow('CLIENT CONTACT', content.contactName + (content.contactEmail ? ` | ${content.contactEmail}` : ''));
+
+  // Budget — prominent display
+  if (content.budgetMin || content.budgetPerShow) {
+    const budgetStr = content.budgetMin
+      ? `$${content.budgetMin.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`
+      : `$${content.budgetPerShow?.toLocaleString()} per show`;
+    slide.addText('BUDGET RANGE', { x: 0.5, y: leftY, w: 4.3, h: 0.2, fontSize: 8, bold: true, color: brandColor });
+    slide.addText(budgetStr, { x: 0.5, y: leftY + 0.2, w: 4.5, h: 0.45, fontSize: 22, bold: true, color: '1a1a1a' });
+    leftY += 0.8;
+  }
+
+  // Right column: objectives + deliverables
+  let rightY = 1.2;
+  if (content.objectives?.length > 0) {
+    slide.addText('Project Objectives', { x: 5.2, y: rightY, w: 4.3, h: 0.3, fontSize: 13, bold: true, color: brandColor });
+    rightY += 0.35;
+    content.objectives.slice(0, 5).forEach((obj: string) => {
+      slide.addText(`• ${obj}`, { x: 5.2, y: rightY, w: 4.3, h: 0.28, fontSize: 10, color: '333333' });
+      rightY += 0.3;
+    });
+    rightY += 0.15;
+  }
+
+  if (content.deliverables?.length > 0) {
+    slide.addText('Required Deliverables', { x: 5.2, y: rightY, w: 4.3, h: 0.3, fontSize: 13, bold: true, color: brandColor });
+    rightY += 0.35;
+    content.deliverables.slice(0, 6).forEach((d: string) => {
+      slide.addText(`• ${d}`, { x: 5.2, y: rightY, w: 4.3, h: 0.28, fontSize: 10, color: '333333' });
+      rightY += 0.3;
+    });
+  }
+
+  // Brand direction + constraints spanning full width below
+  const belowY = Math.max(leftY, rightY) + 0.1;
+  if (content.brandDirection) {
+    slide.addText('Brand Direction', { x: 0.5, y: belowY, w: 9, h: 0.25, fontSize: 11, bold: true, color: brandColor });
+    slide.addText(content.brandDirection.substring(0, 300), { x: 0.5, y: belowY + 0.27, w: 9, h: 0.45, fontSize: 9, color: '444444' });
+  }
+}
+
 function addPptxTableContent(slide: any, content: any, brandColor: string) {
-  if (content.totalPerShow) {
+  // Show budget range if available, otherwise totalPerShow
+  if (content.budgetMin || content.budgetMax) {
+    const budgetStr = `$${content.budgetMin?.toLocaleString()} – $${content.budgetMax?.toLocaleString()}`;
+    slide.addText(budgetStr, {
+      x: 0.5, y: 1.1, w: 6, h: 0.6,
+      fontSize: 32, bold: true, color: brandColor,
+    });
+    slide.addText('Total Budget Range', {
+      x: 0.5, y: 1.65, w: 4, h: 0.3,
+      fontSize: 12, color: '666666',
+    });
+  } else if (content.totalPerShow) {
     slide.addText(`$${content.totalPerShow.toLocaleString()}`, {
       x: 0.5, y: 1.1, w: 4, h: 0.6,
       fontSize: 36, bold: true, color: brandColor,
@@ -1043,7 +1324,7 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
       fontSize: 12, color: '666666',
     });
   }
-  
+
   if (content.allocation?.length > 0) {
     const tableData = [
       ['Category', '%', 'Amount'],
@@ -1053,7 +1334,7 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
         `$${(r.amount || 0).toLocaleString()}`,
       ]),
     ];
-    
+
     slide.addTable(tableData, {
       x: 0.5, y: 2.1, w: 5,
       fontSize: 10,
@@ -1063,6 +1344,7 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
     });
   }
 }
+
 
 function addPptxGridContent(slide: any, content: any) {
   const images = content.images || [];

@@ -485,22 +485,26 @@ export async function generateProposalPDF(
       // Content based on type
       pdf.setTextColor(...hexToRgb(textColor));
       
-      switch (section.type) {
-        case 'text':
-          renderTextSection(pdf, section.content, margin, margin + 120, contentWidth);
-          break;
-        case 'image':
-          await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
-          break;
-        case 'mixed':
-          renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
-          break;
-        case 'table':
-          renderTableSection(pdf, section.content, margin, margin + 120, contentWidth);
-          break;
-        case 'grid':
-          await renderGridSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
-          break;
+      if (section.id === 'project-brief') {
+        renderProjectBriefSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else {
+        switch (section.type) {
+          case 'text':
+            renderTextSection(pdf, section.content, margin, margin + 120, contentWidth);
+            break;
+          case 'image':
+            await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
+            break;
+          case 'mixed':
+            renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
+            break;
+          case 'table':
+            renderTableSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+            break;
+          case 'grid':
+            await renderGridSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
+            break;
+        }
       }
     }
     

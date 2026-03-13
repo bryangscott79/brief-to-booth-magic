@@ -1039,8 +1039,10 @@ function renderSpatialDesignSection(
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(r, g, b);
     pdf.text('Materials & Mood', rightX, rightY); rightY += 22;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
-    content.materialsAndMood.slice(0, 8).forEach((m: string) => {
-      const lines = pdf.splitTextToSize(`• ${m}`, colWidth);
+    content.materialsAndMood.slice(0, 8).forEach((m: any) => {
+      // Handle both string and object entries (e.g. { name, description })
+      const text = typeof m === 'string' ? m : (m.material || m.name || m.finish || JSON.stringify(m));
+      const lines = pdf.splitTextToSize(`• ${text}`, colWidth);
       pdf.text(lines.slice(0, 2), rightX, rightY);
       rightY += lines.slice(0, 2).length * 16 + 6;
     });

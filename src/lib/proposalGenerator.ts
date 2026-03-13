@@ -1487,6 +1487,8 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
       border: { pt: 0.5, color: 'DDDDDD' },
     });
   }
+}
+
 function addPptxSpatialMetricsContent(slide: any, content: any, brandColor: string) {
   // KPI row
   const kpis = [

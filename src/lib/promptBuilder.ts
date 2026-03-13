@@ -85,9 +85,11 @@ export function generateZoneInteriorPrompt(
   bigIdea: any,
   boothDimensions: BoothDimensions,
   elements: any,
-  materialsAndMood: any[]
+  materialsAndMood: any[],
+  projectType?: string | null
 ): string {
   const zoneName = (zone.name || "").toLowerCase();
+  const rules = getRules(projectType);
   const parts: string[] = [];
 
   // Get hero installation details for visual consistency

@@ -201,16 +201,16 @@ WHAT TO AVOID:
 - Do NOT make this look like a trade show booth or exhibit`;
     },
     cameraInstructions: {
-      hero_34: (w, d) => `Camera at ground level (5 feet), positioned at 45° front-left, showing the full activation footprint with the hero installation as the dominant focal point. Wide environmental context visible.`,
+      hero_34: (_w, _d) => `Camera at ground level (5 feet), positioned at 45° front-left, showing the full activation footprint with the hero installation as the dominant focal point. Wide environmental context visible.`,
       top: (w, d) => `Aerial drone view, directly overhead, showing the full ${w > 0 ? `${w}' × ${d}'` : "activation"} footprint and surrounding environment layout.`,
       front: (w) => `Camera at street/crowd level (5 feet), centered on the primary entrance/face, capturing the full ${w > 0 ? `${w}-foot` : ""} front of the activation with crowds and environmental context.`,
-      left: (_w, d) => `Camera at eye level, 90° to the left, showing the full depth of the activation space with environmental context.`,
-      right: (_w, d) => `Camera at eye level, 90° to the right, showing the activation footprint depth and surrounding environment.`,
+      left: (_w, _d) => `Camera at eye level, 90° to the left, showing the full depth of the activation space with environmental context.`,
+      right: (_w, _d) => `Camera at eye level, 90° to the right, showing the activation footprint depth and surrounding environment.`,
       back: () => `Camera at eye level, rear of the activation space showing service access and secondary guest egress points.`,
       detail_hero: () => "Medium shot (20-30 feet), focused on the hero installation with crowd interaction visible, immersive detail.",
       detail_lounge: () => "Medium shot (15-20 feet), focused on the social/lounge zone with guests relaxing and interacting.",
     },
-    cameraScaleHint: (footprintLabel, angleId) => {
+    cameraScaleHint: (_footprintLabel, angleId) => {
       if (angleId === "hero_34") return "Camera at ground level, wide 16:9 frame. Hero structure fills 40-60% of frame. Sky or venue ceiling visible above. Crowd energy at edges.";
       if (angleId === "top") return "Aerial overhead — drone perspective. Full footprint visible with environmental context. Natural ground texture (grass, pavement, gravel) visible.";
       return "Eye-level, wide frame showing activation in its environment. Surrounding venue/streetscape provides context.";

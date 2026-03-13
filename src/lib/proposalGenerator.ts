@@ -7,15 +7,9 @@
 
 import { jsPDF } from 'jspdf';
 import PptxGenJS from 'pptxgenjs';
-import {
-  imageUrlToBase64,
-} from './logoUtils';
+import { imageUrlToBase64 } from './logoUtils';
 import { calculateBoothDimensions, normalizeZones } from './spatialUtils';
-import {
-  estimateZoneCosts,
-  validateFullLayout,
-  calculateUtilityRequirements,
-} from './exhibitConstraints';
+import { estimateZoneCosts, validateFullLayout, calculateUtilityRequirements } from './exhibitConstraints';
 import { generateLayoutMetrics } from '../components/spatial/LayoutMetrics';
 
 // Types

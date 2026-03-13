@@ -256,9 +256,8 @@ THIS IS CRITICAL: This zone is part of the SAME booth as the hero image referenc
 
   parts.push("");
   parts.push("STYLE:");
-  parts.push("Architectural visualization quality. Photorealistic materials.");
+  parts.push(`${rules.styleReference}`);
   parts.push("Same lighting style and color temperature as hero image.");
-  parts.push("Professional trade show environment.");
 
   parts.push("");
   parts.push("NEGATIVE PROMPT:");

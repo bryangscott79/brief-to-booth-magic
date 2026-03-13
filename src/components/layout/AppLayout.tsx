@@ -40,6 +40,7 @@ const navItems = [
   { path: "/files", label: "Files", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
   { path: "/company", label: "Company", icon: Building2 },
+  { path: "/admin", label: "Admin", icon: Settings2 },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {

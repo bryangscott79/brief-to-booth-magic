@@ -7,10 +7,10 @@
 
 import { jsPDF } from 'jspdf';
 import PptxGenJS from 'pptxgenjs';
-import {
-  imageUrlToBase64,
-} from './logoUtils';
+import { imageUrlToBase64 } from './logoUtils';
 import { calculateBoothDimensions, normalizeZones } from './spatialUtils';
+import { estimateZoneCosts, validateFullLayout, calculateUtilityRequirements } from './exhibitConstraints';
+import { generateLayoutMetrics } from '../components/spatial/LayoutMetrics';
 
 // Types
 export interface ProposalConfig {
@@ -219,6 +219,7 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
     const config0 = spatial.configs?.[0];
     const dims = config0 ? calculateBoothDimensions(config0.footprintSize) : null;
     const zones = config0?.zones ? normalizeZones(config0.zones, dims?.totalSqft || 900) : [];
+    const totalSqft = dims?.totalSqft || 900;
 
     const floorPlanImage = images.find(i => i.angle_id === 'floor_plan_2d' || i.angle_id === 'top');
 
@@ -228,7 +229,7 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       type: 'mixed',
       content: {
         footprint: config0?.footprintSize || footprintSize,
-        totalSqft: dims?.totalSqft || 900,
+        totalSqft,
         zones: zones.map(z => ({
           name: z.name,
           sqft: z.sqft,
@@ -238,7 +239,72 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
         materialsAndMood: spatial.materialsAndMood || [],
       },
     });
+
+    // 7b. Zone Performance Metrics
+    if (zones.length > 0) {
+      const metrics = generateLayoutMetrics(zones, config0?.layoutType || 'balanced', totalSqft);
+      sections.push({
+        id: 'spatial-metrics',
+        title: 'Zone Performance Metrics',
+        type: 'table',
+        content: {
+          overallScore: metrics.overallScore,
+          totalExpectedVisitors: metrics.totalExpectedVisitors,
+          avgBoothTime: metrics.avgBoothTime,
+          leadProjection: metrics.leadProjection,
+          flowEfficiency: metrics.flowEfficiency,
+          zoneMetrics: metrics.zoneMetrics,
+        },
+      });
+    }
+
+    // 7c. Cost Intelligence
+    if (zones.length > 0) {
+      const budget = brief?.budget || {};
+      const budgetMax = budget.range?.max || budget.perShow || 0;
+      const costEstimate = estimateZoneCosts(zones, totalSqft, 'premium');
+      const utilities = calculateUtilityRequirements(zones);
+      const validations = validateFullLayout(
+        zones,
+        totalSqft,
+        dims?.width || 30,
+        dims?.depth || 30,
+        budgetMax || undefined,
+        'premium'
+      );
+      sections.push({
+        id: 'cost-intelligence',
+        title: 'Cost Intelligence',
+        type: 'table',
+        content: {
+          grandTotal: costEstimate.grandTotal,
+          costPerSqft: costEstimate.costPerSqft,
+          perZone: costEstimate.perZone,
+          budgetMax,
+          utilities,
+          validations: validations.filter(v => v.severity !== 'info'),
+        },
+      });
+    }
+
+    // 7d. Layout Variations
+    if (spatial.configs && spatial.configs.length > 1) {
+      sections.push({
+        id: 'layout-variations',
+        title: 'Layout Variations',
+        type: 'mixed',
+        content: {
+          configs: spatial.configs.map((c: any) => ({
+            name: c.layoutType || c.name || 'Variation',
+            footprintSize: c.footprintSize,
+            description: c.description || c.concept || '',
+            zoneCount: c.zones?.length || 0,
+          })),
+        },
+      });
+    }
   }
+
 
   // 8. Interactive Mechanics
   if (elements?.interactiveMechanics?.data) {
@@ -1080,6 +1146,12 @@ export async function generateProposalPPTX(
         addPptxBrandIntelContent(slide, section.content, brandColorClean);
       } else if (section.id === 'project-brief') {
         addPptxProjectBriefContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'spatial-metrics') {
+        addPptxSpatialMetricsContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'cost-intelligence') {
+        addPptxCostIntelligenceContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'layout-variations') {
+        addPptxMixedContent(slide, section.content, brandColorClean);
       } else {
         switch (section.type) {
           case 'text':
@@ -1417,6 +1489,100 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
   }
 }
 
+function addPptxSpatialMetricsContent(slide: any, content: any, brandColor: string) {
+  // KPI row
+  const kpis = [
+    { label: 'Layout Score', value: `${content.overallScore}/100` },
+    { label: 'Expected Visitors', value: (content.totalExpectedVisitors || 0).toLocaleString() + '/day' },
+    { label: 'Avg Dwell Time', value: `${content.avgBoothTime} min` },
+    { label: 'Flow Efficiency', value: `${content.flowEfficiency}%` },
+    { label: 'Lead Projection', value: `${content.leadProjection}/day` },
+  ];
+  kpis.forEach((kpi, i) => {
+    const x = 0.5 + i * 1.85;
+    slide.addShape('rect', { x, y: 1.2, w: 1.6, h: 0.8, fill: { color: 'F5F5F5' }, line: { color: 'DDDDDD', pt: 0.5 } });
+    slide.addText(kpi.value, { x, y: 1.3, w: 1.6, h: 0.35, fontSize: 16, bold: true, color: brandColor, align: 'center' });
+    slide.addText(kpi.label, { x, y: 1.65, w: 1.6, h: 0.2, fontSize: 8, color: '666666', align: 'center' });
+  });
+
+  // Zone table
+  if (content.zoneMetrics?.length > 0) {
+    const tableData = [
+      [{ text: 'Zone', options: { bold: true } }, { text: 'Traffic', options: { bold: true } }, { text: 'Dwell', options: { bold: true } }, { text: 'Engagement', options: { bold: true } }],
+      ...content.zoneMetrics.slice(0, 8).map((z: any) => [
+        z.zoneName || '',
+        `${z.trafficPercentage}%`,
+        `${Math.round(z.avgDwellTime / 60)}:${String(z.avgDwellTime % 60).padStart(2, '0')}`,
+        `${z.engagementScore}%`,
+      ]),
+    ];
+    slide.addTable(tableData, {
+      x: 0.5, y: 2.2, w: 9,
+      fontSize: 10, color: '333333',
+      fill: { color: 'FAFAFA' },
+      border: { pt: 0.5, color: 'DDDDDD' },
+      rowH: 0.28,
+    });
+  }
+}
+
+function addPptxCostIntelligenceContent(slide: any, content: any, brandColor: string) {
+  // Budget summary
+  slide.addText(`$${(content.grandTotal || 0).toLocaleString()}`, {
+    x: 0.5, y: 1.1, w: 4.5, h: 0.55, fontSize: 32, bold: true, color: brandColor,
+  });
+  slide.addText(`Estimated Build Cost  •  $${content.costPerSqft}/sqft`, {
+    x: 0.5, y: 1.65, w: 4.5, h: 0.25, fontSize: 11, color: '666666',
+  });
+  if (content.budgetMax) {
+    const pct = Math.round((content.grandTotal / content.budgetMax) * 100);
+    const statusColor = pct > 100 ? 'CC0000' : pct > 85 ? 'E6A000' : '1A8A1A';
+    slide.addText(`${pct}% of $${content.budgetMax.toLocaleString()} budget`, {
+      x: 0.5, y: 1.9, w: 4.5, h: 0.25, fontSize: 11, color: statusColor,
+    });
+  }
+
+  // Utilities
+  if (content.utilities) {
+    const u = content.utilities;
+    slide.addText('Utility Requirements', { x: 5.2, y: 1.1, w: 4.3, h: 0.28, fontSize: 12, bold: true, color: brandColor });
+    [
+      `Total Power: ${u.totalWatts.toLocaleString()}W`,
+      `20A Circuits: ${u.totalAmps20}`,
+      `Data Drops: ${u.dataDrops}`,
+      `Dedicated Circuits: ${u.dedicatedCircuits}`,
+    ].forEach((line, i) => {
+      slide.addText(`• ${line}`, { x: 5.2, y: 1.45 + i * 0.26, w: 4.3, h: 0.24, fontSize: 10, color: '333333' });
+    });
+  }
+
+  // Per-zone cost table
+  if (content.perZone?.length > 0) {
+    const tableData = [
+      [{ text: 'Zone', options: { bold: true } }, { text: 'Structure', options: { bold: true } }, { text: 'Tech', options: { bold: true } }, { text: 'FF&E', options: { bold: true } }, { text: 'Total', options: { bold: true } }],
+      ...content.perZone.slice(0, 7).map((z: any) => [
+        z.name, `$${z.structure.toLocaleString()}`, `$${z.technology.toLocaleString()}`, `$${z.furniture.toLocaleString()}`, `$${z.total.toLocaleString()}`,
+      ]),
+    ];
+    slide.addTable(tableData, {
+      x: 0.5, y: 2.5, w: 9,
+      fontSize: 10, color: '333333',
+      fill: { color: 'FAFAFA' },
+      border: { pt: 0.5, color: 'DDDDDD' },
+      rowH: 0.28,
+    });
+  }
+
+  // Validations
+  if (content.validations?.length > 0) {
+    let vy = 4.6;
+    content.validations.slice(0, 3).forEach((v: any) => {
+      const col = v.severity === 'error' ? 'CC0000' : 'CC8800';
+      slide.addText(`⚠ ${v.message}`, { x: 0.5, y: vy, w: 9, h: 0.22, fontSize: 9, color: col });
+      vy += 0.24;
+    });
+  }
+}
 
 function addPptxGridContent(slide: any, content: any) {
   const images = content.images || [];
@@ -1444,6 +1610,7 @@ function addPptxGridContent(slide: any, content: any) {
     } catch (e) {}
   });
 }
+
 
 // ============================================
 // UTILITIES

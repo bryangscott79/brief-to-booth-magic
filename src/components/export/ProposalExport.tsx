@@ -5,43 +5,23 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  FileText,
-  Loader2,
-  Presentation,
-  Settings2,
-  Building2,
-  Image,
-  Sparkles,
-  Check,
-  AlertCircle,
-  ExternalLink,
+  FileText, Loader2, Presentation, Settings2, Building2,
+  Image, Sparkles, Check, AlertCircle, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { Link } from "react-router-dom";
 import {
-  generateProposalPDF,
-  generateProposalPPTX,
-  type ProposalConfig,
-  type ProposalData,
-  type RhinoRenderEntry,
-  type BrandIntelEntry,
+  generateProposalPDF, generateProposalPPTX,
+  type ProposalConfig, type ProposalData, type RhinoRenderEntry, type BrandIntelEntry,
 } from "@/lib/proposalGenerator";
-import {
-  getClearbitLogoUrl,
-  extractDomain,
-  checkClearbitLogo,
-} from "@/lib/logoUtils";
+import { getClearbitLogoUrl, extractDomain, checkClearbitLogo } from "@/lib/logoUtils";
 import { SlideEditor } from "./SlideEditor";
+import { DeckPreview } from "./DeckPreview";
 import type { PresentationTemplate } from "@/lib/presentationTemplates";
 import { getActiveSlides } from "@/lib/presentationTemplates";
 

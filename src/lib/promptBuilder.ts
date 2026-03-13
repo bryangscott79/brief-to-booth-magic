@@ -388,11 +388,16 @@ export interface GeneratePromptParams {
   boothDimensions: BoothDimensions;
   normalizedZones: NormalizedZone[];
   zoneInteriorAngles: ZoneInteriorAngle[];
+  /** Project type ID — drives all language and framing decisions */
+  projectType?: string | null;
 }
 
-/** Generate prompt with validated spatial data */
+/** Generate prompt with validated spatial data, fully project-type-aware */
 export function generatePrompt(angleId: string, params: GeneratePromptParams): string {
-  const { brief, bigIdea, elements, spatialData, boothDimensions, normalizedZones, zoneInteriorAngles } = params;
+  const { brief, bigIdea, elements, spatialData, boothDimensions, normalizedZones, zoneInteriorAngles, projectType } = params;
+
+  const rules = getRules(projectType);
+  const { width, depth, totalSqft, footprintLabel } = boothDimensions;
 
   // Build the brief compliance block (appended to all prompts)
   const complianceBlock = buildBriefComplianceBlock({
@@ -400,6 +405,7 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
     boothDimensions,
     qualityTier: inferQualityTierFromBrief(brief, elements, boothDimensions),
     elements,
+    projectType,
   });
 
   // Check for zone interior angles first
@@ -411,7 +417,8 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
       bigIdea,
       boothDimensions,
       elements,
-      spatialData.materialsAndMood || []
+      spatialData.materialsAndMood || [],
+      projectType
     );
     return zonePrompt + "\n" + complianceBlock;
   }
@@ -419,29 +426,37 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
   const angle = ANGLE_CONFIG.find(a => a.id === angleId);
   if (!angle) return "";
 
-  const scaleContext = generateScaleContext(boothDimensions.footprintLabel);
-  const zoneDescriptions = generateZoneDescriptionsForPrompt(normalizedZones, boothDimensions.totalSqft, angleId);
-  const cameraInstruction = getCameraInstructions(angleId, boothDimensions);
-  const cameraScaleHint = generateCameraScaleHints(boothDimensions.footprintLabel, angleId);
+  const scaleBlock = buildProjectScaleBlock(projectType, width, depth, totalSqft);
+  const zoneDescriptions = generateZoneDescriptionsForPrompt(normalizedZones, totalSqft, angleId);
+  const cameraInstruction = getProjectCameraInstructions(projectType, angleId, width, depth);
+  const cameraScaleHint = getProjectCameraScaleHint(projectType, footprintLabel, angleId);
 
   const heroInstallation = elements?.interactiveMechanics?.data?.hero;
   const heroDescription = heroInstallation
     ? `${heroInstallation.name} — ${heroInstallation.concept}${heroInstallation.physicalForm?.dimensions ? ` (${heroInstallation.physicalForm.dimensions})` : ''}`
-    : "Central interactive installation";
+    : `Central ${rules.structureNoun} feature installation`;
 
-  const materialsBlock = spatialData.materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "Clean modern finishes";
+  const materialsBlock = spatialData.materialsAndMood?.map((m: any) => `- ${m.material}: ${m.feel}`).join("\n") || "Premium materials matching the design vision";
 
   // Floor plan annotations if any
   const annotationsBlock = spatialData.floorPlanAnnotations?.length > 0
     ? `\nFLOOR PLAN DESIGN NOTES (apply these spatial decisions):\n${spatialData.floorPlanAnnotations.map((a: any, i: number) => `${i + 1}. ${a.comment}`).join("\n")}`
     : "";
 
-  return `Generate a photorealistic ${angle.name.toLowerCase()} of a ${boothDimensions.footprintLabel} trade show booth for ${brief.brand.name}, a ${brief.brand.category} company.
+  const promptOpener = buildPromptOpener(
+    projectType,
+    angle.name,
+    width, depth, totalSqft,
+    brief.brand?.name || "the brand",
+    brief.brand?.category || "brand"
+  );
+
+  return `${promptOpener}
 
 ${cameraInstruction}
 ${cameraScaleHint}
 
-${scaleContext}
+${scaleBlock}
 
 DESIGN DIRECTION:
 ${bigIdea.headline}
@@ -461,10 +476,10 @@ MATERIALS AND MOOD:
 ${materialsBlock}
 
 BRANDING:
-${brief.brand.name} signage visible. Brand colors: ${brief.brand.visualIdentity?.colors?.join(", ") || "brand colors"}. Sophisticated, intelligent aesthetic.
+${brief.brand?.name} signage visible. Brand colors: ${brief.brand?.visualIdentity?.colors?.join(", ") || "brand colors"}. Sophisticated, intelligent aesthetic.
 
 ATMOSPHERE:
-8-12 people naturally distributed: some engaging with the hero installation, others in conversation in the lounge, staff at reception. Convention center environment visible in background.
+${rules.atmosphereBlock}
 ${annotationsBlock}
 
 CAMERA FRAMING:
@@ -472,10 +487,10 @@ ${cameraInstruction}
 ${cameraScaleHint}
 
 STYLE:
-Architectural visualization quality (Gensler/Rockwell Group level). Photorealistic materials. Clean editorial lighting. Professional trade show environment.
+${rules.styleReference}
 
 NEGATIVE PROMPT:
-${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, empty booth, unrealistic lighting, blurry, low quality, oversized booth, mega-exhibit scale, warehouse scale, too large, excessive empty space
+${brief.brand?.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, unrealistic lighting, blurry, low quality, ${rules.negativeAdditions}
 
 Aspect ratio: ${angle.aspectRatio}
 ${complianceBlock}`;

@@ -556,6 +556,7 @@ export async function generateProposalPDF(
       // Content based on type
       pdf.setTextColor(...hexToRgb(textColor));
       
+      // Route by section ID first (most specific), then by type
       if (section.id === 'project-brief') {
         renderProjectBriefSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
       } else if (section.id === 'spatial-design') {
@@ -566,6 +567,18 @@ export async function generateProposalPDF(
         renderCostIntelligenceSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
       } else if (section.id === 'layout-variations') {
         renderLayoutVariationsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'interactive-mechanics') {
+        renderInteractiveMechanicsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'digital-storytelling') {
+        renderDigitalStorytellingSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'human-connection') {
+        renderHumanConnectionSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'adjacent-activations') {
+        renderAdjacentActivationsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'team-credits') {
+        renderTeamCreditsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'next-steps') {
+        renderNextStepsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
       } else {
         switch (section.type) {
           case 'text':
@@ -575,7 +588,7 @@ export async function generateProposalPDF(
             await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
             break;
           case 'mixed':
-            renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
+            renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
             break;
           case 'table':
             renderTableSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);

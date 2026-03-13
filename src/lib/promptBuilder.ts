@@ -1,9 +1,6 @@
 /**
  * Prompt Builder — Pure prompt-building logic extracted from PromptGenerator.tsx
  *
- * Contains angle configuration, camera instructions, and prompt generation
- * functions that don't depend on React state or UI components.
- *
  * ALL language is routed through the Project Type Rules Engine so that
  * "trade show booth" language never appears in non-booth prompts.
  */
@@ -15,8 +12,6 @@ import {
   type NormalizedZone,
   type BoothDimensions,
 } from "@/lib/spatialUtils";
-
-export { normalizeZones, calculateBoothDimensions };
 
 import {
   getRules,

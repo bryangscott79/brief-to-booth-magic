@@ -14,6 +14,107 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_intelligence: {
+        Row: {
+          approved_at: string | null
+          category: string
+          client_id: string
+          confidence_score: number | null
+          content: string
+          created_at: string
+          id: string
+          is_approved: boolean
+          source: string
+          source_project_id: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          category: string
+          client_id: string
+          confidence_score?: number | null
+          content: string
+          created_at?: string
+          id?: string
+          is_approved?: boolean
+          source?: string
+          source_project_id?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          category?: string
+          client_id?: string
+          confidence_score?: number | null
+          content?: string
+          created_at?: string
+          id?: string
+          is_approved?: boolean
+          source?: string
+          source_project_id?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_intelligence_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          industry: string | null
+          logo_url: string | null
+          name: string
+          primary_color: string | null
+          secondary_color: string | null
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          industry?: string | null
+          logo_url?: string | null
+          name: string
+          primary_color?: string | null
+          secondary_color?: string | null
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          industry?: string | null
+          logo_url?: string | null
+          name?: string
+          primary_color?: string | null
+          secondary_color?: string | null
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       company_profiles: {
         Row: {
           address: string | null
@@ -168,6 +269,54 @@ export type Database = {
           },
         ]
       }
+      project_type_configs: {
+        Row: {
+          cost_category_overrides: Json | null
+          created_at: string
+          description: string | null
+          element_overrides: Json | null
+          id: string
+          is_enabled: boolean
+          label: string | null
+          project_type_id: string
+          render_context: string | null
+          sort_order: number
+          tagline: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cost_category_overrides?: Json | null
+          created_at?: string
+          description?: string | null
+          element_overrides?: Json | null
+          id?: string
+          is_enabled?: boolean
+          label?: string | null
+          project_type_id: string
+          render_context?: string | null
+          sort_order?: number
+          tagline?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cost_category_overrides?: Json | null
+          created_at?: string
+          description?: string | null
+          element_overrides?: Json | null
+          id?: string
+          is_enabled?: boolean
+          label?: string | null
+          project_type_id?: string
+          render_context?: string | null
+          sort_order?: number
+          tagline?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           adjacent_activations: Json | null
@@ -176,6 +325,7 @@ export type Database = {
           brief_file_url: string | null
           brief_text: string | null
           budget_logic: Json | null
+          client_id: string | null
           created_at: string
           digital_storytelling: Json | null
           experience_framework: Json | null
@@ -200,6 +350,7 @@ export type Database = {
           brief_file_url?: string | null
           brief_text?: string | null
           budget_logic?: Json | null
+          client_id?: string | null
           created_at?: string
           digital_storytelling?: Json | null
           experience_framework?: Json | null
@@ -224,6 +375,7 @@ export type Database = {
           brief_file_url?: string | null
           brief_text?: string | null
           budget_logic?: Json | null
+          client_id?: string | null
           created_at?: string
           digital_storytelling?: Json | null
           experience_framework?: Json | null
@@ -241,7 +393,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       show_costs: {
         Row: {

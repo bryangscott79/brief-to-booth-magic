@@ -18,6 +18,7 @@ import Files from "./pages/Files";
 import Export from "./pages/Export";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import CompanyProfile from "./pages/CompanyProfile";
+import AdminSettings from "./pages/AdminSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -86,6 +87,11 @@ const App = () => (
             <Route path="/company" element={
               <ProtectedRoute>
                 <CompanyProfile />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute>
+                <AdminSettings />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

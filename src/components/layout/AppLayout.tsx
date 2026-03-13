@@ -23,6 +23,7 @@ import {
   ImageIcon,
   BookOpen,
   Building2,
+  Settings2,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -40,6 +41,7 @@ const navItems = [
   { path: "/files", label: "Files", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
   { path: "/company", label: "Company", icon: Building2 },
+  { path: "/admin", label: "Admin", icon: Settings2 },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {

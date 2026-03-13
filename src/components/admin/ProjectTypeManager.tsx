@@ -270,7 +270,7 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
 }
 
 export function ProjectTypeManager() {
-  const { data: configs = [], isLoading } = useProjectTypeConfigs();
+  const { data: configs = [] } = useProjectTypeConfigs();
   const [selectedType, setSelectedType] = useState<string>(ALL_PROJECT_TYPES[0].id);
 
   const getConfig = (typeId: string) => configs.find(c => c.project_type_id === typeId);

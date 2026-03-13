@@ -440,9 +440,7 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
 
 export function ClientsManager() {
   const { data: clients = [], isLoading } = useClients();
-  const deleteClient = useDeleteClient();
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [showAddClient, setShowAddClient] = useState(false);
+  const deleteClientMutation = useDeleteClient();
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [search, setSearch] = useState("");
 

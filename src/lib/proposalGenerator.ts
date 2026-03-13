@@ -1146,6 +1146,12 @@ export async function generateProposalPPTX(
         addPptxBrandIntelContent(slide, section.content, brandColorClean);
       } else if (section.id === 'project-brief') {
         addPptxProjectBriefContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'spatial-metrics') {
+        addPptxSpatialMetricsContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'cost-intelligence') {
+        addPptxCostIntelligenceContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'layout-variations') {
+        addPptxMixedContent(slide, section.content, brandColorClean);
       } else {
         switch (section.type) {
           case 'text':

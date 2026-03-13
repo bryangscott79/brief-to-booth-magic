@@ -134,18 +134,38 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
     },
     {
       title: "Budget",
-      confidence: "medium",
+      confidence: brief.budget?.range?.min || brief.budget?.range?.max || brief.budget?.perShow ? "high" : "medium",
       content: (
         <div className="space-y-2">
-          <div className="text-2xl font-semibold">
-            ${brief.budget.perShow?.toLocaleString()}
-            <span className="text-sm font-normal text-muted-foreground ml-2">
-              per show
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {brief.budget.efficiencyNotes}
-          </p>
+          {/* Show range if available, otherwise fall back to perShow */}
+          {brief.budget?.range?.min || brief.budget?.range?.max ? (
+            <div className="text-2xl font-semibold">
+              ${brief.budget.range!.min!.toLocaleString()}
+              <span className="text-muted-foreground font-normal mx-2">–</span>
+              ${brief.budget.range!.max!.toLocaleString()}
+              <span className="text-sm font-normal text-muted-foreground ml-2">total budget</span>
+            </div>
+          ) : brief.budget?.perShow ? (
+            <div className="text-2xl font-semibold">
+              ${brief.budget.perShow.toLocaleString()}
+              <span className="text-sm font-normal text-muted-foreground ml-2">per show</span>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No budget specified in brief</p>
+          )}
+          {brief.budget?.efficiencyNotes && (
+            <p className="text-sm text-muted-foreground">{brief.budget.efficiencyNotes}</p>
+          )}
+          {(brief.budget?.inclusions?.length > 0 || brief.budget?.exclusions?.length > 0) && (
+            <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+              {brief.budget.inclusions?.length > 0 && (
+                <span className="text-emerald-600">✓ {brief.budget.inclusions.join(", ")}</span>
+              )}
+              {brief.budget.exclusions?.length > 0 && (
+                <span className="text-destructive">✗ {brief.budget.exclusions.join(", ")}</span>
+              )}
+            </div>
+          )}
         </div>
       ),
     },
@@ -226,6 +246,85 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Required Deliverables */}
+      {brief.requiredDeliverables?.length > 0 && (
+        <Card className="element-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Check className="h-4 w-4 text-status-complete" />
+              Required Deliverables
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="grid md:grid-cols-2 gap-x-6 gap-y-1">
+              {brief.requiredDeliverables.map((d, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <ChevronRight className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+                  {d}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Timeline & Contacts */}
+      {((brief as any).timeline?.proposalDue || (brief as any).contacts?.length > 0) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {(brief as any).timeline?.proposalDue && (
+            <Card className="element-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Check className="h-4 w-4 text-status-complete" />
+                  Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="space-y-1 text-sm">
+                  {(brief as any).timeline.proposalDue && (
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Proposal Due</dt>
+                      <dd className="font-medium">{(brief as any).timeline.proposalDue}</dd>
+                    </div>
+                  )}
+                  {(brief as any).timeline.deliveryDate && (
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Delivery</dt>
+                      <dd className="font-medium">{(brief as any).timeline.deliveryDate}</dd>
+                    </div>
+                  )}
+                  {(brief as any).timeline.notes && (
+                    <p className="text-muted-foreground pt-1">{(brief as any).timeline.notes}</p>
+                  )}
+                </dl>
+              </CardContent>
+            </Card>
+          )}
+
+          {(brief as any).contacts?.length > 0 && (
+            <Card className="element-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Check className="h-4 w-4 text-status-complete" />
+                  Contacts
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {(brief as any).contacts.map((c: any, i: number) => (
+                    <div key={i} className="text-sm">
+                      <span className="font-medium">{c.name}</span>
+                      {c.title && <span className="text-muted-foreground ml-2">{c.title}</span>}
+                      {c.email && <p className="text-muted-foreground text-xs">{c.email}</p>}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Original Brief */}
       <OriginalBrief

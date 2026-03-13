@@ -3,6 +3,9 @@
  *
  * Contains angle configuration, camera instructions, and prompt generation
  * functions that don't depend on React state or UI components.
+ *
+ * ALL language is routed through the Project Type Rules Engine so that
+ * "trade show booth" language never appears in non-booth prompts.
  */
 
 import {
@@ -14,6 +17,15 @@ import {
   type NormalizedZone,
   type BoothDimensions,
 } from "@/lib/spatialUtils";
+
+import {
+  getRules,
+  buildScaleBlock as rulesScaleBlock,
+  getCameraInstructions as rulesCameraInstructions,
+  getCameraScaleHint as rulesCameraScaleHint,
+  buildPromptOpener,
+  buildComplianceHeader,
+} from "@/lib/projectTypeRules";
 
 // Re-export types that callers may need
 export type { NormalizedZone, BoothDimensions };

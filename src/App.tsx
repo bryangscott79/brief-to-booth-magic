@@ -18,7 +18,7 @@ import Files from "./pages/Files";
 import Export from "./pages/Export";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import CompanyProfile from "./pages/CompanyProfile";
-import NotFound from "./pages/NotFound";
+import AdminSettings from "./pages/AdminSettings";
 
 const queryClient = new QueryClient();
 

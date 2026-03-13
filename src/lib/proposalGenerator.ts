@@ -1582,6 +1582,7 @@ function addPptxCostIntelligenceContent(slide: any, content: any, brandColor: st
   }
 }
 
+function addPptxGridContent(slide: any, content: any) {
   const images = content.images || [];
   const cols = images.length <= 2 ? 2 : 3;
   const imgWidth = 2.8;
@@ -1607,6 +1608,7 @@ function addPptxCostIntelligenceContent(slide: any, content: any, brandColor: st
     } catch (e) {}
   });
 }
+
 
 // ============================================
 // UTILITIES

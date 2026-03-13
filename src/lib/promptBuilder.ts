@@ -16,6 +16,8 @@ import {
   type BoothDimensions,
 } from "@/lib/spatialUtils";
 
+export { normalizeZones, calculateBoothDimensions };
+
 import {
   getRules,
   buildPromptOpener,

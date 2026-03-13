@@ -301,8 +301,9 @@ export function buildBriefComplianceBlock(params: {
   boothDimensions?: BoothDimensions | null;
   qualityTier?: "standard" | "premium" | "ultra";
   elements?: any;
+  projectType?: string | null;
 }): string {
-  const { brief, boothDimensions, qualityTier, elements } = params;
+  const { brief, boothDimensions, qualityTier, elements, projectType } = params;
   if (!brief) return "";
 
   const parts: string[] = [];
@@ -310,10 +311,10 @@ export function buildBriefComplianceBlock(params: {
   parts.push("║   BRIEF COMPLIANCE CHECK (MANDATORY)  ║");
   parts.push("╚═══════════════════════════════════════╝\n");
 
-  // Booth dimensions
+  // Project-type-aware size header
   if (boothDimensions) {
-    parts.push(`BOOTH SIZE: ${boothDimensions.width}' × ${boothDimensions.depth}' (${boothDimensions.totalSqft} sq ft) — DO NOT exceed this scale.`);
-    parts.push(`BOOTH TYPE: ${boothDimensions.footprintLabel}`);
+    const { width, depth, totalSqft } = boothDimensions;
+    parts.push(buildComplianceHeader(projectType, width, depth, totalSqft));
   }
 
   // Budget tier
@@ -334,7 +335,7 @@ export function buildBriefComplianceBlock(params: {
 
   // Brand name
   if (brief.brand?.name) {
-    parts.push(`BRAND: ${brief.brand.name} — signage/logos MUST appear on the booth.`);
+    parts.push(`BRAND: ${brief.brand.name} — signage/logos MUST appear prominently.`);
   }
 
   // Creative avoid/embrace

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   FileText, Loader2, Presentation, Settings2, Building2,
-  Image, Sparkles, Check, AlertCircle, ExternalLink, Monitor,
+  Image, Sparkles, Check, AlertCircle, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";

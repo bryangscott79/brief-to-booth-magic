@@ -144,6 +144,7 @@ export function PromptGenerator() {
     boothDimensions,
     normalizedZones,
     zoneInteriorAngles,
+    projectType: currentProject?.projectType ?? null,
   };
 
   /** Local wrapper that closes over current project data */

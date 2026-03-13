@@ -249,8 +249,8 @@ ENVIRONMENT:
 - Natural light from windows or skylights where applicable
 - No temporary event structures visible`,
     cameraInstructions: {
-      hero_34: (w, d) => `Camera at 45° front-left, eye level (5 feet), showing the primary space with hero installation as architectural focal point.`,
-      top: (w, d) => `Architectural plan oblique — overhead view at slight angle showing spatial layout and circulation.`,
+      hero_34: () => `Camera at 45° front-left, eye level (5 feet), showing the primary space with hero installation as architectural focal point.`,
+      top: () => `Architectural plan oblique — overhead view at slight angle showing spatial layout and circulation.`,
       front: () => `Camera centered on the primary entrance experience, eye level, capturing the full arrival moment.`,
       left: () => `Camera at eye level, showing the left elevation and spatial depth.`,
       right: () => `Camera at eye level, showing the right elevation and spatial depth.`,

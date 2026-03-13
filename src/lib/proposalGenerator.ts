@@ -558,6 +558,14 @@ export async function generateProposalPDF(
       
       if (section.id === 'project-brief') {
         renderProjectBriefSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else if (section.id === 'spatial-design') {
+        renderSpatialDesignSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else if (section.id === 'spatial-metrics') {
+        renderSpatialMetricsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'cost-intelligence') {
+        renderCostIntelligenceSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else if (section.id === 'layout-variations') {
+        renderLayoutVariationsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
       } else {
         switch (section.type) {
           case 'text':

@@ -558,6 +558,14 @@ export async function generateProposalPDF(
       
       if (section.id === 'project-brief') {
         renderProjectBriefSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else if (section.id === 'spatial-design') {
+        renderSpatialDesignSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else if (section.id === 'spatial-metrics') {
+        renderSpatialMetricsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'cost-intelligence') {
+        renderCostIntelligenceSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
+      } else if (section.id === 'layout-variations') {
+        renderLayoutVariationsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
       } else {
         switch (section.type) {
           case 'text':
@@ -812,6 +820,213 @@ function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, widt
       rightY += 18;
     });
   }
+}
+
+function renderSpatialDesignSection(
+  pdf: jsPDF, content: any, x: number, y: number, width: number, _pageHeight: number, brandRgb: [number, number, number]
+) {
+  const [r, g, b] = brandRgb;
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let leftY = y;
+  let rightY = y;
+
+  // Left: footprint + total sqft
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(r, g, b);
+  pdf.text('FOOTPRINT', x, leftY);
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(28); pdf.setTextColor(30, 30, 30);
+  pdf.text(content.footprint || '', x, leftY + 28);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(13); pdf.setTextColor(80, 80, 80);
+  pdf.text(`${(content.totalSqft || 0).toLocaleString()} sq ft`, x, leftY + 52);
+  leftY += 80;
+
+  // Zones table
+  if (content.zones?.length > 0) {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(r, g, b);
+    pdf.text('Zone Allocation', x, leftY); leftY += 22;
+
+    const barTotalW = colWidth - 20;
+    content.zones.forEach((z: any) => {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(30, 30, 30);
+      pdf.text(`${z.name}`, x, leftY);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+      pdf.text(`${z.sqft} sqft  (${z.percentage}%)`, x + colWidth - 120, leftY);
+      // Progress bar
+      pdf.setFillColor(230, 230, 230);
+      pdf.rect(x, leftY + 4, barTotalW, 8, 'F');
+      pdf.setFillColor(r, g, b);
+      pdf.rect(x, leftY + 4, Math.max(8, (barTotalW * (z.percentage || 0)) / 100), 8, 'F');
+      leftY += 26;
+    });
+  }
+
+  // Right: materials & mood
+  if (content.materialsAndMood?.length > 0) {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(r, g, b);
+    pdf.text('Materials & Mood', rightX, rightY); rightY += 22;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+    content.materialsAndMood.slice(0, 8).forEach((m: string) => {
+      const lines = pdf.splitTextToSize(`• ${m}`, colWidth);
+      pdf.text(lines.slice(0, 2), rightX, rightY);
+      rightY += lines.slice(0, 2).length * 16 + 6;
+    });
+  }
+
+  // Floor plan image
+  // (already handled by the hero render section if angle_id matches; skip here to avoid duplication)
+}
+
+function renderSpatialMetricsSection(
+  pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]
+) {
+  const [r, g, b] = brandRgb;
+  let currentY = y;
+
+  // KPI tiles
+  const kpis = [
+    { label: 'Layout Score', value: `${content.overallScore}/100` },
+    { label: 'Expected Visitors', value: `${(content.totalExpectedVisitors || 0).toLocaleString()}/day` },
+    { label: 'Avg Dwell Time', value: `${content.avgBoothTime} min` },
+    { label: 'Flow Efficiency', value: `${content.flowEfficiency}%` },
+    { label: 'Lead Projection', value: `${content.leadProjection}/day` },
+  ];
+  const tileW = (width - 40) / kpis.length;
+  kpis.forEach((kpi, i) => {
+    const tx = x + i * (tileW + 10);
+    pdf.setFillColor(245, 245, 245);
+    pdf.rect(tx, currentY, tileW, 80, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.setTextColor(r, g, b);
+    pdf.text(kpi.value, tx + tileW / 2, currentY + 38, { align: 'center' });
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(100, 100, 100);
+    pdf.text(kpi.label, tx + tileW / 2, currentY + 60, { align: 'center' });
+  });
+  currentY += 100;
+
+  // Zone metrics table
+  if (content.zoneMetrics?.length > 0) {
+    const colWidths = [width * 0.35, width * 0.2, width * 0.2, width * 0.25];
+    const headers = ['Zone', 'Traffic', 'Dwell Time', 'Engagement'];
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(x, currentY, width, 30, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+    let hx = x + 10;
+    headers.forEach((h, i) => { pdf.text(h, hx, currentY + 20); hx += colWidths[i]; });
+    currentY += 35;
+
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11);
+    content.zoneMetrics.slice(0, 8).forEach((z: any, idx: number) => {
+      if (idx % 2 === 1) { pdf.setFillColor(250, 250, 250); pdf.rect(x, currentY - 5, width, 25, 'F'); }
+      pdf.setTextColor(30, 30, 30);
+      let cx = x + 10;
+      const mins = Math.round(z.avgDwellTime / 60);
+      const secs = String(z.avgDwellTime % 60).padStart(2, '0');
+      [z.zoneName || '', `${z.trafficPercentage}%`, `${mins}:${secs}`, `${z.engagementScore}%`].forEach((val, i) => {
+        pdf.text(val, cx, currentY + 12); cx += colWidths[i];
+      });
+      currentY += 28;
+    });
+  }
+}
+
+function renderCostIntelligenceSection(
+  pdf: jsPDF, content: any, x: number, y: number, width: number, _pageHeight: number, brandRgb: [number, number, number]
+) {
+  const [r, g, b] = brandRgb;
+  let currentY = y;
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+
+  // Grand total
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(38); pdf.setTextColor(r, g, b);
+  pdf.text(`$${(content.grandTotal || 0).toLocaleString()}`, x, currentY);
+  currentY += 40;
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12); pdf.setTextColor(100, 100, 100);
+  pdf.text(`Estimated Build Cost  •  $${content.costPerSqft}/sqft`, x, currentY);
+  currentY += 22;
+
+  if (content.budgetMax) {
+    const pct = Math.round((content.grandTotal / content.budgetMax) * 100);
+    const [cr, cg, cb] = pct > 100 ? [200, 0, 0] : pct > 85 ? [200, 130, 0] : [30, 140, 30];
+    pdf.setTextColor(cr, cg, cb);
+    pdf.text(`${pct}% of $${content.budgetMax.toLocaleString()} budget`, x, currentY);
+    currentY += 30;
+  } else {
+    currentY += 10;
+  }
+
+  // Utilities (right column)
+  if (content.utilities) {
+    const u = content.utilities;
+    let ry = y;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(r, g, b);
+    pdf.text('Utility Requirements', rightX, ry); ry += 22;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+    [`Total Power: ${u.totalWatts?.toLocaleString()}W`, `20A Circuits: ${u.totalAmps20}`, `Data Drops: ${u.dataDrops}`, `Dedicated Circuits: ${u.dedicatedCircuits}`]
+      .forEach(line => { pdf.text(`• ${line}`, rightX, ry); ry += 20; });
+  }
+
+  // Per-zone cost table
+  if (content.perZone?.length > 0) {
+    const colWidths2 = [width * 0.28, width * 0.18, width * 0.18, width * 0.18, width * 0.18];
+    const headers2 = ['Zone', 'Structure', 'Tech', 'FF&E', 'Total'];
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(x, currentY, width, 28, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+    let hx = x + 10; headers2.forEach((h, i) => { pdf.text(h, hx, currentY + 19); hx += colWidths2[i]; });
+    currentY += 32;
+
+    pdf.setFont('helvetica', 'normal');
+    content.perZone.slice(0, 7).forEach((z: any, idx: number) => {
+      if (idx % 2 === 1) { pdf.setFillColor(250, 250, 250); pdf.rect(x, currentY - 5, width, 25, 'F'); }
+      pdf.setTextColor(30, 30, 30);
+      let cx = x + 10;
+      [z.name, `$${(z.structure||0).toLocaleString()}`, `$${(z.technology||0).toLocaleString()}`, `$${(z.furniture||0).toLocaleString()}`, `$${(z.total||0).toLocaleString()}`]
+        .forEach((val, i) => { pdf.text(String(val), cx, currentY + 12); cx += colWidths2[i]; });
+      currentY += 28;
+    });
+    currentY += 10;
+  }
+
+  // Validations
+  if (content.validations?.length > 0) {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(r, g, b);
+    pdf.text('Layout Validations', x, currentY); currentY += 20;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10);
+    content.validations.slice(0, 4).forEach((v: any) => {
+      const [vr, vg, vb] = v.severity === 'error' ? [200, 0, 0] : [180, 100, 0];
+      pdf.setTextColor(vr, vg, vb);
+      const lines = pdf.splitTextToSize(`⚠ ${v.message}`, width);
+      pdf.text(lines.slice(0, 2), x, currentY);
+      currentY += lines.slice(0, 2).length * 15 + 6;
+    });
+  }
+}
+
+function renderLayoutVariationsSection(
+  pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]
+) {
+  const [r, g, b] = brandRgb;
+  let currentY = y;
+  const configs = content.configs || [];
+  const colCount = Math.min(configs.length, 3);
+  const colW = (width - 40) / Math.max(colCount, 1);
+
+  configs.slice(0, 3).forEach((c: any, i: number) => {
+    const cx = x + i * (colW + 20);
+    pdf.setFillColor(245, 245, 247);
+    pdf.rect(cx, currentY, colW, 160, 'F');
+    pdf.setFillColor(r, g, b);
+    pdf.rect(cx, currentY, colW, 6, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(r, g, b);
+    pdf.text(c.name || `Variation ${i + 1}`, cx + 12, currentY + 30);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(100, 100, 100);
+    pdf.text(c.footprintSize || '', cx + 12, currentY + 50);
+    pdf.setTextColor(50, 50, 50); pdf.setFontSize(10);
+    const descLines = pdf.splitTextToSize(c.description || '', colW - 24);
+    pdf.text(descLines.slice(0, 5), cx + 12, currentY + 68);
+    pdf.setTextColor(r, g, b); pdf.setFontSize(11); pdf.setFont('helvetica', 'bold');
+    pdf.text(`${c.zoneCount} zones`, cx + 12, currentY + 148);
+  });
 }
 
 function renderProjectBriefSection(

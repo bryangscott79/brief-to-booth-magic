@@ -21,7 +21,7 @@ import {
 } from "@/lib/proposalGenerator";
 import { getClearbitLogoUrl, extractDomain, checkClearbitLogo } from "@/lib/logoUtils";
 import { SlideEditor } from "./SlideEditor";
-import { DeckPreview } from "./DeckPreview";
+
 import type { PresentationTemplate } from "@/lib/presentationTemplates";
 import { getActiveSlides } from "@/lib/presentationTemplates";
 

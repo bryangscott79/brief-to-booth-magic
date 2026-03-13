@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PROJECT_TYPE_REGISTRY, ALL_PROJECT_TYPES, type ProjectTypeDef, type ProjectTypeElementDef } from "@/lib/projectTypes";
+import { PROJECT_TYPE_REGISTRY, ALL_PROJECT_TYPES, type ProjectTypeDef } from "@/lib/projectTypes";
 import { useProjectTypeConfigs, useUpsertProjectTypeConfig, type ProjectTypeConfig } from "@/hooks/useClients";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import {
-  ChevronRight, Save, RotateCcw, Settings2, Sparkles, Layers,
-  Eye, EyeOff, GripVertical, Edit2, Check, X
-} from "lucide-react";
+import { ChevronRight, Save, RotateCcw, Sparkles, Edit2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface EditingElement {

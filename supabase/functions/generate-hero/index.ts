@@ -10,7 +10,7 @@ interface GenerateHeroRequest {
   feedback?: string;
   previousImageUrl?: string;
   boothSize?: string;
-  /** Phase 4: Enhanced context for brief-validated rendering */
+  projectType?: string;
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
@@ -103,7 +103,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, designContext }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext }: GenerateHeroRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -114,14 +114,35 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Project-type-aware suffix and feedback prefix
+    const TYPE_SUFFIX: Record<string, string> = {
+      live_brand_activation: "Generate a photorealistic 16:9 visualization of this brand activation. This is an outdoor experiential build — NOT a trade show booth. Show crowd energy, open sky, and immersive scale.",
+      permanent_installation: "Generate a photorealistic 16:9 architectural visualization of this permanent installation. High-quality, permanent branded environment — architectural photography aesthetic.",
+      film_premiere: "Generate a photorealistic 16:9 visualization of this premiere event build. Theatrical, glamorous film/event premiere experience — cinematic and dramatic, NOT a trade show booth.",
+      game_release_activation: "Generate a photorealistic 16:9 visualization of this game launch activation. Epic, immersive game world activation — NOT a trade show booth. RGB LED environment, massive screens, gaming community energy.",
+      architectural_brief: "Generate a photorealistic 16:9 architectural visualization. Permanent architectural brief — award-quality architectural photography aesthetic. NOT a trade show booth.",
+      trade_show_booth: "Generate a photorealistic 16:9 architectural visualization of this trade show booth. The booth must appear as the correct physical size — not a mega-exhibit.",
+    };
+    const TYPE_FEEDBACK_PREFIX: Record<string, string> = {
+      live_brand_activation: "Based on this brand activation event image, apply the following feedback and generate an improved version:",
+      permanent_installation: "Based on this permanent installation image, apply the following feedback and generate an improved version:",
+      film_premiere: "Based on this premiere event visualization, apply the following feedback and generate an improved version:",
+      game_release_activation: "Based on this game launch activation image, apply the following feedback and generate an improved version:",
+      architectural_brief: "Based on this architectural visualization, apply the following feedback and generate an improved version:",
+      trade_show_booth: "Based on this trade show booth image, apply the following feedback and generate an improved version:",
+    };
+
+    const genSuffix = TYPE_SUFFIX[projectType || "trade_show_booth"] ?? TYPE_SUFFIX.trade_show_booth;
+    const feedbackPrefix = TYPE_FEEDBACK_PREFIX[projectType || "trade_show_booth"] ?? TYPE_FEEDBACK_PREFIX.trade_show_booth;
+
     const scaleBlock = buildScaleBlock(boothSize);
     const designBlock = buildDesignContextBlock(designContext);
-    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext });
+    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType });
 
     let messages;
 
     if (previousImageUrl && feedback) {
-      const refinedPrompt = `Based on this trade show booth image, apply the following feedback and generate an improved version:
+      const refinedPrompt = `${feedbackPrefix}
 
 FEEDBACK TO APPLY:
 ${feedback}
@@ -131,7 +152,7 @@ ${prompt}
 ${scaleBlock}
 ${designBlock}
 
-Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall booth concept and brand identity. The booth must appear as the correct physical size — not larger.`;
+Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
 
       messages = [
         {
@@ -150,7 +171,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
 ${scaleBlock}
 ${designBlock}
 
-Generate a photorealistic 16:9 architectural visualization of this trade show booth. The booth must appear as the correct physical size — not a mega-exhibit.`,
+${genSuffix}`,
         },
       ];
     }

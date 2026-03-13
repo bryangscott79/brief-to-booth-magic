@@ -56,6 +56,7 @@ interface RenderActions {
     previousImageUrl?: string;
     projectId: string;
     boothSize?: string;
+    projectType?: string | null;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -143,17 +144,17 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
-  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, onSave }) => {
+  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, projectType, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
-      // Phase 4: Include designContext if available
       const { designContext } = get();
       const body: Record<string, unknown> = {
         prompt,
         feedback: feedback || undefined,
         previousImageUrl: previousImageUrl || undefined,
         boothSize: boothSize || undefined,
+        projectType: projectType || undefined,
       };
       if (designContext) {
         body.designContext = designContext;

@@ -172,6 +172,19 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     }
   };
 
+  /** Convert a File to base64 string */
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Strip the data URL prefix (e.g. "data:application/pdf;base64,")
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -179,14 +192,11 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     const ext = file.name.split(".").pop()?.toLowerCase();
     const sourceName = file.name.replace(/\.[^/.]+$/, "");
 
-    if (ext === "docx") {
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      const fileBase64 = btoa(binary);
-      await processBrief("", sourceName, fileBase64, "docx", file);
-    } else {
+    if (ext === "docx" || ext === "pdf") {
+      // Send binary files as base64 for server-side extraction
+      const fileBase64 = await fileToBase64(file);
+      await processBrief("", sourceName, fileBase64, ext as "docx" | "pdf", file);
+    } else if (ext === "txt") {
       const text = await file.text();
       if (!text || text.trim().length < 20) {
         toast({
@@ -197,6 +207,12 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         return;
       }
       await processBrief(text, sourceName, undefined, undefined, file);
+    } else {
+      toast({
+        title: "Unsupported file type",
+        description: "Please upload a DOCX, PDF, or TXT file.",
+        variant: "destructive",
+      });
     }
   }, [user, navigate, toast, projectId, selectedType, selectedClientId]);
 

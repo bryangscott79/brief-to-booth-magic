@@ -134,18 +134,38 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
     },
     {
       title: "Budget",
-      confidence: "medium",
+      confidence: brief.budget?.range?.min || brief.budget?.range?.max || brief.budget?.perShow ? "high" : "medium",
       content: (
         <div className="space-y-2">
-          <div className="text-2xl font-semibold">
-            ${brief.budget.perShow?.toLocaleString()}
-            <span className="text-sm font-normal text-muted-foreground ml-2">
-              per show
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {brief.budget.efficiencyNotes}
-          </p>
+          {/* Show range if available, otherwise fall back to perShow */}
+          {brief.budget?.range?.min || brief.budget?.range?.max ? (
+            <div className="text-2xl font-semibold">
+              ${brief.budget.range!.min!.toLocaleString()}
+              <span className="text-muted-foreground font-normal mx-2">–</span>
+              ${brief.budget.range!.max!.toLocaleString()}
+              <span className="text-sm font-normal text-muted-foreground ml-2">total budget</span>
+            </div>
+          ) : brief.budget?.perShow ? (
+            <div className="text-2xl font-semibold">
+              ${brief.budget.perShow.toLocaleString()}
+              <span className="text-sm font-normal text-muted-foreground ml-2">per show</span>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No budget specified in brief</p>
+          )}
+          {brief.budget?.efficiencyNotes && (
+            <p className="text-sm text-muted-foreground">{brief.budget.efficiencyNotes}</p>
+          )}
+          {(brief.budget?.inclusions?.length > 0 || brief.budget?.exclusions?.length > 0) && (
+            <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+              {brief.budget.inclusions?.length > 0 && (
+                <span className="text-emerald-600">✓ {brief.budget.inclusions.join(", ")}</span>
+              )}
+              {brief.budget.exclusions?.length > 0 && (
+                <span className="text-destructive">✗ {brief.budget.exclusions.join(", ")}</span>
+              )}
+            </div>
+          )}
         </div>
       ),
     },

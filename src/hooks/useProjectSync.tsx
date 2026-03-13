@@ -73,7 +73,7 @@ export function useProjectSync() {
       loadFromDb({
         id: dbProject.id,
         name: dbProject.name,
-        projectType: (dbProject as any).project_type ?? "trade_show_booth",
+        projectType: dbProject.project_type ?? "trade_show_booth",
         rawBrief: dbProject.brief_text || "",
         parsedBrief: dbProject.parsed_brief as ParsedBrief | null,
         elements,

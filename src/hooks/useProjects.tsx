@@ -9,8 +9,11 @@ export interface DBProject {
   user_id: string;
   name: string;
   status: string;
+  project_type: string;
+  client_id: string | null;
   brief_text: string | null;
   brief_file_name: string | null;
+  brief_file_url: string | null;
   parsed_brief: ParsedBrief | null;
   big_idea: any;
   experience_framework: any;

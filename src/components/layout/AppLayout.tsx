@@ -23,6 +23,7 @@ import {
   ImageIcon,
   BookOpen,
   Building2,
+  Settings2,
 } from "lucide-react";
 
 interface AppLayoutProps {

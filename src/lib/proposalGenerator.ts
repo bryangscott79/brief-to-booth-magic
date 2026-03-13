@@ -556,6 +556,7 @@ export async function generateProposalPDF(
       // Content based on type
       pdf.setTextColor(...hexToRgb(textColor));
       
+      // Route by section ID first (most specific), then by type
       if (section.id === 'project-brief') {
         renderProjectBriefSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
       } else if (section.id === 'spatial-design') {
@@ -566,6 +567,18 @@ export async function generateProposalPDF(
         renderCostIntelligenceSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
       } else if (section.id === 'layout-variations') {
         renderLayoutVariationsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'interactive-mechanics') {
+        renderInteractiveMechanicsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'digital-storytelling') {
+        renderDigitalStorytellingSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'human-connection') {
+        renderHumanConnectionSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'adjacent-activations') {
+        renderAdjacentActivationsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'team-credits') {
+        renderTeamCreditsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
+      } else if (section.id === 'next-steps') {
+        renderNextStepsSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
       } else {
         switch (section.type) {
           case 'text':
@@ -575,7 +588,7 @@ export async function generateProposalPDF(
             await renderImageSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight - margin - 150);
             break;
           case 'mixed':
-            renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight);
+            renderMixedSection(pdf, section.content, margin, margin + 120, contentWidth, pageHeight, [r, g, b]);
             break;
           case 'table':
             renderTableSection(pdf, section.content, margin, margin + 120, contentWidth, [r, g, b]);
@@ -746,79 +759,240 @@ async function renderImageSection(
   }
 }
 
-function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, width: number, _pageHeight: number) {
-  let currentY = y;
+// ── Generic helpers ─────────────────────────────────────────────────────────
+
+function pdfBulletList(pdf: jsPDF, items: string[], x: number, y: number, width: number, fontSize = 11): number {
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(fontSize); pdf.setTextColor(50, 50, 50);
+  items.forEach(item => {
+    const text = typeof item === 'string' ? item : (item as any).name || JSON.stringify(item);
+    const lines = pdf.splitTextToSize(`• ${text}`, width);
+    pdf.text(lines.slice(0, 3), x, y);
+    y += lines.slice(0, 3).length * (fontSize * 1.4) + 6;
+  });
+  return y;
+}
+
+function pdfSectionLabel(pdf: jsPDF, label: string, x: number, y: number, brandRgb: [number, number, number]): number {
+  const [r, g, b] = brandRgb;
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(r, g, b);
+  pdf.text(label, x, y);
+  return y + 22;
+}
+
+// ── Section-specific PDF renderers ──────────────────────────────────────────
+
+function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, width: number, _pageHeight: number, brandRgb: [number, number, number] = [0, 71, 171]) {
   const colWidth = width / 2 - 20;
-  
-  // Main narrative on left
-  if (content.narrative || content.conceptDescription || content.philosophy) {
-    const text = content.narrative || content.conceptDescription || content.philosophy;
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(13);
-    pdf.setTextColor(50, 50, 50);
-    const lines = pdf.splitTextToSize(text, colWidth);
-    pdf.text(lines.slice(0, 25), x, currentY);
-  }
-  
-  // Right column - key points
   const rightX = x + colWidth + 40;
-  let rightY = currentY;
-  
-  // Handle different content types
-  if (content.briefAlignment && content.briefAlignment.length > 0) {
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(14);
-    pdf.setTextColor(0, 71, 171);
-    pdf.text('Brief Alignment', rightX, rightY);
-    rightY += 25;
-    
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(11);
-    pdf.setTextColor(50, 50, 50);
-    content.briefAlignment.slice(0, 5).forEach((item: string) => {
-      const bullet = `• ${item}`;
-      const lines = pdf.splitTextToSize(bullet, colWidth - 20);
-      pdf.text(lines, rightX, rightY);
-      rightY += lines.length * 16 + 8;
+  let rightY = y;
+
+  // Left: narrative text
+  const text = content.narrative || content.conceptDescription || content.philosophy || content.hospitalityDetails || '';
+  if (text) {
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(13); pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(text, colWidth);
+    pdf.text(lines.slice(0, 22), x, y);
+  }
+
+  // Right: all known list fields
+  if (content.briefAlignment?.length) {
+    rightY = pdfSectionLabel(pdf, 'Brief Alignment', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.briefAlignment.slice(0, 5), rightX, rightY, colWidth - 20);
+  }
+  if (content.designPrinciples?.length) {
+    rightY = pdfSectionLabel(pdf, 'Design Principles', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.designPrinciples.slice(0, 4).map((p: any) => typeof p === 'string' ? p : `${p.name}: ${p.description || ''}`), rightX, rightY, colWidth - 20, 10);
+  }
+  if (content.visitorJourney?.length) {
+    rightY = pdfSectionLabel(pdf, 'Visitor Journey', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.visitorJourney.slice(0, 4).map((s: any) => typeof s === 'string' ? s : `${s.stage}: ${s.description || ''}`), rightX, rightY, colWidth - 20, 10);
+  }
+  if (content.zones?.length) {
+    rightY = pdfSectionLabel(pdf, 'Zone Allocation', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.zones.map((z: any) => `${z.name}: ${z.sqft} sqft (${z.percentage}%)`), rightX, rightY, colWidth - 20);
+  }
+}
+
+function renderInteractiveMechanicsSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]) {
+  const [r, g, b] = brandRgb;
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let leftY = y;
+  let rightY = y;
+
+  if (content.hero) {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(r, g, b);
+    pdf.text('Hero Activation', x, leftY); leftY += 22;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16); pdf.setTextColor(30, 30, 30);
+    pdf.text(content.hero.name || '', x, leftY); leftY += 22;
+    if (content.hero.concept) {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12); pdf.setTextColor(60, 60, 60);
+      const lines = pdf.splitTextToSize(content.hero.concept, colWidth);
+      pdf.text(lines.slice(0, 12), x, leftY); leftY += lines.slice(0, 12).length * 17 + 12;
+    }
+    if (content.hero.physicalForm) {
+      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(11); pdf.setTextColor(100, 100, 100);
+      const flines = pdf.splitTextToSize(content.hero.physicalForm, colWidth);
+      pdf.text(flines.slice(0, 4), x, leftY);
+    }
+  } else {
+    // No hero — fill left with description if any
+    const desc = content.description || '';
+    if (desc) { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12); pdf.setTextColor(60, 60, 60); pdf.text(pdf.splitTextToSize(desc, colWidth).slice(0, 15), x, leftY); }
+  }
+
+  // Right column
+  if (content.secondary?.length) {
+    rightY = pdfSectionLabel(pdf, 'Secondary Activations', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.secondary.slice(0, 5).map((s: any) => typeof s === 'string' ? s : `${s.name || ''}: ${s.concept || ''}`), rightX, rightY, colWidth - 20, 10);
+    rightY += 10;
+  }
+  if (content.technologyStack?.length) {
+    rightY = pdfSectionLabel(pdf, 'Technology Stack', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.technologyStack.slice(0, 6).map((t: any) => typeof t === 'string' ? t : t.name || ''), rightX, rightY, colWidth - 20);
+  }
+}
+
+function renderDigitalStorytellingSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]) {
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let rightY = y;
+
+  // Left: philosophy text
+  const text = content.philosophy || '';
+  if (text) {
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12); pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(text, colWidth);
+    pdf.text(lines.slice(0, 22), x, y);
+  }
+
+  // Right: audience tracks + content modules
+  if (content.audienceTracks?.length) {
+    rightY = pdfSectionLabel(pdf, 'Audience Tracks', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.audienceTracks.slice(0, 5).map((t: any) => typeof t === 'string' ? t : `${t.audience || t.name || ''}: ${t.strategy || t.description || ''}`), rightX, rightY, colWidth - 20, 10);
+    rightY += 10;
+  }
+  if (content.contentModules?.length) {
+    rightY = pdfSectionLabel(pdf, 'Content Modules', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.contentModules.slice(0, 5).map((m: any) => typeof m === 'string' ? m : `${m.name || ''}: ${m.description || ''}`), rightX, rightY, colWidth - 20, 10);
+  }
+}
+
+function renderHumanConnectionSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]) {
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let leftY = y;
+  let rightY = y;
+
+  // Left: hospitality details / configs
+  if (content.hospitalityDetails) {
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12); pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(content.hospitalityDetails, colWidth);
+    pdf.text(lines.slice(0, 18), x, leftY); leftY += lines.slice(0, 18).length * 17 + 12;
+  }
+  if (content.configs?.length) {
+    leftY = pdfSectionLabel(pdf, 'Configuration Options', x, leftY, brandRgb);
+    content.configs.slice(0, 4).forEach((c: any) => {
+      const label = typeof c === 'string' ? c : `${c.name || c.type || ''}: ${c.capacity ? `${c.capacity} people` : ''}`;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.text(`• ${label}`, x, leftY); leftY += 20;
     });
   }
-  
-  if (content.designPrinciples && content.designPrinciples.length > 0) {
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(14);
-    pdf.setTextColor(0, 71, 171);
-    pdf.text('Design Principles', rightX, rightY);
-    rightY += 25;
-    
-    content.designPrinciples.slice(0, 4).forEach((p: any) => {
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(11);
-      pdf.text(`• ${p.name}`, rightX, rightY);
-      rightY += 16;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(100, 100, 100);
-      const lines = pdf.splitTextToSize(p.description, colWidth - 30);
-      pdf.text(lines.slice(0, 2), rightX + 10, rightY);
-      rightY += lines.slice(0, 2).length * 14 + 10;
-      pdf.setTextColor(50, 50, 50);
+
+  // Right: meeting types
+  if (content.meetingTypes?.length) {
+    rightY = pdfSectionLabel(pdf, 'Meeting Types', rightX, rightY, brandRgb);
+    rightY = pdfBulletList(pdf, content.meetingTypes.slice(0, 6).map((m: any) => typeof m === 'string' ? m : `${m.type || m.name || ''}: ${m.description || ''}`), rightX, rightY, colWidth - 20, 10);
+  }
+}
+
+function renderAdjacentActivationsSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]) {
+  const colWidth = width / 2 - 20;
+  const rightX = x + colWidth + 40;
+  let leftY = y;
+  let rightY = y;
+
+  if (content.activations?.length) {
+    leftY = pdfSectionLabel(pdf, 'Activations', x, leftY, brandRgb);
+    content.activations.slice(0, 6).forEach((a: any) => {
+      const name = typeof a === 'string' ? a : a.name || '';
+      const desc = typeof a === 'object' ? (a.description || a.concept || '') : '';
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(30, 30, 30);
+      pdf.text(`• ${name}`, x, leftY); leftY += 18;
+      if (desc) {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(80, 80, 80);
+        const dlines = pdf.splitTextToSize(desc, colWidth - 20);
+        pdf.text(dlines.slice(0, 2), x + 15, leftY);
+        leftY += dlines.slice(0, 2).length * 14 + 6;
+      }
     });
   }
-  
-  if (content.zones && content.zones.length > 0) {
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(14);
-    pdf.setTextColor(0, 71, 171);
-    pdf.text('Zone Allocation', rightX, rightY);
-    rightY += 25;
-    
-    content.zones.forEach((z: any) => {
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(11);
-      pdf.setTextColor(50, 50, 50);
-      pdf.text(`${z.name}: ${z.sqft} sqft (${z.percentage}%)`, rightX, rightY);
-      rightY += 18;
-    });
+
+  if (content.competitivePositioning) {
+    rightY = pdfSectionLabel(pdf, 'Competitive Positioning', rightX, rightY, brandRgb);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+    const lines = pdf.splitTextToSize(content.competitivePositioning, colWidth - 20);
+    pdf.text(lines.slice(0, 14), rightX, rightY);
+  }
+}
+
+function renderTeamCreditsSection(pdf: jsPDF, content: any, x: number, y: number, _width: number, brandRgb: [number, number, number]) {
+  const [r, g, b] = brandRgb;
+  let currentY = y;
+
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(32); pdf.setTextColor(r, g, b);
+  pdf.text(content.exhibitHouseName || '', x, currentY); currentY += 50;
+
+  if (content.tagline) {
+    pdf.setFont('helvetica', 'italic'); pdf.setFontSize(16); pdf.setTextColor(100, 100, 100);
+    pdf.text(content.tagline, x, currentY); currentY += 35;
+  }
+
+  if (content.contactInfo?.name) {
+    currentY += 20;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(r, g, b);
+    pdf.text('Contact', x, currentY); currentY += 22;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(14); pdf.setTextColor(30, 30, 30);
+    pdf.text(content.contactInfo.name, x, currentY); currentY += 22;
+    if (content.contactInfo.email) { pdf.setTextColor(80, 80, 80); pdf.text(content.contactInfo.email, x, currentY); currentY += 20; }
+    if (content.contactInfo.phone) { pdf.text(content.contactInfo.phone, x, currentY); currentY += 20; }
+  }
+
+  if (content.tools?.length) {
+    currentY += 20;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(r, g, b);
+    pdf.text('Powered by', x, currentY); currentY += 20;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12); pdf.setTextColor(50, 50, 50);
+    content.tools.forEach((t: string) => { pdf.text(`• ${t}`, x, currentY); currentY += 18; });
+  }
+}
+
+function renderNextStepsSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]) {
+  const [r, g, b] = brandRgb;
+  let currentY = y;
+
+  // CTA box
+  pdf.setFillColor(r, g, b);
+  pdf.rect(x, currentY, width, 80, 'F');
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(22); pdf.setTextColor(255, 255, 255);
+  const cta = content.callToAction || "Ready to bring this vision to life? Let's schedule a walkthrough.";
+  const ctaLines = pdf.splitTextToSize(cta, width - 60);
+  pdf.text(ctaLines.slice(0, 2), x + width / 2, currentY + 45, { align: 'center' });
+  currentY += 110;
+
+  if (content.contactInfo?.name) {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(r, g, b);
+    pdf.text('Contact Us', x, currentY); currentY += 24;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(14); pdf.setTextColor(30, 30, 30);
+    pdf.text(content.contactInfo.name, x, currentY); currentY += 22;
+    if (content.contactInfo.email) { pdf.setTextColor(80, 80, 80); pdf.text(content.contactInfo.email, x, currentY); currentY += 20; }
+    if (content.contactInfo.phone) { pdf.text(content.contactInfo.phone, x, currentY); currentY += 20; }
+  }
+
+  if (content.exhibitHouseName) {
+    currentY += 30;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(r, g, b);
+    pdf.text(content.exhibitHouseName, x, currentY);
   }
 }
 
@@ -865,8 +1039,10 @@ function renderSpatialDesignSection(
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(r, g, b);
     pdf.text('Materials & Mood', rightX, rightY); rightY += 22;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
-    content.materialsAndMood.slice(0, 8).forEach((m: string) => {
-      const lines = pdf.splitTextToSize(`• ${m}`, colWidth);
+    content.materialsAndMood.slice(0, 8).forEach((m: any) => {
+      // Handle both string and object entries (e.g. { name, description })
+      const text = typeof m === 'string' ? m : (m.material || m.name || m.finish || JSON.stringify(m));
+      const lines = pdf.splitTextToSize(`• ${text}`, colWidth);
       pdf.text(lines.slice(0, 2), rightX, rightY);
       rightY += lines.slice(0, 2).length * 16 + 6;
     });

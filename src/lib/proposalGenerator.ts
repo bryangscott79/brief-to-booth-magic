@@ -823,7 +823,7 @@ function renderMixedSection(pdf: jsPDF, content: any, x: number, y: number, widt
 }
 
 function renderSpatialDesignSection(
-  pdf: jsPDF, content: any, x: number, y: number, width: number, pageHeight: number, brandRgb: [number, number, number]
+  pdf: jsPDF, content: any, x: number, y: number, width: number, _pageHeight: number, brandRgb: [number, number, number]
 ) {
   const [r, g, b] = brandRgb;
   const colWidth = width / 2 - 20;

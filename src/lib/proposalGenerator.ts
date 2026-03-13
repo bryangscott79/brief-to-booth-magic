@@ -11,6 +11,12 @@ import {
   imageUrlToBase64,
 } from './logoUtils';
 import { calculateBoothDimensions, normalizeZones } from './spatialUtils';
+import {
+  estimateZoneCosts,
+  validateFullLayout,
+  calculateUtilityRequirements,
+} from './exhibitConstraints';
+import { generateLayoutMetrics } from '../components/spatial/LayoutMetrics';
 
 // Types
 export interface ProposalConfig {

@@ -1070,9 +1070,11 @@ export async function generateProposalPPTX(
         fill: { color: brandColorClean },
       });
       
-      // Content based on type — use specialized renderer for brand intelligence
+      // Content based on type — use specialized renderer for known section IDs
       if (section.id === 'brand-intelligence') {
         addPptxBrandIntelContent(slide, section.content, brandColorClean);
+      } else if (section.id === 'project-brief') {
+        addPptxProjectBriefContent(slide, section.content, brandColorClean);
       } else {
         switch (section.type) {
           case 'text':

@@ -56,6 +56,7 @@ interface RenderActions {
     previousImageUrl?: string;
     projectId: string;
     boothSize?: string;
+    projectType?: string | null;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 

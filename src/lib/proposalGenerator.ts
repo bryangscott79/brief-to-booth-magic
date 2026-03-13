@@ -64,7 +64,19 @@ export interface ProposalSection {
 export function buildProposalSections(data: ProposalData): ProposalSection[] {
   const { brief, elements, images, config } = data;
   const sections: ProposalSection[] = [];
-  
+
+  // Helper to get show/event name from multiple possible locations
+  const showName =
+    brief?.eventContext?.showName ||
+    brief?.events?.shows?.[0]?.name ||
+    brief?.show ||
+    '';
+
+  const footprintSize =
+    brief?.spatial?.footprints?.[0]?.size ||
+    brief?.space?.size ||
+    '30x30';
+
   // 1. Cover Page
   sections.push({
     id: 'cover',
@@ -76,9 +88,9 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       exhibitHouseName: config.exhibitHouseName,
       exhibitHouseLogo: config.exhibitHouseLogo,
       projectTitle: elements?.bigIdea?.data?.headline || 'Exhibit Concept Proposal',
-      showName: brief?.eventContext?.showName || '',
+      showName,
       date: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-      footprintSize: brief?.spatial?.footprints?.[0]?.size || '30x30',
+      footprintSize,
     },
   });
   

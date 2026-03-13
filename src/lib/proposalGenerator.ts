@@ -936,7 +936,7 @@ function renderAdjacentActivationsSection(pdf: jsPDF, content: any, x: number, y
   }
 }
 
-function renderTeamCreditsSection(pdf: jsPDF, content: any, x: number, y: number, width: number, brandRgb: [number, number, number]) {
+function renderTeamCreditsSection(pdf: jsPDF, content: any, x: number, y: number, _width: number, brandRgb: [number, number, number]) {
   const [r, g, b] = brandRgb;
   let currentY = y;
 

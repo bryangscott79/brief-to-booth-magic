@@ -17,6 +17,9 @@ import {
   buildPromptOpener,
   buildComplianceHeader,
   getRules,
+  buildScaleBlock as buildProjectScaleBlock,
+  getCameraInstructions as getProjectCameraInstructions,
+  getCameraScaleHint as getProjectCameraScaleHint,
 } from "@/lib/projectTypeRules";
 
 // Re-export types that callers may need

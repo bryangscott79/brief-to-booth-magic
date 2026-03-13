@@ -12,17 +12,12 @@ import {
   normalizeZones,
   calculateBoothDimensions,
   generateZoneDescriptionsForPrompt,
-  generateScaleContext,
-  generateCameraScaleHints,
   type NormalizedZone,
   type BoothDimensions,
 } from "@/lib/spatialUtils";
 
 import {
   getRules,
-  buildScaleBlock as rulesScaleBlock,
-  getCameraInstructions as rulesCameraInstructions,
-  getCameraScaleHint as rulesCameraScaleHint,
   buildPromptOpener,
   buildComplianceHeader,
 } from "@/lib/projectTypeRules";

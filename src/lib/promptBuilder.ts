@@ -379,8 +379,35 @@ export function buildBriefComplianceBlock(params: {
 }
 
 // ============================================
+// BRAND INTELLIGENCE BLOCK
+// ============================================
+
+function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
+  if (!entries || entries.length === 0) return "";
+  // Focus on visual_identity and vendor_material for render prompts
+  const relevant = entries.filter(e =>
+    e.category === "visual_identity" || e.category === "vendor_material"
+  );
+  if (relevant.length === 0) return "";
+  const parts: string[] = [
+    "\nBRAND INTELLIGENCE (apply these approved constraints):",
+  ];
+  for (const entry of relevant) {
+    parts.push(`• ${entry.title}: ${entry.content}`);
+  }
+  return parts.join("\n");
+}
+
+// ============================================
 // MAIN PROMPT GENERATOR
 // ============================================
+
+export interface BrandIntelEntry {
+  category: string;
+  title: string;
+  content: string;
+  tags?: string[] | null;
+}
 
 export interface GeneratePromptParams {
   brief: any;
@@ -392,11 +419,13 @@ export interface GeneratePromptParams {
   zoneInteriorAngles: ZoneInteriorAngle[];
   /** Project type ID — drives all language and framing decisions */
   projectType?: string | null;
+  /** Approved brand intelligence entries to inject into render prompts */
+  brandIntelligence?: BrandIntelEntry[];
 }
 
 /** Generate prompt with validated spatial data, fully project-type-aware */
 export function generatePrompt(angleId: string, params: GeneratePromptParams): string {
-  const { brief, bigIdea, elements, spatialData, boothDimensions, normalizedZones, zoneInteriorAngles, projectType } = params;
+  const { brief, bigIdea, elements, spatialData, boothDimensions, normalizedZones, zoneInteriorAngles, projectType, brandIntelligence } = params;
 
   const rules = getRules(projectType);
   const { width, depth, totalSqft, footprintLabel } = boothDimensions;
@@ -493,7 +522,7 @@ ${rules.styleReference}
 
 NEGATIVE PROMPT:
 ${brief.brand?.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, unrealistic lighting, blurry, low quality, ${rules.negativeAdditions}
-
+${buildBrandIntelBlock(brandIntelligence)}
 Aspect ratio: ${angle.aspectRatio}
 ${complianceBlock}`;
 }

@@ -74,6 +74,7 @@ export function useProjectSync() {
         id: dbProject.id,
         name: dbProject.name,
         projectType: dbProject.project_type ?? "trade_show_booth",
+        clientId: (dbProject as any).client_id ?? null,
         rawBrief: dbProject.brief_text || "",
         parsedBrief: dbProject.parsed_brief as ParsedBrief | null,
         elements,

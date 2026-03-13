@@ -29,6 +29,7 @@ import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
+import { useBrandIntelligence } from "@/hooks/useClients";
 
 // Import prompt building utilities
 import {
@@ -70,6 +71,14 @@ export function PromptGenerator() {
   const spatialData = currentProject?.elements.spatialStrategy.data;
   const bigIdea = currentProject?.elements.bigIdea.data;
   const elements = currentProject?.elements;
+
+  // Brand intelligence for render prompts
+  const clientId = currentProject?.clientId ?? null;
+  const { data: brandIntelEntries } = useBrandIntelligence(clientId);
+  const approvedBrandIntel = useMemo(
+    () => brandIntelEntries?.filter(e => e.is_approved).map(e => ({ category: e.category, title: e.title, content: e.content, tags: e.tags })),
+    [brandIntelEntries]
+  );
 
   // Calculate booth dimensions
   const boothDimensions = useMemo(() => {
@@ -145,6 +154,7 @@ export function PromptGenerator() {
     normalizedZones,
     zoneInteriorAngles,
     projectType: currentProject?.projectType ?? null,
+    brandIntelligence: approvedBrandIntel,
   };
 
   /** Local wrapper that closes over current project data */
@@ -162,6 +172,7 @@ export function PromptGenerator() {
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
         projectType: currentProject?.projectType ?? null,
+        brandIntelligence: approvedBrandIntel,
         onSave: doSave,
       });
 
@@ -216,6 +227,7 @@ export function PromptGenerator() {
       heroImageUrl: heroImage!,
       projectId: projectId!,
       boothSize: boothDimensions.footprintLabel,
+      brandIntelligence: approvedBrandIntel,
       onSave: doSave,
     }).then(() => {
       toast({
@@ -236,6 +248,7 @@ export function PromptGenerator() {
         heroImageUrl: heroImage,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        brandIntelligence: approvedBrandIntel,
         onSave: doSave,
       });
 
@@ -271,6 +284,7 @@ export function PromptGenerator() {
         previousImageUrl: undefined, // Don't use previous as reference
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        brandIntelligence: approvedBrandIntel,
         onSave: doSave,
       });
 
@@ -296,6 +310,7 @@ export function PromptGenerator() {
         heroImageUrl: newHeroImage,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        brandIntelligence: approvedBrandIntel,
         onSave: doSave,
       });
 

@@ -1,8 +1,10 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft, Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectStore";
 import { useNavigate } from "react-router-dom";
@@ -13,16 +15,21 @@ import type { ParsedBrief } from "@/types/brief";
 import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
 import type { ProjectTypeId } from "@/lib/projectTypes";
 import { DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
+import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
+import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";
 
 interface BriefUploadProps {
   projectId: string | null;
 }
 
-type UploadStep = "type-select" | "upload";
+type UploadStep = "type-select" | "client-select" | "upload";
 
 export function BriefUpload({ projectId }: BriefUploadProps) {
   const [step, setStep] = useState<UploadStep>("type-select");
   const [selectedType, setSelectedType] = useState<ProjectTypeId | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -30,6 +37,9 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { data: clients = [] } = useClients();
+  const upsertClient = useUpsertClient();
+  const batchCreateIntel = useBatchCreateIntelligence();
 
   /** Send brief text to AI-powered parser edge function */
   const parseBriefWithAI = async (text: string, fileBase64?: string, fileType?: string): Promise<ParsedBrief> => {
@@ -60,7 +70,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
 
     const { data, error } = await supabase
       .from("projects")
-      .insert({ user_id: userId, name, status: "draft", project_type: type } as any)
+      .insert({ user_id: userId, name, status: "draft", project_type: type, client_id: selectedClientId } as any)
       .select("id")
       .single();
 
@@ -111,11 +121,24 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
 
       if (updateError) console.error("Failed to save brief to DB:", updateError);
 
+      // Auto-extract brand intelligence if a client is linked
+      if (selectedClientId && parsedBrief) {
+        try {
+          const entries = extractBrandIntelligence(parsedBrief, selectedClientId, dbProjectId);
+          if (entries.length > 0) {
+            await batchCreateIntel.mutateAsync(entries);
+          }
+        } catch (intelError) {
+          console.warn("Brand intelligence extraction failed (non-blocking):", intelError);
+        }
+      }
+
       const { loadFromDb } = useProjectStore.getState();
       loadFromDb({
         id: dbProjectId,
         name: sourceName,
         projectType: type,
+        clientId: selectedClientId,
         rawBrief: text,
         parsedBrief,
         elements: {
@@ -175,7 +198,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       }
       await processBrief(text, sourceName, undefined, undefined, file);
     }
-  }, [user, navigate, toast, projectId, selectedType]);
+  }, [user, navigate, toast, projectId, selectedType, selectedClientId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -192,6 +215,14 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     await processBrief(pasteText, "Pasted Brief");
   };
 
+  const handleCreateClient = async () => {
+    if (!newClientName.trim()) return;
+    const result = await upsertClient.mutateAsync({ name: newClientName.trim() });
+    setSelectedClientId((result as any).id);
+    setNewClientName("");
+    setIsCreatingClient(false);
+  };
+
   // ─── STEP 1: Type Selection ──────────────────────────────────────────────
   if (step === "type-select") {
     return (
@@ -205,6 +236,123 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
             size="lg"
             className="btn-glow px-8 h-12 rounded-xl"
             disabled={!selectedType}
+            onClick={() => setStep("client-select")}
+          >
+            Continue
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── STEP 2: Client Selection ─────────────────────────────────────────────
+  if (step === "client-select") {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <button
+          onClick={() => setStep("type-select")}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Change project type
+        </button>
+
+        <div>
+          <h2 className="text-xl font-semibold mb-1">Select Client</h2>
+          <p className="text-sm text-muted-foreground">
+            Link this project to a client to enable brand intelligence. You can skip this step.
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          {/* No client option */}
+          <Card
+            className={cn(
+              "cursor-pointer transition-all hover:border-primary/30",
+              selectedClientId === null && "border-primary bg-primary/5"
+            )}
+            onClick={() => setSelectedClientId(null)}
+          >
+            <CardContent className="flex items-center gap-3 py-3 px-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <span className="text-sm font-medium">No Client</span>
+                <p className="text-xs text-muted-foreground">Skip client association for now</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Existing clients */}
+          {clients.map((client) => (
+            <Card
+              key={client.id}
+              className={cn(
+                "cursor-pointer transition-all hover:border-primary/30",
+                selectedClientId === client.id && "border-primary bg-primary/5"
+              )}
+              onClick={() => setSelectedClientId(client.id)}
+            >
+              <CardContent className="flex items-center gap-3 py-3 px-4">
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-full"
+                  style={{ backgroundColor: client.primary_color ? `${client.primary_color}20` : undefined }}
+                >
+                  <Building2
+                    className="h-4 w-4"
+                    style={{ color: client.primary_color || undefined }}
+                  />
+                </div>
+                <div>
+                  <span className="text-sm font-medium">{client.name}</span>
+                  {client.industry && (
+                    <p className="text-xs text-muted-foreground">{client.industry}</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* Create new client inline */}
+          {isCreatingClient ? (
+            <Card className="border-dashed">
+              <CardContent className="flex items-center gap-3 py-3 px-4">
+                <Input
+                  autoFocus
+                  placeholder="Client name..."
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreateClient();
+                    if (e.key === "Escape") setIsCreatingClient(false);
+                  }}
+                  className="h-9"
+                />
+                <Button size="sm" onClick={handleCreateClient} disabled={!newClientName.trim()}>
+                  Add
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setIsCreatingClient(false)}>
+                  Cancel
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <button
+              onClick={() => setIsCreatingClient(true)}
+              className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors py-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add new client
+            </button>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            size="lg"
+            className="btn-glow px-8 h-12 rounded-xl"
             onClick={() => setStep("upload")}
           >
             Continue
@@ -215,16 +363,16 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     );
   }
 
-  // ─── STEP 2: Brief Upload ────────────────────────────────────────────────
+  // ─── STEP 3: Brief Upload ────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Back to type selection */}
+      {/* Back to client selection */}
       <button
-        onClick={() => setStep("type-select")}
+        onClick={() => setStep("client-select")}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Change project type
+        Change client
       </button>
 
       {/* Mode Toggle */}

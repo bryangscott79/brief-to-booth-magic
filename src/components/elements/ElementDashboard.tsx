@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
 import type { ElementType, ElementState } from "@/types/brief";
 import { cn } from "@/lib/utils";
-import { 
-  Play, 
-  Check, 
-  Loader2, 
+import {
+  Play,
+  Check,
+  Loader2,
   AlertCircle,
   ChevronRight,
   Sparkles,
@@ -21,6 +21,8 @@ import { saveProjectField, ELEMENT_DB_KEYS } from "@/hooks/useProjectSync";
 import { ElementDetailPanel } from "./ElementDetailPanel";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { useCompanyProfile, useShowCosts } from "@/hooks/useCompanyProfile";
+import { useBrandIntelligence, useClient, useBatchCreateIntelligence } from "@/hooks/useClients";
+import { IntelligenceSelector } from "./IntelligenceSelector";
 
 const ELEMENT_ORDER: ElementType[] = [
   "bigIdea",
@@ -61,6 +63,9 @@ async function runGenerationJob(
   companyProfile: any | undefined,
   showCosts: any[] | undefined,
   isRegenerate: boolean,
+  brandIntelligence?: any[],
+  clientData?: any,
+  projectType?: string,
 ): Promise<GenerationJob> {
   // Abort any existing job
   if (activeJob) {
@@ -94,6 +99,9 @@ async function runGenerationJob(
             knowledgeBaseContent: knowledgeBaseContent && knowledgeBaseContent.length > 0 ? knowledgeBaseContent : undefined,
             companyProfile,
             showCosts: showCosts && showCosts.length > 0 ? showCosts : undefined,
+            brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
+            clientData,
+            projectType,
           },
         });
 
@@ -132,6 +140,43 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
   const { files: kbFiles } = useKnowledgeBase(projectId);
   const { profile: companyProfile } = useCompanyProfile();
   const { costs: showCosts } = useShowCosts();
+
+  // Brand intelligence + client context for AI generation
+  const clientId = currentProject?.clientId ?? null;
+  const { data: brandIntelEntries } = useBrandIntelligence(clientId);
+  const { data: clientRecord } = useClient(clientId);
+  const batchCreateIntelligence = useBatchCreateIntelligence();
+
+  // Approved entries for IntelligenceSelector
+  const approvedEntries = useMemo(
+    () => brandIntelEntries?.filter(e => e.is_approved) ?? [],
+    [brandIntelEntries]
+  );
+
+  // Track which intelligence entries are selected for this generation run
+  const [selectedIntelIds, setSelectedIntelIds] = useState<Set<string>>(new Set());
+
+  // Initialize selection when entries load
+  useEffect(() => {
+    if (approvedEntries.length > 0 && selectedIntelIds.size === 0) {
+      setSelectedIntelIds(new Set(approvedEntries.map(e => e.id)));
+    }
+  }, [approvedEntries]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleIntel = useCallback((id: string) => {
+    setSelectedIntelIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleAllIntel = useCallback((enabled: boolean) => {
+    setSelectedIntelIds(
+      enabled ? new Set(approvedEntries.map(e => e.id)) : new Set()
+    );
+  }, [approvedEntries]);
 
   const elements = currentProject?.elements;
   const completedCount = elements ? ELEMENT_ORDER.filter(
@@ -212,14 +257,32 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
       unionRequired: c.union_labor_required,
     })) : undefined;
 
-    return { knowledgeBaseContent, cpPayload, scPayload };
+    // Brand intelligence: only send approved + user-selected entries
+    const biPayload = approvedEntries
+      .filter(e => selectedIntelIds.has(e.id))
+      .map(e => ({ category: e.category, title: e.title, content: e.content, tags: e.tags }));
+
+    // Client context
+    const clientPayload = clientRecord ? {
+      name: clientRecord.name,
+      industry: clientRecord.industry,
+      description: clientRecord.description,
+      primaryColor: clientRecord.primary_color,
+      secondaryColor: clientRecord.secondary_color,
+      website: clientRecord.website,
+    } : undefined;
+
+    // Project type
+    const projectTypeId = currentProject?.projectType ?? undefined;
+
+    return { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId };
   };
 
   const generateElement = async (elementType: ElementType, feedback?: string) => {
     setElementStatus(elementType, "generating");
 
     try {
-      const { knowledgeBaseContent, cpPayload, scPayload } = getContextPayloads();
+      const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId } = getContextPayloads();
 
       const { data, error } = await supabase.functions.invoke("generate-element", {
         body: {
@@ -230,6 +293,9 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           knowledgeBaseContent: knowledgeBaseContent.length > 0 ? knowledgeBaseContent : undefined,
           companyProfile: cpPayload,
           showCosts: scPayload,
+          brandIntelligence: biPayload && biPayload.length > 0 ? biPayload : undefined,
+          clientData: clientPayload,
+          projectType: projectTypeId,
         },
       });
 
@@ -258,7 +324,7 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
 
     setIsGenerating(true);
 
-    const { knowledgeBaseContent, cpPayload, scPayload } = getContextPayloads();
+    const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId } = getContextPayloads();
 
     const job = await runGenerationJob(
       projectId,
@@ -269,6 +335,9 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
       cpPayload,
       scPayload,
       isRegenerate,
+      biPayload && biPayload.length > 0 ? biPayload : undefined,
+      clientPayload,
+      projectTypeId,
     );
 
     // Wait for completion (component may unmount, that's fine — job continues)
@@ -287,6 +356,25 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
     setRegeneratingElement(elementType);
     await generateElement(elementType, feedback);
     setRegeneratingElement(null);
+
+    // Phase 1E: Auto-capture feedback as brand intelligence (past_learning)
+    if (feedback && feedback.trim().length > 0 && clientId && projectId) {
+      const elementLabel = ELEMENT_META[elementType]?.title ?? elementType;
+      batchCreateIntelligence.mutate([
+        {
+          client_id: clientId,
+          category: "past_learning" as const,
+          title: `Feedback on ${elementLabel}`,
+          content: feedback.trim(),
+          tags: [elementType, "regen_feedback"],
+          source: "feedback" as const,
+          confidence_score: null,
+          source_project_id: projectId,
+          is_approved: true,
+          approved_at: new Date().toISOString(),
+        },
+      ]);
+    }
   };
 
   const handleUpdateField = (elementType: ElementType, path: string, value: any) => {
@@ -367,6 +455,16 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           )}
         </div>
       </div>
+
+      {/* Brand Intelligence Selector */}
+      {approvedEntries.length > 0 && (
+        <IntelligenceSelector
+          entries={approvedEntries}
+          selectedIds={selectedIntelIds}
+          onToggle={handleToggleIntel}
+          onToggleAll={handleToggleAllIntel}
+        />
+      )}
 
       {/* Progress Bar */}
       <div className="h-2 bg-muted rounded-full overflow-hidden">

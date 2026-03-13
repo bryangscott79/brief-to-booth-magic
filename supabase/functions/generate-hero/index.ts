@@ -5,12 +5,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface BrandIntelEntry {
+  category: string;
+  title: string;
+  content: string;
+  tags?: string[] | null;
+}
+
 interface GenerateHeroRequest {
   prompt: string;
   feedback?: string;
   previousImageUrl?: string;
   boothSize?: string;
   projectType?: string;
+  brandIntelligence?: BrandIntelEntry[];
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
@@ -20,6 +28,26 @@ interface GenerateHeroRequest {
     creativeAvoid?: string[];
     creativeEmbrace?: string[];
   };
+}
+
+/** Build brand intelligence block for image generation prompts */
+function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
+  if (!entries || entries.length === 0) return "";
+  // Focus on visual_identity and vendor_material for image gen
+  const relevant = entries.filter(e =>
+    e.category === "visual_identity" || e.category === "vendor_material" || e.category === "strategic_voice"
+  );
+  if (relevant.length === 0) return "";
+
+  const parts: string[] = [
+    "\n── BRAND INTELLIGENCE ──",
+    "Apply these approved brand constraints to the visualization:\n",
+  ];
+  for (const entry of relevant) {
+    parts.push(`• ${entry.title}: ${entry.content}`);
+  }
+  parts.push("── END BRAND INTELLIGENCE ──\n");
+  return parts.join("\n");
 }
 
 function buildScaleBlock(sizeStr?: string): string {
@@ -103,7 +131,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence }: GenerateHeroRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -137,7 +165,8 @@ serve(async (req) => {
 
     const scaleBlock = buildScaleBlock(boothSize);
     const designBlock = buildDesignContextBlock(designContext);
-    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType });
+    const brandBlock = buildBrandIntelBlock(brandIntelligence);
+    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType, brandIntelEntries: brandIntelligence?.length ?? 0 });
 
     let messages;
 
@@ -151,6 +180,7 @@ ORIGINAL DESIGN REQUIREMENTS:
 ${prompt}
 ${scaleBlock}
 ${designBlock}
+${brandBlock}
 
 Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
 
@@ -170,6 +200,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
           content: `${prompt}
 ${scaleBlock}
 ${designBlock}
+${brandBlock}
 
 ${genSuffix}`,
         },

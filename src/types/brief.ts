@@ -326,6 +326,7 @@ export interface Project {
   id: string;
   name: string;
   projectType: string;
+  clientId: string | null;
   createdAt: Date;
   updatedAt: Date;
   rawBrief: string;

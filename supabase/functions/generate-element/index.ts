@@ -6,8 +6,43 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const ELEMENT_SYSTEM_PROMPTS: Record<string, string> = {
-  bigIdea: `You are an elite experiential marketing strategist. Generate a comprehensive "Big Idea" for a trade show booth. Include:
+// ─── PROJECT TYPE NOUN MAP ─────────────────────────────────────────────────────
+// Mirrors projectTypeRules.ts structureNoun — used to make system prompts type-aware.
+const STRUCTURE_NOUNS: Record<string, string> = {
+  trade_show_booth: "trade show booth",
+  live_brand_activation: "brand activation",
+  permanent_installation: "permanent installation",
+  film_premiere: "premiere event build",
+  game_release_activation: "game launch activation",
+  architectural_brief: "architectural space",
+};
+
+function getStructureNoun(projectType?: string): string {
+  if (!projectType) return "trade show booth";
+  return STRUCTURE_NOUNS[projectType] ?? "trade show booth";
+}
+
+// ─── AI GUIDANCE PER PROJECT TYPE ──────────────────────────────────────────────
+// High-level creative direction that replaces hardcoded booth language in system prompts.
+const PROJECT_TYPE_AI_GUIDANCE: Record<string, string> = {
+  trade_show_booth: "This is for a trade show booth on a convention center floor. Design for a professional B2B event environment with neighboring booths, aisles, and convention infrastructure.",
+  live_brand_activation: "This is for an outdoor/semi-outdoor brand activation (festival, street, plaza). Design for open-air environments with crowd energy, NOT a convention center. No neighboring booths or carpet.",
+  permanent_installation: "This is for a permanent branded environment (retail, museum, visitor center, corporate HQ). Design for architectural-quality construction with a 5-10 year lifespan. NOT temporary or event-based.",
+  film_premiere: "This is for a film/entertainment premiere event build. Design for a glamorous, theatrical atmosphere with red carpets, step-and-repeat, dramatic lighting. NOT a trade show.",
+  game_release_activation: "This is for a game launch activation. Design for an immersive game-world environment with RGB LED lighting, massive screens, gaming community energy. NOT a corporate event.",
+  architectural_brief: "This is for a permanent architectural space. Design with full architectural construction quality, natural light, and long-lifespan materials. NOT a temporary exhibit.",
+};
+
+// ─── TYPE-AWARE SYSTEM PROMPTS ─────────────────────────────────────────────────
+
+function getElementSystemPrompt(elementType: string, projectType?: string): string {
+  const noun = getStructureNoun(projectType);
+  const guidance = PROJECT_TYPE_AI_GUIDANCE[projectType || "trade_show_booth"] || PROJECT_TYPE_AI_GUIDANCE.trade_show_booth;
+
+  const BASE_PROMPTS: Record<string, string> = {
+    bigIdea: `You are an elite experiential marketing strategist. Generate a comprehensive "Big Idea" for a ${noun}. ${guidance}
+
+Include:
 - A bold, memorable headline (tagline)
 - A supporting subheadline
 - A detailed strategic narrative (3-4 paragraphs) explaining the concept
@@ -21,7 +56,9 @@ const ELEMENT_SYSTEM_PROMPTS: Record<string, string> = {
 
 Make it feel like a pitch deck slide — bold, confident, and strategically grounded.`,
 
-  experienceFramework: `You are a world-class experience designer for trade shows. Generate an exhaustive "Experience Framework" including:
+    experienceFramework: `You are a world-class experience designer. Generate an exhaustive "Experience Framework" for a ${noun}. ${guidance}
+
+Include:
 - Concept description (2-3 paragraphs, vivid and evocative)
 - 5-7 design principles, each with name, detailed description, and brief reference
 - Complete visitor journey with 5-6 stages, each with description, touchpoints, emotional arc, and timing
@@ -34,7 +71,9 @@ Make it feel like a pitch deck slide — bold, confident, and strategically grou
 
 Reference current industry trends in experiential design: multi-sensory environments, personalized journeys, phygital experiences, data-driven engagement.`,
 
-  interactiveMechanics: `You are a creative technologist specializing in interactive installations. Generate detailed "Interactive Mechanics" including:
+    interactiveMechanics: `You are a creative technologist specializing in interactive installations. Generate detailed "Interactive Mechanics" for a ${noun}. ${guidance}
+
+Include:
 - Hero installation with: evocative name, high-concept description (2 paragraphs), physical form details (structure, dimensions, materials, visual language), complete interaction model (5+ steps with user actions and system responses), technical specifications, and audience value per persona
 - 3-4 secondary interactive elements with names, types, descriptions, locations, purposes, and technical notes
 - Technology stack recommendations
@@ -45,7 +84,9 @@ Reference current industry trends in experiential design: multi-sensory environm
 - Engagement metrics to track
 - Reference cutting-edge interactive technology trends: spatial computing, generative AI, real-time data visualization, gesture recognition, AR/MR overlays.`,
 
-  digitalStorytelling: `You are a content strategist for immersive brand experiences. Generate comprehensive "Digital Storytelling" strategy including:
+    digitalStorytelling: `You are a content strategist for immersive brand experiences. Generate comprehensive "Digital Storytelling" strategy for a ${noun}. ${guidance}
+
+Include:
 - Content philosophy (2 paragraphs)
 - 3-4 audience tracks with: track name, target audience, format, content focus, tone, delivery method, key messages, and sample content outline
 - 6-8 content modules with: title, description, duration, format, reusability notes, and production complexity
@@ -56,7 +97,9 @@ Reference current industry trends in experiential design: multi-sensory environm
 - Measurement framework for content effectiveness
 - Reference trends: short-form video, interactive storytelling, AI-personalized content, user-generated content integration.`,
 
-  humanConnection: `You are a hospitality and meeting design expert for trade shows. Generate exhaustive "Human Connection Zones" strategy including:
+    humanConnection: `You are a hospitality and meeting design expert. Generate exhaustive "Human Connection Zones" strategy for a ${noun}. ${guidance}
+
+Include:
 - Detailed zone configurations for each footprint size with: zone names, capacity, rich descriptions, design features, furniture specs, purpose, and atmosphere notes
 - Operational plan: booking system, content support, transition design, staffing model
 - Meeting type taxonomy: executive briefings, technical deep-dives, partner discussions, press meetings
@@ -66,7 +109,9 @@ Reference current industry trends in experiential design: multi-sensory environm
 - Scaling notes with specific recommendations per footprint
 - Reference trends: biophilic design, wellness spaces, quiet zones, networking technology.`,
 
-  adjacentActivations: `You are an event strategist specializing in off-booth activations. Generate comprehensive "Adjacent Activations" including:
+    adjacentActivations: `You are an event strategist specializing in off-site activations. Generate comprehensive "Adjacent Activations" for a ${noun}. ${guidance}
+
+Include:
 - 3-4 detailed activations with: name, type (primary/secondary), format description, capacity, venue type, venue recommendations per show, program format, atmosphere description, takeaway items, brief alignment, and estimated budget
 - Competitive positioning strategy (2 paragraphs)
 - Timing and scheduling recommendations
@@ -78,13 +123,13 @@ Reference current industry trends in experiential design: multi-sensory environm
 - Logistics and production notes
 - Reference trends: exclusive experiences, thought leadership forums, wellness activations, cultural immersion events.`,
 
-  spatialStrategy: `You are an exhibit designer and spatial strategist. Generate detailed "Spatial Strategy" with MATHEMATICALLY CORRECT zone positions.
+    spatialStrategy: `You are an exhibit designer and spatial strategist. Generate detailed "Spatial Strategy" for a ${noun} with MATHEMATICALLY CORRECT zone positions. ${guidance}
 
 CRITICAL POSITIONING RULES:
 1. All position values (x, y, width, height) must be PERCENTAGES from 0-100
 2. x = 0 means left edge, x = 100 means right edge
 3. y = 0 means FRONT (aisle side), y = 100 means BACK (rear wall)
-4. For EACH zone: x + width <= 100 AND y + height <= 100 (zones must fit within booth)
+4. For EACH zone: x + width <= 100 AND y + height <= 100 (zones must fit within the space)
 5. Zones should NOT overlap significantly
 6. All zone percentages should sum to approximately 85-100% (leaving room for circulation)
 7. sqft = (width/100) * (height/100) * totalSqft — calculate this correctly!
@@ -109,7 +154,9 @@ Include:
 - ADA compliance notes
 - Reference trends: modular systems, sustainable materials, LED environments, flexible configurations.`,
 
-  budgetLogic: `You are a trade show budget strategist and financial analyst. Generate comprehensive "Budget Logic" including:
+    budgetLogic: `You are a budget strategist and financial analyst for experiential projects. Generate comprehensive "Budget Logic" for a ${noun}. ${guidance}
+
+Include:
 - Total per-show budget with detailed allocation across 8-10 categories (percentage, amount, detailed description)
 - Amortization schedule across 3-5 shows showing cost reduction through reuse
 - 5-7 risk factors with impact description and severity level
@@ -120,7 +167,74 @@ Include:
 - Insurance and contingency planning
 - Cost comparison vs industry benchmarks
 - Reference trends: sustainable ROI, digital-first cost optimization, modular investment strategies.`,
-};
+  };
+
+  return BASE_PROMPTS[elementType] || "";
+}
+
+// ─── BUILD BRAND INTELLIGENCE PROMPT SECTION ────────────────────────────────────
+
+interface IntelligenceEntry {
+  category: string;
+  title: string;
+  content: string;
+  tags?: string[] | null;
+}
+
+function buildBrandIntelligenceBlock(entries: IntelligenceEntry[]): string {
+  if (!entries || entries.length === 0) return "";
+
+  // Group by category
+  const grouped: Record<string, IntelligenceEntry[]> = {};
+  for (const entry of entries) {
+    if (!grouped[entry.category]) grouped[entry.category] = [];
+    grouped[entry.category].push(entry);
+  }
+
+  const categoryLabels: Record<string, string> = {
+    visual_identity: "Visual Identity",
+    strategic_voice: "Strategic Voice & Positioning",
+    vendor_material: "Vendor & Material Preferences",
+    process_procedure: "Process & Procedure",
+    cost_benchmark: "Cost Benchmarks",
+    past_learning: "Past Project Learnings",
+  };
+
+  let block = `\n\n═══════════════════════════════════════
+BRAND INTELLIGENCE (approved entries from client profile)
+═══════════════════════════════════════
+The following brand intelligence entries have been approved by the user. Your output MUST respect and incorporate these constraints.
+Do NOT contradict brand colors, voice guidelines, material preferences, or past learnings.\n`;
+
+  for (const [category, items] of Object.entries(grouped)) {
+    const label = categoryLabels[category] || category;
+    block += `\n── ${label} ──\n`;
+    for (const item of items) {
+      block += `• ${item.title}: ${item.content}\n`;
+    }
+  }
+
+  block += `\n═══════════════════════════════════════
+END BRAND INTELLIGENCE
+═══════════════════════════════════════\n`;
+
+  return block;
+}
+
+function buildClientContextBlock(clientData: { name?: string; industry?: string; description?: string; primaryColor?: string; secondaryColor?: string; website?: string }): string {
+  if (!clientData || !clientData.name) return "";
+
+  let block = `\n\n── CLIENT CONTEXT ──\n`;
+  block += `Client: ${clientData.name}\n`;
+  if (clientData.industry) block += `Industry: ${clientData.industry}\n`;
+  if (clientData.description) block += `Description: ${clientData.description}\n`;
+  if (clientData.primaryColor) block += `Primary Brand Color: ${clientData.primaryColor}\n`;
+  if (clientData.secondaryColor) block += `Secondary Brand Color: ${clientData.secondaryColor}\n`;
+  if (clientData.website) block += `Website: ${clientData.website}\n`;
+  block += `── END CLIENT CONTEXT ──\n`;
+
+  return block;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -128,7 +242,7 @@ serve(async (req) => {
   }
 
   try {
-    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext } = await req.json();
+    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType } = await req.json();
 
     const validTypes = ["bigIdea", "experienceFramework", "interactiveMechanics", "digitalStorytelling", "humanConnection", "adjacentActivations", "spatialStrategy", "budgetLogic"];
     if (!elementType || !validTypes.includes(elementType)) {
@@ -141,10 +255,23 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = ELEMENT_SYSTEM_PROMPTS[elementType];
+    // Build type-aware system prompt (replaces hardcoded booth-only prompts)
+    const systemPrompt = getElementSystemPrompt(elementType, projectType);
     if (!systemPrompt) throw new Error(`Unknown element type: ${elementType}`);
 
+    console.log("Project type:", projectType || "trade_show_booth (default)", "| Brand intelligence entries:", Array.isArray(brandIntelligence) ? brandIntelligence.length : 0);
+
     let userPrompt = `Here is the creative brief data:\n\n${JSON.stringify(briefData, null, 2)}`;
+
+    // Inject brand intelligence (approved entries from client profile)
+    if (brandIntelligence && Array.isArray(brandIntelligence) && brandIntelligence.length > 0) {
+      userPrompt += buildBrandIntelligenceBlock(brandIntelligence);
+    }
+
+    // Inject client context
+    if (clientData && typeof clientData === "object") {
+      userPrompt += buildClientContextBlock(clientData);
+    }
 
     // PHASE 2: Inject upstream element context for cascading generation
     if (upstreamContext && typeof upstreamContext === "object" && Object.keys(upstreamContext).length > 0) {

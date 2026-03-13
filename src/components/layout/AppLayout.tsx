@@ -10,11 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { 
-  Upload, 
-  FileSearch, 
-  Grid3X3, 
-  FileText, 
+import {
+  Upload,
+  FileSearch,
+  Grid3X3,
+  FileText,
   Download,
   Sparkles,
   FolderOpen,
@@ -24,6 +24,8 @@ import {
   BookOpen,
   Building2,
   Settings2,
+  Users,
+  Box,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -38,9 +40,11 @@ const navItems = [
   { path: "/generate", label: "Generate", icon: Sparkles },
   { path: "/spatial", label: "Spatial", icon: Grid3X3 },
   { path: "/prompts", label: "Prompts", icon: FileText },
+  { path: "/rhino", label: "3D Upload", icon: Box },
   { path: "/files", label: "Files", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
   { path: "/company", label: "Company", icon: Building2 },
+  { path: "/team", label: "Team", icon: Users },
   { path: "/admin", label: "Admin", icon: Settings2 },
 ];
 
@@ -51,7 +55,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const projectId = searchParams.get("project");
   const { user, signOut } = useAuth();
 
-  const noProjectPaths = ["/projects", "/company", "/admin"];
+  const noProjectPaths = ["/projects", "/company", "/team", "/admin"];
   const buildPath = (path: string) => {
     if (noProjectPaths.includes(path)) return path;
     return projectId ? `${path}?project=${projectId}` : path;

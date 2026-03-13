@@ -70,6 +70,10 @@ const SECTION_IDS = {
   MATERIALS_SPEC: "materials-spec",
   TIMELINE: "timeline",
   ROI_PROJECTIONS: "roi-projections",
+  // Phase 3: Rhino + Intelligence sections
+  RHINO_COMPARISON: "rhino-comparison",
+  BRAND_INTELLIGENCE: "brand-intelligence",
+  TEAM_CREDITS: "team-credits",
 } as const;
 
 // ============================================
@@ -123,9 +127,12 @@ const fullProposal: PresentationTemplate = {
     { sectionId: SECTION_IDS.ADJACENT_ACTIVATIONS, title: "Adjacent Activations", type: "mixed", included: true, required: false },
     { sectionId: SECTION_IDS.MATERIALS_SPEC, title: "Materials & Finishes", type: "mixed", included: true, required: false },
     { sectionId: SECTION_IDS.VIDEO_SHOWCASE, title: "Video Walkthrough", type: "mixed", included: true, required: false },
+    { sectionId: SECTION_IDS.RHINO_COMPARISON, title: "3D Design Process", type: "grid", included: true, required: false, layout: "grid-2" },
+    { sectionId: SECTION_IDS.BRAND_INTELLIGENCE, title: "Brand Intelligence Summary", type: "mixed", included: false, required: false },
     { sectionId: SECTION_IDS.INVESTMENT_SUMMARY, title: "Investment Summary", type: "table", included: true, required: true },
     { sectionId: SECTION_IDS.ROI_PROJECTIONS, title: "ROI Projections", type: "table", included: true, required: false },
     { sectionId: SECTION_IDS.TIMELINE, title: "Project Timeline", type: "table", included: true, required: false },
+    { sectionId: SECTION_IDS.TEAM_CREDITS, title: "Design Team", type: "text", included: false, required: false },
     { sectionId: SECTION_IDS.NEXT_STEPS, title: "Next Steps & Contact", type: "text", included: true, required: true },
   ],
   style: {
@@ -187,6 +194,35 @@ const budgetReview: PresentationTemplate = {
   },
 };
 
+/** Design + 3D Showcase — 12-16 slides, Rhino renders featured with before/after comparisons */
+const design3DShowcase: PresentationTemplate = {
+  id: "design-3d-showcase",
+  name: "Design + 3D Showcase",
+  description: "Visual-heavy 12-16 slide deck featuring Rhino 3D renders with before/after comparisons.",
+  icon: "🏗️",
+  slideRange: { min: 12, max: 16 },
+  slides: [
+    { sectionId: SECTION_IDS.COVER, title: "Cover", type: "cover", included: true, required: true },
+    { sectionId: SECTION_IDS.EXECUTIVE_SUMMARY, title: "Design Direction", type: "text", included: true, required: false, subtitle: "Brief overview" },
+    { sectionId: SECTION_IDS.BRAND_INTELLIGENCE, title: "Brand Identity", type: "mixed", included: true, required: false },
+    { sectionId: SECTION_IDS.HERO_RENDER, title: "Hero View", type: "image", included: true, required: true, layout: "full" },
+    { sectionId: SECTION_IDS.RHINO_COMPARISON, title: "3D Design Process", type: "grid", included: true, required: true, layout: "grid-2" },
+    { sectionId: SECTION_IDS.SPATIAL_DESIGN, title: "Floor Plan", type: "image", included: true, required: false, layout: "full" },
+    { sectionId: SECTION_IDS.MULTI_VIEW_RENDERS, title: "Exterior Perspectives", type: "grid", included: true, required: false, layout: "grid-3" },
+    { sectionId: SECTION_IDS.ZONE_INTERIORS, title: "Interior Views", type: "grid", included: true, required: false, layout: "grid-2" },
+    { sectionId: SECTION_IDS.INTERACTIVE_MECHANICS, title: "Hero Installation Detail", type: "mixed", included: true, required: false },
+    { sectionId: SECTION_IDS.MATERIALS_SPEC, title: "Materials & Finishes", type: "mixed", included: true, required: false },
+    { sectionId: SECTION_IDS.INVESTMENT_SUMMARY, title: "Investment", type: "table", included: true, required: false },
+    { sectionId: SECTION_IDS.TEAM_CREDITS, title: "Design Team", type: "text", included: true, required: false },
+    { sectionId: SECTION_IDS.NEXT_STEPS, title: "Next Steps", type: "text", included: true, required: true },
+  ],
+  style: {
+    colorScheme: "dark",
+    imageEmphasis: "high",
+    textDensity: "minimal",
+  },
+};
+
 // ============================================
 // EXPORTS
 // ============================================
@@ -195,6 +231,7 @@ export const PRESENTATION_TEMPLATES: PresentationTemplate[] = [
   executiveSummary,
   fullProposal,
   designShowcase,
+  design3DShowcase,
   budgetReview,
 ];
 

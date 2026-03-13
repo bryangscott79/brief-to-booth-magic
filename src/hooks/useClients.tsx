@@ -219,6 +219,31 @@ export function useApproveBrandIntelligence() {
   });
 }
 
+export function useBatchCreateIntelligence() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (entries: Array<Omit<BrandIntelligenceEntry, "id" | "user_id" | "created_at" | "updated_at">>) => {
+      if (!user) throw new Error("Not authenticated");
+      const payload = entries.map((e) => ({ ...e, user_id: user.id }));
+      const { data, error } = await supabase
+        .from("brand_intelligence")
+        .insert(payload as any)
+        .select();
+      if (error) throw error;
+      return data as BrandIntelligenceEntry[];
+    },
+    onSuccess: (data) => {
+      if (data.length > 0) {
+        qc.invalidateQueries({ queryKey: ["brand-intelligence", data[0].client_id] });
+      }
+      toast({ title: `${data.length} intelligence entries created` });
+    },
+    onError: (e: any) => toast({ title: "Error creating intelligence entries", description: e.message, variant: "destructive" }),
+  });
+}
+
 // ─── PROJECT TYPE CONFIGS ─────────────────────────────────────────────────────
 
 export function useProjectTypeConfigs() {

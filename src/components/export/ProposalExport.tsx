@@ -33,27 +33,35 @@ import {
   generateProposalPPTX,
   type ProposalConfig,
   type ProposalData,
+  type RhinoRenderEntry,
+  type BrandIntelEntry,
 } from "@/lib/proposalGenerator";
 import {
   getClearbitLogoUrl,
   extractDomain,
   checkClearbitLogo,
 } from "@/lib/logoUtils";
+import { SlideEditor } from "./SlideEditor";
+import type { PresentationTemplate } from "@/lib/presentationTemplates";
+import { getActiveSlides } from "@/lib/presentationTemplates";
 
 interface ProposalExportProps {
   brief: any;
   elements: any;
   images: Array<{ angle_name: string; public_url: string; angle_id: string; is_current: boolean }>;
   projectName: string;
+  rhinoRenders?: RhinoRenderEntry[];
+  brandIntelligence?: BrandIntelEntry[];
 }
 
-export function ProposalExport({ brief, elements, images, projectName }: ProposalExportProps) {
+export function ProposalExport({ brief, elements, images, projectName, rhinoRenders, brandIntelligence }: ProposalExportProps) {
   const { toast } = useToast();
   const { profile } = useCompanyProfile();
-  
+
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingPPTX, setIsGeneratingPPTX] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSlideEditor, setShowSlideEditor] = useState(false);
   
   // Client logo state
   const [clientLogo, setClientLogo] = useState<string | null>(null);
@@ -133,7 +141,43 @@ export function ProposalExport({ brief, elements, images, projectName }: Proposa
       elements,
       images: currentImages,
       config: buildProposalConfig(),
+      rhinoRenders,
+      brandIntelligence,
     };
+  };
+
+  // SlideEditor confirm → generate PPTX with template
+  const handleSlideEditorConfirm = async (template: PresentationTemplate) => {
+    setShowSlideEditor(false);
+    setIsGeneratingPPTX(true);
+    try {
+      const proposalData = buildProposalData();
+      const activeSectionIds = getActiveSlides(template).map(s => s.sectionId);
+      const pptxBlob = await generateProposalPPTX(proposalData, { activeSectionIds });
+
+      const url = URL.createObjectURL(pptxBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${brief.brand?.name || projectName}_Proposal.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Proposal PPTX Generated",
+        description: `${activeSectionIds.length} slides using ${template.name} template`,
+      });
+    } catch (error) {
+      console.error('PPTX generation error:', error);
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPPTX(false);
+    }
   };
   
   const handleGeneratePDF = async () => {
@@ -383,44 +427,62 @@ export function ProposalExport({ brief, elements, images, projectName }: Proposa
         </div>
         
         {/* Export buttons */}
-        <div className="flex gap-3">
-          <Button 
-            onClick={handleGeneratePDF}
-            disabled={isGeneratingPDF || isGeneratingPPTX}
-            className="flex-1"
-            variant="outline"
-          >
-            {isGeneratingPDF ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <FileText className="h-4 w-4 mr-2" />
-                Download PDF
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={handleGeneratePPTX}
-            disabled={isGeneratingPDF || isGeneratingPPTX}
-            className="flex-1 btn-glow"
-          >
-            {isGeneratingPPTX ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Presentation className="h-4 w-4 mr-2" />
-                Download PPTX
-              </>
-            )}
-          </Button>
-        </div>
+        {showSlideEditor ? (
+          <SlideEditor
+            onConfirm={handleSlideEditorConfirm}
+            onCancel={() => setShowSlideEditor(false)}
+          />
+        ) : (
+          <div className="space-y-3">
+            <div className="flex gap-3">
+              <Button
+                onClick={handleGeneratePDF}
+                disabled={isGeneratingPDF || isGeneratingPPTX}
+                className="flex-1"
+                variant="outline"
+              >
+                {isGeneratingPDF ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Quick PDF
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={handleGeneratePPTX}
+                disabled={isGeneratingPDF || isGeneratingPPTX}
+                className="flex-1"
+                variant="outline"
+              >
+                {isGeneratingPPTX ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Presentation className="h-4 w-4 mr-2" />
+                    Quick PPTX
+                  </>
+                )}
+              </Button>
+            </div>
+            <Button
+              onClick={() => setShowSlideEditor(true)}
+              disabled={isGeneratingPDF || isGeneratingPPTX}
+              className="w-full btn-glow"
+            >
+              <Presentation className="h-4 w-4 mr-2" />
+              Customize & Export PPTX
+            </Button>
+          </div>
+        )}
         
         {!hasCompanyProfile && (
           <p className="text-xs text-center text-muted-foreground">

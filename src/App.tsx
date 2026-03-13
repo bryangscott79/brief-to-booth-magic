@@ -19,6 +19,9 @@ import Export from "./pages/Export";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import CompanyProfile from "./pages/CompanyProfile";
 import AdminSettings from "./pages/AdminSettings";
+import Team from "./pages/Team";
+import AcceptInvite from "./pages/AcceptInvite";
+import Rhino from "./pages/Rhino";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -69,6 +72,11 @@ const App = () => (
                 <Prompts />
               </ProtectedRoute>
             } />
+            <Route path="/rhino" element={
+              <ProtectedRoute>
+                <Rhino />
+              </ProtectedRoute>
+            } />
             <Route path="/files" element={
               <ProtectedRoute>
                 <Files />
@@ -94,6 +102,12 @@ const App = () => (
                 <AdminSettings />
               </ProtectedRoute>
             } />
+            <Route path="/team" element={
+              <ProtectedRoute>
+                <Team />
+              </ProtectedRoute>
+            } />
+            <Route path="/invite/:token" element={<AcceptInvite />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

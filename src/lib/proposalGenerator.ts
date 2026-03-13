@@ -27,11 +27,27 @@ export interface ProposalConfig {
   };
 }
 
+export interface RhinoRenderEntry {
+  id: string;
+  view_name: string | null;
+  original_public_url: string;
+  polished_public_url: string | null;
+  polish_status: string;
+}
+
+export interface BrandIntelEntry {
+  category: string;
+  title: string;
+  content: string;
+}
+
 export interface ProposalData {
   brief: any;
   elements: any;
   images: Array<{ angle_name: string; public_url: string; angle_id: string }>;
   config: ProposalConfig;
+  rhinoRenders?: RhinoRenderEntry[];
+  brandIntelligence?: BrandIntelEntry[];
 }
 
 export interface ProposalSection {
@@ -272,7 +288,59 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
     });
   }
   
-  // 14. Next Steps / Contact
+  // 15. Rhino 3D Comparison (before/after)
+  const polishedRhino = (data.rhinoRenders || []).filter(
+    (r) => r.polish_status === 'complete' && r.polished_public_url
+  );
+  if (polishedRhino.length > 0) {
+    sections.push({
+      id: 'rhino-comparison',
+      title: '3D Design Process',
+      type: 'grid',
+      content: {
+        images: polishedRhino.flatMap((r) => [
+          { url: r.original_public_url, caption: `${r.view_name || 'View'} — Original 3D Model` },
+          { url: r.polished_public_url!, caption: `${r.view_name || 'View'} — AI Polished` },
+        ]),
+        isComparison: true,
+      },
+    });
+  }
+
+  // 16. Brand Intelligence Summary
+  const approvedIntel = (data.brandIntelligence || []).filter((e) => e.content);
+  if (approvedIntel.length > 0) {
+    const grouped: Record<string, { title: string; content: string }[]> = {};
+    for (const entry of approvedIntel) {
+      const cat = entry.category || 'general';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push({ title: entry.title, content: entry.content });
+    }
+    sections.push({
+      id: 'brand-intelligence',
+      title: 'Brand Intelligence',
+      type: 'mixed',
+      content: {
+        narrative: 'Key brand insights informing every design decision in this proposal.',
+        categories: grouped,
+      },
+    });
+  }
+
+  // 17. Team Credits
+  sections.push({
+    id: 'team-credits',
+    title: 'Design Team',
+    type: 'text',
+    content: {
+      exhibitHouseName: config.exhibitHouseName,
+      tagline: config.exhibitHouseTagline || '',
+      contactInfo: config.contactInfo,
+      tools: ['AI-Powered Concept Generation', '3D Visualization Pipeline', 'Brand Intelligence Engine'],
+    },
+  });
+
+  // 18. Next Steps / Contact
   sections.push({
     id: 'next-steps',
     title: 'Next Steps',
@@ -291,8 +359,17 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
 // PDF GENERATOR
 // ============================================
 
-export async function generateProposalPDF(data: ProposalData): Promise<Blob> {
-  const sections = buildProposalSections(data);
+export async function generateProposalPDF(
+  data: ProposalData,
+  options?: { activeSectionIds?: string[] }
+): Promise<Blob> {
+  let sections = buildProposalSections(data);
+
+  if (options?.activeSectionIds) {
+    const activeSet = new Set(options.activeSectionIds);
+    sections = sections.filter((s) => activeSet.has(s.id));
+  }
+
   const pdf = new jsPDF({
     orientation: 'landscape',
     unit: 'pt',
@@ -695,8 +772,18 @@ async function renderGridSection(
 // PPTX GENERATOR
 // ============================================
 
-export async function generateProposalPPTX(data: ProposalData): Promise<Blob> {
-  const sections = buildProposalSections(data);
+export async function generateProposalPPTX(
+  data: ProposalData,
+  options?: { activeSectionIds?: string[] }
+): Promise<Blob> {
+  let sections = buildProposalSections(data);
+
+  // Filter to active template sections if provided
+  if (options?.activeSectionIds) {
+    const activeSet = new Set(options.activeSectionIds);
+    sections = sections.filter((s) => activeSet.has(s.id));
+  }
+
   const pptx = new PptxGenJS();
   
   // Set presentation properties
@@ -777,23 +864,27 @@ export async function generateProposalPPTX(data: ProposalData): Promise<Blob> {
         fill: { color: brandColorClean },
       });
       
-      // Content based on type
-      switch (section.type) {
-        case 'text':
-          addPptxTextContent(slide, section.content);
-          break;
-        case 'image':
-          addPptxImageContent(slide, section.content);
-          break;
-        case 'mixed':
-          addPptxMixedContent(slide, section.content, brandColorClean);
-          break;
-        case 'table':
-          addPptxTableContent(slide, section.content, brandColorClean);
-          break;
-        case 'grid':
-          addPptxGridContent(slide, section.content);
-          break;
+      // Content based on type — use specialized renderer for brand intelligence
+      if (section.id === 'brand-intelligence') {
+        addPptxBrandIntelContent(slide, section.content, brandColorClean);
+      } else {
+        switch (section.type) {
+          case 'text':
+            addPptxTextContent(slide, section.content);
+            break;
+          case 'image':
+            addPptxImageContent(slide, section.content);
+            break;
+          case 'mixed':
+            addPptxMixedContent(slide, section.content, brandColorClean);
+            break;
+          case 'table':
+            addPptxTableContent(slide, section.content, brandColorClean);
+            break;
+          case 'grid':
+            addPptxGridContent(slide, section.content);
+            break;
+        }
       }
       
       // Footer
@@ -897,6 +988,48 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
       y += 0.25;
     });
   }
+}
+
+function addPptxBrandIntelContent(slide: any, content: any, brandColor: string) {
+  let y = 1.2;
+
+  // Narrative
+  if (content.narrative) {
+    slide.addText(content.narrative, {
+      x: 0.5, y, w: 9, h: 0.4,
+      fontSize: 13, italic: true, color: '666666', fontFace: 'Arial',
+    });
+    y += 0.6;
+  }
+
+  // Categories grid
+  const categories = content.categories || {};
+  const catKeys = Object.keys(categories);
+  const cols = Math.min(catKeys.length, 3);
+  const colW = cols > 0 ? (9 / cols) - 0.2 : 9;
+
+  catKeys.slice(0, 6).forEach((catKey: string, i: number) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = 0.5 + col * (colW + 0.2);
+    const catY = y + row * 2;
+
+    // Category header
+    const catLabel = catKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    slide.addText(catLabel, {
+      x, y: catY, w: colW, h: 0.3,
+      fontSize: 12, bold: true, color: brandColor, fontFace: 'Arial',
+    });
+
+    // Entries
+    const entries = categories[catKey] || [];
+    entries.slice(0, 3).forEach((entry: any, j: number) => {
+      slide.addText(`${entry.title}: ${entry.content.substring(0, 120)}`, {
+        x, y: catY + 0.35 + j * 0.4, w: colW, h: 0.35,
+        fontSize: 9, color: '333333', fontFace: 'Arial', valign: 'top',
+      });
+    });
+  });
 }
 
 function addPptxTableContent(slide: any, content: any, brandColor: string) {

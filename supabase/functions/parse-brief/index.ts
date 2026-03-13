@@ -61,7 +61,7 @@ async function extractDocxTextAsync(base64Data: string): Promise<string> {
     .trim();
 }
 
-const PARSE_SYSTEM_PROMPT = `You are an expert trade show brief analyst. Given raw brief text, extract structured data into the exact schema provided via the tool call.
+const PARSE_SYSTEM_PROMPT = `You are an expert brief analyst for experiential design projects (trade show booths, brand activations, permanent installations, premiere events, game launches, and architectural spaces). Given raw brief text, extract structured data into the exact schema provided via the tool call.
 
 Rules:
 - Extract ONLY what is explicitly stated or clearly implied in the brief text.
@@ -73,6 +73,7 @@ Rules:
 - For brand: use the actual company name and industry from the document.
 - Be precise with spatial dimensions — extract exact booth sizes mentioned.
 - For creative direction: derive from the brief's theme, design language, and stated preferences.
+- If brand intelligence context is provided below, cross-reference it — do NOT contradict known brand data.
 
 You MUST call the provided function tool to return your response.`;
 
@@ -305,7 +306,21 @@ serve(async (req) => {
       },
     };
 
-    console.log("Parsing brief, text length:", briefText.length);
+    // Optional brand intelligence context
+    const brandIntelligence = body.brandIntelligence as Array<{ category: string; title: string; content: string }> | undefined;
+
+    console.log("Parsing brief, text length:", briefText.length, "| Brand intelligence entries:", Array.isArray(brandIntelligence) ? brandIntelligence.length : 0);
+
+    let userMessage = `Parse the following brief document into structured data. Extract ONLY information present in the document.\n\n--- BRIEF TEXT ---\n${briefText}\n--- END BRIEF TEXT ---`;
+
+    // Inject brand intelligence as known context for cross-referencing
+    if (brandIntelligence && Array.isArray(brandIntelligence) && brandIntelligence.length > 0) {
+      userMessage += `\n\n--- KNOWN CLIENT BRAND INTELLIGENCE (for cross-reference — do NOT contradict these) ---\n`;
+      for (const entry of brandIntelligence) {
+        userMessage += `• [${entry.category}] ${entry.title}: ${entry.content}\n`;
+      }
+      userMessage += `--- END BRAND INTELLIGENCE ---\nUse this intelligence to fill in gaps where the brief is silent, but always prioritize what is explicitly stated in the brief text.`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -317,7 +332,7 @@ serve(async (req) => {
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: PARSE_SYSTEM_PROMPT },
-          { role: "user", content: `Parse the following brief document into structured data. Extract ONLY information present in the document.\n\n--- BRIEF TEXT ---\n${briefText}\n--- END BRIEF TEXT ---` },
+          { role: "user", content: userMessage },
         ],
         tools: [toolSchema],
         tool_choice: { type: "function", function: { name: "parse_brief" } },

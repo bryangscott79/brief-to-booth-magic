@@ -6,12 +6,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface BrandIntelEntry {
+  category: string;
+  title: string;
+  content: string;
+  tags?: string[] | null;
+}
+
 interface GenerateViewRequest {
   referenceImageUrl: string;
   viewPrompt: string;
   viewName: string;
   aspectRatio: string;
   boothSize?: string;
+  brandIntelligence?: BrandIntelEntry[];
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
     brandColors?: string[];
@@ -78,6 +86,24 @@ function buildConsistencyBlock(tokens?: GenerateViewRequest["consistencyTokens"]
   return parts.join("\n");
 }
 
+/** Build brand intelligence block for view generation */
+function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
+  if (!entries || entries.length === 0) return "";
+  const relevant = entries.filter(e =>
+    e.category === "visual_identity" || e.category === "vendor_material"
+  );
+  if (relevant.length === 0) return "";
+  const parts: string[] = [
+    "\n── BRAND INTELLIGENCE ──",
+    "Apply these approved brand constraints for visual consistency:\n",
+  ];
+  for (const entry of relevant) {
+    parts.push(`• ${entry.title}: ${entry.content}`);
+  }
+  parts.push("── END BRAND INTELLIGENCE ──\n");
+  return parts.join("\n");
+}
+
 function buildScaleBlock(sizeStr?: string): string {
   if (!sizeStr) return "";
   const m = sizeStr.match(/(\d+)\s*[x×X]\s*(\d+)/);
@@ -111,7 +137,7 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens }: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence }: GenerateViewRequest = await req.json();
 
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -127,8 +153,9 @@ serve(async (req) => {
 
     const scaleBlock = buildScaleBlock(boothSize);
     const consistencyBlock = buildConsistencyBlock(consistencyTokens);
+    const brandBlock = buildBrandIntelBlock(brandIntelligence);
 
-    console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`, { hasConsistencyTokens: !!consistencyTokens });
+    console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`, { hasConsistencyTokens: !!consistencyTokens, brandIntelEntries: brandIntelligence?.length ?? 0 });
 
     // Camera direction mapping for strong angle differentiation
     const cameraDirections: Record<string, string> = {
@@ -176,7 +203,8 @@ COMPOSITION:
 
 OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.
 ${scaleBlock}
-${consistencyBlock}`
+${consistencyBlock}
+${brandBlock}`
       : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 ${scaleBlock}
 
@@ -194,7 +222,8 @@ CONSISTENCY RULES (maintain from reference):
 - Same trade show environment
 
 OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.
-${consistencyBlock}`;
+${consistencyBlock}
+${brandBlock}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

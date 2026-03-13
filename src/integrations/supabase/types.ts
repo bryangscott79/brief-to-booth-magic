@@ -269,6 +269,151 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          id: string
+          user_id: string
+          team_owner_id: string
+          role: string
+          display_name: string
+          invited_email: string | null
+          invited_by: string | null
+          accepted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          team_owner_id: string
+          role: string
+          display_name: string
+          invited_email?: string | null
+          invited_by?: string | null
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          team_owner_id?: string
+          role?: string
+          display_name?: string
+          invited_email?: string | null
+          invited_by?: string | null
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      project_invites: {
+        Row: {
+          id: string
+          project_id: string
+          created_by: string
+          token: string
+          email: string | null
+          scope: string
+          label: string | null
+          expires_at: string
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          created_by: string
+          token?: string
+          email?: string | null
+          scope: string
+          label?: string | null
+          expires_at: string
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          created_by?: string
+          token?: string
+          email?: string | null
+          scope?: string
+          label?: string | null
+          expires_at?: string
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_invites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rhino_renders: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          original_storage_path: string
+          original_public_url: string
+          polished_storage_path: string | null
+          polished_public_url: string | null
+          polish_status: string
+          polish_prompt: string | null
+          polish_feedback: string | null
+          view_name: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          original_storage_path: string
+          original_public_url: string
+          polished_storage_path?: string | null
+          polished_public_url?: string | null
+          polish_status?: string
+          polish_prompt?: string | null
+          polish_feedback?: string | null
+          view_name?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          original_storage_path?: string
+          original_public_url?: string
+          polished_storage_path?: string | null
+          polished_public_url?: string | null
+          polish_status?: string
+          polish_prompt?: string | null
+          polish_feedback?: string | null
+          view_name?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rhino_renders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_type_configs: {
         Row: {
           cost_category_overrides: Json | null

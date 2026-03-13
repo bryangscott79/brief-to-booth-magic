@@ -57,6 +57,7 @@ interface RenderActions {
     projectId: string;
     boothSize?: string;
     projectType?: string | null;
+    brandIntelligence?: Array<{ category: string; title: string; content: string; tags?: string[] | null }>;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -66,6 +67,7 @@ interface RenderActions {
     heroImageUrl: string;
     projectId: string;
     boothSize?: string;
+    brandIntelligence?: Array<{ category: string; title: string; content: string; tags?: string[] | null }>;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -75,6 +77,7 @@ interface RenderActions {
     heroImageUrl: string;
     projectId: string;
     boothSize?: string;
+    brandIntelligence?: Array<{ category: string; title: string; content: string; tags?: string[] | null }>;
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -144,7 +147,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
-  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, projectType, onSave }) => {
+  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, projectType, brandIntelligence, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
@@ -155,6 +158,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         previousImageUrl: previousImageUrl || undefined,
         boothSize: boothSize || undefined,
         projectType: projectType || undefined,
+        brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
       };
       if (designContext) {
         body.designContext = designContext;
@@ -186,7 +190,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, onSave }) => {
+  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, brandIntelligence, onSave }) => {
     // Split into exterior views first, then interiors — so interiors can reference exterior images
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
@@ -235,6 +239,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           viewName: angle.name,
           aspectRatio: angle.aspectRatio,
           boothSize: boothSize || undefined,
+          brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
         };
         if (consistencyTokens) {
           viewBody.consistencyTokens = consistencyTokens;
@@ -281,7 +286,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, onSave }) => {
+  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, brandIntelligence, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -308,6 +313,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         viewName: angle.name,
         aspectRatio: angle.aspectRatio,
         boothSize: boothSize || undefined,
+        brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
       };
       if (consistencyTokens) {
         viewBody.consistencyTokens = consistencyTokens;

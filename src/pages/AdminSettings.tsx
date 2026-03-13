@@ -3,7 +3,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProjectTypeManager } from "@/components/admin/ProjectTypeManager";
 import { ClientsManager } from "@/components/admin/ClientsManager";
-import { Settings2, Users, Layers } from "lucide-react";
+import { TeamManager } from "@/components/admin/TeamManager";
+import { Settings2, Users, Layers, UserCog } from "lucide-react";
 
 export default function AdminSettings() {
   const [tab, setTab] = useState("project-types");
@@ -36,6 +37,10 @@ export default function AdminSettings() {
               <Users className="h-4 w-4" />
               Clients & Brand Intelligence
             </TabsTrigger>
+            <TabsTrigger value="team" className="gap-2">
+              <UserCog className="h-4 w-4" />
+              Team
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="project-types">
@@ -44,6 +49,10 @@ export default function AdminSettings() {
 
           <TabsContent value="clients">
             <ClientsManager />
+          </TabsContent>
+
+          <TabsContent value="team">
+            <TeamManager />
           </TabsContent>
         </Tabs>
       </div>

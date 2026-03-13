@@ -3,7 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectStore } from "@/store/projectStore";
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;

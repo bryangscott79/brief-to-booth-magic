@@ -3,16 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Download, 
-  FileText, 
+import {
+  Download,
+  FileText,
   Folder,
-  Check,
   Package,
   Hammer,
   Box,
   Loader2,
-  Presentation,
   FolderArchive,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
@@ -21,6 +19,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ProposalExport } from "./ProposalExport";
+import { FigmaExportPanel } from "./FigmaExportPanel";
+import { SaveLearningsButton } from "./SaveLearningsButton";
+import { useRhinoRenders } from "@/hooks/useRhinoRenders";
+import { useBrandIntelligence } from "@/hooks/useClients";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
 interface MaterialItem {
   name: string;
@@ -84,13 +87,17 @@ export function ExportPackage() {
 
   const projectId = currentProject?.id;
   const { data: images } = useProjectImages(projectId);
+  const { data: rhinoRenders = [] } = useRhinoRenders(projectId);
+
+  const clientId = currentProject?.clientId ?? null;
+  const { data: brandIntelligence = [] } = useBrandIntelligence(clientId);
+  const approvedIntel = brandIntelligence.filter((e: any) => e.is_approved);
+  const { profile } = useCompanyProfile();
 
   const [materials, setMaterials] = useState<MaterialsData | null>(null);
   const [threeDData, setThreeDData] = useState<ThreeDData | null>(null);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [loading3D, setLoading3D] = useState(false);
-  const [loadingPresentation, setLoadingPresentation] = useState(false);
-  const [presentationSlides, setPresentationSlides] = useState<any[] | null>(null);
   const [loadingZip, setLoadingZip] = useState(false);
 
   const brief = currentProject?.parsedBrief;
@@ -197,307 +204,6 @@ export function ExportPackage() {
     downloadTextFile(`${brief.brand?.name || "project"}_3d_brief.md`, lines.join("\n"));
   };
 
-  const handleGeneratePresentation = async () => {
-    setLoadingPresentation(true);
-    try {
-      const imageUrls = (images || []).filter(i => i.is_current).map(i => ({
-        angle: i.angle_id,
-        angleName: i.angle_name,
-        url: i.public_url,
-      }));
-      const { data, error } = await supabase.functions.invoke("generate-presentation", {
-        body: {
-          parsedBrief: brief,
-          elements,
-          projectName: brief.brand?.name || currentProject?.name,
-          imageUrls,
-        },
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      setPresentationSlides(data.slides);
-      toast({ title: "Presentation content generated", description: "Click Download to get your .pptx file" });
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally {
-      setLoadingPresentation(false);
-    }
-  };
-
-  const downloadPresentation = async () => {
-    if (!presentationSlides) return;
-    const PptxGenJS = (await import("pptxgenjs")).default;
-    const pptx = new PptxGenJS();
-
-    const brandName = brief.brand?.name || currentProject?.name || "Project";
-    const brandColors = brief.brand?.visualIdentity?.colors || [];
-    // Strip # from hex colors for pptxgenjs
-    const cleanColor = (c: string) => c.replace(/^#/, "");
-    const primaryColor = cleanColor(brandColors[0] || "#1a1a2e");
-    const accentColor = cleanColor(brandColors[1] || "#e94560");
-    const darkBg = "0D0D0D";
-    const lightText = "FFFFFF";
-    const mutedText = "AAAAAA";
-    const bodyText = "333333";
-    const subtitleGray = "777777";
-
-    pptx.author = "Brief-to-Booth";
-    pptx.title = `${brandName} — Trade Show Booth Proposal`;
-    pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 inches
-
-    const W = 13.33;
-    const H = 7.5;
-    const MARGIN = 0.7;
-    const CONTENT_W = W - MARGIN * 2;
-
-    // Map of available images by angle
-    const imageMap: Record<string, string> = {};
-    (images || []).filter(i => i.is_current).forEach(i => {
-      imageMap[i.angle_id] = i.public_url;
-    });
-
-    // Helper: add a thin accent bar at top
-    const addAccentBar = (s: any) => {
-      s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.06, fill: { color: accentColor } });
-    };
-
-    // Helper: add brand watermark at bottom-right
-    const addBrandWatermark = (s: any, color = mutedText) => {
-      s.addText(brandName.toUpperCase(), {
-        x: W - 3.5, y: H - 0.6, w: 3, h: 0.4,
-        fontSize: 8, color, fontFace: "Arial",
-        align: "right", italic: true,
-      });
-    };
-
-    // Helper: add slide number
-    const addSlideNumber = (s: any, num: number, total: number, color = mutedText) => {
-      s.addText(`${num} / ${total}`, {
-        x: MARGIN, y: H - 0.6, w: 1.5, h: 0.4,
-        fontSize: 8, color, fontFace: "Arial",
-      });
-    };
-
-    const totalSlides = presentationSlides.length;
-
-    for (let idx = 0; idx < presentationSlides.length; idx++) {
-      const slide = presentationSlides[idx];
-      const s = pptx.addSlide();
-
-      if (slide.slideType === "title") {
-        // ─── TITLE SLIDE: Full dark bg, large text left, image right ───
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: darkBg } });
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.08, fill: { color: accentColor } });
-
-        // Brand name small at top
-        s.addText(brandName.toUpperCase(), {
-          x: MARGIN, y: 0.5, w: 5, h: 0.4,
-          fontSize: 10, color: accentColor, fontFace: "Arial",
-          bold: true,
-        });
-
-        // Title
-        s.addText(slide.title, {
-          x: MARGIN, y: 1.5, w: 6, h: 2,
-          fontSize: 36, bold: true, color: lightText, fontFace: "Arial",
-          lineSpacingMultiple: 1.1,
-        });
-
-        // Subtitle
-        s.addText(slide.subtitle, {
-          x: MARGIN, y: 3.6, w: 6, h: 0.8,
-          fontSize: 16, color: mutedText, fontFace: "Arial",
-        });
-
-        // Body points as a row at bottom
-        if (slide.bodyPoints?.length) {
-          s.addText(slide.bodyPoints.join("  •  "), {
-            x: MARGIN, y: H - 1.4, w: CONTENT_W, h: 0.5,
-            fontSize: 10, color: mutedText, fontFace: "Arial",
-          });
-        }
-
-        // Hero image on the right side
-        if (imageMap["hero_34"]) {
-          try {
-            s.addImage({ path: imageMap["hero_34"], x: 7.2, y: 0.8, w: 5.5, h: 5.5, sizing: { type: "cover", w: 5.5, h: 5.5 } });
-          } catch {}
-        }
-
-      } else if (slide.slideType === "section") {
-        // ─── SECTION DIVIDER: Accent bg, centered text ───
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: primaryColor } });
-        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 3, w: 2, h: 0.06, fill: { color: accentColor } });
-
-        s.addText(slide.title, {
-          x: MARGIN, y: 1.8, w: CONTENT_W, h: 1.2,
-          fontSize: 32, bold: true, color: lightText, fontFace: "Arial",
-        });
-        s.addText(slide.subtitle, {
-          x: MARGIN, y: 3.4, w: CONTENT_W, h: 0.8,
-          fontSize: 16, color: "CCCCCC", fontFace: "Arial",
-        });
-        addSlideNumber(s, idx + 1, totalSlides, "888888");
-
-      } else if (slide.slideType === "imageFeature") {
-        // ─── IMAGE FEATURE: Image fills most of slide, text overlay at bottom ───
-        s.background = { fill: darkBg };
-        addAccentBar(s);
-
-        // Title at top
-        s.addText(slide.title, {
-          x: MARGIN, y: 0.4, w: CONTENT_W, h: 0.6,
-          fontSize: 20, bold: true, color: lightText, fontFace: "Arial",
-        });
-
-        // Large image in center
-        const imgAngle = slide.imageAngle && imageMap[slide.imageAngle] ? slide.imageAngle : "hero_34";
-        if (imageMap[imgAngle]) {
-          try {
-            s.addImage({ path: imageMap[imgAngle], x: MARGIN, y: 1.2, w: CONTENT_W, h: 4.6, sizing: { type: "contain", w: CONTENT_W, h: 4.6 } });
-          } catch {}
-        }
-
-        // Bullet points below image
-        if (slide.bodyPoints?.length) {
-          s.addText(
-            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 10, color: mutedText } })),
-            { x: MARGIN, y: 6, w: CONTENT_W, h: 1, fontFace: "Arial", valign: "top" }
-          );
-        }
-        addBrandWatermark(s, "555555");
-        addSlideNumber(s, idx + 1, totalSlides, "555555");
-
-      } else if (slide.slideType === "closing") {
-        // ─── CLOSING: Dark bg, centered messaging ───
-        s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: darkBg } });
-        s.addShape(pptx.ShapeType.rect, { x: W / 2 - 1, y: 2.5, w: 2, h: 0.06, fill: { color: accentColor } });
-
-        s.addText(slide.title, {
-          x: 1.5, y: 1.2, w: W - 3, h: 1.2,
-          fontSize: 30, bold: true, color: lightText, fontFace: "Arial", align: "center",
-        });
-        s.addText(slide.subtitle, {
-          x: 1.5, y: 2.8, w: W - 3, h: 0.8,
-          fontSize: 16, color: mutedText, fontFace: "Arial", align: "center",
-        });
-        if (slide.bodyPoints?.length) {
-          s.addText(
-            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n`, options: { fontSize: 12, color: "CCCCCC" } })),
-            { x: 2.5, y: 4, w: W - 5, h: 2, fontFace: "Arial", align: "center", valign: "top" }
-          );
-        }
-        addBrandWatermark(s, "555555");
-
-      } else if (slide.slideType === "twoColumn") {
-        // ─── TWO COLUMN: Split layout ───
-        s.background = { fill: "FAFAFA" };
-        addAccentBar(s);
-
-        s.addText(slide.title, {
-          x: MARGIN, y: 0.5, w: CONTENT_W, h: 0.7,
-          fontSize: 22, bold: true, color: primaryColor, fontFace: "Arial",
-        });
-        s.addText(slide.subtitle, {
-          x: MARGIN, y: 1.15, w: CONTENT_W, h: 0.45,
-          fontSize: 12, color: subtitleGray, fontFace: "Arial",
-        });
-
-        // Divider line
-        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 1.7, w: 1.5, h: 0.04, fill: { color: accentColor } });
-
-        const hasImage = slide.imageAngle && imageMap[slide.imageAngle];
-        const textW = hasImage ? 5.5 : CONTENT_W;
-
-        if (slide.bodyPoints?.length) {
-          s.addText(
-            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n\n`, options: { fontSize: 13, color: bodyText, lineSpacingMultiple: 1.3 } })),
-            { x: MARGIN, y: 2, w: textW, h: 4.5, fontFace: "Arial", valign: "top" }
-          );
-        }
-
-        if (hasImage) {
-          try {
-            s.addImage({ path: imageMap[slide.imageAngle], x: 6.8, y: 2, w: 5.8, h: 4.5, sizing: { type: "contain", w: 5.8, h: 4.5 } });
-          } catch {}
-        }
-
-        addBrandWatermark(s);
-        addSlideNumber(s, idx + 1, totalSlides);
-
-      } else if (slide.slideType === "data") {
-        // ─── DATA SLIDE: Clean layout for numbers/stats ───
-        s.background = { fill: "FFFFFF" };
-        addAccentBar(s);
-
-        s.addText(slide.title, {
-          x: MARGIN, y: 0.5, w: CONTENT_W, h: 0.7,
-          fontSize: 22, bold: true, color: primaryColor, fontFace: "Arial",
-        });
-        s.addText(slide.subtitle, {
-          x: MARGIN, y: 1.15, w: CONTENT_W, h: 0.45,
-          fontSize: 12, color: subtitleGray, fontFace: "Arial",
-        });
-        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 1.7, w: 1.5, h: 0.04, fill: { color: accentColor } });
-
-        if (slide.bodyPoints?.length) {
-          s.addText(
-            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n\n`, options: { fontSize: 13, color: bodyText, lineSpacingMultiple: 1.4 } })),
-            { x: MARGIN, y: 2, w: CONTENT_W, h: 4.5, fontFace: "Arial", valign: "top" }
-          );
-        }
-
-        addBrandWatermark(s);
-        addSlideNumber(s, idx + 1, totalSlides);
-
-      } else {
-        // ─── CONTENT (default): Clean white slide with optional image ───
-        s.background = { fill: "FFFFFF" };
-        addAccentBar(s);
-
-        // Title block
-        s.addText(slide.title, {
-          x: MARGIN, y: 0.5, w: CONTENT_W, h: 0.7,
-          fontSize: 22, bold: true, color: primaryColor, fontFace: "Arial",
-        });
-        s.addText(slide.subtitle, {
-          x: MARGIN, y: 1.15, w: CONTENT_W, h: 0.45,
-          fontSize: 12, color: subtitleGray, fontFace: "Arial",
-        });
-
-        // Accent divider
-        s.addShape(pptx.ShapeType.rect, { x: MARGIN, y: 1.7, w: 1.5, h: 0.04, fill: { color: accentColor } });
-
-        const hasImg = slide.imageAngle && imageMap[slide.imageAngle];
-        const bulletW = hasImg ? 5.5 : CONTENT_W;
-
-        // Body bullets
-        if (slide.bodyPoints?.length) {
-          s.addText(
-            slide.bodyPoints.map((p: string) => ({ text: `• ${p}\n\n`, options: { fontSize: 13, color: bodyText, lineSpacingMultiple: 1.3 } })),
-            { x: MARGIN, y: 2, w: bulletW, h: 4.5, fontFace: "Arial", valign: "top" }
-          );
-        }
-
-        // Side image
-        if (hasImg) {
-          try {
-            s.addImage({ path: imageMap[slide.imageAngle], x: 6.8, y: 2, w: 5.8, h: 4.5, sizing: { type: "contain", w: 5.8, h: 4.5 } });
-          } catch {}
-        }
-
-        addBrandWatermark(s);
-        addSlideNumber(s, idx + 1, totalSlides);
-      }
-
-      // Speaker notes
-      if (slide.speakerNotes) {
-        s.addNotes(slide.speakerNotes);
-      }
-    }
-
-    pptx.writeFile({ fileName: `${brandName}_Booth_Proposal.pptx` });
-  };
 
   const handleDownloadZip = async () => {
     setLoadingZip(true);
@@ -576,19 +282,26 @@ export function ExportPackage() {
         }
       }
 
-      if (presentationSlides) {
-        content += `---\n\n# Presentation Slides\n\n`;
-        for (let i = 0; i < presentationSlides.length; i++) {
-          const slide = presentationSlides[i];
-          content += `### Slide ${i + 1}: ${slide.title}\n`;
-          content += `**Type:** ${slide.slideType} | **Subtitle:** ${slide.subtitle}\n`;
-          if (slide.imageAngle) content += `**Image:** ${slide.imageAngle}\n`;
-          if (slide.bodyPoints?.length) {
-            for (const p of slide.bodyPoints) content += `- ${p}\n`;
+      // Rhino renders
+      const polishedRhino = rhinoRenders.filter(r => r.polish_status === "complete" && r.polished_public_url);
+      if (polishedRhino.length > 0) {
+        const rhinoFolder = zip.folder("rhino-renders")!;
+        content += `---\n\n# 3D Design Renders\n\n`;
+        for (const r of polishedRhino) {
+          const viewName = (r.view_name || "untitled").replace(/[^a-zA-Z0-9_\- ]/g, "_");
+          try {
+            const origRes = await fetch(r.original_public_url);
+            if (origRes.ok) rhinoFolder.file(`${viewName}_original.jpg`, await origRes.blob());
+            if (r.polished_public_url) {
+              const polRes = await fetch(r.polished_public_url);
+              if (polRes.ok) rhinoFolder.file(`${viewName}_polished.jpg`, await polRes.blob());
+            }
+          } catch {
+            console.warn(`Failed to fetch rhino render: ${viewName}`);
           }
-          if (slide.speakerNotes) content += `\n> **Speaker Notes:** ${slide.speakerNotes}\n`;
-          content += `\n`;
+          content += `- **${r.view_name || "Untitled"}**: rhino-renders/${viewName}_original.jpg → rhino-renders/${viewName}_polished.jpg\n`;
         }
+        content += `\n`;
       }
 
       content += `---\n\n# Rendered Views\n\n`;
@@ -611,7 +324,11 @@ export function ExportPackage() {
         elements: Object.fromEntries(
           elementKeys.filter(({ key }) => (elements as any)[key]?.data).map(({ key, label }) => [key, { label, data: (elements as any)[key].data }])
         ),
-        slides: presentationSlides || [],
+        rhinoRenders: rhinoRenders.filter(r => r.polish_status === "complete").map(r => ({
+          viewName: r.view_name,
+          originalUrl: r.original_public_url,
+          polishedUrl: r.polished_public_url,
+        })),
         images: currentImages.map(img => ({
           angleId: img.angle_id,
           angleName: img.angle_name,
@@ -646,12 +363,24 @@ export function ExportPackage() {
         </p>
       </div>
 
-      {/* Proposal Export - NEW */}
-      <ProposalExport 
+      {/* Proposal Export with Template System */}
+      <ProposalExport
         brief={brief}
         elements={elements}
         images={images || []}
         projectName={currentProject?.name || brief.brand?.name || 'Project'}
+        rhinoRenders={rhinoRenders.map(r => ({
+          id: r.id,
+          view_name: r.view_name,
+          original_public_url: r.original_public_url,
+          polished_public_url: r.polished_public_url,
+          polish_status: r.polish_status,
+        }))}
+        brandIntelligence={approvedIntel.map((e: any) => ({
+          category: e.category,
+          title: e.title,
+          content: e.content,
+        }))}
       />
 
       {/* Download All Assets ZIP */}
@@ -840,57 +569,83 @@ export function ExportPackage() {
         </CardContent>
       </Card>
 
-      {/* Presentation Deck */}
-      <Card className="element-card">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+
+      {/* Figma Export */}
+      <FigmaExportPanel
+        brief={brief}
+        elements={elements}
+        images={images || []}
+        projectName={currentProject?.name || brief.brand?.name || 'Project'}
+        config={{
+          clientLogo: null,
+          exhibitHouseLogo: profile?.logo_url || null,
+          exhibitHouseName: profile?.company_name || 'Your Company',
+          exhibitHouseTagline: profile?.tagline || undefined,
+          brandColor: profile?.brand_color || '#0047AB',
+          secondaryColor: profile?.secondary_color || '#4682B4',
+          contactInfo: profile?.contact_name ? {
+            name: profile.contact_name,
+            email: profile.contact_email || '',
+            phone: profile.contact_phone || '',
+          } : undefined,
+        }}
+        rhinoRenders={rhinoRenders.map(r => ({
+          id: r.id,
+          view_name: r.view_name,
+          original_public_url: r.original_public_url,
+          polished_public_url: r.polished_public_url,
+          polish_status: r.polish_status,
+        }))}
+        brandIntelligence={approvedIntel.map((e: any) => ({
+          category: e.category,
+          title: e.title,
+          content: e.content,
+        }))}
+      />
+
+      {/* Polished 3D Renders */}
+      {rhinoRenders.filter(r => r.polish_status === "complete").length > 0 && (
+        <Card className="element-card">
+          <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Presentation className="h-4 w-4 text-primary" />
-              Presentation Deck
+              <Box className="h-4 w-4 text-primary" />
+              3D Design Renders
+              <Badge variant="secondary" className="ml-auto">
+                {rhinoRenders.filter(r => r.polish_status === "complete").length} polished
+              </Badge>
             </CardTitle>
-            <div className="flex gap-2">
-              {presentationSlides && (
-                <Button variant="outline" size="sm" onClick={downloadPresentation}>
-                  <Download className="mr-1 h-3 w-3" /> Download .pptx
-                </Button>
-              )}
-              <Button size="sm" onClick={handleGeneratePresentation} disabled={loadingPresentation}>
-                {loadingPresentation ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Presentation className="mr-1 h-3 w-3" />}
-                {presentationSlides ? "Regenerate" : "Generate"}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!presentationSlides && !loadingPresentation && (
-            <p className="text-sm text-muted-foreground">
-              AI will compile all strategic elements, spatial plans, budget data, and rendered images into a polished PowerPoint presentation deck ready for client review.
-            </p>
-          )}
-          {loadingPresentation && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Crafting your presentation deck...</p>
-              <Progress value={45} className="h-2" />
-            </div>
-          )}
-          {presentationSlides && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-3">
-                <Check className="h-4 w-4 text-green-500" />
-                <span className="text-sm font-medium">{presentationSlides.length} slides generated</span>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {presentationSlides.map((slide, i) => (
-                  <div key={i} className="p-2 rounded-lg bg-muted/50 text-center">
-                    <div className="text-xs font-medium truncate">{slide.title}</div>
-                    <Badge variant="outline" className="text-[10px] mt-1">{slide.slideType}</Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {rhinoRenders
+                .filter(r => r.polish_status === "complete" && r.polished_public_url)
+                .map(r => (
+                  <div key={r.id} className="relative aspect-video rounded-lg overflow-hidden bg-muted group">
+                    <img
+                      src={r.polished_public_url!}
+                      alt={r.view_name || "Polished render"}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                      <span className="text-xs text-white font-medium">
+                        {r.view_name || "Untitled View"}
+                      </span>
+                    </div>
                   </div>
                 ))}
-              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <p className="text-xs text-muted-foreground mt-2">
+              Polished Rhino renders are included in presentation exports and ZIP downloads.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Save Learnings to Client Intelligence */}
+      <SaveLearningsButton
+        clientId={currentProject?.clientId ?? null}
+        projectId={projectId ?? null}
+      />
     </div>
   );
 }

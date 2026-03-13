@@ -219,6 +219,7 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
     const config0 = spatial.configs?.[0];
     const dims = config0 ? calculateBoothDimensions(config0.footprintSize) : null;
     const zones = config0?.zones ? normalizeZones(config0.zones, dims?.totalSqft || 900) : [];
+    const totalSqft = dims?.totalSqft || 900;
 
     const floorPlanImage = images.find(i => i.angle_id === 'floor_plan_2d' || i.angle_id === 'top');
 
@@ -228,7 +229,7 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       type: 'mixed',
       content: {
         footprint: config0?.footprintSize || footprintSize,
-        totalSqft: dims?.totalSqft || 900,
+        totalSqft,
         zones: zones.map(z => ({
           name: z.name,
           sqft: z.sqft,
@@ -238,7 +239,72 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
         materialsAndMood: spatial.materialsAndMood || [],
       },
     });
+
+    // 7b. Zone Performance Metrics
+    if (zones.length > 0) {
+      const metrics = generateLayoutMetrics(zones, config0?.layoutType || 'balanced', totalSqft);
+      sections.push({
+        id: 'spatial-metrics',
+        title: 'Zone Performance Metrics',
+        type: 'table',
+        content: {
+          overallScore: metrics.overallScore,
+          totalExpectedVisitors: metrics.totalExpectedVisitors,
+          avgBoothTime: metrics.avgBoothTime,
+          leadProjection: metrics.leadProjection,
+          flowEfficiency: metrics.flowEfficiency,
+          zoneMetrics: metrics.zoneMetrics,
+        },
+      });
+    }
+
+    // 7c. Cost Intelligence
+    if (zones.length > 0) {
+      const budget = brief?.budget || {};
+      const budgetMax = budget.range?.max || budget.perShow || 0;
+      const costEstimate = estimateZoneCosts(zones, totalSqft, 'premium');
+      const utilities = calculateUtilityRequirements(zones);
+      const validations = validateFullLayout(
+        zones,
+        totalSqft,
+        dims?.width || 30,
+        dims?.depth || 30,
+        budgetMax || undefined,
+        'premium'
+      );
+      sections.push({
+        id: 'cost-intelligence',
+        title: 'Cost Intelligence',
+        type: 'table',
+        content: {
+          grandTotal: costEstimate.grandTotal,
+          costPerSqft: costEstimate.costPerSqft,
+          perZone: costEstimate.perZone,
+          budgetMax,
+          utilities,
+          validations: validations.filter(v => v.severity !== 'info'),
+        },
+      });
+    }
+
+    // 7d. Layout Variations
+    if (spatial.configs && spatial.configs.length > 1) {
+      sections.push({
+        id: 'layout-variations',
+        title: 'Layout Variations',
+        type: 'mixed',
+        content: {
+          configs: spatial.configs.map((c: any) => ({
+            name: c.layoutType || c.name || 'Variation',
+            footprintSize: c.footprintSize,
+            description: c.description || c.concept || '',
+            zoneCount: c.zones?.length || 0,
+          })),
+        },
+      });
+    }
   }
+
 
   // 8. Interactive Mechanics
   if (elements?.interactiveMechanics?.data) {

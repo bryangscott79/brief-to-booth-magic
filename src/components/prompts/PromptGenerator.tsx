@@ -161,6 +161,7 @@ export function PromptGenerator() {
         previousImageUrl: heroImage || undefined,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        projectType: currentProject?.projectType ?? null,
         onSave: doSave,
       });
 

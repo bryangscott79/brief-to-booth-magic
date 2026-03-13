@@ -1111,31 +1111,86 @@ export async function generateProposalPPTX(
   return await pptx.write({ outputType: 'blob' }) as Blob;
 }
 
-function addPptxTextContent(slide: any, content: any) {
+// Helper: add a labelled section header + bullet list to a slide column
+function pptxBulletBlock(
+  slide: any,
+  label: string,
+  items: string[],
+  x: number,
+  y: number,
+  w: number,
+  brandColor: string,
+  maxItems = 6
+): number {
+  if (!items?.length) return y;
+  slide.addText(label, { x, y, w, h: 0.28, fontSize: 12, bold: true, color: brandColor });
+  y += 0.3;
+  items.slice(0, maxItems).forEach((item: string) => {
+    const text = typeof item === 'string' ? item : JSON.stringify(item);
+    slide.addText(`• ${text.substring(0, 120)}`, { x, y, w, h: 0.24, fontSize: 10, color: '333333' });
+    y += 0.26;
+  });
+  return y + 0.15;
+}
+
+// Helper: add a key-value row
+function pptxKVRow(
+  slide: any,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  w: number,
+  brandColor: string
+): number {
+  if (!value) return y;
+  slide.addText(label, { x, y, w, h: 0.18, fontSize: 8, bold: true, color: brandColor });
+  slide.addText(value.substring(0, 200), { x, y: y + 0.18, w, h: 0.26, fontSize: 11, color: '1a1a1a' });
+  return y + 0.5;
+}
+
+function addPptxTextContent(slide: any, content: any, brandColor = '333333') {
   let y = 1.2;
-  
+
   if (content.headline) {
-    slide.addText(content.headline, {
-      x: 0.5, y, w: 9, h: 0.6,
-      fontSize: 24, bold: true, color: '1a1a1a',
-    });
-    y += 0.7;
+    slide.addText(content.headline, { x: 0.5, y, w: 9, h: 0.55, fontSize: 22, bold: true, color: '1a1a1a' });
+    y += 0.65;
   }
-  
   if (content.subheadline) {
-    slide.addText(content.subheadline, {
-      x: 0.5, y, w: 9, h: 0.4,
-      fontSize: 16, italic: true, color: '666666',
-    });
-    y += 0.5;
+    slide.addText(content.subheadline, { x: 0.5, y, w: 9, h: 0.35, fontSize: 15, italic: true, color: '666666' });
+    y += 0.45;
   }
-  
   if (content.narrative) {
-    slide.addText(content.narrative.substring(0, 1200), {
-      x: 0.5, y, w: 9, h: 3,
-      fontSize: 12, color: '333333',
-      valign: 'top',
-    });
+    slide.addText(content.narrative.substring(0, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top' });
+    y += 2.1;
+  }
+  // Team credits
+  if (content.exhibitHouseName) {
+    slide.addText(content.exhibitHouseName, { x: 0.5, y, w: 9, h: 0.35, fontSize: 18, bold: true, color: '1a1a1a' });
+    y += 0.4;
+  }
+  if (content.tagline) {
+    slide.addText(content.tagline, { x: 0.5, y, w: 9, h: 0.25, fontSize: 12, italic: true, color: '666666' });
+    y += 0.35;
+  }
+  if (content.tools?.length) {
+    y = pptxBulletBlock(slide, 'Powered by', content.tools, 0.5, y, 9, brandColor, 6);
+  }
+  if (content.contactInfo?.name) {
+    y += 0.15;
+    slide.addText(`Contact: ${content.contactInfo.name}`, { x: 0.5, y, w: 9, h: 0.25, fontSize: 11, bold: true, color: '1a1a1a' });
+    y += 0.28;
+    if (content.contactInfo.email) {
+      slide.addText(content.contactInfo.email, { x: 0.5, y, w: 9, h: 0.22, fontSize: 10, color: '555555' });
+      y += 0.25;
+    }
+    if (content.contactInfo.phone) {
+      slide.addText(content.contactInfo.phone, { x: 0.5, y, w: 9, h: 0.22, fontSize: 10, color: '555555' });
+    }
+  }
+  // Next steps
+  if (content.callToAction) {
+    slide.addText(content.callToAction, { x: 0.5, y: y + 0.2, w: 9, h: 0.4, fontSize: 14, bold: true, color: brandColor, align: 'center' });
   }
 }
 
@@ -1144,62 +1199,94 @@ function addPptxImageContent(slide: any, content: any) {
     try {
       slide.addImage({
         path: content.imageUrl,
-        x: 0.5, y: 1.2, w: 9, h: 5,
-        sizing: { type: 'contain', w: 9, h: 3.5 },
+        x: 0.5, y: 1.1, w: 9, h: 4.2,
+        sizing: { type: 'contain', w: 9, h: 4.2 },
       });
-      
       if (content.caption) {
-        slide.addText(content.caption, {
-          x: 0.5, y: 4.8, w: 9, h: 0.3,
-          fontSize: 10, italic: true, color: '666666', align: 'center',
-        });
+        slide.addText(content.caption, { x: 0.5, y: 5.35, w: 9, h: 0.25, fontSize: 10, italic: true, color: '666666', align: 'center' });
       }
     } catch (e) {}
   }
 }
 
 function addPptxMixedContent(slide: any, content: any, brandColor: string) {
-  // Left column - main text
-  const mainText = content.narrative || content.conceptDescription || content.philosophy || '';
-  slide.addText(mainText.substring(0, 800), {
-    x: 0.5, y: 1.2, w: 4.5, h: 3.5,
-    fontSize: 11, color: '333333', valign: 'top',
-  });
-  
-  // Right column - key points
-  let y = 1.2;
-  
-  if (content.briefAlignment?.length > 0) {
-    slide.addText('Brief Alignment', {
-      x: 5.2, y, w: 4.3, h: 0.3,
-      fontSize: 14, bold: true, color: brandColor,
-    });
-    y += 0.35;
-    
-    content.briefAlignment.slice(0, 4).forEach((item: string) => {
-      slide.addText(`• ${item}`, {
-        x: 5.2, y, w: 4.3, h: 0.25,
-        fontSize: 10, color: '333333',
-      });
-      y += 0.28;
-    });
-    y += 0.2;
+  // ── Left column: narrative/description ──
+  const mainText = content.narrative || content.conceptDescription || content.philosophy || content.hospitalityDetails || '';
+  if (mainText) {
+    slide.addText(mainText.substring(0, 700), { x: 0.5, y: 1.2, w: 4.5, h: 3.8, fontSize: 11, color: '333333', valign: 'top' });
   }
-  
-  if (content.zones?.length > 0) {
-    slide.addText('Zone Allocation', {
-      x: 5.2, y, w: 4.3, h: 0.3,
-      fontSize: 14, bold: true, color: brandColor,
-    });
-    y += 0.35;
-    
-    content.zones.forEach((z: any) => {
-      slide.addText(`${z.name}: ${z.sqft} sqft (${z.percentage}%)`, {
-        x: 5.2, y, w: 4.3, h: 0.22,
-        fontSize: 10, color: '333333',
-      });
-      y += 0.25;
-    });
+
+  // ── Right column: context-aware content ──
+  let y = 1.2;
+  const rx = 5.2;
+  const rw = 4.3;
+
+  // Strategic Concept
+  if (content.briefAlignment?.length) {
+    y = pptxBulletBlock(slide, 'Brief Alignment', content.briefAlignment, rx, y, rw, brandColor, 5);
+  }
+  if (content.differentiation) {
+    slide.addText('Differentiation', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
+    y += 0.28;
+    slide.addText(content.differentiation.substring(0, 200), { x: rx, y, w: rw, h: 0.7, fontSize: 10, color: '333333', valign: 'top' });
+    y += 0.8;
+  }
+
+  // Experience Framework
+  if (content.designPrinciples?.length) {
+    y = pptxBulletBlock(slide, 'Design Principles', content.designPrinciples.map((p: any) => typeof p === 'string' ? p : `${p.name}: ${p.description || ''}`), rx, y, rw, brandColor, 4);
+  }
+  if (content.visitorJourney?.length) {
+    y = pptxBulletBlock(slide, 'Visitor Journey', content.visitorJourney.map((s: any) => typeof s === 'string' ? s : `${s.stage}: ${s.description || ''}`), rx, y, rw, brandColor, 5);
+  }
+
+  // Spatial Design
+  if (content.zones?.length) {
+    y = pptxBulletBlock(slide, 'Zone Allocation', content.zones.map((z: any) => `${z.name}: ${z.sqft} sqft (${z.percentage}%)`), rx, y, rw, brandColor, 6);
+  }
+  if (content.materialsAndMood?.length) {
+    y = pptxBulletBlock(slide, 'Materials & Mood', content.materialsAndMood, rx, y, rw, brandColor, 4);
+  }
+
+  // Interactive Mechanics
+  if (content.hero?.name) {
+    slide.addText('Hero Activation', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
+    y += 0.28;
+    slide.addText(`${content.hero.name}`, { x: rx, y, w: rw, h: 0.22, fontSize: 11, bold: true, color: '1a1a1a' });
+    y += 0.25;
+    if (content.hero.concept) {
+      slide.addText(content.hero.concept.substring(0, 180), { x: rx, y, w: rw, h: 0.55, fontSize: 9, color: '444444', valign: 'top' });
+      y += 0.65;
+    }
+  }
+  if (content.secondary?.length) {
+    y = pptxBulletBlock(slide, 'Secondary Activations', content.secondary.map((s: any) => typeof s === 'string' ? s : s.name || ''), rx, y, rw, brandColor, 4);
+  }
+  if (content.technologyStack?.length) {
+    y = pptxBulletBlock(slide, 'Technology', content.technologyStack, rx, y, rw, brandColor, 4);
+  }
+
+  // Digital Storytelling
+  if (content.contentModules?.length) {
+    y = pptxBulletBlock(slide, 'Content Modules', content.contentModules.map((m: any) => typeof m === 'string' ? m : m.name || ''), rx, y, rw, brandColor, 4);
+  }
+  if (content.audienceTracks?.length) {
+    y = pptxBulletBlock(slide, 'Audience Tracks', content.audienceTracks.map((t: any) => typeof t === 'string' ? t : t.audience || t.name || ''), rx, y, rw, brandColor, 4);
+  }
+
+  // Human Connection
+  if (content.meetingTypes?.length) {
+    y = pptxBulletBlock(slide, 'Meeting Types', content.meetingTypes.map((m: any) => typeof m === 'string' ? m : m.type || ''), rx, y, rw, brandColor, 4);
+  }
+
+  // Adjacent Activations
+  if (content.activations?.length) {
+    y = pptxBulletBlock(slide, 'Activations', content.activations.map((a: any) => typeof a === 'string' ? a : a.name || ''), rx, y, rw, brandColor, 5);
+  }
+  if (content.competitivePositioning) {
+    slide.addText('Competitive Positioning', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
+    y += 0.28;
+    slide.addText(content.competitivePositioning.substring(0, 200), { x: rx, y, w: rw, h: 0.6, fontSize: 10, color: '333333', valign: 'top' });
   }
 }
 

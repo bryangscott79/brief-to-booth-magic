@@ -142,7 +142,7 @@ serve(async (req) => {
     let messages;
 
     if (previousImageUrl && feedback) {
-      const refinedPrompt = `Based on this trade show booth image, apply the following feedback and generate an improved version:
+      const refinedPrompt = `${feedbackPrefix}
 
 FEEDBACK TO APPLY:
 ${feedback}
@@ -152,7 +152,7 @@ ${prompt}
 ${scaleBlock}
 ${designBlock}
 
-Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall booth concept and brand identity. The booth must appear as the correct physical size — not larger.`;
+Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
 
       messages = [
         {
@@ -171,7 +171,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
 ${scaleBlock}
 ${designBlock}
 
-Generate a photorealistic 16:9 architectural visualization of this trade show booth. The booth must appear as the correct physical size — not a mega-exhibit.`,
+${genSuffix}`,
         },
       ];
     }

@@ -10,7 +10,7 @@ interface GenerateHeroRequest {
   feedback?: string;
   previousImageUrl?: string;
   boothSize?: string;
-  /** Phase 4: Enhanced context for brief-validated rendering */
+  projectType?: string;
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;

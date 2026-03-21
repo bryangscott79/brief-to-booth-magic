@@ -36,7 +36,7 @@ export function useCustomProjectTypes() {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      return (data ?? []) as CustomProjectType[];
+      return (data ?? []) as unknown as CustomProjectType[];
     },
   });
 }

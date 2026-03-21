@@ -314,6 +314,11 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         <ProjectTypeSelector
           selected={selectedType}
           onSelect={setSelectedType}
+          customTypes={customTypes}
+          aiSuggestion={aiSuggestion}
+          onConfirmAiSuggestion={handleConfirmAiSuggestion}
+          onDismissAiSuggestion={() => setAiSuggestion(null)}
+          onAddCustomType={handleAddCustomType}
         />
         <div className="flex justify-end">
           <Button

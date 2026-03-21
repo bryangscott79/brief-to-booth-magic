@@ -12,10 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
-import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
+import { ProjectTypeSelector, type AiTypeSuggestion } from "@/components/brief/ProjectTypeSelector";
 import { DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
 import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";
+import { useCustomProjectTypes, useUpsertCustomProjectType } from "@/hooks/useCustomProjectTypes";
 
 interface BriefUploadProps {
   projectId: string | null;

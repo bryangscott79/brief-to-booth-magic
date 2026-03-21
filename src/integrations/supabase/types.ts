@@ -178,6 +178,74 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_project_types: {
+        Row: {
+          accent_color: string | null
+          confirmed_by_user: boolean
+          created_at: string
+          default_size: number | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_ai_detected: boolean
+          label: string
+          render_context: string | null
+          short_label: string | null
+          source_brief_id: string | null
+          spatial_unit: string | null
+          tagline: string | null
+          type_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accent_color?: string | null
+          confirmed_by_user?: boolean
+          created_at?: string
+          default_size?: number | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_ai_detected?: boolean
+          label: string
+          render_context?: string | null
+          short_label?: string | null
+          source_brief_id?: string | null
+          spatial_unit?: string | null
+          tagline?: string | null
+          type_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accent_color?: string | null
+          confirmed_by_user?: boolean
+          created_at?: string
+          default_size?: number | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_ai_detected?: boolean
+          label?: string
+          render_context?: string | null
+          short_label?: string | null
+          source_brief_id?: string | null
+          spatial_unit?: string | null
+          tagline?: string | null
+          type_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_project_types_source_brief_id_fkey"
+            columns: ["source_brief_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_base_files: {
         Row: {
           created_at: string
@@ -611,15 +679,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -746,6 +841,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "member"],
+    },
   },
 } as const

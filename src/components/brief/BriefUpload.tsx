@@ -26,7 +26,7 @@ type UploadStep = "type-select" | "client-select" | "upload";
 
 export function BriefUpload({ projectId }: BriefUploadProps) {
   const [step, setStep] = useState<UploadStep>("type-select");
-  const [selectedType, setSelectedType] = useState<ProjectTypeId | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");

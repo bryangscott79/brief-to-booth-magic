@@ -4,6 +4,7 @@ import { ALL_PROJECT_TYPES, type ProjectTypeId } from "@/lib/projectTypes";
 import type { CustomProjectType } from "@/hooks/useCustomProjectTypes";
 import { CheckCircle2, Sparkles, Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+// Label imported from ui/label below
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

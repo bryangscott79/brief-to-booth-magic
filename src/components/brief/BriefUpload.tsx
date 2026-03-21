@@ -28,6 +28,7 @@ type UploadStep = "type-select" | "client-select" | "upload";
 export function BriefUpload({ projectId }: BriefUploadProps) {
   const [step, setStep] = useState<UploadStep>("type-select");
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<AiTypeSuggestion | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
@@ -41,6 +42,43 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { data: clients = [] } = useClients();
   const upsertClient = useUpsertClient();
   const batchCreateIntel = useBatchCreateIntelligence();
+  const { data: customTypes = [] } = useCustomProjectTypes();
+  const upsertCustomType = useUpsertCustomProjectType();
+
+  const handleAddCustomType = async (newType: NewCustomType) => {
+    try {
+      await upsertCustomType.mutateAsync({
+        ...newType,
+        confirmed_by_user: true,
+        is_ai_detected: false,
+      });
+      setSelectedType(newType.type_id);
+    } catch (e) {
+      toast({
+        title: "Failed to save project type",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfirmAiSuggestion = async (suggestion: AiTypeSuggestion) => {
+    try {
+      await upsertCustomType.mutateAsync({
+        type_id: suggestion.type_id,
+        label: suggestion.label,
+        tagline: suggestion.tagline,
+        description: suggestion.description,
+        icon: suggestion.icon,
+        render_context: suggestion.render_context,
+        is_ai_detected: true,
+        confirmed_by_user: true,
+      });
+      setAiSuggestion(null);
+    } catch (e) {
+      // non-blocking
+    }
+  };
 
   /** Send brief text to AI-powered parser edge function */
   const parseBriefWithAI = async (text: string, fileBase64?: string, fileType?: string): Promise<ParsedBrief> => {

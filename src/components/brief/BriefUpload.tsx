@@ -90,7 +90,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   };
 
   /** Create a DB project if none exists, returns the project ID */
-  const ensureDbProject = async (name: string, type: ProjectTypeId): Promise<string> => {
+  const ensureDbProject = async (name: string, type: string): Promise<string> => {
     if (projectId) return projectId;
 
     const { data: sessionData } = await supabase.auth.getSession();

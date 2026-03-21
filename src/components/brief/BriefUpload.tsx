@@ -13,10 +13,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
 import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
-import type { ProjectTypeId } from "@/lib/projectTypes";
+import type { AiTypeSuggestion, NewCustomType } from "@/components/brief/ProjectTypeSelector";
 import { DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
 import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";
+import { useCustomProjectTypes, useUpsertCustomProjectType } from "@/hooks/useCustomProjectTypes";
 
 interface BriefUploadProps {
   projectId: string | null;
@@ -26,7 +27,8 @@ type UploadStep = "type-select" | "client-select" | "upload";
 
 export function BriefUpload({ projectId }: BriefUploadProps) {
   const [step, setStep] = useState<UploadStep>("type-select");
-  const [selectedType, setSelectedType] = useState<ProjectTypeId | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<AiTypeSuggestion | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
@@ -40,6 +42,43 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { data: clients = [] } = useClients();
   const upsertClient = useUpsertClient();
   const batchCreateIntel = useBatchCreateIntelligence();
+  const { data: customTypes = [] } = useCustomProjectTypes();
+  const upsertCustomType = useUpsertCustomProjectType();
+
+  const handleAddCustomType = async (newType: NewCustomType) => {
+    try {
+      await upsertCustomType.mutateAsync({
+        ...newType,
+        confirmed_by_user: true,
+        is_ai_detected: false,
+      });
+      setSelectedType(newType.type_id);
+    } catch (e) {
+      toast({
+        title: "Failed to save project type",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfirmAiSuggestion = async (suggestion: AiTypeSuggestion) => {
+    try {
+      await upsertCustomType.mutateAsync({
+        type_id: suggestion.type_id,
+        label: suggestion.label,
+        tagline: suggestion.tagline,
+        description: suggestion.description,
+        icon: suggestion.icon,
+        render_context: suggestion.render_context,
+        is_ai_detected: true,
+        confirmed_by_user: true,
+      });
+      setAiSuggestion(null);
+    } catch (e) {
+      // non-blocking
+    }
+  };
 
   /** Send brief text to AI-powered parser edge function */
   const parseBriefWithAI = async (text: string, fileBase64?: string, fileType?: string): Promise<ParsedBrief> => {
@@ -90,7 +129,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   };
 
   /** Create a DB project if none exists, returns the project ID */
-  const ensureDbProject = async (name: string, type: ProjectTypeId): Promise<string> => {
+  const ensureDbProject = async (name: string, type: string): Promise<string> => {
     if (projectId) return projectId;
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -275,6 +314,11 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         <ProjectTypeSelector
           selected={selectedType}
           onSelect={setSelectedType}
+          customTypes={customTypes}
+          aiSuggestion={aiSuggestion}
+          onConfirmAiSuggestion={handleConfirmAiSuggestion}
+          onDismissAiSuggestion={() => setAiSuggestion(null)}
+          onAddCustomType={handleAddCustomType}
         />
         <div className="flex justify-end">
           <Button

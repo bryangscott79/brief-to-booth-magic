@@ -4,10 +4,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProjectTypeManager } from "@/components/admin/ProjectTypeManager";
 import { ClientsManager } from "@/components/admin/ClientsManager";
 import { TeamManager } from "@/components/admin/TeamManager";
-import { Settings2, Users, Layers, UserCog } from "lucide-react";
+import { UserAccountsManager } from "@/components/admin/UserAccountsManager";
+import { useIsAdmin } from "@/hooks/useAdminRole";
+import { Settings2, Users, Layers, UserCog, Shield } from "lucide-react";
 
 export default function AdminSettings() {
   const [tab, setTab] = useState("project-types");
+  const { data: isAdmin } = useIsAdmin();
 
   return (
     <AppLayout>
@@ -28,7 +31,7 @@ export default function AdminSettings() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="mb-8">
+          <TabsList className="mb-8 flex-wrap h-auto gap-1">
             <TabsTrigger value="project-types" className="gap-2">
               <Layers className="h-4 w-4" />
               Project Types
@@ -41,6 +44,12 @@ export default function AdminSettings() {
               <UserCog className="h-4 w-4" />
               Team
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="accounts" className="gap-2">
+                <Shield className="h-4 w-4" />
+                All Accounts
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="project-types">
@@ -54,6 +63,12 @@ export default function AdminSettings() {
           <TabsContent value="team">
             <TeamManager />
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="accounts">
+              <UserAccountsManager />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </AppLayout>

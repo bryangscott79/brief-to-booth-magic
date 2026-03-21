@@ -13,7 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
 import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
-import type { ProjectTypeId } from "@/lib/projectTypes";
 import { DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
 import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";

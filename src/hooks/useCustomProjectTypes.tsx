@@ -54,7 +54,7 @@ export function useUpsertCustomProjectType() {
         .single();
 
       if (error) throw error;
-      return data as CustomProjectType;
+      return data as unknown as CustomProjectType;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["custom-project-types", user?.id] });

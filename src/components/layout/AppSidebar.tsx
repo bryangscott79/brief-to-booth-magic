@@ -12,7 +12,7 @@ import {
   ImageIcon,
   BookOpen,
   Building2,
-  Settings2,
+  
   Users,
   Box,
   ChevronLeft,

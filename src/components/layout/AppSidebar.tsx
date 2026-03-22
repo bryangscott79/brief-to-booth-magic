@@ -1,15 +1,9 @@
-import { useLocation, useSearchParams, Link } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import {
-  Upload,
-  FileSearch,
   Grid3X3,
-  FileText,
-  Download,
-  Sparkles,
   FolderOpen,
   LogOut,
-  ImageIcon,
   Building2,
   Users,
   ChevronLeft,

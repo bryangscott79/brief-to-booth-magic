@@ -62,8 +62,8 @@ const PIPELINE_STEPS: { key: string; label: string; tooltip: string; check: (p: 
     check: (p) => {
       if (!p.parsed_brief) return false;
       const pb = p.parsed_brief as any;
-      // Must have at minimum brand name + at least one objective or event
-      return !!(pb?.brand?.name && (pb?.businessObjectives?.length || pb?.eventsAndShows?.length));
+      // brand name + at least one objective or event show
+      return !!(pb?.brand?.name && (pb?.objectives?.primary || pb?.events?.shows?.length));
     },
   },
   {
@@ -79,14 +79,16 @@ const PIPELINE_STEPS: { key: string; label: string; tooltip: string; check: (p: 
     check: (p) => {
       if (!p.spatial_strategy) return false;
       const ss = p.spatial_strategy as any;
-      return !!(ss?.zones?.length || ss?.layoutType || ss?.totalArea);
+      // SpatialStrategy uses configs[].zones array
+      return !!(ss?.configs?.length || ss?.zones?.length || ss?.scalingStrategy);
     },
   },
   {
     key: "prompts",
     label: "Render Prompts Ready",
-    tooltip: "Hero style confirmed and render prompts have been generated",
-    check: (p) => !!(p.hero_style_confirmed && p.render_prompts),
+    tooltip: "Render prompts have been generated",
+    // hero_style_confirmed is optional — prompts existing is sufficient
+    check: (p) => !!(p.render_prompts),
   },
   {
     key: "export",

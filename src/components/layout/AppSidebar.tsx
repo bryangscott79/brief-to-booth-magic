@@ -1,15 +1,9 @@
-import { useLocation, useSearchParams, Link } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import {
-  Upload,
-  FileSearch,
   Grid3X3,
-  FileText,
-  Download,
-  Sparkles,
   FolderOpen,
   LogOut,
-  ImageIcon,
   Building2,
   Users,
   ChevronLeft,
@@ -21,7 +15,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -35,38 +28,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useAdminRole";
 import { cn } from "@/lib/utils";
 
-const projectNavItems = [
-  { path: "/upload", label: "New Project", icon: Upload },
-  { path: "/review", label: "Brief Review", icon: FileSearch },
-  { path: "/generate", label: "Generate", icon: Sparkles },
-  { path: "/spatial", label: "Spatial", icon: Grid3X3 },
-  { path: "/prompts", label: "Prompts", icon: FileText },
-  { path: "/files", label: "Files & Media", icon: ImageIcon },
-  { path: "/export", label: "Export", icon: Download },
-];
-
 const workspaceNavItems = [
   { path: "/projects", label: "All Projects", icon: FolderOpen },
-  { path: "/company", label: "Company Profile", icon: Building2 },
-  { path: "/team", label: "Team", icon: Users },
+  { path: "/company",  label: "Company Profile", icon: Building2 },
+  { path: "/team",     label: "Team", icon: Users },
 ];
-
-const noProjectPaths = ["/projects", "/company", "/team", "/admin"];
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
   const { user, signOut } = useAuth();
   const { data: isAdmin } = useIsAdmin();
-
-  const buildPath = (path: string) => {
-    if (noProjectPaths.includes(path)) return path;
-    return projectId ? `${path}?project=${projectId}` : path;
-  };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -75,13 +49,21 @@ export function AppSidebar() {
     navigate("/");
   };
 
-  const NavItem = ({ path, label, icon: Icon }: { path: string; label: string; icon: React.ElementType }) => {
+  const NavItem = ({
+    path,
+    label,
+    icon: Icon,
+  }: {
+    path: string;
+    label: string;
+    icon: React.ElementType;
+  }) => {
     const active = isActive(path);
     const item = (
       <SidebarMenuItem key={path}>
         <SidebarMenuButton asChild isActive={active}>
           <Link
-            to={buildPath(path)}
+            to={path}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               active
@@ -99,9 +81,7 @@ export function AppSidebar() {
     if (collapsed) {
       return (
         <Tooltip>
-          <TooltipTrigger asChild>
-            {item}
-          </TooltipTrigger>
+          <TooltipTrigger asChild>{item}</TooltipTrigger>
           <TooltipContent side="right">{label}</TooltipContent>
         </Tooltip>
       );
@@ -149,39 +129,13 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="py-3 gap-0">
-        {/* Project tools */}
         <SidebarGroup className="px-2 pb-4">
-          {!collapsed && (
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">
-              Project
-            </SidebarGroupLabel>
-          )}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {projectNavItems.map((item) => (
-                <NavItem key={item.path} {...item} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Workspace */}
-        <SidebarGroup className="px-2 pb-4">
-          {!collapsed && (
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">
-              Workspace
-            </SidebarGroupLabel>
-          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {workspaceNavItems.map((item) => (
                 <NavItem key={item.path} {...item} />
               ))}
-
-              {/* Admin — only shown to admins */}
-              {isAdmin && (
-                <NavItem path="/admin" label="Admin" icon={Shield} />
-              )}
+              {isAdmin && <NavItem path="/admin" label="Admin Settings" icon={Shield} />}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

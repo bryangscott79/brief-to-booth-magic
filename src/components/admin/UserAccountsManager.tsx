@@ -406,7 +406,7 @@ function InvitesTab({ onInvite }: { onInvite: () => void }) {
                           Expired
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+                        <span className="flex items-center gap-1 text-[11px] text-foreground/60 font-medium">
                           <Clock className="h-3.5 w-3.5" />
                           Pending
                         </span>

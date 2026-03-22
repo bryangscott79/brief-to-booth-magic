@@ -332,6 +332,11 @@ export default function FilesPage() {
                   preSelectedImages={selectMode && selectedImages.size > 0 ? selectedImageObjects : undefined}
                 />
               </TabsContent>
+
+              {/* ── DOCUMENTS TAB ── */}
+              <TabsContent value="documents" className="mt-4">
+                <ProjectKnowledgeBase projectId={projectId} />
+              </TabsContent>
             </Tabs>
           </div>
         )}

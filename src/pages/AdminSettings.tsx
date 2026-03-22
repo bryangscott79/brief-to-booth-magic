@@ -5,8 +5,9 @@ import { ProjectTypeManager } from "@/components/admin/ProjectTypeManager";
 import { ClientsManager } from "@/components/admin/ClientsManager";
 import { TeamManager } from "@/components/admin/TeamManager";
 import { UserAccountsManager } from "@/components/admin/UserAccountsManager";
+import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
 import { useIsAdmin } from "@/hooks/useAdminRole";
-import { Settings2, Users, Layers, UserCog, Shield } from "lucide-react";
+import { Settings2, Users, Layers, UserCog, Shield, BookOpen } from "lucide-react";
 
 export default function AdminSettings() {
   const [tab, setTab] = useState("project-types");
@@ -40,6 +41,10 @@ export default function AdminSettings() {
               <Users className="h-4 w-4" />
               Clients & Brand Intelligence
             </TabsTrigger>
+            <TabsTrigger value="agency-kb" className="gap-2">
+              <BookOpen className="h-4 w-4" />
+              Agency Knowledge Base
+            </TabsTrigger>
             <TabsTrigger value="team" className="gap-2">
               <UserCog className="h-4 w-4" />
               Team
@@ -58,6 +63,10 @@ export default function AdminSettings() {
 
           <TabsContent value="clients">
             <ClientsManager />
+          </TabsContent>
+
+          <TabsContent value="agency-kb">
+            <AgencyKnowledgeBase />
           </TabsContent>
 
           <TabsContent value="team">

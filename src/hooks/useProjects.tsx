@@ -30,20 +30,28 @@ export interface DBProject {
   updated_at: string;
 }
 
-export function useProjects() {
+// When adminMode=true, returns ALL projects (relies on admin RLS SELECT policy).
+// When adminMode=false (default), the DB RLS still returns only the user's own projects.
+export function useProjects(adminMode = false) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const { data: projects = [], isLoading } = useQuery({
-    queryKey: ["projects", user?.id],
+    queryKey: ["projects", user?.id, adminMode],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("projects")
         .select("*")
         .order("updated_at", { ascending: false });
-      
+
+      // In non-admin mode, restrict to own projects even if RLS would allow more
+      if (!adminMode) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as unknown as DBProject[];
     },

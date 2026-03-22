@@ -22,10 +22,12 @@ import {
   CheckSquare,
   Square,
   Play,
+  BookOpen,
 } from "lucide-react";
 import { RhinoUploadPanel } from "@/components/rhino/RhinoUploadPanel";
 import { RhinoGallery } from "@/components/rhino/RhinoGallery";
 import { FilesVideoPanel } from "@/components/files/FilesVideoPanel";
+import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 
 export default function FilesPage() {
   const { projectId, isLoading: syncLoading } = useProjectSync();

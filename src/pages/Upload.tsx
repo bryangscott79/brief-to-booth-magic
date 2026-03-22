@@ -22,7 +22,7 @@ export default function UploadPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">New Project</h1>
           <p className="text-muted-foreground">
-            Choose your project type, then upload or paste your brief to get started
+            Upload your brief and let AI extract the details — then confirm and continue
           </p>
         </div>
         <BriefUpload projectId={projectId} />

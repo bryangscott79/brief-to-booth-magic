@@ -657,7 +657,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         {/* Current selection */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => { setSelectedClientId(null); setShowClientList(false); }}
+            onClick={() => setSelectedClientId(null)}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors",
               selectedClientId === null
@@ -670,7 +670,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
           {clients.map((c) => (
             <button
               key={c.id}
-              onClick={() => { setSelectedClientId(c.id); setShowClientList(false); }}
+              onClick={() => setSelectedClientId(c.id)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors",
                 selectedClientId === c.id

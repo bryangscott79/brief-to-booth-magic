@@ -44,8 +44,7 @@ const projectNavItems = [
   { path: "/generate", label: "Generate", icon: Sparkles },
   { path: "/spatial", label: "Spatial", icon: Grid3X3 },
   { path: "/prompts", label: "Prompts", icon: FileText },
-  { path: "/rhino", label: "3D Upload", icon: Box },
-  { path: "/files", label: "Files", icon: ImageIcon },
+  { path: "/files", label: "Files & Media", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
   { path: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
 ];

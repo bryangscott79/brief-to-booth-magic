@@ -137,6 +137,10 @@ export default function FilesPage() {
                   <Video className="h-3.5 w-3.5" />
                   Video
                 </TabsTrigger>
+                <TabsTrigger value="documents" className="gap-2">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Documents
+                </TabsTrigger>
               </TabsList>
 
               {/* ── IMAGES TAB ── */}

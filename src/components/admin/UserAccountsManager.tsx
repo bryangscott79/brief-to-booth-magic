@@ -377,9 +377,9 @@ function InvitesTab({ onInvite }: { onInvite: () => void }) {
                       <div
                         className={cn(
                           "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                          accepted ? "bg-emerald-500/10 text-emerald-600" :
+                          accepted ? "bg-primary/10 text-primary" :
                           expired  ? "bg-muted text-muted-foreground" :
-                                     "bg-amber-500/10 text-amber-600"
+                                     "bg-accent text-accent-foreground"
                         )}
                       >
                         {inv.email[0].toUpperCase()}
@@ -396,7 +396,7 @@ function InvitesTab({ onInvite }: { onInvite: () => void }) {
                     </div>
                     <div className="shrink-0">
                       {accepted ? (
-                        <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+                        <span className="flex items-center gap-1 text-[11px] text-primary font-medium">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           Accepted
                         </span>

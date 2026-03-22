@@ -336,34 +336,52 @@ export default function ProjectsPage() {
               return (
                 <Card
                   key={project.id}
-                  className="element-card cursor-pointer hover:border-primary/30 transition-colors"
+                  className={`element-card cursor-pointer transition-colors ${
+                    isOwnProject
+                      ? "hover:border-primary/30"
+                      : "hover:border-muted-foreground/30 border-dashed"
+                  }`}
                   onClick={() => handleOpenProject(project)}
                 >
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-base leading-snug break-words min-w-0 flex-1">{project.name}</CardTitle>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {adminMode && !isOwnProject && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/10">
-                                <Shield className="h-3 w-3 text-primary" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs">
-                              Owner: {project.user_id.slice(0, 8)}…
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
                         <Badge variant={STATUS_BADGES[project.status]?.variant || "outline"}>
                           {STATUS_BADGES[project.status]?.label || project.status}
                         </Badge>
                       </div>
                     </div>
-                    <CardDescription className="flex items-center gap-1 text-xs">
-                      <Calendar className="h-3 w-3" />
-                      Updated {formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}
-                    </CardDescription>
+                    <div className="flex items-center justify-between mt-1">
+                      <CardDescription className="flex items-center gap-1 text-xs">
+                        <Calendar className="h-3 w-3" />
+                        Updated {formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}
+                      </CardDescription>
+                      {/* Owner chip */}
+                      {isOwnProject ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold leading-none">
+                              <User className="h-2.5 w-2.5" />
+                              Mine
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">Your project</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold leading-none">
+                              <Shield className="h-2.5 w-2.5" />
+                              Shared
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            Owner: {project.user_id.slice(0, 8)}…
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <ProjectProgressBar project={project} />

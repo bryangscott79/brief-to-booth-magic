@@ -46,13 +46,54 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 
 // --- Pipeline step definitions ---
-const PIPELINE_STEPS: { key: string; label: string; check: (p: DBProject) => boolean }[] = [
-  { key: "brief",    label: "Brief Uploaded",      check: (p) => !!p.brief_text },
-  { key: "review",   label: "Brief Reviewed",       check: (p) => !!p.parsed_brief },
-  { key: "elements", label: "Elements Generated",   check: (p) => !!(p.big_idea || p.experience_framework || p.interactive_mechanics) },
-  { key: "spatial",  label: "Spatial Planned",      check: (p) => !!p.spatial_strategy },
-  { key: "prompts",  label: "Render Prompts Ready", check: (p) => !!p.render_prompts },
-  { key: "export",   label: "Exported",             check: (p) => p.status === "completed" },
+// Each check reflects the minimum data needed to consider that step "done"
+// and unlock the most value in the next step.
+const PIPELINE_STEPS: { key: string; label: string; tooltip: string; check: (p: DBProject) => boolean }[] = [
+  {
+    key: "brief",
+    label: "Brief Uploaded",
+    tooltip: "A brief document or text has been added to the project",
+    check: (p) => !!(p.brief_text || p.brief_file_url || p.brief_file_name),
+  },
+  {
+    key: "review",
+    label: "Brief Reviewed",
+    tooltip: "The brief has been parsed and key data (brand, objectives, events) confirmed",
+    check: (p) => {
+      if (!p.parsed_brief) return false;
+      const pb = p.parsed_brief as any;
+      // Must have at minimum brand name + at least one objective or event
+      return !!(pb?.brand?.name && (pb?.businessObjectives?.length || pb?.eventsAndShows?.length));
+    },
+  },
+  {
+    key: "elements",
+    label: "Elements Generated",
+    tooltip: "AI has generated the Big Idea and at least one experience element",
+    check: (p) => !!(p.big_idea && (p.experience_framework || p.interactive_mechanics || p.digital_storytelling)),
+  },
+  {
+    key: "spatial",
+    label: "Spatial Planned",
+    tooltip: "A spatial strategy with layout zones has been defined",
+    check: (p) => {
+      if (!p.spatial_strategy) return false;
+      const ss = p.spatial_strategy as any;
+      return !!(ss?.zones?.length || ss?.layoutType || ss?.totalArea);
+    },
+  },
+  {
+    key: "prompts",
+    label: "Render Prompts Ready",
+    tooltip: "Hero style confirmed and render prompts have been generated",
+    check: (p) => !!(p.hero_style_confirmed && p.render_prompts),
+  },
+  {
+    key: "export",
+    label: "Exported",
+    tooltip: "Final assets have been exported or presentation generated",
+    check: (p) => p.status === "completed",
+  },
 ];
 
 function ProjectProgressBar({ project }: { project: DBProject }) {

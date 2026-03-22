@@ -10,7 +10,6 @@ import {
   FolderOpen,
   LogOut,
   ImageIcon,
-  BookOpen,
   Building2,
   Users,
   ChevronLeft,

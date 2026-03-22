@@ -220,7 +220,16 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
 
       // Auto-match client by brand name
       const autoClientId = fuzzyMatchClient(parsed.brand?.name ?? "", clients);
-      setSelectedClientId(autoClientId); // null = no match, still "no client"
+      setSelectedClientId(autoClientId ?? null);
+
+      // If no client matched and brand name was extracted, pre-fill the new client suggestion
+      if (!autoClientId && parsed.brand?.name) {
+        setSuggestedClientName(parsed.brand.name);
+        setShowNewClientSuggestion(true);
+        setCaptureKnowledge(true);
+      } else {
+        setShowNewClientSuggestion(false);
+      }
 
       setParseResult({ parsed, sourceName, briefText: text, fileBase64, fileType, originalFile, briefFileUrl, dbProjectId });
       setStep("confirm");
@@ -235,6 +244,33 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     }
   };
 
+  // ─── Confirm new client suggestion ────────────────────────────────────────
+
+  const handleConfirmNewClient = async () => {
+    if (!suggestedClientName.trim()) return;
+    const pb = parseResult?.parsed;
+    const result = await upsertClient.mutateAsync({
+      name: suggestedClientName.trim(),
+      industry: pb?.brand?.category ?? undefined,
+      description: pb?.brand?.pov ?? undefined,
+      primary_color: pb?.brand?.visualIdentity?.colors?.[0] ?? undefined,
+    });
+    const newId = (result as any).id;
+    setSelectedClientId(newId);
+    setPendingNewClientId(newId);
+    setNewClientConfirmed(true);
+    setShowNewClientSuggestion(false);
+    toast({
+      title: `Client "${suggestedClientName.trim()}" created`,
+      description: captureKnowledge ? "Brand intelligence will be captured from this brief." : "No intelligence will be saved for now.",
+    });
+  };
+
+  const handleDismissNewClientSuggestion = () => {
+    setShowNewClientSuggestion(false);
+    setSelectedClientId(null);
+  };
+
   // ─── Save & navigate ──────────────────────────────────────────────────────
 
   const handleConfirmAndContinue = async () => {
@@ -243,6 +279,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
     setIsSaving(true);
     try {
       const dbProjectId = parseResult.dbProjectId ?? (await ensureDbProject(parseResult.sourceName));
+      const effectiveClientId = selectedClientId ?? null;
 
       await supabase
         .from("projects")
@@ -253,13 +290,17 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
           parsed_brief: parseResult.parsed as any,
           status: "reviewed",
           project_type: type,
-          client_id: selectedClientId ?? null,
+          client_id: effectiveClientId,
         } as any)
         .eq("id", dbProjectId);
 
-      if (selectedClientId && parseResult.parsed) {
+      // Capture brand intelligence if client selected and knowledge capture is on
+      const shouldCapture = effectiveClientId && parseResult.parsed &&
+        (captureKnowledge || effectiveClientId !== pendingNewClientId);
+
+      if (shouldCapture) {
         try {
-          const entries = extractBrandIntelligence(parseResult.parsed, selectedClientId, dbProjectId);
+          const entries = extractBrandIntelligence(parseResult.parsed!, effectiveClientId!, dbProjectId);
           if (entries.length > 0) await batchCreateIntel.mutateAsync(entries);
         } catch (e) {
           console.warn("Brand intelligence extraction failed:", e);
@@ -271,7 +312,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         id: dbProjectId,
         name: parseResult.sourceName,
         projectType: type,
-        clientId: selectedClientId ?? null,
+        clientId: effectiveClientId,
         rawBrief: parseResult.briefText,
         parsedBrief: parseResult.parsed,
         elements: {

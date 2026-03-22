@@ -57,7 +57,7 @@ function TagList({
     variant === "destructive"
       ? "bg-destructive/5 text-destructive border-destructive/20"
       : variant === "success"
-      ? "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+      ? "bg-emerald-500/5 text-emerald-700 border-emerald-500/20"
       : "";
 
   return (

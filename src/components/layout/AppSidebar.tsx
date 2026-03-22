@@ -44,7 +44,6 @@ const projectNavItems = [
   { path: "/prompts", label: "Prompts", icon: FileText },
   { path: "/files", label: "Files & Media", icon: ImageIcon },
   { path: "/export", label: "Export", icon: Download },
-  { path: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
 ];
 
 const workspaceNavItems = [

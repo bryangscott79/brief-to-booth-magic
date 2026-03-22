@@ -2,12 +2,11 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft,
-  Building2, Plus, CheckCircle2, Sparkles, ChevronDown, ChevronUp,
+  Building2, Plus, CheckCircle2, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectStore";

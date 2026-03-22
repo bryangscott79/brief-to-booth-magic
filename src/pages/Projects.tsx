@@ -43,7 +43,6 @@ import { useProjects, DBProject } from "@/hooks/useProjects";
 import { useProjectStore } from "@/store/projectStore";
 import { useIsAdmin } from "@/hooks/useAdminRole";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 
 // --- Pipeline step definitions ---

@@ -32,7 +32,7 @@ export function ProjectHeader() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("project");
-  const { dbProject } = useProjectSync();
+  const { dbProject: project } = useProjectSync();
 
   const isProjectRoute = PROJECT_PATHS.includes(location.pathname);
 

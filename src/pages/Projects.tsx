@@ -111,11 +111,20 @@ function ProjectProgressBar({ project }: { project: DBProject }) {
           return (
             <Tooltip key={step.key}>
               <TooltipTrigger asChild>
-                <div className={`h-1.5 flex-1 rounded-full transition-colors cursor-default ${done ? "bg-primary" : "bg-muted-foreground/20"}`} />
+                <div
+                  className={`h-2 flex-1 rounded-full transition-colors cursor-default ${
+                    done ? "bg-primary" : "bg-muted-foreground/20"
+                  }`}
+                />
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="flex items-center gap-1.5 text-xs">
-                {done ? <CheckCircle2 className="h-3 w-3 text-primary" /> : <Circle className="h-3 w-3 text-muted-foreground" />}
-                {step.label}
+              <TooltipContent side="bottom" className="flex items-center gap-1.5 text-xs max-w-[200px]">
+                {done
+                  ? <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
+                  : <Circle className="h-3 w-3 text-muted-foreground shrink-0" />}
+                <span>
+                  <span className="font-semibold">{step.label}</span>
+                  {" — "}{done ? "Complete" : step.tooltip}
+                </span>
               </TooltipContent>
             </Tooltip>
           );

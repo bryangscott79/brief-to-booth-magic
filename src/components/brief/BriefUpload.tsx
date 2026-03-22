@@ -3,12 +3,14 @@ import { useDropzone } from "react-dropzone";
 import {
   Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft,
   Building2, Plus, CheckCircle2, Sparkles, ChevronDown, ChevronUp, Tag,
-  Target, MapPin, DollarSign, Users, Palette, Star, List,
+  Target, MapPin, DollarSign, Users, Palette, Star, List, Brain, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectStore";
 import { useNavigate } from "react-router-dom";

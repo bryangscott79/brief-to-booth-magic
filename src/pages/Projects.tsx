@@ -339,7 +339,7 @@ export default function ProjectsPage() {
                 >
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-lg leading-tight">{project.name}</CardTitle>
+                      <CardTitle className="text-base leading-snug break-words min-w-0 flex-1">{project.name}</CardTitle>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {adminMode && !isOwnProject && (
                           <Tooltip>

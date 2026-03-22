@@ -56,7 +56,6 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
-  const [showClientList, setShowClientList] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const { setActiveStep } = useProjectStore();

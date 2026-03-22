@@ -806,49 +806,137 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
           <p className="text-xs text-muted-foreground">
             {selectedClientId
               ? `Auto-matched to "${selectedClientLabel}" based on brand name — change if needed.`
-              : "Link this project to a client for brand intelligence tracking. Optional."}
+              : "Link this project to a client for brand intelligence tracking."}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setSelectedClientId(null)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors",
-              !selectedClientId
-                ? "border-primary bg-primary/8 text-primary font-medium"
-                : "border-border text-muted-foreground hover:border-primary/40"
-            )}
-          >
-            No client
-          </button>
-          {clients.map((c) => (
+        {/* ── New client suggestion banner ───────────────────────────────── */}
+        {showNewClientSuggestion && (
+          <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="h-9 w-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Brain className="h-4.5 w-4.5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">New client detected</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  No existing client matched <span className="font-medium text-foreground">"{parseResult?.parsed?.brand?.name}"</span>. Create a new client profile and start building their brand intelligence.
+                </p>
+              </div>
+              <button
+                onClick={handleDismissNewClientSuggestion}
+                className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                aria-label="Dismiss"
+              >
+                <Zap className="h-4 w-4 rotate-45 opacity-40 hover:opacity-70" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Client name</label>
+              <Input
+                value={suggestedClientName}
+                onChange={(e) => setSuggestedClientName(e.target.value)}
+                className="h-9 text-sm"
+                placeholder="Client name…"
+              />
+            </div>
+
+            {/* Knowledge capture toggle */}
+            <div className="flex items-start gap-3 rounded-lg border border-border bg-background px-3 py-2.5">
+              <Brain className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div className="flex-1 space-y-0.5">
+                <p className="text-xs font-semibold">Capture brand intelligence</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Save extracted brand data (visual identity, creative direction, objectives) to this client's knowledge base for future projects.
+                </p>
+              </div>
+              <Switch
+                checked={captureKnowledge}
+                onCheckedChange={setCaptureKnowledge}
+                className="mt-0.5 shrink-0"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={handleConfirmNewClient}
+                disabled={!suggestedClientName.trim() || upsertClient.isPending}
+              >
+                {upsertClient.isPending ? (
+                  <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Creating…</>
+                ) : (
+                  <><CheckCircle2 className="mr-2 h-3.5 w-3.5" />Create client &amp; link project</>
+                )}
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleDismissNewClientSuggestion}>
+                Skip
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Confirmed new client ───────────────────────────────────────── */}
+        {newClientConfirmed && selectedClientId && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-primary/30 bg-primary/5 px-3.5 py-2.5">
+            <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{selectedClientLabel} — new client created</p>
+              <p className="text-[11px] text-muted-foreground">
+                {captureKnowledge ? "Brand intelligence will be captured from this brief." : "Linked without capturing intelligence."}
+              </p>
+            </div>
+            <button onClick={() => { setNewClientConfirmed(false); setSelectedClientId(null); setSuggestedClientName(parseResult?.parsed?.brand?.name ?? ""); setShowNewClientSuggestion(true); }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Change
+            </button>
+          </div>
+        )}
+
+        {/* ── Existing client pills (shown when no pending suggestion) ──── */}
+        {!showNewClientSuggestion && !newClientConfirmed && (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              key={c.id}
-              onClick={() => setSelectedClientId(c.id)}
+              onClick={() => setSelectedClientId(null)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors",
-                selectedClientId === c.id
-                  ? "border-primary bg-primary/8 text-primary font-medium"
+                !selectedClientId
+                  ? "border-primary bg-primary/10 text-primary font-medium"
                   : "border-border text-muted-foreground hover:border-primary/40"
               )}
             >
-              <Building2 className="h-3 w-3" />
-              {c.name}
+              No client
             </button>
-          ))}
-          {!isCreatingClient && (
-            <button
-              onClick={() => setIsCreatingClient(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-primary/40 text-sm text-primary hover:bg-primary/5 transition-colors"
-            >
-              <Plus className="h-3 w-3" />
-              New client
-            </button>
-          )}
-        </div>
+            {clients.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedClientId(c.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors",
+                  selectedClientId === c.id
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:border-primary/40"
+                )}
+              >
+                <Building2 className="h-3 w-3" />
+                {c.name}
+              </button>
+            ))}
+            {!isCreatingClient && (
+              <button
+                onClick={() => setIsCreatingClient(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-primary/40 text-sm text-primary hover:bg-primary/5 transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                New client
+              </button>
+            )}
+          </div>
+        )}
 
-        {isCreatingClient && (
+        {isCreatingClient && !showNewClientSuggestion && !newClientConfirmed && (
           <div className="flex items-center gap-2">
             <Input autoFocus placeholder="Client name..." value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}

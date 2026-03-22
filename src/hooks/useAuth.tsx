@@ -20,6 +20,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
 
+  const upsertProfile = async (u: User) => {
+    await supabase
+      .from("profiles" as any)
+      .upsert(
+        {
+          user_id: u.id,
+          email: u.email ?? null,
+          display_name: u.user_metadata?.display_name ?? u.user_metadata?.full_name ?? null,
+          avatar_url: u.user_metadata?.avatar_url ?? null,
+        },
+        { onConflict: "user_id" }
+      );
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -35,6 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
+
+        // Upsert profile row so admin can see email/name
+        if (session?.user) {
+          upsertProfile(session.user);
+        }
       }
     );
 
@@ -44,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+      if (session?.user) {
+        upsertProfile(session.user);
+      }
     });
 
     return () => subscription.unsubscribe();

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ import { useProjects, DBProject } from "@/hooks/useProjects";
 import { useProjectStore } from "@/store/projectStore";
 import { useIsAdmin } from "@/hooks/useAdminRole";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 
 // --- Pipeline step definitions ---

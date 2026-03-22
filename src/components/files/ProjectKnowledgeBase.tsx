@@ -41,13 +41,13 @@ function formatBytes(bytes: number) {
 }
 
 function getFileIcon(type: string) {
-  if (type.startsWith("image/")) return <ImageIcon className="h-5 w-5 text-blue-500" />;
-  if (type.startsWith("video/")) return <FileVideo className="h-5 w-5 text-purple-500" />;
-  if (type.startsWith("audio/")) return <FileAudio className="h-5 w-5 text-pink-500" />;
+  if (type.startsWith("image/")) return <ImageIcon className="h-5 w-5 text-primary" />;
+  if (type.startsWith("video/")) return <FileVideo className="h-5 w-5 text-primary/70" />;
+  if (type.startsWith("audio/")) return <FileAudio className="h-5 w-5 text-primary/60" />;
   if (type.includes("spreadsheet") || type.includes("excel") || type.includes("csv"))
-    return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+    return <FileSpreadsheet className="h-5 w-5 text-foreground/70" />;
   if (type.includes("pdf") || type.includes("text") || type.includes("word"))
-    return <FileText className="h-5 w-5 text-orange-500" />;
+    return <FileText className="h-5 w-5 text-foreground/60" />;
   return <File className="h-5 w-5 text-muted-foreground" />;
 }
 

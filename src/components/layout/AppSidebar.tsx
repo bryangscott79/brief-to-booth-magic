@@ -113,25 +113,39 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
       {/* Logo / Header */}
-      <SidebarHeader className="h-16 flex items-center justify-between px-3 border-b border-border">
-        <Link to="/projects" className="flex items-center gap-2.5 min-w-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <Grid3X3 className="h-4 w-4 text-primary-foreground" />
-          </div>
+      <SidebarHeader className="flex flex-col border-b border-border">
+        <div className="flex items-center justify-between px-3 pt-3 pb-2">
+          <Link to="/projects" className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary">
+              <Grid3X3 className="h-5 w-5 text-primary-foreground" />
+            </div>
+            {!collapsed && (
+              <span className="text-lg font-semibold tracking-tight truncate">
+                BriefEngine
+              </span>
+            )}
+          </Link>
           {!collapsed && (
-            <span className="text-base font-semibold tracking-tight truncate">
-              BriefEngine
-            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={toggleSidebar}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
           )}
-        </Link>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={toggleSidebar}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        </div>
+        {collapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mx-auto mb-2 h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={toggleSidebar}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="py-3 gap-0">

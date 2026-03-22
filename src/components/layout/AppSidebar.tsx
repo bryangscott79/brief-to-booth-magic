@@ -12,9 +12,7 @@ import {
   ImageIcon,
   BookOpen,
   Building2,
-  
   Users,
-  Box,
   ChevronLeft,
   ChevronRight,
   Shield,

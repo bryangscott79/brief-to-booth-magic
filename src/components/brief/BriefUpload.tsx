@@ -3,7 +3,7 @@ import { useDropzone } from "react-dropzone";
 import {
   Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft,
   Building2, Plus, CheckCircle2, Sparkles, ChevronDown, ChevronUp, Tag,
-  Target, MapPin, DollarSign, Users, Palette, Star, List, Brain, X,
+  Target, MapPin, DollarSign, Users, Palette, Star, List, Brain, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +63,6 @@ function inferProjectType(pb: ParsedBrief): string {
     return "permanent_installation";
   if (/architectural|interior|office|hospitality|restaurant|hotel|commercial/.test(text))
     return "architectural_brief";
-  // Default: trade show / convention / expo
   return "trade_show_booth";
 }
 
@@ -88,11 +87,19 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   // Confirm step
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<AiTypeSuggestion | null>(null);
-  const [selectedClientId, setSelectedClientId] = useState<string | null | undefined>(undefined); // undefined = not yet resolved
+  const [selectedClientId, setSelectedClientId] = useState<string | null | undefined>(undefined);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [showTypeEditor, setShowTypeEditor] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // ─── New client suggestion state ────────────────────────────────────────────
+  // When no client matches, we suggest creating one from the brief brand data
+  const [showNewClientSuggestion, setShowNewClientSuggestion] = useState(false);
+  const [suggestedClientName, setSuggestedClientName] = useState("");
+  const [captureKnowledge, setCaptureKnowledge] = useState(true);
+  const [newClientConfirmed, setNewClientConfirmed] = useState(false);
+  const [pendingNewClientId, setPendingNewClientId] = useState<string | null>(null);
 
   const { setActiveStep } = useProjectStore();
   const { user } = useAuth();

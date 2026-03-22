@@ -22,10 +22,12 @@ import {
   CheckSquare,
   Square,
   Play,
+  BookOpen,
 } from "lucide-react";
 import { RhinoUploadPanel } from "@/components/rhino/RhinoUploadPanel";
 import { RhinoGallery } from "@/components/rhino/RhinoGallery";
 import { FilesVideoPanel } from "@/components/files/FilesVideoPanel";
+import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 
 export default function FilesPage() {
   const { projectId, isLoading: syncLoading } = useProjectSync();
@@ -134,6 +136,10 @@ export default function FilesPage() {
                 <TabsTrigger value="video" className="gap-2">
                   <Video className="h-3.5 w-3.5" />
                   Video
+                </TabsTrigger>
+                <TabsTrigger value="documents" className="gap-2">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Documents
                 </TabsTrigger>
               </TabsList>
 
@@ -325,6 +331,11 @@ export default function FilesPage() {
                   rhinoRenders={rhinoRenders}
                   preSelectedImages={selectMode && selectedImages.size > 0 ? selectedImageObjects : undefined}
                 />
+              </TabsContent>
+
+              {/* ── DOCUMENTS TAB ── */}
+              <TabsContent value="documents" className="mt-4">
+                <ProjectKnowledgeBase projectId={projectId} />
               </TabsContent>
             </Tabs>
           </div>

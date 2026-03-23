@@ -25,7 +25,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { useIsAdmin } from "@/hooks/useAdminRole";
+import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
+import { Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const workspaceNavItems = [

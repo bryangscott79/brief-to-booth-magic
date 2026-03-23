@@ -13,11 +13,11 @@ export function useIsAdmin() {
       const { data, error } = await (supabase as any)
         .from("user_roles")
         .select("id, role")
-        .eq("user_id", user!.id)
-        .in("role", ["admin", "super_admin"]);
+        .eq("user_id", user!.id);
 
       if (error) return false;
-      return !!(data as any[])?.length;
+      const roles = (data as any[])?.map((r) => r.role as string) ?? [];
+      return roles.includes("admin") || roles.includes("super_admin");
     },
     staleTime: 1000 * 60 * 5,
   });

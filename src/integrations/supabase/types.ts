@@ -773,6 +773,7 @@ export type Database = {
           display_name: string
           email: string
           is_admin: boolean
+          is_super_admin: boolean
           user_id: string
         }[]
       }

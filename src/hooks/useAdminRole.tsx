@@ -31,11 +31,11 @@ export function useIsSuperAdmin() {
     queryKey: ["is-super-admin", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles" as any)
+      const { data, error } = await (supabase as any)
+        .from("user_roles")
         .select("id")
         .eq("user_id", user!.id)
-        .eq("role" as any, "super_admin")
+        .eq("role", "super_admin")
         .maybeSingle();
 
       if (error) return false;

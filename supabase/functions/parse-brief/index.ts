@@ -595,7 +595,7 @@ serve(async (req) => {
 
     const parsed = await callAIWithRetry(LOVABLE_API_KEY, briefText, brandIntelligence, 1, brandContext, suiteContext);
 
-    console.log("Final parsed brand:", parsed.brand?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
+    console.log("Final parsed brand:", (parsed.brand as any)?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
 
     return new Response(JSON.stringify({ data: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

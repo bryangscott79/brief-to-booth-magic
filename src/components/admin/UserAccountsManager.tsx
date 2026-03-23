@@ -72,7 +72,15 @@ function getDisplayLabel(profile: UserProfile) {
 }
 
 // ─── Invite Dialog ────────────────────────────────────────────────────────────
-function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function InviteDialog({
+  open,
+  onClose,
+  isSuperAdmin,
+}: {
+  open: boolean;
+  onClose: () => void;
+  isSuperAdmin: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const invite = useInviteUser();
@@ -131,10 +139,18 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
                 </SelectItem>
                 <SelectItem value="admin">
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Admin</span>
-                    <span className="text-xs text-muted-foreground">Full access to all accounts and projects</span>
+                    <span className="font-medium">Agency Admin</span>
+                    <span className="text-xs text-muted-foreground">Manages their agency team and projects</span>
                   </div>
                 </SelectItem>
+                {isSuperAdmin && (
+                  <SelectItem value="super_admin">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Platform Owner</span>
+                      <span className="text-xs text-muted-foreground">Full platform access — all agencies and users</span>
+                    </div>
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -162,13 +178,36 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
+// ─── Role badge ───────────────────────────────────────────────────────────────
+function RoleBadge({ profile }: { profile: UserProfile }) {
+  if (profile.is_super_admin) {
+    return (
+      <Badge className="h-4 text-[10px] px-1.5 bg-amber-500/10 text-amber-600 border-0">
+        <Crown className="h-2.5 w-2.5 mr-0.5" />
+        Platform Owner
+      </Badge>
+    );
+  }
+  if (profile.is_admin) {
+    return (
+      <Badge className="h-4 text-[10px] px-1.5 bg-primary/10 text-primary border-0">
+        <Shield className="h-2.5 w-2.5 mr-0.5" />
+        Agency Admin
+      </Badge>
+    );
+  }
+  return null;
+}
+
 // ─── User Row ─────────────────────────────────────────────────────────────────
 function UserRow({
   profile,
   currentUserId,
+  currentUserIsSuperAdmin,
 }: {
   profile: UserProfile;
   currentUserId: string | undefined;
+  currentUserIsSuperAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -180,15 +219,22 @@ function UserRow({
     try {
       if (profile.is_admin) {
         await manageRole.mutateAsync({ target_user_id: profile.user_id, action: "revoke_admin" });
-        toast.success(`Admin removed from ${getDisplayLabel(profile)}`);
+        toast.success(`Agency Admin removed from ${getDisplayLabel(profile)}`);
       } else {
         await manageRole.mutateAsync({ target_user_id: profile.user_id, action: "grant_admin" });
-        toast.success(`${getDisplayLabel(profile)} is now an admin`);
+        toast.success(`${getDisplayLabel(profile)} is now an Agency Admin`);
       }
     } catch (err: any) {
       toast.error(err.message ?? "Failed to update role");
     }
   };
+
+  // Avatar color: gold for super_admin, primary for admin, muted for member
+  const avatarClass = profile.is_super_admin
+    ? "bg-amber-500 text-white"
+    : profile.is_admin
+    ? "bg-primary text-primary-foreground"
+    : "bg-muted text-muted-foreground";
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -198,15 +244,10 @@ function UserRow({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 {/* Avatar */}
-                <div
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-                    profile.is_admin
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {getInitials(profile.email, profile.display_name)}
+                <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarClass)}>
+                  {profile.is_super_admin
+                    ? <Crown className="h-4 w-4" />
+                    : getInitials(profile.email, profile.display_name)}
                 </div>
 
                 {/* Identity */}
@@ -218,12 +259,7 @@ function UserRow({
                         <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(you)</span>
                       )}
                     </p>
-                    {profile.is_admin && (
-                      <Badge className="h-4 text-[10px] px-1.5 bg-primary/10 text-primary border-0">
-                        <Shield className="h-2.5 w-2.5 mr-0.5" />
-                        Admin
-                      </Badge>
-                    )}
+                    <RoleBadge profile={profile} />
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1">
@@ -238,9 +274,9 @@ function UserRow({
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* Actions — only super_admin can manage admin roles; admins can't touch super_admins */}
               <div className="flex items-center gap-2 shrink-0">
-                {!isSelf && (
+                {!isSelf && currentUserIsSuperAdmin && !profile.is_super_admin && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -260,7 +296,7 @@ function UserRow({
                     ) : (
                       <Shield className="h-3 w-3" />
                     )}
-                    {profile.is_admin ? "Remove Admin" : "Make Admin"}
+                    {profile.is_admin ? "Remove Admin" : "Make Agency Admin"}
                   </Button>
                 )}
                 {open ? (

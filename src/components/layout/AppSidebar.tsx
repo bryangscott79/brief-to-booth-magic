@@ -25,7 +25,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { useIsAdmin } from "@/hooks/useAdminRole";
+import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
+import { Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const workspaceNavItems = [
@@ -41,6 +42,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { data: isAdmin } = useIsAdmin();
+  const { data: isSuperAdmin } = useIsSuperAdmin();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -135,7 +137,13 @@ export function AppSidebar() {
               {workspaceNavItems.map((item) => (
                 <NavItem key={item.path} {...item} />
               ))}
-              {isAdmin && <NavItem path="/admin" label="Admin Settings" icon={Shield} />}
+              {isAdmin && (
+                <NavItem
+                  path="/admin"
+                  label={isSuperAdmin ? "Platform Admin" : "Admin Settings"}
+                  icon={isSuperAdmin ? Crown : Shield}
+                />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -146,10 +154,14 @@ export function AppSidebar() {
         {!collapsed ? (
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <span className="text-xs font-semibold text-primary">
-                  {user?.email?.[0]?.toUpperCase() ?? "?"}
-                </span>
+              <div className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                  isSuperAdmin ? "bg-amber-500/20" : "bg-primary/10"
+                )}>
+                {isSuperAdmin
+                  ? <Crown className="h-3.5 w-3.5 text-amber-600" />
+                  : <span className="text-xs font-semibold text-primary">{user?.email?.[0]?.toUpperCase() ?? "?"}</span>
+                }
               </div>
               <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
             </div>

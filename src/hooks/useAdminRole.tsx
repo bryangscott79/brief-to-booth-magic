@@ -10,11 +10,11 @@ export function useIsAdmin() {
     queryKey: ["is-admin", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles" as any)
+      const { data, error } = await (supabase as any)
+        .from("user_roles")
         .select("id, role")
         .eq("user_id", user!.id)
-        .in("role" as any, ["admin", "super_admin"]);
+        .in("role", ["admin", "super_admin"]);
 
       if (error) return false;
       return !!(data as any[])?.length;

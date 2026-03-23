@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-// ─── Is current user admin? ───────────────────────────────────────────────────
+// ─── Is current user admin (agency admin OR super admin)? ─────────────────────
 export function useIsAdmin() {
   const { user } = useAuth();
 
@@ -12,9 +12,30 @@ export function useIsAdmin() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles" as any)
+        .select("id, role")
+        .eq("user_id", user!.id)
+        .in("role" as any, ["admin", "super_admin"]);
+
+      if (error) return false;
+      return !!(data as any[])?.length;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+// ─── Is current user super admin (platform owner)? ────────────────────────────
+export function useIsSuperAdmin() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["is-super-admin", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_roles" as any)
         .select("id")
         .eq("user_id", user!.id)
-        .eq("role", "admin")
+        .eq("role" as any, "super_admin")
         .maybeSingle();
 
       if (error) return false;
@@ -31,6 +52,7 @@ export interface UserProfile {
   display_name: string | null;
   avatar_url: string | null;
   is_admin: boolean;
+  is_super_admin: boolean;
   created_at: string;
   projects?: ProjectSummary[];
 }
@@ -44,7 +66,7 @@ export interface ProjectSummary {
   created_at: string;
 }
 
-// ─── All user profiles (admin only) ──────────────────────────────────────────
+// ─── All user profiles (admin/super_admin only) ───────────────────────────────
 export function useAdminProfiles() {
   const { data: isAdmin } = useIsAdmin();
 
@@ -52,19 +74,16 @@ export function useAdminProfiles() {
     queryKey: ["admin-all-profiles"],
     enabled: !!isAdmin,
     queryFn: async () => {
-      // Get all profiles via the security-definer function
       const { data: profiles, error: profilesErr } = await supabase
         .rpc("get_all_user_profiles" as any);
       if (profilesErr) throw profilesErr;
 
-      // Get all projects (admin RLS allows this)
       const { data: projects, error: projectsErr } = await supabase
         .from("projects")
         .select("id, name, status, project_type, user_id, created_at, updated_at")
         .order("updated_at", { ascending: false });
       if (projectsErr) throw projectsErr;
 
-      // Attach projects to each profile
       const byUser: Record<string, ProjectSummary[]> = {};
       for (const p of projects ?? []) {
         if (!byUser[p.user_id]) byUser[p.user_id] = [];
@@ -73,6 +92,7 @@ export function useAdminProfiles() {
 
       return ((profiles as UserProfile[]) ?? []).map((profile) => ({
         ...profile,
+        is_super_admin: (profile as any).is_super_admin ?? false,
         projects: byUser[profile.user_id] ?? [],
       }));
     },
@@ -105,7 +125,7 @@ export function useAdminUsers() {
   });
 }
 
-// ─── Invite user (admin only) ─────────────────────────────────────────────────
+// ─── Invite user (admin/super_admin only) ─────────────────────────────────────
 export function useInviteUser() {
   const qc = useQueryClient();
   return useMutation({
@@ -150,7 +170,7 @@ export function usePlatformInvites() {
   });
 }
 
-// ─── Manage admin role ────────────────────────────────────────────────────────
+// ─── Manage role (super_admin only) ──────────────────────────────────────────
 export function useManageAdminRole() {
   const qc = useQueryClient();
   return useMutation({
@@ -159,7 +179,7 @@ export function useManageAdminRole() {
       action,
     }: {
       target_user_id: string;
-      action: "grant_admin" | "revoke_admin";
+      action: "grant_admin" | "revoke_admin" | "grant_super_admin" | "revoke_super_admin";
     }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke("admin-manage-role", {
@@ -171,6 +191,8 @@ export function useManageAdminRole() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-all-profiles"] });
+      qc.invalidateQueries({ queryKey: ["is-admin"] });
+      qc.invalidateQueries({ queryKey: ["is-super-admin"] });
     },
   });
 }

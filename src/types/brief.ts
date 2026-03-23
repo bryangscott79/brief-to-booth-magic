@@ -322,11 +322,146 @@ export interface ElementState {
   error?: string;
 }
 
+// ─── Hierarchy & Suite Types ─────────────────────────────────────────────────
+
+export type ScaleClassification =
+  | "tabletop"
+  | "inline"
+  | "peninsula"
+  | "island"
+  | "large_island"
+  | "mega"
+  | "custom";
+
+export interface ProjectHierarchy {
+  parentId: string | null;
+  activationType: string | null;
+  sortOrder: number;
+  inheritsBrief: boolean;
+  inheritsBrand: boolean;
+  scaleClassification: ScaleClassification | null;
+  footprintSqft: number | null;
+  suiteNotes: string | null;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  projectType: string;
+  activationType: string | null;
+  status: string;
+  scaleClassification: string | null;
+  footprintSqft: number | null;
+}
+
+export interface SuiteContext {
+  parent: ProjectSummary | null;
+  children: ProjectSummary[];
+  siblings: ProjectSummary[];
+}
+
+// ─── Activation Types ────────────────────────────────────────────────────────
+
+export type ActivationCategory =
+  | "engagement"
+  | "hospitality"
+  | "support"
+  | "outdoor"
+  | "digital";
+
+export type ElementEmphasis = "required" | "inherit" | "skip" | "normal";
+
+export interface ActivationType {
+  id: string;
+  slug: string;
+  label: string;
+  description: string | null;
+  icon: string | null;
+  category: ActivationCategory;
+  parentTypeAffinity: string[];
+  defaultScale: string | null;
+  defaultSqft: number | null;
+  elementEmphasis: Record<string, ElementEmphasis> | null;
+  renderContextOverride: string | null;
+  isBuiltin: boolean;
+}
+
+// ─── Brand Knowledge Types ───────────────────────────────────────────────────
+
+export interface BrandGuidelines {
+  id: string;
+  clientId: string;
+  colorSystem: {
+    primary: Array<{ hex: string; name: string; usage: string }>;
+    secondary: Array<{ hex: string; name: string; usage: string }>;
+    accent: Array<{ hex: string; name: string; usage: string }>;
+    forbidden: Array<{ hex: string; name: string }>;
+  } | null;
+  typography: {
+    primaryTypeface: string;
+    secondaryTypeface: string;
+    sizeScale: string;
+    usageRules: string;
+  } | null;
+  logoRules: {
+    clearSpace: string;
+    minSize: string;
+    forbiddenTreatments: string[];
+    usageNotes: string;
+  } | null;
+  photographyStyle: {
+    style: string;
+    dos: string[];
+    donts: string[];
+  } | null;
+  toneOfVoice: {
+    description: string;
+    messagingPillars: string[];
+    taglines: string[];
+  } | null;
+  materialsFinishes: {
+    preferred: string[];
+    forbidden: string[];
+    finishNotes: string;
+  } | null;
+  guidelinesVersion: string | null;
+}
+
+export interface BrandAsset {
+  id: string;
+  clientId: string;
+  assetType: "logo" | "font" | "approved_image" | "brand_guide_pdf" | "icon_set" | "texture" | "pattern";
+  label: string;
+  publicUrl: string;
+  fileType: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface VenueIntelligence {
+  id: string;
+  showName: string;
+  venue: string | null;
+  city: string | null;
+  industry: string | null;
+  designTips: string[];
+  trafficPatterns: string | null;
+  audienceNotes: string | null;
+  logisticsNotes: string | null;
+  boothPlacementTips: string | null;
+  typicalBoothSizes: string[];
+  unionLaborRequired: boolean | null;
+  source: string;
+  sourceProjectId: string | null;
+}
+
+// ─── Project ─────────────────────────────────────────────────────────────────
+
 export interface Project {
   id: string;
   name: string;
   projectType: string;
   clientId: string | null;
+  hierarchy: ProjectHierarchy;
   createdAt: Date;
   updatedAt: Date;
   rawBrief: string;

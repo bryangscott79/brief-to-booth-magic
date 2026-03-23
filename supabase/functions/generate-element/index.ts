@@ -242,7 +242,7 @@ serve(async (req) => {
   }
 
   try {
-    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType } = await req.json();
+    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType, brandContext = "", suiteContext = "" } = await req.json();
 
     const validTypes = ["bigIdea", "experienceFramework", "interactiveMechanics", "digitalStorytelling", "humanConnection", "adjacentActivations", "spatialStrategy", "budgetLogic"];
     if (!elementType || !validTypes.includes(elementType)) {
@@ -367,7 +367,7 @@ END UPSTREAM CONTEXT
       model: "google/gemini-2.5-pro",
       temperature: existingData || feedback ? 1.2 : 0.9,
       messages: [
-        { role: "system", content: systemPrompt + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
+        { role: "system", content: systemPrompt + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}` + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
         { role: "user", content: userPrompt },
       ],
       tools: [toolSchema],

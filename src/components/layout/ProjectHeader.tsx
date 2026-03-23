@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SuiteContextBar } from "@/components/layout/SuiteContextBar";
 
 const PROJECT_STEPS = [
   { path: "/upload",   label: "Brief",    shortLabel: "Brief",    icon: Upload },
@@ -72,6 +73,9 @@ export function ProjectHeader() {
           </span>
         </div>
       </div>
+
+      {/* Suite context bar */}
+      <SuiteContextBar />
 
       {/* Step nav row */}
       <div className="flex items-center gap-0.5 px-3 h-10 overflow-x-auto scrollbar-none">

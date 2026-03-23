@@ -70,11 +70,22 @@ export function useProjectSync() {
         };
       }
 
+      const dbAny = dbProject as any;
       loadFromDb({
         id: dbProject.id,
         name: dbProject.name,
         projectType: dbProject.project_type ?? "trade_show_booth",
-        clientId: (dbProject as any).client_id ?? null,
+        clientId: dbAny.client_id ?? null,
+        hierarchy: {
+          parentId: dbAny.parent_id ?? null,
+          activationType: dbAny.activation_type ?? null,
+          sortOrder: dbAny.sort_order ?? 0,
+          inheritsBrief: dbAny.inherits_brief ?? true,
+          inheritsBrand: dbAny.inherits_brand ?? true,
+          scaleClassification: dbAny.scale_classification ?? null,
+          footprintSqft: dbAny.footprint_sqft ?? null,
+          suiteNotes: dbAny.suite_notes ?? null,
+        },
         rawBrief: dbProject.brief_text || "",
         parsedBrief: dbProject.parsed_brief as ParsedBrief | null,
         elements,

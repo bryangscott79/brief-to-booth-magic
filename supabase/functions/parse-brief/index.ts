@@ -348,7 +348,9 @@ async function callAIWithRetry(
   apiKey: string,
   briefText: string,
   brandIntelligence?: Array<{ category: string; title: string; content: string }>,
-  attempt = 1
+  attempt = 1,
+  brandContext = "",
+  suiteContext = "",
 ): Promise<Record<string, unknown>> {
   let userMessage = `You are parsing a brief document. Extract ALL data — scan every line including tables (formatted as tab-separated text).
 
@@ -373,7 +375,7 @@ ${briefText}
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
       messages: [
-        { role: "system", content: PARSE_SYSTEM_PROMPT },
+        { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}` },
         { role: "user", content: userMessage },
       ],
       tools: [toolSchema],
@@ -387,7 +389,7 @@ ${briefText}
     console.error(`AI gateway error (attempt ${attempt}):`, response.status, text.substring(0, 300));
     if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 1000 * attempt));
-      return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1);
+      return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
     }
     throw new Error(`AI gateway error: ${response.status}`);
   }
@@ -412,7 +414,7 @@ ${briefText}
       if (attempt < 3) {
         console.warn("JSON parse failed, retrying...");
         await new Promise((r) => setTimeout(r, 1000));
-        return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1);
+        return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
       }
       throw new Error("AI returned malformed JSON");
     }
@@ -434,7 +436,7 @@ ${briefText}
   if (attempt < 3) {
     console.warn(`No tool call or parseable content (attempt ${attempt}), retrying...`);
     await new Promise((r) => setTimeout(r, 1500));
-    return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1);
+    return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
   }
 
   throw new Error("AI returned empty or unparseable response after 3 attempts");
@@ -489,6 +491,9 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
+    const brandContext = (body.brandContext as string) || "";
+    const suiteContext = (body.suiteContext as string) || "";
+
     let briefText = (body.briefText as string) || "";
 
     // ── DOCX: Extract text server-side ──
@@ -512,7 +517,7 @@ serve(async (req) => {
       // Gemini supports PDF as inline data
       const brandIntelligence = body.brandIntelligence as Array<{ category: string; title: string; content: string }> | undefined;
 
-      let systemMsg = PARSE_SYSTEM_PROMPT;
+      let systemMsg = PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`;
       let userMsg = "Parse this PDF brief document. Extract ALL data — scan every page including tables, sidebars, headers, and footnotes.\n\nReturn ALL fields as completely as possible.";
 
       if (brandIntelligence && brandIntelligence.length > 0) {
@@ -588,7 +593,7 @@ serve(async (req) => {
 
     console.log(`Parsing brief: ${briefText.length} chars | brand intel: ${brandIntelligence?.length ?? 0} entries`);
 
-    const parsed = await callAIWithRetry(LOVABLE_API_KEY, briefText, brandIntelligence);
+    const parsed = await callAIWithRetry(LOVABLE_API_KEY, briefText, brandIntelligence, 1, brandContext, suiteContext);
 
     console.log("Final parsed brand:", parsed.brand?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
 

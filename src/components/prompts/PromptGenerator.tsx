@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 import { useBrandIntelligence } from "@/hooks/useClients";
+import { useBrandRAG } from "@/hooks/useBrandRAG";
 
 // Import prompt building utilities
 import {
@@ -79,6 +80,16 @@ export function PromptGenerator() {
     () => brandIntelEntries?.filter(e => e.is_approved).map(e => ({ category: e.category, title: e.title, content: e.content, tags: e.tags })),
     [brandIntelEntries]
   );
+
+  // Brand RAG context for edge function calls
+  const parentId = currentProject?.hierarchy?.parentId ?? null;
+  const showName = brief?.events?.primaryShow ?? undefined;
+  const { brandContext: ragBrandContext, suiteContext: ragSuiteContext } = useBrandRAG({
+    clientId,
+    projectId,
+    parentId,
+    showName,
+  });
 
   // Calculate booth dimensions
   const boothDimensions = useMemo(() => {
@@ -173,6 +184,8 @@ export function PromptGenerator() {
         boothSize: boothDimensions.footprintLabel,
         projectType: currentProject?.projectType ?? null,
         brandIntelligence: approvedBrandIntel,
+        brandContext: ragBrandContext || undefined,
+        suiteContext: ragSuiteContext || undefined,
         onSave: doSave,
       });
 
@@ -228,6 +241,8 @@ export function PromptGenerator() {
       projectId: projectId!,
       boothSize: boothDimensions.footprintLabel,
       brandIntelligence: approvedBrandIntel,
+      brandContext: ragBrandContext || undefined,
+      suiteContext: ragSuiteContext || undefined,
       onSave: doSave,
     }).then(() => {
       toast({
@@ -249,6 +264,8 @@ export function PromptGenerator() {
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
         brandIntelligence: approvedBrandIntel,
+        brandContext: ragBrandContext || undefined,
+        suiteContext: ragSuiteContext || undefined,
         onSave: doSave,
       });
 
@@ -285,6 +302,8 @@ export function PromptGenerator() {
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
         brandIntelligence: approvedBrandIntel,
+        brandContext: ragBrandContext || undefined,
+        suiteContext: ragSuiteContext || undefined,
         onSave: doSave,
       });
 
@@ -311,6 +330,8 @@ export function PromptGenerator() {
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
         brandIntelligence: approvedBrandIntel,
+        brandContext: ragBrandContext || undefined,
+        suiteContext: ragSuiteContext || undefined,
         onSave: doSave,
       });
 

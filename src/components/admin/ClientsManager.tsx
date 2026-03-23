@@ -4,6 +4,8 @@ import {
   useBrandIntelligence, useUpsertBrandIntelligence, useDeleteBrandIntelligence, useApproveBrandIntelligence,
   type Client, type BrandIntelligenceEntry,
 } from "@/hooks/useClients";
+import { BrandGuidelinesEditor } from "@/components/admin/BrandGuidelinesEditor";
+import { BrandAssetLibrary } from "@/components/admin/BrandAssetLibrary";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -419,6 +421,16 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
           })}
         </div>
       )}
+
+      {/* Brand Guidelines */}
+      <div className="border-t border-border pt-6">
+        <BrandGuidelinesEditor clientId={client.id} />
+      </div>
+
+      {/* Brand Asset Library */}
+      <div className="border-t border-border pt-6">
+        <BrandAssetLibrary clientId={client.id} />
+      </div>
 
       {/* Add intelligence dialog */}
       <Dialog open={showAddEntry || !!editingEntry} onOpenChange={(v) => { if (!v) { setShowAddEntry(false); setEditingEntry(null); } }}>

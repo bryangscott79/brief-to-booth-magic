@@ -4,19 +4,35 @@ import type {
   ParsedBrief,
   ElementType,
   ElementState,
-  RenderPromptSet
+  RenderPromptSet,
+  ProjectHierarchy,
+  SuiteContext,
 } from "@/types/brief";
+
+const DEFAULT_HIERARCHY: ProjectHierarchy = {
+  parentId: null,
+  activationType: null,
+  sortOrder: 0,
+  inheritsBrief: true,
+  inheritsBrand: true,
+  scaleClassification: null,
+  footprintSqft: null,
+  suiteNotes: null,
+};
 
 interface ProjectStore {
   // State
   currentProject: Project | null;
   projects: Project[];
+  suiteContext: SuiteContext;
   isLoading: boolean;
   activeStep: "upload" | "review" | "generate" | "spatial" | "prompts" | "export";
-  
+
   // Actions
   createProject: (name: string) => void;
-  loadFromDb: (data: { id: string; name: string; projectType?: string; clientId?: string | null; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
+  loadFromDb: (data: { id: string; name: string; projectType?: string; clientId?: string | null; hierarchy?: Partial<ProjectHierarchy>; rawBrief: string; parsedBrief: ParsedBrief | null; elements: Record<ElementType, ElementState>; renderPrompts: RenderPromptSet | null }) => void;
+  loadSuiteContext: (ctx: SuiteContext) => void;
+  setHierarchy: (h: Partial<ProjectHierarchy>) => void;
   setRawBrief: (brief: string) => void;
   setParsedBrief: (brief: ParsedBrief) => void;
   setElementStatus: (type: ElementType, status: ElementState["status"]) => void;
@@ -41,6 +57,7 @@ const createInitialElements = (): Record<ElementType, ElementState> => ({
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   currentProject: null,
   projects: [],
+  suiteContext: { parent: null, children: [], siblings: [] },
   isLoading: false,
   activeStep: "upload",
 
@@ -50,6 +67,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       name,
       projectType: "trade_show_booth",
       clientId: null,
+      hierarchy: { ...DEFAULT_HIERARCHY },
       createdAt: new Date(),
       updatedAt: new Date(),
       rawBrief: "",
@@ -66,6 +84,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       name: data.name,
       projectType: data.projectType ?? "trade_show_booth",
       clientId: data.clientId ?? null,
+      hierarchy: { ...DEFAULT_HIERARCHY, ...data.hierarchy },
       createdAt: new Date(),
       updatedAt: new Date(),
       rawBrief: data.rawBrief,
@@ -81,6 +100,20 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     if (hasElements) activeStep = "generate";
     if (data.renderPrompts) activeStep = "prompts";
     set({ currentProject: project, activeStep });
+  },
+
+  loadSuiteContext: (ctx: SuiteContext) => set({ suiteContext: ctx }),
+
+  setHierarchy: (h: Partial<ProjectHierarchy>) => {
+    const { currentProject } = get();
+    if (!currentProject) return;
+    set({
+      currentProject: {
+        ...currentProject,
+        hierarchy: { ...currentProject.hierarchy, ...h },
+        updatedAt: new Date(),
+      },
+    });
   },
 
   setRawBrief: (brief: string) => {
@@ -161,10 +194,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   
   setIsLoading: (loading) => set({ isLoading: loading }),
 
-  resetProject: () => set({ 
-    currentProject: null, 
+  resetProject: () => set({
+    currentProject: null,
+    suiteContext: { parent: null, children: [], siblings: [] },
     activeStep: "upload",
-    isLoading: false 
+    isLoading: false
   }),
 }));
 

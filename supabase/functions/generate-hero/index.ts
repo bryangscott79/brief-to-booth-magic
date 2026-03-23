@@ -19,6 +19,8 @@ interface GenerateHeroRequest {
   boothSize?: string;
   projectType?: string;
   brandIntelligence?: BrandIntelEntry[];
+  brandContext?: string;
+  suiteContext?: string;
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
@@ -131,7 +133,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "" }: GenerateHeroRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -180,7 +182,7 @@ ORIGINAL DESIGN REQUIREMENTS:
 ${prompt}
 ${scaleBlock}
 ${designBlock}
-${brandBlock}
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}
 
 Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
 
@@ -200,7 +202,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
           content: `${prompt}
 ${scaleBlock}
 ${designBlock}
-${brandBlock}
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}
 
 ${genSuffix}`,
         },

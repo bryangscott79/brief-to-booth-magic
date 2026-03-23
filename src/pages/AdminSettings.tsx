@@ -6,8 +6,10 @@ import { ClientsManager } from "@/components/admin/ClientsManager";
 import { TeamManager } from "@/components/admin/TeamManager";
 import { UserAccountsManager } from "@/components/admin/UserAccountsManager";
 import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
+import { ActivationTypeManager } from "@/components/admin/ActivationTypeManager";
+import { VenueIntelligenceManager } from "@/components/admin/VenueIntelligenceManager";
 import { useIsAdmin } from "@/hooks/useAdminRole";
-import { Settings2, Users, Layers, UserCog, Shield, BookOpen } from "lucide-react";
+import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin } from "lucide-react";
 
 export default function AdminSettings() {
   const [tab, setTab] = useState("project-types");
@@ -37,9 +39,17 @@ export default function AdminSettings() {
               <Layers className="h-4 w-4" />
               Project Types
             </TabsTrigger>
+            <TabsTrigger value="activation-types" className="gap-2">
+              <Zap className="h-4 w-4" />
+              Activation Types
+            </TabsTrigger>
             <TabsTrigger value="clients" className="gap-2">
               <Users className="h-4 w-4" />
               Clients & Brand Intelligence
+            </TabsTrigger>
+            <TabsTrigger value="venues" className="gap-2">
+              <MapPin className="h-4 w-4" />
+              Venues
             </TabsTrigger>
             <TabsTrigger value="agency-kb" className="gap-2">
               <BookOpen className="h-4 w-4" />
@@ -61,8 +71,16 @@ export default function AdminSettings() {
             <ProjectTypeManager />
           </TabsContent>
 
+          <TabsContent value="activation-types">
+            <ActivationTypeManager />
+          </TabsContent>
+
           <TabsContent value="clients">
             <ClientsManager />
+          </TabsContent>
+
+          <TabsContent value="venues">
+            <VenueIntelligenceManager />
           </TabsContent>
 
           <TabsContent value="agency-kb">

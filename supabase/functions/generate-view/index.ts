@@ -20,6 +20,8 @@ interface GenerateViewRequest {
   aspectRatio: string;
   boothSize?: string;
   brandIntelligence?: BrandIntelEntry[];
+  brandContext?: string;
+  suiteContext?: string;
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
     brandColors?: string[];
@@ -136,7 +138,7 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence }: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "" }: GenerateViewRequest = await req.json();
 
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -203,7 +205,7 @@ COMPOSITION:
 OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.
 ${scaleBlock}
 ${consistencyBlock}
-${brandBlock}`
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`
       : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 ${scaleBlock}
 
@@ -222,7 +224,7 @@ CONSISTENCY RULES (maintain from reference):
 
 OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.
 ${consistencyBlock}
-${brandBlock}`;
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

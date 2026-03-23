@@ -23,6 +23,8 @@ import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { useCompanyProfile, useShowCosts } from "@/hooks/useCompanyProfile";
 import { useBrandIntelligence, useClient, useBatchCreateIntelligence } from "@/hooks/useClients";
 import { IntelligenceSelector } from "./IntelligenceSelector";
+import { useBrandRAG } from "@/hooks/useBrandRAG";
+
 
 const ELEMENT_ORDER: ElementType[] = [
   "bigIdea",
@@ -66,6 +68,8 @@ async function runGenerationJob(
   brandIntelligence?: any[],
   clientData?: any,
   projectType?: string,
+  brandContext?: string,
+  suiteContext?: string,
 ): Promise<GenerationJob> {
   // Abort any existing job
   if (activeJob) {
@@ -102,6 +106,8 @@ async function runGenerationJob(
             brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
             clientData,
             projectType,
+            brandContext: brandContext || undefined,
+            suiteContext: suiteContext || undefined,
           },
         });
 
@@ -143,9 +149,19 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
 
   // Brand intelligence + client context for AI generation
   const clientId = currentProject?.clientId ?? null;
+  const parentId = currentProject?.hierarchy?.parentId ?? null;
   const { data: brandIntelEntries } = useBrandIntelligence(clientId);
   const { data: clientRecord } = useClient(clientId);
   const batchCreateIntelligence = useBatchCreateIntelligence();
+
+  // RAG context + suite context
+  const showName = currentProject?.parsedBrief?.events?.primaryShow ?? undefined;
+  const { brandContext: ragBrandContext, suiteContext: ragSuiteContext } = useBrandRAG({
+    clientId,
+    projectId,
+    parentId,
+    showName,
+  });
 
   // Approved entries for IntelligenceSelector
   const approvedEntries = useMemo(
@@ -275,14 +291,14 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
     // Project type
     const projectTypeId = currentProject?.projectType ?? undefined;
 
-    return { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId };
+    return { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext, ragSuiteContext };
   };
 
   const generateElement = async (elementType: ElementType, feedback?: string) => {
     setElementStatus(elementType, "generating");
 
     try {
-      const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId } = getContextPayloads();
+      const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc } = getContextPayloads();
 
       const { data, error } = await supabase.functions.invoke("generate-element", {
         body: {
@@ -296,6 +312,8 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           brandIntelligence: biPayload && biPayload.length > 0 ? biPayload : undefined,
           clientData: clientPayload,
           projectType: projectTypeId,
+          brandContext: bc || undefined,
+          suiteContext: sc || undefined,
         },
       });
 
@@ -324,7 +342,7 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
 
     setIsGenerating(true);
 
-    const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId } = getContextPayloads();
+    const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc } = getContextPayloads();
 
     const job = await runGenerationJob(
       projectId,
@@ -338,6 +356,8 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
       biPayload && biPayload.length > 0 ? biPayload : undefined,
       clientPayload,
       projectTypeId,
+      bc || undefined,
+      sc || undefined,
     );
 
     // Wait for completion (component may unmount, that's fine — job continues)

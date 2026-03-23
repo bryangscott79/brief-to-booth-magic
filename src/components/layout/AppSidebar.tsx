@@ -137,7 +137,13 @@ export function AppSidebar() {
               {workspaceNavItems.map((item) => (
                 <NavItem key={item.path} {...item} />
               ))}
-              {isAdmin && <NavItem path="/admin" label="Admin Settings" icon={Shield} />}
+              {isAdmin && (
+                <NavItem
+                  path="/admin"
+                  label={isSuperAdmin ? "Platform Admin" : "Admin Settings"}
+                  icon={isSuperAdmin ? Crown : Shield}
+                />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

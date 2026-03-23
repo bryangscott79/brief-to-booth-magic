@@ -78,6 +78,7 @@ export default function AgencyAccountPage() {
     queryKey: ["agency-account", userId],
     enabled: !!userId,
     queryFn: async () => {
+      if (!userId) throw new Error("No userId");
       // Profile
       const { data: profiles } = await supabase
         .rpc("get_all_user_profiles" as any);

@@ -1,4 +1,115 @@
 -- =========================================================
+-- Phase 0A: Foundation — user_roles table + has_role()
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS public.user_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'member')),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, role)
+);
+
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own roles"
+  ON public.user_roles FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can manage all roles"
+  ON public.user_roles FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin')
+  );
+
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role = _role
+  );
+END;
+$$;
+
+-- =========================================================
+-- Phase 0B: Foundation — clients table
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS public.clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  logo_url TEXT,
+  industry TEXT,
+  website TEXT,
+  notes TEXT,
+  user_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own clients"
+  ON public.clients FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own clients"
+  ON public.clients FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own clients"
+  ON public.clients FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own clients"
+  ON public.clients FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Admins can manage all clients"
+  ON public.clients FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+-- =========================================================
+-- Phase 0C: Foundation — brand_intelligence table
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS public.brand_intelligence (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  source TEXT DEFAULT 'manual',
+  user_id UUID NOT NULL,
+  metadata JSONB,
+  relevance_weight NUMERIC DEFAULT 1.0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.brand_intelligence ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own brand intelligence"
+  ON public.brand_intelligence FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own brand intelligence"
+  ON public.brand_intelligence FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own brand intelligence"
+  ON public.brand_intelligence FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own brand intelligence"
+  ON public.brand_intelligence FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Admins can manage all brand intelligence"
+  ON public.brand_intelligence FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+-- =========================================================
+-- Phase 0D: Add client_id and user_id to projects
+-- =========================================================
+
+ALTER TABLE public.projects
+  ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS user_id UUID;
+
+-- =========================================================
 -- Phase 1A: Add hierarchy columns to projects table
 -- Enables parent/child "Activation Suite" relationships.
 -- All columns nullable — existing projects unchanged.
@@ -230,9 +341,11 @@ CREATE POLICY "Admins can manage all venue intelligence"
   WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 -- =========================================================
--- Phase 1F: Extend brand_intelligence
+-- Phase 1F: Extend brand_intelligence (no-op if created above)
 -- =========================================================
 
 ALTER TABLE public.brand_intelligence
   ADD COLUMN IF NOT EXISTS metadata JSONB,
   ADD COLUMN IF NOT EXISTS relevance_weight NUMERIC DEFAULT 1.0;
+-- NOTE: These columns already exist if brand_intelligence was created
+-- in Phase 0C. The IF NOT EXISTS makes this idempotent.

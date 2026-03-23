@@ -17,17 +17,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Users,
-  ChevronDown,
   ChevronRight,
   FolderOpen,
   Search,
-  Eye,
   Calendar,
   Loader2,
   UserPlus,
@@ -38,7 +31,6 @@ import {
   CheckCircle2,
   XCircle,
   Send,
-  LayoutGrid,
   Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

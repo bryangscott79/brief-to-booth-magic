@@ -31,6 +31,7 @@ const Team = lazy(() => import("./pages/Team"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Rhino = lazy(() => import("./pages/Rhino"));
 const Suite = lazy(() => import("./pages/Suite"));
+const AgencyAccount = lazy(() => import("./pages/AgencyAccount"));
 
 const queryClient = new QueryClient();
 
@@ -51,91 +52,98 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <CacheClearGuard>
-        <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Suspense fallback={<LazyFallback />}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/projects" element={
-              <ProtectedRoute>
-                <Projects />
-              </ProtectedRoute>
-            } />
-            <Route path="/upload" element={
-              <ProtectedRoute>
-                <Upload />
-              </ProtectedRoute>
-            } />
-            <Route path="/review" element={
-              <ProtectedRoute>
-                <Review />
-              </ProtectedRoute>
-            } />
-            <Route path="/generate" element={
-              <ProtectedRoute>
-                <Generate />
-              </ProtectedRoute>
-            } />
-            <Route path="/spatial" element={
-              <ProtectedRoute>
-                <Spatial />
-              </ProtectedRoute>
-            } />
-            <Route path="/prompts" element={
-              <ProtectedRoute>
-                <Prompts />
-              </ProtectedRoute>
-            } />
-            <Route path="/rhino" element={
-              <ProtectedRoute>
-                <Rhino />
-              </ProtectedRoute>
-            } />
-            <Route path="/files" element={
-              <ProtectedRoute>
-                <Files />
-              </ProtectedRoute>
-            } />
-            <Route path="/export" element={
-              <ProtectedRoute>
-                <Export />
-              </ProtectedRoute>
-            } />
-            <Route path="/knowledge-base" element={
-              <ProtectedRoute>
-                <KnowledgeBase />
-              </ProtectedRoute>
-            } />
-            <Route path="/company" element={
-              <ProtectedRoute>
-                <CompanyProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin" element={
-              <ProtectedRoute>
-                <AdminSettings />
-              </ProtectedRoute>
-            } />
-            <Route path="/team" element={
-              <ProtectedRoute>
-                <Team />
-              </ProtectedRoute>
-            } />
-            <Route path="/suite" element={
-              <ProtectedRoute>
-                <Suite />
-              </ProtectedRoute>
-            } />
-            <Route path="/invite/:token" element={<AcceptInvite />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
+        <PlatformOwnerProvider>
+          <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Suspense fallback={<LazyFallback />}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/projects" element={
+                <ProtectedRoute>
+                  <Projects />
+                </ProtectedRoute>
+              } />
+              <Route path="/upload" element={
+                <ProtectedRoute>
+                  <Upload />
+                </ProtectedRoute>
+              } />
+              <Route path="/review" element={
+                <ProtectedRoute>
+                  <Review />
+                </ProtectedRoute>
+              } />
+              <Route path="/generate" element={
+                <ProtectedRoute>
+                  <Generate />
+                </ProtectedRoute>
+              } />
+              <Route path="/spatial" element={
+                <ProtectedRoute>
+                  <Spatial />
+                </ProtectedRoute>
+              } />
+              <Route path="/prompts" element={
+                <ProtectedRoute>
+                  <Prompts />
+                </ProtectedRoute>
+              } />
+              <Route path="/rhino" element={
+                <ProtectedRoute>
+                  <Rhino />
+                </ProtectedRoute>
+              } />
+              <Route path="/files" element={
+                <ProtectedRoute>
+                  <Files />
+                </ProtectedRoute>
+              } />
+              <Route path="/export" element={
+                <ProtectedRoute>
+                  <Export />
+                </ProtectedRoute>
+              } />
+              <Route path="/knowledge-base" element={
+                <ProtectedRoute>
+                  <KnowledgeBase />
+                </ProtectedRoute>
+              } />
+              <Route path="/company" element={
+                <ProtectedRoute>
+                  <CompanyProfile />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin" element={
+                <ProtectedRoute>
+                  <AdminSettings />
+                </ProtectedRoute>
+              } />
+              <Route path="/account/:userId" element={
+                <ProtectedRoute>
+                  <AgencyAccount />
+                </ProtectedRoute>
+              } />
+              <Route path="/team" element={
+                <ProtectedRoute>
+                  <Team />
+                </ProtectedRoute>
+              } />
+              <Route path="/suite" element={
+                <ProtectedRoute>
+                  <Suite />
+                </ProtectedRoute>
+              } />
+              <Route path="/invite/:token" element={<AcceptInvite />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </TooltipProvider>
+        </PlatformOwnerProvider>
       </CacheClearGuard>
     </AuthProvider>
   </QueryClientProvider>

@@ -37,21 +37,6 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  reviewed: "bg-blue-500/10 text-blue-600",
-  generating: "bg-amber-500/10 text-amber-600",
-  complete: "bg-emerald-500/10 text-emerald-600",
-};
-
-const PROJECT_TYPE_LABEL: Record<string, string> = {
-  trade_show_booth: "Trade Show",
-  live_brand_activation: "Brand Activation",
-  permanent_installation: "Permanent Install",
-  pop_up_retail: "Pop-Up Retail",
-  corporate_environment: "Corporate",
-  museum_exhibit: "Museum",
-};
 
 function getInitials(email: string | null, displayName: string | null) {
   if (displayName) return displayName.slice(0, 2).toUpperCase();

@@ -33,7 +33,6 @@ import {
   UserPlus,
   Shield,
   ShieldOff,
-  ShieldCheck,
   Mail,
   Clock,
   CheckCircle2,

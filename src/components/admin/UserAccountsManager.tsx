@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAdminProfiles, useInviteUser, usePlatformInvites, useManageAdminRole, UserProfile } from "@/hooks/useAdminRole";
+import { useAdminProfiles, useInviteUser, usePlatformInvites, useManageAdminRole, useIsSuperAdmin, UserProfile } from "@/hooks/useAdminRole";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -33,12 +33,14 @@ import {
   UserPlus,
   Shield,
   ShieldOff,
+  ShieldCheck,
   Mail,
   Clock,
   CheckCircle2,
   XCircle,
   Send,
   LayoutGrid,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";

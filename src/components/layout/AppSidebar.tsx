@@ -9,6 +9,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Crown,
+  Mail,
+  LayoutGrid,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,13 +31,19 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
-import { Crown } from "lucide-react";
+import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { cn } from "@/lib/utils";
 
-const workspaceNavItems = [
+// ─── Nav sets ─────────────────────────────────────────────────────────────────
+const agencyNavItems = [
   { path: "/projects", label: "All Projects", icon: FolderOpen },
   { path: "/company",  label: "Company Profile", icon: Building2 },
   { path: "/team",     label: "Team", icon: Users },
+];
+
+const platformOwnerNavItems = [
+  { path: "/admin",    label: "Accounts", icon: LayoutGrid },
+  { path: "/platform-invites", label: "Invites", icon: Mail },
 ];
 
 export function AppSidebar() {
@@ -43,6 +54,7 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const { data: isAdmin } = useIsAdmin();
   const { data: isSuperAdmin } = useIsSuperAdmin();
+  const { previewMode, setPreviewMode } = usePlatformOwner();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -92,19 +104,39 @@ export function AppSidebar() {
     return item;
   };
 
+  // Determine which nav to show
+  // Super admin in normal mode → platform owner nav
+  // Super admin in preview mode → agency nav (with exit button)
+  // Regular admin/member → agency nav
+  const showPlatformNav = isSuperAdmin && !previewMode;
+  const navItems = showPlatformNav ? platformOwnerNavItems : agencyNavItems;
+
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
       {/* Logo / Header */}
       <SidebarHeader className="flex flex-col border-b border-border">
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
-          <Link to="/projects" className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary">
-              <Grid3X3 className="h-5 w-5 text-primary-foreground" />
+          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-3 min-w-0">
+            <div className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+              isSuperAdmin && !previewMode ? "bg-amber-500" : "bg-primary"
+            )}>
+              {isSuperAdmin && !previewMode
+                ? <Crown className="h-5 w-5 text-white" />
+                : <Grid3X3 className="h-5 w-5 text-primary-foreground" />
+              }
             </div>
             {!collapsed && (
-              <span className="text-lg font-semibold tracking-tight truncate">
-                BriefEngine
-              </span>
+              <div className="min-w-0">
+                <span className="text-lg font-semibold tracking-tight truncate block">
+                  BriefEngine
+                </span>
+                {isSuperAdmin && !previewMode && (
+                  <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">
+                    Platform Admin
+                  </span>
+                )}
+              </div>
             )}
           </Link>
           {!collapsed && (
@@ -131,17 +163,59 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="py-3 gap-0">
+        {/* Preview mode banner */}
+        {previewMode && isSuperAdmin && !collapsed && (
+          <div className="mx-2 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Eye className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                <span className="text-[11px] font-medium text-amber-700">Preview Mode</span>
+              </div>
+              <button
+                onClick={() => { setPreviewMode(false); navigate("/admin"); }}
+                className="text-[10px] text-amber-600 hover:text-amber-800 font-medium flex items-center gap-0.5"
+              >
+                <EyeOff className="h-3 w-3" />
+                Exit
+              </button>
+            </div>
+            <p className="text-[10px] text-amber-600/70 mt-0.5">Read-only agency view</p>
+          </div>
+        )}
+
+        {/* Collapsed preview badge */}
+        {previewMode && isSuperAdmin && collapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => { setPreviewMode(false); navigate("/admin"); }}
+                className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Exit Preview Mode</TooltipContent>
+          </Tooltip>
+        )}
+
         <SidebarGroup className="px-2 pb-4">
+          {/* Section label for platform owner */}
+          {showPlatformNav && !collapsed && (
+            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+              Platform
+            </p>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {workspaceNavItems.map((item) => (
+              {navItems.map((item) => (
                 <NavItem key={item.path} {...item} />
               ))}
-              {isAdmin && (
+              {/* Agency admins still get admin settings */}
+              {isAdmin && !isSuperAdmin && (
                 <NavItem
                   path="/admin"
-                  label={isSuperAdmin ? "Platform Admin" : "Admin Settings"}
-                  icon={isSuperAdmin ? Crown : Shield}
+                  label="Admin Settings"
+                  icon={Shield}
                 />
               )}
             </SidebarMenu>

@@ -141,9 +141,6 @@ export default function AgencyAccountPage() {
 
   const { profile, projects, teamMembers } = account;
   const displayName = profile.display_name || profile.email || `User …${profile.user_id.slice(-6)}`;
-  const lastActive = projects[0]?.updated_at
-    ? formatDistanceToNow(new Date(projects[0].updated_at), { addSuffix: true })
-    : "No activity";
 
   const roleTier = profile.is_super_admin
     ? { label: "Platform Owner", icon: Crown, color: "text-amber-600 bg-amber-500/10" }

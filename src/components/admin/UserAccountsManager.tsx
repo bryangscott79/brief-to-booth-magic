@@ -17,17 +17,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Users,
-  ChevronDown,
   ChevronRight,
   FolderOpen,
   Search,
-  Eye,
   Calendar,
   Loader2,
   UserPlus,
@@ -38,28 +31,12 @@ import {
   CheckCircle2,
   XCircle,
   Send,
-  LayoutGrid,
   Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  reviewed: "bg-blue-500/10 text-blue-600",
-  generating: "bg-amber-500/10 text-amber-600",
-  complete: "bg-emerald-500/10 text-emerald-600",
-};
-
-const PROJECT_TYPE_LABEL: Record<string, string> = {
-  trade_show_booth: "Trade Show",
-  live_brand_activation: "Brand Activation",
-  permanent_installation: "Permanent Install",
-  pop_up_retail: "Pop-Up Retail",
-  corporate_environment: "Corporate",
-  museum_exhibit: "Museum",
-};
 
 function getInitials(email: string | null, displayName: string | null) {
   if (displayName) return displayName.slice(0, 2).toUpperCase();
@@ -209,13 +186,13 @@ function UserRow({
   currentUserId: string | undefined;
   currentUserIsSuperAdmin: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const manageRole = useManageAdminRole();
 
   const isSelf = profile.user_id === currentUserId;
 
-  const toggleAdmin = async () => {
+  const toggleAdmin = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       if (profile.is_admin) {
         await manageRole.mutateAsync({ target_user_id: profile.user_id, action: "revoke_admin" });
@@ -229,7 +206,6 @@ function UserRow({
     }
   };
 
-  // Avatar color: gold for super_admin, primary for admin, muted for member
   const avatarClass = profile.is_super_admin
     ? "bg-amber-500 text-white"
     : profile.is_admin
@@ -237,138 +213,74 @@ function UserRow({
     : "bg-muted text-muted-foreground";
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <Card className="cursor-pointer hover:border-primary/40 transition-colors group">
-          <CardHeader className="py-3 px-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                {/* Avatar */}
-                <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarClass)}>
-                  {profile.is_super_admin
-                    ? <Crown className="h-4 w-4" />
-                    : getInitials(profile.email, profile.display_name)}
-                </div>
+    <Card
+      className="cursor-pointer hover:border-primary/40 transition-colors group"
+      onClick={() => navigate(`/account/${profile.user_id}`)}
+    >
+      <CardHeader className="py-3 px-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Avatar */}
+            <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarClass)}>
+              {profile.is_super_admin
+                ? <Crown className="h-4 w-4" />
+                : getInitials(profile.email, profile.display_name)}
+            </div>
 
-                {/* Identity */}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold truncate">
-                      {getDisplayLabel(profile)}
-                      {isSelf && (
-                        <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(you)</span>
-                      )}
-                    </p>
-                    <RoleBadge profile={profile} />
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <FolderOpen className="h-3 w-3" />
-                      {profile.projects?.length ?? 0} project{(profile.projects?.length ?? 0) !== 1 ? "s" : ""}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Joined {format(new Date(profile.created_at), "MMM yyyy")}
-                    </span>
-                  </div>
-                </div>
+            {/* Identity */}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold truncate">
+                  {getDisplayLabel(profile)}
+                  {isSelf && (
+                    <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(you)</span>
+                  )}
+                </p>
+                <RoleBadge profile={profile} />
               </div>
-
-              {/* Actions — only super_admin can manage admin roles; admins can't touch super_admins */}
-              <div className="flex items-center gap-2 shrink-0">
-                {!isSelf && currentUserIsSuperAdmin && !profile.is_super_admin && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className={cn(
-                      "h-7 text-xs gap-1 opacity-0 group-hover:opacity-100 transition-opacity",
-                      profile.is_admin
-                        ? "text-destructive hover:text-destructive hover:bg-destructive/10"
-                        : "text-muted-foreground hover:text-primary"
-                    )}
-                    onClick={(e) => { e.stopPropagation(); toggleAdmin(); }}
-                    disabled={manageRole.isPending}
-                  >
-                    {manageRole.isPending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : profile.is_admin ? (
-                      <ShieldOff className="h-3 w-3" />
-                    ) : (
-                      <Shield className="h-3 w-3" />
-                    )}
-                    {profile.is_admin ? "Remove Admin" : "Make Agency Admin"}
-                  </Button>
-                )}
-                {open ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
+              <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <FolderOpen className="h-3 w-3" />
+                  {profile.projects?.length ?? 0} project{(profile.projects?.length ?? 0) !== 1 ? "s" : ""}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  Joined {format(new Date(profile.created_at), "MMM yyyy")}
+                </span>
               </div>
             </div>
-          </CardHeader>
-        </Card>
-      </CollapsibleTrigger>
+          </div>
 
-      <CollapsibleContent>
-        <div className="ml-4 pl-4 border-l-2 border-border/60 space-y-2 mt-1 mb-3">
-          {!profile.projects?.length ? (
-            <p className="text-xs text-muted-foreground py-4 text-center">No projects yet</p>
-          ) : (
-            profile.projects.map((project) => (
-              <Card key={project.id} className="bg-muted/30 border-border/50">
-                <CardContent className="py-3 px-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{project.name}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span
-                          className={cn(
-                            "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                            STATUS_COLORS[project.status] ?? "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {project.status}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
-                          {PROJECT_TYPE_LABEL[project.project_type] ?? project.project_type.replace(/_/g, " ")}
-                        </span>
-                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {format(new Date(project.updated_at), "MMM d, yyyy")}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => navigate(`/review?project=${project.id}`)}
-                        title="View brief"
-                      >
-                        <Eye className="h-3 w-3" />
-                        Brief
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => navigate(`/generate?project=${project.id}`)}
-                        title="Open project"
-                      >
-                        <LayoutGrid className="h-3 w-3" />
-                        Open
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
+          {/* Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {!isSelf && currentUserIsSuperAdmin && !profile.is_super_admin && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  "h-7 text-xs gap-1 opacity-0 group-hover:opacity-100 transition-opacity",
+                  profile.is_admin
+                    ? "text-destructive hover:text-destructive hover:bg-destructive/10"
+                    : "text-muted-foreground hover:text-primary"
+                )}
+                onClick={toggleAdmin}
+                disabled={manageRole.isPending}
+              >
+                {manageRole.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : profile.is_admin ? (
+                  <ShieldOff className="h-3 w-3" />
+                ) : (
+                  <Shield className="h-3 w-3" />
+                )}
+                {profile.is_admin ? "Remove Admin" : "Make Agency Admin"}
+              </Button>
+            )}
+            <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </CardHeader>
+    </Card>
   );
 }
 

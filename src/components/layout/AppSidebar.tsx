@@ -42,6 +42,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { data: isAdmin } = useIsAdmin();
+  const { data: isSuperAdmin } = useIsSuperAdmin();
 
   const isActive = (path: string) => location.pathname === path;
 

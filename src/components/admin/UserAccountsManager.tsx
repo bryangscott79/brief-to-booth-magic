@@ -464,6 +464,7 @@ function InvitesTab({ onInvite }: { onInvite: () => void }) {
 export function UserAccountsManager() {
   const { data: profiles, isLoading } = useAdminProfiles();
   const { user } = useAuth();
+  const { data: isSuperAdmin } = useIsSuperAdmin();
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
 
@@ -479,7 +480,8 @@ export function UserAccountsManager() {
   });
 
   const totalProjects = (profiles ?? []).reduce((s, p) => s + (p.projects?.length ?? 0), 0);
-  const adminCount = (profiles ?? []).filter((p) => p.is_admin).length;
+  const adminCount = (profiles ?? []).filter((p) => p.is_admin && !p.is_super_admin).length;
+  const superAdminCount = (profiles ?? []).filter((p) => p.is_super_admin).length;
 
   if (isLoading) {
     return (
@@ -491,7 +493,11 @@ export function UserAccountsManager() {
 
   return (
     <>
-      <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <InviteDialog
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        isSuperAdmin={!!isSuperAdmin}
+      />
 
       <Tabs defaultValue="users">
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
@@ -518,7 +524,7 @@ export function UserAccountsManager() {
         {/* ── Users Tab ── */}
         <TabsContent value="users" className="space-y-4">
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <Card>
               <CardContent className="pt-5 pb-4">
                 <p className="text-2xl font-bold">{profiles?.length ?? 0}</p>
@@ -534,7 +540,13 @@ export function UserAccountsManager() {
             <Card>
               <CardContent className="pt-5 pb-4">
                 <p className="text-2xl font-bold">{adminCount}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Admin users</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Agency Admins</p>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-500/20 bg-amber-500/5">
+              <CardContent className="pt-5 pb-4">
+                <p className="text-2xl font-bold text-amber-600">{superAdminCount}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Platform Owners</p>
               </CardContent>
             </Card>
           </div>
@@ -565,15 +577,24 @@ export function UserAccountsManager() {
             </div>
           )}
 
-          {/* User list */}
+          {/* User list — platform owners first, then agency admins, then members */}
           <div className="space-y-2">
-            {filtered.map((profile) => (
-              <UserRow
-                key={profile.user_id}
-                profile={profile}
-                currentUserId={user?.id}
-              />
-            ))}
+            {[...filtered]
+              .sort((a, b) => {
+                if (a.is_super_admin && !b.is_super_admin) return -1;
+                if (!a.is_super_admin && b.is_super_admin) return 1;
+                if (a.is_admin && !b.is_admin) return -1;
+                if (!a.is_admin && b.is_admin) return 1;
+                return 0;
+              })
+              .map((profile) => (
+                <UserRow
+                  key={profile.user_id}
+                  profile={profile}
+                  currentUserId={user?.id}
+                  currentUserIsSuperAdmin={!!isSuperAdmin}
+                />
+              ))}
           </div>
         </TabsContent>
 

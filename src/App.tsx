@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { useClearCacheOnUserChange } from "@/hooks/useClearCacheOnUserChange";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { PlatformOwnerProvider } from "@/contexts/PlatformOwnerContext";
 import { Loader2 } from "lucide-react";
 
 // Eagerly loaded (landing + auth — needed immediately)

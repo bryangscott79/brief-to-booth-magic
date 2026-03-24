@@ -103,6 +103,8 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { setActiveStep } = useProjectStore();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isSuiteMode = searchParams.get("suite") === "true";
   const { toast } = useToast();
   const { data: clients = [] } = useClients();
   const upsertClient = useUpsertClient();

@@ -1673,7 +1673,7 @@ function addPptxImageContent(slide: any, content: any) {
 
 function addPptxMixedContent(slide: any, content: any, brandColor: string) {
   // ── Left column: narrative/description ──
-  const mainText = content.narrative || content.conceptDescription || content.philosophy || content.hospitalityDetails || '';
+  const mainText = safeStr(content.narrative || content.conceptDescription || content.philosophy || content.hospitalityDetails || '');
   if (mainText) {
     slide.addText(mainText.substring(0, 700), { x: 0.5, y: 1.2, w: 4.5, h: 3.8, fontSize: 11, color: '333333', valign: 'top' });
   }

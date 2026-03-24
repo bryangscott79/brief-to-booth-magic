@@ -551,6 +551,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          activation_type: string | null
           adjacent_activations: Json | null
           big_idea: Json | null
           brief_file_name: string | null
@@ -561,22 +562,29 @@ export type Database = {
           created_at: string
           digital_storytelling: Json | null
           experience_framework: Json | null
+          footprint_sqft: number | null
           hero_prompt: string | null
           hero_style_confirmed: boolean | null
           human_connection: Json | null
           id: string
+          inherits_brand: boolean
+          inherits_brief: boolean
           interactive_mechanics: Json | null
           is_suite: boolean
           name: string
+          parent_id: string | null
           parsed_brief: Json | null
           project_type: string
           render_prompts: Json | null
+          scale_classification: string | null
           spatial_strategy: Json | null
           status: string
+          suite_notes: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          activation_type?: string | null
           adjacent_activations?: Json | null
           big_idea?: Json | null
           brief_file_name?: string | null
@@ -587,22 +595,29 @@ export type Database = {
           created_at?: string
           digital_storytelling?: Json | null
           experience_framework?: Json | null
+          footprint_sqft?: number | null
           hero_prompt?: string | null
           hero_style_confirmed?: boolean | null
           human_connection?: Json | null
           id?: string
+          inherits_brand?: boolean
+          inherits_brief?: boolean
           interactive_mechanics?: Json | null
           is_suite?: boolean
           name: string
+          parent_id?: string | null
           parsed_brief?: Json | null
           project_type?: string
           render_prompts?: Json | null
+          scale_classification?: string | null
           spatial_strategy?: Json | null
           status?: string
+          suite_notes?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          activation_type?: string | null
           adjacent_activations?: Json | null
           big_idea?: Json | null
           brief_file_name?: string | null
@@ -613,18 +628,24 @@ export type Database = {
           created_at?: string
           digital_storytelling?: Json | null
           experience_framework?: Json | null
+          footprint_sqft?: number | null
           hero_prompt?: string | null
           hero_style_confirmed?: boolean | null
           human_connection?: Json | null
           id?: string
+          inherits_brand?: boolean
+          inherits_brief?: boolean
           interactive_mechanics?: Json | null
           is_suite?: boolean
           name?: string
+          parent_id?: string | null
           parsed_brief?: Json | null
           project_type?: string
           render_prompts?: Json | null
+          scale_classification?: string | null
           spatial_strategy?: Json | null
           status?: string
+          suite_notes?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -634,6 +655,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

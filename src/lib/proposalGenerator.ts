@@ -1847,7 +1847,7 @@ function addPptxProjectBriefContent(slide: any, content: any, brandColor: string
   const belowY = Math.max(leftY, rightY) + 0.1;
   if (content.brandDirection) {
     slide.addText('Brand Direction', { x: 0.5, y: belowY, w: 9, h: 0.25, fontSize: 11, bold: true, color: brandColor });
-    slide.addText(content.brandDirection.substring(0, 300), { x: 0.5, y: belowY + 0.27, w: 9, h: 0.45, fontSize: 9, color: '444444' });
+    slide.addText(safeStr(content.brandDirection, 300), { x: 0.5, y: belowY + 0.27, w: 9, h: 0.45, fontSize: 9, color: '444444' });
   }
 }
 

@@ -58,6 +58,20 @@ export interface ProposalSection {
 }
 
 // ============================================
+// SAFE STRING HELPER
+// ============================================
+
+/** Safely coerce any value to a string, truncated to maxLen chars */
+function safeStr(val: unknown, maxLen = 99999): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val.substring(0, maxLen);
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val).substring(0, maxLen);
+  // Arrays → join; Objects → JSON stringify
+  if (Array.isArray(val)) return val.map(v => safeStr(v)).join(', ').substring(0, maxLen);
+  try { return JSON.stringify(val).substring(0, maxLen); } catch { return ''; }
+}
+
+// ============================================
 // PROPOSAL STRUCTURE BUILDER
 // ============================================
 
@@ -159,10 +173,10 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       title: 'Executive Summary',
       type: 'text',
       content: {
-        headline: bigIdea.headline,
-        subheadline: bigIdea.subheadline,
-        narrative: bigIdea.narrative?.substring(0, 800) + '...',
-        strategicPosition: bigIdea.strategicPosition,
+        headline: safeStr(bigIdea.headline),
+        subheadline: safeStr(bigIdea.subheadline),
+        narrative: safeStr(bigIdea.narrative, 800),
+        strategicPosition: safeStr(bigIdea.strategicPosition),
       },
     });
   }
@@ -1609,7 +1623,7 @@ function addPptxTextContent(slide: any, content: any, brandColor = '333333') {
     y += 0.45;
   }
   if (content.narrative) {
-    slide.addText(content.narrative.substring(0, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.narrative, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top' });
     y += 2.1;
   }
   // Team credits
@@ -1659,7 +1673,7 @@ function addPptxImageContent(slide: any, content: any) {
 
 function addPptxMixedContent(slide: any, content: any, brandColor: string) {
   // ── Left column: narrative/description ──
-  const mainText = content.narrative || content.conceptDescription || content.philosophy || content.hospitalityDetails || '';
+  const mainText = safeStr(content.narrative || content.conceptDescription || content.philosophy || content.hospitalityDetails || '');
   if (mainText) {
     slide.addText(mainText.substring(0, 700), { x: 0.5, y: 1.2, w: 4.5, h: 3.8, fontSize: 11, color: '333333', valign: 'top' });
   }
@@ -1676,7 +1690,7 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
   if (content.differentiation) {
     slide.addText('Differentiation', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
     y += 0.28;
-    slide.addText(content.differentiation.substring(0, 200), { x: rx, y, w: rw, h: 0.7, fontSize: 10, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.differentiation, 200), { x: rx, y, w: rw, h: 0.7, fontSize: 10, color: '333333', valign: 'top' });
     y += 0.8;
   }
 
@@ -1703,7 +1717,7 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
     slide.addText(`${content.hero.name}`, { x: rx, y, w: rw, h: 0.22, fontSize: 11, bold: true, color: '1a1a1a' });
     y += 0.25;
     if (content.hero.concept) {
-      slide.addText(content.hero.concept.substring(0, 180), { x: rx, y, w: rw, h: 0.55, fontSize: 9, color: '444444', valign: 'top' });
+      slide.addText(safeStr(content.hero.concept, 180), { x: rx, y, w: rw, h: 0.55, fontSize: 9, color: '444444', valign: 'top' });
       y += 0.65;
     }
   }
@@ -1734,7 +1748,7 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
   if (content.competitivePositioning) {
     slide.addText('Competitive Positioning', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
     y += 0.28;
-    slide.addText(content.competitivePositioning.substring(0, 200), { x: rx, y, w: rw, h: 0.6, fontSize: 10, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.competitivePositioning, 200), { x: rx, y, w: rw, h: 0.6, fontSize: 10, color: '333333', valign: 'top' });
   }
 }
 
@@ -1772,7 +1786,7 @@ function addPptxBrandIntelContent(slide: any, content: any, brandColor: string) 
     // Entries
     const entries = categories[catKey] || [];
     entries.slice(0, 3).forEach((entry: any, j: number) => {
-      slide.addText(`${entry.title}: ${entry.content.substring(0, 120)}`, {
+      slide.addText(`${safeStr(entry.title)}: ${safeStr(entry.content, 120)}`, {
         x, y: catY + 0.35 + j * 0.4, w: colW, h: 0.35,
         fontSize: 9, color: '333333', fontFace: 'Arial', valign: 'top',
       });
@@ -1833,7 +1847,7 @@ function addPptxProjectBriefContent(slide: any, content: any, brandColor: string
   const belowY = Math.max(leftY, rightY) + 0.1;
   if (content.brandDirection) {
     slide.addText('Brand Direction', { x: 0.5, y: belowY, w: 9, h: 0.25, fontSize: 11, bold: true, color: brandColor });
-    slide.addText(content.brandDirection.substring(0, 300), { x: 0.5, y: belowY + 0.27, w: 9, h: 0.45, fontSize: 9, color: '444444' });
+    slide.addText(safeStr(content.brandDirection, 300), { x: 0.5, y: belowY + 0.27, w: 9, h: 0.45, fontSize: 9, color: '444444' });
   }
 }
 

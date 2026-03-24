@@ -1748,7 +1748,7 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
   if (content.competitivePositioning) {
     slide.addText('Competitive Positioning', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
     y += 0.28;
-    slide.addText(content.competitivePositioning.substring(0, 200), { x: rx, y, w: rw, h: 0.6, fontSize: 10, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.competitivePositioning, 200), { x: rx, y, w: rw, h: 0.6, fontSize: 10, color: '333333', valign: 'top' });
   }
 }
 

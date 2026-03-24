@@ -229,8 +229,10 @@ export default function ProjectsPage() {
     setIsSuiteCreate(false);
 
     if (isSuiteCreate) {
-      // Navigate to suite view for the new parent project
-      navigate(`/suite?project=${result.id}`);
+      // Navigate to upload first so the suite parent project gets a brief,
+      // then the upload page will redirect to /suite after completion.
+      setActiveStep("upload");
+      navigate(`/upload?project=${result.id}&suite=true`);
     } else {
       setActiveStep("upload");
       navigate(`/upload?project=${result.id}`);

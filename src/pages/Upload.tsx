@@ -1,10 +1,13 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BriefUpload } from "@/components/brief/BriefUpload";
 import { useProjectSync } from "@/hooks/useProjectSync";
+import { useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 export default function UploadPage() {
   const { projectId, isLoading } = useProjectSync();
+  const [searchParams] = useSearchParams();
+  const isSuiteMode = searchParams.get("suite") === "true";
 
   if (isLoading) {
     return (
@@ -20,9 +23,13 @@ export default function UploadPage() {
     <AppLayout>
       <div className="container py-12">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">New Project</h1>
+          <h1 className="text-3xl font-bold mb-2">
+            {isSuiteMode ? "Upload Suite Brief" : "New Project"}
+          </h1>
           <p className="text-muted-foreground">
-            Upload your brief and let AI extract the details — then confirm and continue
+            {isSuiteMode
+              ? "Upload the master brief for this suite — activations will inherit this context"
+              : "Upload your brief and let AI extract the details — then confirm and continue"}
           </p>
         </div>
         <BriefUpload projectId={projectId} />

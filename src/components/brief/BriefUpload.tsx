@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectStore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -103,6 +103,8 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
   const { setActiveStep } = useProjectStore();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isSuiteMode = searchParams.get("suite") === "true";
   const { toast } = useToast();
   const { data: clients = [] } = useClients();
   const upsertClient = useUpsertClient();
@@ -327,7 +329,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         renderPrompts: null,
       });
       setActiveStep("review");
-      navigate(`/review?project=${dbProjectId}`);
+      navigate(isSuiteMode ? `/suite?project=${dbProjectId}` : `/review?project=${dbProjectId}`);
     } catch (error) {
       toast({ title: "Error saving project", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
     } finally {

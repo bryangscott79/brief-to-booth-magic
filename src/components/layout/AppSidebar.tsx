@@ -221,6 +221,33 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Platform owner: toggle to preview agency view */}
+        {isSuperAdmin && !previewMode && (
+          <div className="px-2 mt-auto mb-2">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => { setPreviewMode(true); navigate("/projects"); }}
+                    className="flex h-8 w-8 mx-auto items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Preview as Agency Admin</TooltipContent>
+              </Tooltip>
+            ) : (
+              <button
+                onClick={() => { setPreviewMode(true); navigate("/projects"); }}
+                className="w-full flex items-center gap-2.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-border/80 hover:bg-muted/40 transition-colors"
+              >
+                <Eye className="h-3.5 w-3.5 shrink-0" />
+                <span>Preview as Agency Admin</span>
+              </button>
+            )}
+          </div>
+        )}
       </SidebarContent>
 
       {/* Footer: user info + sign out */}

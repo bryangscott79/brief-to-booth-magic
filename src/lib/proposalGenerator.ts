@@ -1717,7 +1717,7 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
     slide.addText(`${content.hero.name}`, { x: rx, y, w: rw, h: 0.22, fontSize: 11, bold: true, color: '1a1a1a' });
     y += 0.25;
     if (content.hero.concept) {
-      slide.addText(content.hero.concept.substring(0, 180), { x: rx, y, w: rw, h: 0.55, fontSize: 9, color: '444444', valign: 'top' });
+      slide.addText(safeStr(content.hero.concept, 180), { x: rx, y, w: rw, h: 0.55, fontSize: 9, color: '444444', valign: 'top' });
       y += 0.65;
     }
   }

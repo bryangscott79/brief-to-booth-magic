@@ -173,10 +173,10 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
       title: 'Executive Summary',
       type: 'text',
       content: {
-        headline: bigIdea.headline,
-        subheadline: bigIdea.subheadline,
-        narrative: bigIdea.narrative?.substring(0, 800) + '...',
-        strategicPosition: bigIdea.strategicPosition,
+        headline: safeStr(bigIdea.headline),
+        subheadline: safeStr(bigIdea.subheadline),
+        narrative: safeStr(bigIdea.narrative, 800),
+        strategicPosition: safeStr(bigIdea.strategicPosition),
       },
     });
   }

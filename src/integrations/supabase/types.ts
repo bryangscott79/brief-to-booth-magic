@@ -566,6 +566,7 @@ export type Database = {
           human_connection: Json | null
           id: string
           interactive_mechanics: Json | null
+          is_suite: boolean
           name: string
           parsed_brief: Json | null
           project_type: string
@@ -591,6 +592,7 @@ export type Database = {
           human_connection?: Json | null
           id?: string
           interactive_mechanics?: Json | null
+          is_suite?: boolean
           name: string
           parsed_brief?: Json | null
           project_type?: string
@@ -616,6 +618,7 @@ export type Database = {
           human_connection?: Json | null
           id?: string
           interactive_mechanics?: Json | null
+          is_suite?: boolean
           name?: string
           parsed_brief?: Json | null
           project_type?: string

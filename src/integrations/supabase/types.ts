@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      activation_types: {
+        Row: {
+          category: string
+          created_at: string
+          default_scale: string | null
+          default_sqft: number | null
+          description: string | null
+          element_emphasis: Json | null
+          icon: string | null
+          id: string
+          is_builtin: boolean
+          label: string
+          parent_type_affinity: string[]
+          render_context_override: string | null
+          slug: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          default_scale?: string | null
+          default_sqft?: number | null
+          description?: string | null
+          element_emphasis?: Json | null
+          icon?: string | null
+          id?: string
+          is_builtin?: boolean
+          label: string
+          parent_type_affinity?: string[]
+          render_context_override?: string | null
+          slug: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          default_scale?: string | null
+          default_sqft?: number | null
+          description?: string | null
+          element_emphasis?: Json | null
+          icon?: string | null
+          id?: string
+          is_builtin?: boolean
+          label?: string
+          parent_type_affinity?: string[]
+          render_context_override?: string | null
+          slug?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       brand_intelligence: {
         Row: {
           approved_at: string | null

@@ -58,6 +58,20 @@ export interface ProposalSection {
 }
 
 // ============================================
+// SAFE STRING HELPER
+// ============================================
+
+/** Safely coerce any value to a string, truncated to maxLen chars */
+function safeStr(val: unknown, maxLen = 99999): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val.substring(0, maxLen);
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val).substring(0, maxLen);
+  // Arrays → join; Objects → JSON stringify
+  if (Array.isArray(val)) return val.map(v => safeStr(v)).join(', ').substring(0, maxLen);
+  try { return JSON.stringify(val).substring(0, maxLen); } catch { return ''; }
+}
+
+// ============================================
 // PROPOSAL STRUCTURE BUILDER
 // ============================================
 

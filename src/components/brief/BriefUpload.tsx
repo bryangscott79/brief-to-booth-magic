@@ -329,7 +329,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         renderPrompts: null,
       });
       setActiveStep("review");
-      navigate(`/review?project=${dbProjectId}`);
+      navigate(isSuiteMode ? `/suite?project=${dbProjectId}` : `/review?project=${dbProjectId}`);
     } catch (error) {
       toast({ title: "Error saving project", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
     } finally {

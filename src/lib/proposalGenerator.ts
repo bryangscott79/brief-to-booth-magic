@@ -1690,7 +1690,7 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
   if (content.differentiation) {
     slide.addText('Differentiation', { x: rx, y, w: rw, h: 0.25, fontSize: 12, bold: true, color: brandColor });
     y += 0.28;
-    slide.addText(content.differentiation.substring(0, 200), { x: rx, y, w: rw, h: 0.7, fontSize: 10, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.differentiation, 200), { x: rx, y, w: rw, h: 0.7, fontSize: 10, color: '333333', valign: 'top' });
     y += 0.8;
   }
 

@@ -1623,7 +1623,7 @@ function addPptxTextContent(slide: any, content: any, brandColor = '333333') {
     y += 0.45;
   }
   if (content.narrative) {
-    slide.addText(content.narrative.substring(0, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.narrative, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top' });
     y += 2.1;
   }
   // Team credits

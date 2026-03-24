@@ -224,6 +224,13 @@ export default function ProjectsPage() {
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
     const result = await createProject.mutateAsync(newProjectName);
+
+    // If suite, stamp the is_suite flag on the project immediately
+    if (isSuiteCreate) {
+      const { supabase } = await import("@/integrations/supabase/client");
+      await supabase.from("projects").update({ is_suite: true } as any).eq("id", result.id);
+    }
+
     setNewProjectName("");
     setIsDialogOpen(false);
     setIsSuiteCreate(false);
@@ -240,12 +247,11 @@ export default function ProjectsPage() {
   };
 
   const handleOpenProject = (project: DBProject) => {
-    // If this project has children, go to suite view
-    if (childrenByParent.has(project.id)) {
+    // Suite projects (has children OR flagged as suite) always go to /suite
+    if (childrenByParent.has(project.id) || (project as any).is_suite) {
       navigate(`/suite?project=${project.id}`);
       return;
     }
-    // If admin is viewing someone else's project, just go to review/upload
     const routes: Record<string, string> = {
       draft: `/upload?project=${project.id}`,
       parsing: `/upload?project=${project.id}`,

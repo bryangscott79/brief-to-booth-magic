@@ -1786,7 +1786,7 @@ function addPptxBrandIntelContent(slide: any, content: any, brandColor: string) 
     // Entries
     const entries = categories[catKey] || [];
     entries.slice(0, 3).forEach((entry: any, j: number) => {
-      slide.addText(`${entry.title}: ${entry.content.substring(0, 120)}`, {
+      slide.addText(`${safeStr(entry.title)}: ${safeStr(entry.content, 120)}`, {
         x, y: catY + 0.35 + j * 0.4, w: colW, h: 0.35,
         fontSize: 9, color: '333333', fontFace: 'Arial', valign: 'top',
       });

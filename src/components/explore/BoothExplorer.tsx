@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Loader2, Compass, Plus, RotateCcw, Maximize2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Loader2, Compass, RotateCcw, Maximize2, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +14,9 @@ export interface PanoramaSpace {
   id: string;
   name: string;
   panoramaUrl: string | null;
+  /** Existing rendered image URL for this space (used as reference + fallback preview) */
+  referenceImageUrl: string | null;
   isGenerating: boolean;
-  /** Zones this space connects to (hotspots) */
   connections: Array<{ targetId: string; label: string; yaw: number; pitch: number }>;
 }
 
@@ -28,6 +29,7 @@ export function BoothExplorer() {
   const [spaces, setSpaces] = useState<PanoramaSpace[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   // Get hero image as reference for consistency
   const heroImage = useMemo(
@@ -35,53 +37,91 @@ export function BoothExplorer() {
     [images]
   );
 
-  // Build initial spaces from spatial zones if available
+  // Detect zones from rendered interior images (angle names ending in "Interior")
+  const detectedZones = useMemo(() => {
+    if (!images) return [];
+    const interiorImages = images.filter(
+      (i) => i.is_current && i.angle_name.endsWith("Interior")
+    );
+    return interiorImages.map((img) => ({
+      id: img.angle_id,
+      name: img.angle_name.replace(" Interior", "").replace(/ Interior$/, ""),
+      imageUrl: img.public_url,
+    }));
+  }, [images]);
+
+  // Also check spatial strategy zones from element data
   const spatialZones = useMemo(() => {
-    const configs =
-      (project?.elements?.spatialStrategy as { configs?: Array<{ zones?: Array<{ id: string; name: string; percentage: number }> }> })
-        ?.configs;
-    return configs?.[0]?.zones ?? [];
+    const el = project?.elements?.spatialStrategy;
+    if (!el) return [];
+    const data = el as { configs?: Array<{ zones?: Array<{ id: string; name: string; percentage: number }> }> };
+    return data?.configs?.[0]?.zones ?? [];
   }, [project]);
 
-  // Initialize spaces from zones if empty
-  const initializeSpaces = () => {
+  // Auto-initialize spaces when images load and we haven't initialized yet
+  useEffect(() => {
+    if (initialized || !images || images.length === 0) return;
+
     const newSpaces: PanoramaSpace[] = [
       {
         id: "main-interior",
         name: "Main Booth Interior",
         panoramaUrl: null,
+        referenceImageUrl: heroImage?.public_url ?? null,
         isGenerating: false,
         connections: [],
       },
     ];
 
-    // Add a space for each spatial zone
-    for (const zone of spatialZones) {
-      const connections: PanoramaSpace["connections"] = [
-        { targetId: "main-interior", label: "Back to Main", yaw: 180, pitch: -10 },
-      ];
+    // Merge zones from rendered interiors and spatial strategy
+    const zoneMap = new Map<string, { name: string; imageUrl: string | null }>();
+
+    // From rendered interior images (higher priority — has actual images)
+    for (const z of detectedZones) {
+      zoneMap.set(z.id, { name: z.name, imageUrl: z.imageUrl });
+    }
+
+    // From spatial strategy (fill in any missing)
+    for (const z of spatialZones) {
+      const key = z.name.toLowerCase().replace(/\s+/g, "_") + "_interior";
+      if (!zoneMap.has(key)) {
+        zoneMap.set(key, { name: z.name, imageUrl: null });
+      }
+    }
+
+    const zoneEntries = Array.from(zoneMap.entries());
+
+    for (let idx = 0; idx < zoneEntries.length; idx++) {
+      const [zoneId, zone] = zoneEntries[idx];
       newSpaces.push({
-        id: `zone-${zone.id}`,
+        id: `zone-${zoneId}`,
         name: zone.name,
         panoramaUrl: null,
+        referenceImageUrl: zone.imageUrl,
         isGenerating: false,
-        connections,
+        connections: [
+          { targetId: "main-interior", label: "Back to Main", yaw: 180, pitch: -10 },
+        ],
       });
 
       // Add hotspot from main to this zone
-      const idx = spatialZones.indexOf(zone);
-      const yaw = -90 + (180 / Math.max(spatialZones.length - 1, 1)) * idx;
+      const yaw = zoneEntries.length === 1
+        ? 0
+        : -90 + (180 / Math.max(zoneEntries.length - 1, 1)) * idx;
       newSpaces[0].connections.push({
-        targetId: `zone-${zone.id}`,
+        targetId: `zone-${zoneId}`,
         label: zone.name,
         yaw,
         pitch: -5,
       });
     }
 
-    setSpaces(newSpaces);
-    setActiveSpaceId("main-interior");
-  };
+    if (newSpaces.length > 0) {
+      setSpaces(newSpaces);
+      setActiveSpaceId("main-interior");
+      setInitialized(true);
+    }
+  }, [images, detectedZones, spatialZones, heroImage, initialized]);
 
   // Generate a single panorama
   const generatePanorama = async (spaceId: string) => {
@@ -99,13 +139,16 @@ export function BoothExplorer() {
 
       const prompt = buildPromptForSpace(space, project);
 
+      // Use the zone's own rendered image as reference if available, else hero
+      const referenceImageUrl = space.referenceImageUrl ?? heroImage?.public_url ?? undefined;
+
       const { data, error } = await supabase.functions.invoke(
         "generate-panorama",
         {
           body: {
             spaceName: space.name,
             prompt,
-            referenceImageUrl: heroImage?.public_url ?? undefined,
+            referenceImageUrl,
             boothSize,
             projectType: project.projectType ?? "trade_show_booth",
             consistencyTokens: consistencyTokens ?? undefined,
@@ -171,8 +214,20 @@ export function BoothExplorer() {
     setActiveSpaceId(hotspot.targetPanoramaId);
   };
 
-  // No spaces set up yet
-  if (spaces.length === 0) {
+  // Loading state — waiting for project images
+  if (!images) {
+    return (
+      <Card>
+        <CardContent className="py-12 flex flex-col items-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Loading project data...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // No rendered images yet
+  if (images.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -182,23 +237,23 @@ export function BoothExplorer() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            Generate immersive 360° panoramic views of your booth spaces. Walk
-            through the main interior and navigate between zones using
-            interactive hotspots.
+          <p className="text-sm text-muted-foreground">
+            Generate booth renders on the <strong>Prompts</strong> page first.
+            The 360° Explorer uses your rendered images as references to create
+            immersive panoramic walkthroughs.
           </p>
-          {!heroImage && (
-            <p className="text-sm text-amber-600 mb-4">
-              Tip: Generate a hero render first on the Prompts page — it will be
-              used as a visual reference for consistency.
-            </p>
-          )}
-          <Button onClick={initializeSpaces}>
-            <Plus className="h-4 w-4 mr-2" />
-            Set Up Spaces
-            {spatialZones.length > 0 &&
-              ` (${spatialZones.length} zones detected)`}
-          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Spaces not initialized (shouldn't happen if images exist, but safety)
+  if (spaces.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 flex flex-col items-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Detecting spaces...</p>
         </CardContent>
       </Card>
     );
@@ -206,6 +261,24 @@ export function BoothExplorer() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Compass className="h-5 w-5" />
+            360° Explorer
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {spaces.length} spaces detected &middot;{" "}
+            {spaces.filter((s) => s.panoramaUrl).length} panoramas generated
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={generateAll}>
+          <RotateCcw className="h-3 w-3 mr-1" />
+          Generate All
+        </Button>
+      </div>
+
       {/* Space selector strip */}
       <div className="flex items-center gap-2 flex-wrap">
         {spaces.map((space) => (
@@ -214,7 +287,6 @@ export function BoothExplorer() {
             variant={activeSpaceId === space.id ? "default" : "outline"}
             size="sm"
             onClick={() => setActiveSpaceId(space.id)}
-            disabled={!space.panoramaUrl && !space.isGenerating}
           >
             {space.isGenerating && (
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -227,13 +299,6 @@ export function BoothExplorer() {
             )}
           </Button>
         ))}
-
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={generateAll}>
-            <RotateCcw className="h-3 w-3 mr-1" />
-            Generate All
-          </Button>
-        </div>
       </div>
 
       {/* Main viewer */}
@@ -252,12 +317,10 @@ export function BoothExplorer() {
             className="w-full h-full"
           />
 
-          {/* Space label */}
           <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded-lg text-white text-sm font-medium">
             {activeSpace.name}
           </div>
 
-          {/* Fullscreen toggle */}
           <Button
             variant="ghost"
             size="icon"
@@ -267,7 +330,6 @@ export function BoothExplorer() {
             <Maximize2 className="h-4 w-4" />
           </Button>
 
-          {/* ESC hint in fullscreen */}
           {isFullscreen && (
             <div className="absolute top-4 right-16 text-xs text-white/50">
               Press ESC to exit
@@ -282,11 +344,32 @@ export function BoothExplorer() {
           </p>
         </div>
       ) : (
-        <div className="aspect-video bg-muted rounded-lg flex flex-col items-center justify-center gap-3">
-          <Compass className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No panorama generated yet for "{activeSpace?.name}"
-          </p>
+        <div className="aspect-video bg-muted rounded-lg flex flex-col items-center justify-center gap-4">
+          {activeSpace?.referenceImageUrl ? (
+            <>
+              <img
+                src={activeSpace.referenceImageUrl}
+                alt={activeSpace.name}
+                className="max-h-48 rounded-lg opacity-50"
+              />
+              <p className="text-sm text-muted-foreground">
+                Reference image available — generate a 360° panorama
+              </p>
+            </>
+          ) : (
+            <>
+              <Compass className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                No panorama for "{activeSpace?.name}" yet
+              </p>
+            </>
+          )}
+          <Button
+            size="sm"
+            onClick={() => activeSpace && generatePanorama(activeSpace.id)}
+          >
+            Generate 360° Panorama
+          </Button>
         </div>
       )}
 
@@ -300,9 +383,7 @@ export function BoothExplorer() {
                 ? "ring-2 ring-primary"
                 : "hover:border-primary/50"
             }`}
-            onClick={() => {
-              if (space.panoramaUrl) setActiveSpaceId(space.id);
-            }}
+            onClick={() => setActiveSpaceId(space.id)}
           >
             <CardContent className="p-3">
               <div className="aspect-video bg-muted rounded-md mb-2 overflow-hidden">
@@ -312,6 +393,17 @@ export function BoothExplorer() {
                     alt={space.name}
                     className="w-full h-full object-cover"
                   />
+                ) : space.referenceImageUrl ? (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={space.referenceImageUrl}
+                      alt={space.name}
+                      className="w-full h-full object-cover opacity-40"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <ImageIcon className="h-5 w-5 text-muted-foreground/70" />
+                    </div>
+                  </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Compass className="h-5 w-5 text-muted-foreground/50" />
@@ -322,7 +414,7 @@ export function BoothExplorer() {
               <div className="flex items-center gap-1 mt-1">
                 {space.panoramaUrl ? (
                   <Badge variant="secondary" className="text-[10px]">
-                    Ready
+                    360° Ready
                   </Badge>
                 ) : (
                   <Button
@@ -342,11 +434,6 @@ export function BoothExplorer() {
                     )}
                   </Button>
                 )}
-                {space.connections.length > 0 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {space.connections.length} links
-                  </span>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -356,10 +443,9 @@ export function BoothExplorer() {
   );
 }
 
-// Build a descriptive prompt for a specific space
 function buildPromptForSpace(
   space: PanoramaSpace,
-  project: { name?: string | null; rawBrief?: string | null; parsedBrief?: unknown }
+  project: { name?: string | null; rawBrief?: string | null; parsedBrief?: unknown; projectType?: string | null }
 ): string {
   const brief = project.parsedBrief as {
     eventName?: string;

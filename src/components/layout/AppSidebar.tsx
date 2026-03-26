@@ -14,7 +14,6 @@ import {
   LayoutGrid,
   Eye,
   EyeOff,
-  Compass,
 } from "lucide-react";
 import {
   Sidebar,
@@ -38,7 +37,6 @@ import { cn } from "@/lib/utils";
 // ─── Nav sets ─────────────────────────────────────────────────────────────────
 const agencyNavItems = [
   { path: "/projects", label: "All Projects", icon: FolderOpen },
-  { path: "/explore",  label: "360° Explorer", icon: Compass },
   { path: "/company",  label: "Company Profile", icon: Building2 },
   { path: "/team",     label: "Team", icon: Users },
 ];

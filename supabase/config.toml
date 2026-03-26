@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.polish-rhino-render]
 verify_jwt = false
+
+[functions.generate-panorama]
+verify_jwt = false

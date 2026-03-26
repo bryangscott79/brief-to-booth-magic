@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => ({
           "vendor-react": ["react", "react-dom", "react-router-dom"],
           "vendor-query": ["@tanstack/react-query"],
           "vendor-export": ["pptxgenjs", "jspdf", "html2canvas"],
+          "vendor-3d": ["playcanvas"],
         },
       },
     },

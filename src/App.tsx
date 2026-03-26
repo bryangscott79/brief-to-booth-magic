@@ -32,6 +32,7 @@ const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Rhino = lazy(() => import("./pages/Rhino"));
 const Suite = lazy(() => import("./pages/Suite"));
 const AgencyAccount = lazy(() => import("./pages/AgencyAccount"));
+const Explore = lazy(() => import("./pages/Explore"));
 
 const queryClient = new QueryClient();
 
@@ -134,6 +135,11 @@ const App = () => (
               <Route path="/suite" element={
                 <ProtectedRoute>
                   <Suite />
+                </ProtectedRoute>
+              } />
+              <Route path="/explore" element={
+                <ProtectedRoute>
+                  <Explore />
                 </ProtectedRoute>
               } />
               <Route path="/invite/:token" element={<AcceptInvite />} />

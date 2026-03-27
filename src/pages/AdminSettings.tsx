@@ -18,7 +18,7 @@ export default function AdminSettings() {
   const { previewMode } = usePlatformOwner();
 
   // Platform owners default to Accounts; agency admins default to project types
-  const [tab, setTab] = useState(isSuperAdmin ? "accounts" : "project-types");
+  const [tab, setTab] = useState((isSuperAdmin && !previewMode) ? "accounts" : "project-types");
 
   return (
     <AppLayout>

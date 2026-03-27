@@ -22,6 +22,7 @@ export type Database = {
           file_name: string
           file_size_bytes: number | null
           file_type: string
+          folder: string
           id: string
           public_url: string
           storage_path: string
@@ -34,6 +35,7 @@ export type Database = {
           file_name: string
           file_size_bytes?: number | null
           file_type: string
+          folder?: string
           id?: string
           public_url: string
           storage_path: string
@@ -46,6 +48,7 @@ export type Database = {
           file_name?: string
           file_size_bytes?: number | null
           file_type?: string
+          folder?: string
           id?: string
           public_url?: string
           storage_path?: string
@@ -354,6 +357,7 @@ export type Database = {
           file_name: string
           file_size_bytes: number | null
           file_type: string
+          folder: string
           id: string
           project_id: string
           public_url: string
@@ -366,6 +370,7 @@ export type Database = {
           file_name: string
           file_size_bytes?: number | null
           file_type: string
+          folder?: string
           id?: string
           project_id: string
           public_url: string
@@ -378,6 +383,7 @@ export type Database = {
           file_name?: string
           file_size_bytes?: number | null
           file_type?: string
+          folder?: string
           id?: string
           project_id?: string
           public_url?: string

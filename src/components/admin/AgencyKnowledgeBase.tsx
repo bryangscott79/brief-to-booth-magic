@@ -59,15 +59,15 @@ function getFileIcon(type: string) {
   return <File className="h-5 w-5 text-muted-foreground" />;
 }
 
-const CATEGORIES = [
-  { value: "all", label: "All" },
-  { value: "branding", label: "Branding" },
-  { value: "pricing", label: "Pricing" },
-  { value: "process", label: "Process" },
-  { value: "materials", label: "Materials" },
-  { value: "vendors", label: "Vendors" },
-  { value: "templates", label: "Templates" },
-  { value: "case-studies", label: "Case Studies" },
+const FOLDERS = [
+  { value: "activation-types", label: "Activation Types", icon: "⚡" },
+  { value: "cost", label: "Cost & Pricing", icon: "💰" },
+  { value: "operations", label: "Operations", icon: "⚙️" },
+  { value: "branding", label: "Branding", icon: "🎨" },
+  { value: "vendors", label: "Vendors", icon: "🏭" },
+  { value: "templates", label: "Templates", icon: "📄" },
+  { value: "case-studies", label: "Case Studies", icon: "📊" },
+  { value: "general", label: "General", icon: "📁" },
 ];
 
 export function AgencyKnowledgeBase() {
@@ -78,7 +78,7 @@ export function AgencyKnowledgeBase() {
   const [editingText, setEditingText] = useState<Record<string, string>>({});
   const [savingText, setSavingText] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeFolder, setActiveFolder] = useState("activation-types");
 
   // ─── Fetch ────────────────────────────────────────────────────────────────
   const { data: files = [], isLoading } = useQuery({
@@ -115,7 +115,8 @@ export function AgencyKnowledgeBase() {
         storage_path: storagePath,
         public_url: urlData.publicUrl,
         extracted_text: extractedText ?? null,
-      });
+        folder: activeFolder,
+      } as any);
       if (dbError) throw dbError;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agency-kb"] }),
@@ -179,11 +180,19 @@ export function AgencyKnowledgeBase() {
   };
 
   // ─── Filter ───────────────────────────────────────────────────────────────
-  const filtered = files.filter((f) => {
+  const folderFiles = files.filter((f: any) => (f.folder || "general") === activeFolder);
+  const filtered = folderFiles.filter((f) => {
     const matchSearch = !search || f.file_name.toLowerCase().includes(search.toLowerCase()) ||
       (f.extracted_text ?? "").toLowerCase().includes(search.toLowerCase());
     return matchSearch;
   });
+
+  const folderCounts = FOLDERS.reduce((acc, folder) => {
+    acc[folder.value] = files.filter((f: any) => (f.folder || "general") === folder.value).length;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const currentFolderMeta = FOLDERS.find((f) => f.value === activeFolder);
 
   return (
     <div className="space-y-6">
@@ -193,26 +202,46 @@ export function AgencyKnowledgeBase() {
         <div>
           <p className="text-sm font-semibold">Agency Knowledge Base</p>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
-            Upload agency-level documents that inform all projects: brand guidelines, pricing sheets, approved vendor lists,
-            material catalogs, process documents, case studies, and templates. These are shared across every project and
-            referenced by AI during strategic generation.
+            Upload agency-level documents that inform all projects. Organize by folder to keep activation types,
+            cost data, operations docs, and branding materials structured for AI reference.
           </p>
         </div>
+      </div>
+
+      {/* Folder tabs */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {FOLDERS.map((folder) => (
+          <button
+            key={folder.value}
+            onClick={() => setActiveFolder(folder.value)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              activeFolder === folder.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted"
+            }`}
+          >
+            <span>{folder.icon}</span>
+            {folder.label}
+            {folderCounts[folder.value] > 0 && (
+              <span className={`ml-0.5 ${activeFolder === folder.value ? "opacity-70" : "opacity-50"}`}>
+                {folderCounts[folder.value]}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Upload zone */}
       <div
         {...getRootProps()}
-        className={`upload-zone rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragActive ? "dragging" : ""}`}
+        className={`upload-zone rounded-xl p-6 text-center cursor-pointer transition-colors ${isDragActive ? "dragging" : ""}`}
       >
         <input {...getInputProps()} />
-        <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+        <Upload className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
         <p className="text-sm font-medium">
-          {isDragActive ? "Drop files here…" : "Drag & drop files, or click to browse"}
+          {isDragActive ? "Drop files here…" : `Upload to ${currentFolderMeta?.label ?? "folder"}`}
         </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Brand guidelines, pricing, vendor sheets, templates — up to 20MB each
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">Up to 20MB each</p>
         {uploadMutation.isPending && (
           <div className="mt-3 flex items-center justify-center gap-2 text-sm text-primary">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -221,30 +250,16 @@ export function AgencyKnowledgeBase() {
         )}
       </div>
 
-      {/* Search + Category filter */}
-      {files.length > 0 && (
-        <div className="space-y-3">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search files…"
-              className="pl-8 h-9 text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                onClick={() => setActiveCategory(cat.value)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${activeCategory === cat.value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/40"}`}
-              >
-                {cat.label}
-                {cat.value === "all" && <span className="opacity-60 ml-1">{files.length}</span>}
-              </button>
-            ))}
-          </div>
+      {/* Search */}
+      {folderFiles.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search files in this folder…"
+            className="pl-8 h-9 text-sm"
+          />
         </div>
       )}
 
@@ -258,8 +273,8 @@ export function AgencyKnowledgeBase() {
           <CardContent className="py-14 text-center">
             <BookOpen className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-30" />
             <p className="text-sm text-muted-foreground">
-              {files.length === 0
-                ? "No agency documents yet. Upload brand guidelines, pricing, and reference materials."
+              {folderFiles.length === 0
+                ? `No files in ${currentFolderMeta?.label ?? "this folder"} yet. Upload documents to build AI context.`
                 : "No files match your search."}
             </p>
           </CardContent>

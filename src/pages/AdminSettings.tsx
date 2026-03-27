@@ -9,6 +9,7 @@ import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
 import { ActivationTypeManager } from "@/components/admin/ActivationTypeManager";
 import { VenueIntelligenceManager } from "@/components/admin/VenueIntelligenceManager";
 import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
+import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid } from "lucide-react";
 
 export default function AdminSettings() {

@@ -508,19 +508,10 @@ export function ActivationTypeManager() {
                             size="sm"
                             variant="ghost"
                             className="h-7 w-7 p-0"
-                            disabled={at.isBuiltin}
-                            title={
-                              at.isBuiltin
-                                ? "Built-in types are read-only"
-                                : "Edit"
-                            }
+                            title="Edit"
                             onClick={() => setEditingType(at)}
                           >
-                            {at.isBuiltin ? (
-                              <Lock className="h-3 w-3 text-muted-foreground" />
-                            ) : (
-                              <Edit className="h-3 w-3" />
-                            )}
+                            <Edit className="h-3 w-3" />
                           </Button>
                           {!at.isBuiltin && (
                             <AlertDialog>

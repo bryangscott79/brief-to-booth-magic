@@ -54,8 +54,8 @@ export default function AdminSettings() {
               </TabsTrigger>
             )}
 
-            {/* Agency admin tabs — visible to both roles */}
-            {isAdmin && !isSuperAdmin && (
+            {/* Agency admin tabs — visible to agency admins and super admins in preview mode */}
+            {(isAdmin && !isSuperAdmin) || (isSuperAdmin && previewMode) ? (
               <>
                 <TabsTrigger value="project-types" className="gap-2">
                   <Layers className="h-4 w-4" />
@@ -82,7 +82,7 @@ export default function AdminSettings() {
                   Team
                 </TabsTrigger>
               </>
-            )}
+            ) : null}
 
             {/* Super admin also has access to invite + user management */}
             {isSuperAdmin && (

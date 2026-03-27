@@ -273,8 +273,8 @@ export function AgencyKnowledgeBase() {
           <CardContent className="py-14 text-center">
             <BookOpen className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-30" />
             <p className="text-sm text-muted-foreground">
-              {files.length === 0
-                ? "No agency documents yet. Upload brand guidelines, pricing, and reference materials."
+              {folderFiles.length === 0
+                ? `No files in ${currentFolderMeta?.label ?? "this folder"} yet. Upload documents to build AI context.`
                 : "No files match your search."}
             </p>
           </CardContent>

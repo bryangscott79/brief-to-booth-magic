@@ -78,7 +78,7 @@ export function AgencyKnowledgeBase() {
   const [editingText, setEditingText] = useState<Record<string, string>>({});
   const [savingText, setSavingText] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeFolder, setActiveFolder] = useState("activation-types");
 
   // ─── Fetch ────────────────────────────────────────────────────────────────
   const { data: files = [], isLoading } = useQuery({

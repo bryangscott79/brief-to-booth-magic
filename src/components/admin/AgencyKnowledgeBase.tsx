@@ -115,7 +115,8 @@ export function AgencyKnowledgeBase() {
         storage_path: storagePath,
         public_url: urlData.publicUrl,
         extracted_text: extractedText ?? null,
-      });
+        folder: activeFolder,
+      } as any);
       if (dbError) throw dbError;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agency-kb"] }),

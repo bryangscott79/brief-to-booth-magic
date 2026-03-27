@@ -620,7 +620,7 @@ export function ActivationTypeManager() {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingType
@@ -628,13 +628,36 @@ export function ActivationTypeManager() {
                 : "New Custom Activation Type"}
             </DialogTitle>
           </DialogHeader>
-          <ActivationTypeForm
-            activationType={editingType ?? undefined}
-            onClose={() => {
-              setShowAddDialog(false);
-              setEditingType(null);
-            }}
-          />
+          {editingType ? (
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="w-full">
+                <TabsTrigger value="details" className="flex-1">Details</TabsTrigger>
+                <TabsTrigger value="knowledge" className="flex-1">
+                  <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+                  Knowledge Base
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="details">
+                <ActivationTypeForm
+                  activationType={editingType}
+                  onClose={() => {
+                    setShowAddDialog(false);
+                    setEditingType(null);
+                  }}
+                />
+              </TabsContent>
+              <TabsContent value="knowledge">
+                <ActivationTypeKnowledgeBase activationTypeId={editingType.id} />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <ActivationTypeForm
+              onClose={() => {
+                setShowAddDialog(false);
+                setEditingType(null);
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

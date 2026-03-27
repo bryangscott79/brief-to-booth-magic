@@ -15,6 +15,7 @@ import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown
 export default function AdminSettings() {
   const { data: isAdmin } = useIsAdmin();
   const { data: isSuperAdmin } = useIsSuperAdmin();
+  const { previewMode } = usePlatformOwner();
 
   // Platform owners default to Accounts; agency admins default to project types
   const [tab, setTab] = useState(isSuperAdmin ? "accounts" : "project-types");

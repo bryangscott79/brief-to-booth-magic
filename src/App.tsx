@@ -9,6 +9,8 @@ import { useClearCacheOnUserChange } from "@/hooks/useClearCacheOnUserChange";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { PlatformOwnerProvider } from "@/contexts/PlatformOwnerContext";
 import { Loader2 } from "lucide-react";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 // Eagerly loaded (landing + auth — needed immediately)
 import Index from "./pages/Index";
@@ -148,6 +150,8 @@ const App = () => (
             </Routes>
             </Suspense>
           </BrowserRouter>
+          <Analytics />
+          <SpeedInsights />
         </TooltipProvider>
         </PlatformOwnerProvider>
       </CacheClearGuard>

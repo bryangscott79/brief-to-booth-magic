@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callGemini } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -252,9 +253,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "briefData is required and must be an object" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
     // Build type-aware system prompt (replaces hardcoded booth-only prompts)
     const systemPrompt = getElementSystemPrompt(elementType, projectType);
     if (!systemPrompt) throw new Error(`Unknown element type: ${elementType}`);
@@ -363,7 +361,9 @@ END UPSTREAM CONTEXT
     // Define the tool schema for structured output
     const toolSchema = getToolSchema(elementType);
 
-    const requestBody: any = {
+    console.log("Calling AI for element:", elementType);
+
+    const result = await callGemini({
       model: "google/gemini-2.5-pro",
       temperature: existingData || feedback ? 1.2 : 0.9,
       messages: [
@@ -371,70 +371,30 @@ END UPSTREAM CONTEXT
         { role: "user", content: userPrompt },
       ],
       tools: [toolSchema],
-      tool_choice: { type: "function", function: { name: `generate_${elementType}` } },
-    };
-
-    console.log("Calling AI for element:", elementType);
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
+      toolChoice: { type: "function", function: { name: `generate_${elementType}` } },
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Usage limit reached. Please add credits." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
-
-    const data = await response.json();
     console.log("AI response structure:", JSON.stringify({
-      hasToolCalls: !!data.choices?.[0]?.message?.tool_calls,
-      hasContent: !!data.choices?.[0]?.message?.content,
-      finishReason: data.choices?.[0]?.finish_reason,
+      hasToolCalls: !!result.toolCalls,
+      hasText: !!result.text,
     }));
 
     // Extract the tool call response
-    const toolCalls = data.choices?.[0]?.message?.tool_calls;
-    if (toolCalls && toolCalls.length > 0) {
-      const toolCall = toolCalls[0];
-      let parsedData;
-      
-      try {
-        parsedData = typeof toolCall.function.arguments === "string" 
-          ? JSON.parse(toolCall.function.arguments) 
-          : toolCall.function.arguments;
-      } catch (parseError) {
-        console.error("Failed to parse tool arguments:", parseError);
-        throw new Error("Failed to parse AI response");
-      }
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      let parsedData = result.toolCalls[0].arguments;
 
       // Post-process spatial strategy to validate/fix zone positions
       if (elementType === "spatialStrategy" && parsedData.configs) {
         parsedData.configs = parsedData.configs.map((config: any) => {
           const totalSqft = config.totalSqft || 900;
-          
+
           if (config.zones) {
             config.zones = config.zones.map((zone: any, index: number) => {
               const pos = zone.position || { x: 0, y: 0, width: 25, height: 25 };
-              
+
               // Normalize positions to 0-100 range if they appear to be ratios
               let x = pos.x, y = pos.y, w = pos.width, h = pos.height;
-              
+
               // Detect if values are in 0-1 ratio format
               if (x <= 1 && y <= 1 && w <= 1 && h <= 1) {
                 x = x * 100;
@@ -442,17 +402,17 @@ END UPSTREAM CONTEXT
                 w = w * 100;
                 h = h * 100;
               }
-              
+
               // Clamp to valid bounds
               w = Math.max(5, Math.min(w, 100));
               h = Math.max(5, Math.min(h, 100));
               x = Math.max(0, Math.min(x, 100 - w));
               y = Math.max(0, Math.min(y, 100 - h));
-              
+
               // Recalculate sqft based on actual dimensions
               const calculatedSqft = Math.round((w / 100) * (h / 100) * totalSqft);
               const calculatedPercentage = Math.round((w / 100) * (h / 100) * 100);
-              
+
               return {
                 ...zone,
                 id: zone.id || `zone_${index}`,
@@ -463,7 +423,7 @@ END UPSTREAM CONTEXT
               };
             });
           }
-          
+
           return config;
         });
       }
@@ -473,13 +433,11 @@ END UPSTREAM CONTEXT
       });
     }
 
-    // Fallback: try to extract content from message
-    const content = data.choices?.[0]?.message?.content;
-    if (content) {
-      console.log("Falling back to content parsing, content length:", content.length);
-      // Try to parse as JSON
-      let jsonStr = content;
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    // Fallback: try to extract content from text response
+    if (result.text) {
+      console.log("Falling back to text parsing, text length:", result.text.length);
+      let jsonStr = result.text;
+      const jsonMatch = result.text.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         jsonStr = jsonMatch[1];
       }
@@ -489,14 +447,14 @@ END UPSTREAM CONTEXT
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch {
-        console.error("Failed to parse AI content as JSON");
-        return new Response(JSON.stringify({ data: { rawContent: content } }), {
+        console.error("Failed to parse AI text as JSON");
+        return new Response(JSON.stringify({ data: { rawContent: result.text } }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    console.error("No tool calls or content in response");
+    console.error("No tool calls or text in response");
     return new Response(JSON.stringify({ error: "AI returned empty response. Please try again." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
+import { callGemini } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -345,7 +346,6 @@ const toolSchema = {
 // ─── AI CALL WITH RETRY ───────────────────────────────────────────────────────
 
 async function callAIWithRetry(
-  apiKey: string,
   briefText: string,
   brandIntelligence?: Array<{ category: string; title: string; content: string }>,
   attempt = 1,
@@ -366,62 +366,32 @@ ${briefText}
     userMessage += `--- END BRAND INTELLIGENCE ---\nUse this to fill gaps where the brief is silent, but prioritize what the brief explicitly states.`;
   }
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}` },
-        { role: "user", content: userMessage },
-      ],
-      tools: [toolSchema],
-      tool_choice: { type: "function", function: { name: "parse_brief" } },
-      max_tokens: 8192,
-    }),
+  const result = await callGemini({
+    model: "google/gemini-2.5-flash",
+    messages: [
+      { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}` },
+      { role: "user", content: userMessage },
+    ],
+    tools: [toolSchema],
+    toolChoice: { type: "function", function: { name: "parse_brief" } },
+    maxTokens: 8192,
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error(`AI gateway error (attempt ${attempt}):`, response.status, text.substring(0, 300));
-    if (attempt < 3) {
-      await new Promise((r) => setTimeout(r, 1000 * attempt));
-      return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
-    }
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  const toolCallArgs = result.toolCalls?.[0]?.arguments ?? null;
 
   console.log(`AI response (attempt ${attempt}):`, JSON.stringify({
-    hasToolCalls: !!toolCall,
-    finishReason: data.choices?.[0]?.finish_reason,
-    toolArgsPreview: toolCall ? toolCall.function.arguments.substring(0, 500) : null,
-    contentPreview: !toolCall ? data.choices?.[0]?.message?.content?.substring(0, 300) : null,
+    hasToolCalls: !!toolCallArgs,
+    toolArgsPreview: toolCallArgs ? JSON.stringify(toolCallArgs).substring(0, 500) : null,
+    contentPreview: !toolCallArgs ? result.text?.substring(0, 300) : null,
   }));
 
-  if (toolCall) {
-    try {
-      return JSON.parse(toolCall.function.arguments);
-    } catch {
-      // Attempt to repair truncated JSON
-      const repaired = attemptJsonRepair(toolCall.function.arguments);
-      if (repaired) return repaired;
-      if (attempt < 3) {
-        console.warn("JSON parse failed, retrying...");
-        await new Promise((r) => setTimeout(r, 1000));
-        return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
-      }
-      throw new Error("AI returned malformed JSON");
-    }
+  if (toolCallArgs) {
+    // Arguments are already parsed by the shared utility
+    return toolCallArgs as Record<string, unknown>;
   }
 
-  // Fallback: extract JSON from content
-  const content = data.choices?.[0]?.message?.content;
+  // Fallback: extract JSON from text content
+  const content = result.text;
   if (content) {
     const codeBlockMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     const jsonStr = codeBlockMatch ? codeBlockMatch[1].trim() : content;
@@ -436,7 +406,7 @@ ${briefText}
   if (attempt < 3) {
     console.warn(`No tool call or parseable content (attempt ${attempt}), retrying...`);
     await new Promise((r) => setTimeout(r, 1500));
-    return callAIWithRetry(apiKey, briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
+    return callAIWithRetry(briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
   }
 
   throw new Error("AI returned empty or unparseable response after 3 attempts");
@@ -488,9 +458,6 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
     const brandContext = (body.brandContext as string) || "";
     const suiteContext = (body.suiteContext as string) || "";
 
@@ -513,11 +480,9 @@ serve(async (req) => {
     // ── PDF: Pass base64 directly to Gemini vision ──
     if (body.fileBase64 && body.fileType === "pdf") {
       console.log("Handling PDF via Gemini vision...");
-      // For PDFs, we'll construct the message with inline base64 data
-      // Gemini supports PDF as inline data
       const brandIntelligence = body.brandIntelligence as Array<{ category: string; title: string; content: string }> | undefined;
 
-      let systemMsg = PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`;
+      const systemMsg = PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`;
       let userMsg = "Parse this PDF brief document. Extract ALL data — scan every page including tables, sidebars, headers, and footnotes.\n\nReturn ALL fields as completely as possible.";
 
       if (brandIntelligence && brandIntelligence.length > 0) {
@@ -528,13 +493,8 @@ serve(async (req) => {
         userMsg += `--- END ---\nUse this to fill gaps but prioritize the document.`;
       }
 
-      const pdfResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      try {
+        const pdfResult = await callGemini({
           model: "google/gemini-2.5-pro",
           messages: [
             { role: "system", content: systemMsg },
@@ -555,30 +515,22 @@ serve(async (req) => {
             },
           ],
           tools: [toolSchema],
-          tool_choice: { type: "function", function: { name: "parse_brief" } },
-          max_tokens: 8192,
-        }),
-      });
+          toolChoice: { type: "function", function: { name: "parse_brief" } },
+          maxTokens: 8192,
+        });
 
-      if (pdfResponse.ok) {
-        const pdfData = await pdfResponse.json();
-        const pdfToolCall = pdfData.choices?.[0]?.message?.tool_calls?.[0];
-        if (pdfToolCall) {
-          try {
-            const parsed = JSON.parse(pdfToolCall.function.arguments);
-            console.log("PDF parsed via vision, brand:", parsed.brand?.name);
-            return new Response(JSON.stringify({ data: parsed }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          } catch {
-            console.warn("PDF vision JSON parse failed, falling back to text extraction");
-          }
+        const pdfParsed = pdfResult.toolCalls?.[0]?.arguments;
+        if (pdfParsed) {
+          console.log("PDF parsed via vision, brand:", (pdfParsed as any).brand?.name);
+          return new Response(JSON.stringify({ data: pdfParsed }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
+        console.warn("PDF vision returned no tool call, falling back to text extraction");
+      } catch (pdfErr) {
+        console.warn("PDF vision failed, attempting text fallback:", pdfErr);
       }
 
-      // Fallback: try to extract text from PDF using pdfjs-compatible approach
-      // Convert base64 back to check if it's a text-readable PDF
-      console.warn("PDF vision failed, attempting text fallback");
       briefText = `[PDF document — content could not be extracted as text. Please review the upload.]`;
     }
 
@@ -593,7 +545,7 @@ serve(async (req) => {
 
     console.log(`Parsing brief: ${briefText.length} chars | brand intel: ${brandIntelligence?.length ?? 0} entries`);
 
-    const parsed = await callAIWithRetry(LOVABLE_API_KEY, briefText, brandIntelligence, 1, brandContext, suiteContext);
+    const parsed = await callAIWithRetry(briefText, brandIntelligence, 1, brandContext, suiteContext);
 
     console.log("Final parsed brand:", (parsed.brand as any)?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
 

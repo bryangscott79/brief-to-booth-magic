@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callGemini } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,11 +140,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
-
     // Project-type-aware suffix and feedback prefix
     const TYPE_SUFFIX: Record<string, string> = {
       live_brand_activation: "Generate a photorealistic 16:9 visualization of this brand activation. This is an outdoor experiential build — NOT a trade show booth. Show crowd energy, open sky, and immersive scale.",
@@ -209,47 +205,20 @@ ${genSuffix}`,
       ];
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-image-preview",
-        messages,
-        modalities: ["image", "text"],
-      }),
+    const result = await callGemini({
+      model: "google/gemini-3-pro-image-preview",
+      messages,
+      modalities: ["image", "text"],
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Usage limit reached. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const generatedImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    const responseText = data.choices?.[0]?.message?.content || "";
-
-    if (!generatedImageUrl) {
-      console.error("No image in response:", JSON.stringify(data));
+    const image = result.images?.[0];
+    if (!image) {
+      console.error("No image in response:", JSON.stringify(result));
       throw new Error("No image generated");
     }
+
+    const generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
+    const responseText = result.text || "";
 
     console.log("Successfully generated hero image");
 

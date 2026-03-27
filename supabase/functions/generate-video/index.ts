@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callGemini } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,11 +71,6 @@ serve(async (req) => {
     }
 
     const clampedDuration = Math.min(10, Math.max(4, duration || 6));
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
 
     // Check for video API key (for direct Runway/Kling/Veo integration)
     const VIDEO_API_KEY = Deno.env.get("VIDEO_API_KEY");
@@ -184,64 +180,33 @@ serve(async (req) => {
       );
     }
 
-    // Fallback: Use Lovable gateway with Veo or available video model
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/veo-2",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Generate a ${clampedDuration}-second video from this trade show booth image.\n\nCAMERA MOTION:\n${motionPrompt}\n\nIMPORTANT:\n- Maintain photorealistic quality throughout\n- Keep booth signage, branding, and materials consistent\n- Include natural visitor movement\n- Professional, cinematic camera work\n- 16:9 aspect ratio\n- Smooth, steady motion — no jitter or sudden movements`,
-              },
-              {
-                type: "image_url",
-                image_url: { url: sourceImageUrl },
-              },
-            ],
-          },
-        ],
-        modalities: ["video"],
-      }),
+    // Fallback: Use Gemini / Veo via ai-gateway
+    const result = await callGemini({
+      model: "google/veo-2",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Generate a ${clampedDuration}-second video from this trade show booth image.\n\nCAMERA MOTION:\n${motionPrompt}\n\nIMPORTANT:\n- Maintain photorealistic quality throughout\n- Keep booth signage, branding, and materials consistent\n- Include natural visitor movement\n- Professional, cinematic camera work\n- 16:9 aspect ratio\n- Smooth, steady motion — no jitter or sudden movements`,
+            },
+            {
+              type: "image_url",
+              image_url: { url: sourceImageUrl },
+            },
+          ],
+        },
+      ],
+      modalities: ["video"],
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway video error:", response.status, errorText);
-
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Usage limit reached. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      throw new Error(`AI gateway video error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    // Try to extract video URL from response — format may vary by provider
-    const videoUrl =
-      data.choices?.[0]?.message?.video?.url ||
-      data.choices?.[0]?.message?.videos?.[0]?.url ||
-      data.choices?.[0]?.message?.content;
+    // The response may contain a video URL in text, or video data directly
+    const videoUrl = result.text;
 
     if (!videoUrl || typeof videoUrl !== "string" || !videoUrl.startsWith("http")) {
-      console.error("No video URL in response:", JSON.stringify(data));
-      throw new Error("No video generated — the video API may not be available on this gateway");
+      console.error("No video URL in response:", JSON.stringify(result));
+      throw new Error("No video generated — the video API may not be available via this model");
     }
 
     console.log("Successfully generated video");
@@ -251,7 +216,7 @@ serve(async (req) => {
         success: true,
         status: "complete",
         videoUrl,
-        provider: "lovable_gateway",
+        provider: "gemini",
         cameraMotion,
         duration: clampedDuration,
         message: `Video generated successfully. Camera motion: ${cameraMotion}, duration: ${clampedDuration}s.`,

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callGemini } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,9 +18,6 @@ serve(async (req) => {
     if (!spatialStrategy || typeof spatialStrategy !== "object") {
       return new Response(JSON.stringify({ error: "spatialStrategy is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const prompt = `You are a trade show booth construction estimator. Based on the following project data, generate a comprehensive materials list with estimated costs.
 
@@ -48,82 +46,61 @@ Categories should include:
 
 Be realistic with trade show industry pricing.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: "You are a trade show booth construction cost estimator. Return structured JSON only." },
-          { role: "user", content: prompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "materials_list",
-              description: "Return a structured materials list with costs",
-              parameters: {
-                type: "object",
-                properties: {
-                  categories: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
+    const result = await callGemini({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: "You are a trade show booth construction cost estimator. Return structured JSON only." },
+        { role: "user", content: prompt },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "materials_list",
+            description: "Return a structured materials list with costs",
+            parameters: {
+              type: "object",
+              properties: {
+                categories: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      items: {
+                        type: "array",
                         items: {
-                          type: "array",
-                          items: {
-                            type: "object",
-                            properties: {
-                              name: { type: "string" },
-                              description: { type: "string" },
-                              quantity: { type: "number" },
-                              unit: { type: "string" },
-                              unitCost: { type: "number" },
-                              totalCost: { type: "number" },
-                            },
-                            required: ["name", "description", "quantity", "unit", "unitCost", "totalCost"],
-                            additionalProperties: false,
+                          type: "object",
+                          properties: {
+                            name: { type: "string" },
+                            description: { type: "string" },
+                            quantity: { type: "number" },
+                            unit: { type: "string" },
+                            unitCost: { type: "number" },
+                            totalCost: { type: "number" },
                           },
+                          required: ["name", "description", "quantity", "unit", "unitCost", "totalCost"],
+                          additionalProperties: false,
                         },
-                        subtotal: { type: "number" },
                       },
-                      required: ["name", "items", "subtotal"],
-                      additionalProperties: false,
+                      subtotal: { type: "number" },
                     },
+                    required: ["name", "items", "subtotal"],
+                    additionalProperties: false,
                   },
-                  grandTotal: { type: "number" },
-                  notes: { type: "string" },
                 },
-                required: ["categories", "grandTotal", "notes"],
-                additionalProperties: false,
+                grandTotal: { type: "number" },
+                notes: { type: "string" },
               },
+              required: ["categories", "grandTotal", "notes"],
+              additionalProperties: false,
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "materials_list" } },
-      }),
+        },
+      ],
+      toolChoice: { type: "function", function: { name: "materials_list" } },
     });
-
-    if (!response.ok) {
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    const materials = toolCall ? JSON.parse(toolCall.function.arguments) : null;
+    const materials = result.toolCalls?.[0]?.arguments ?? null;
 
     return new Response(JSON.stringify({ materials }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

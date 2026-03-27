@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAnthropic } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,9 +18,6 @@ serve(async (req) => {
     if (!elements || typeof elements !== "object") {
       return new Response(JSON.stringify({ error: "elements is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const brand = parsedBrief?.brand || {};
     const objectives = parsedBrief?.objectives || {};
@@ -94,114 +92,47 @@ Structure the presentation as:
 
 Make it persuasive and strategic — this is a pitch deck for creative services.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-5",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Create a presentation deck for this project:\n\n${dataSummary}` },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "create_presentation",
-              description: "Create a structured presentation deck",
-              parameters: {
-                type: "object",
-                properties: {
-                  slides: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        title: { type: "string" },
-                        subtitle: { type: "string" },
-                        bodyPoints: { type: "array", items: { type: "string" } },
-                        speakerNotes: { type: "string" },
-                        slideType: { type: "string", enum: ["title", "section", "content", "twoColumn", "imageFeature", "data", "closing"] },
-                        imageAngle: { type: "string" },
-                      },
-                      required: ["title", "subtitle", "bodyPoints", "speakerNotes", "slideType"],
-                      additionalProperties: false,
-                    },
+    const aiResult = await callAnthropic({
+      system: systemPrompt,
+      messages: [
+        { role: "user", content: `Create a presentation deck for this project:\n\n${dataSummary}` },
+      ],
+      tools: [
+        {
+          name: "create_presentation",
+          description: "Create a structured presentation deck",
+          input_schema: {
+            type: "object",
+            properties: {
+              slides: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    subtitle: { type: "string" },
+                    bodyPoints: { type: "array", items: { type: "string" } },
+                    speakerNotes: { type: "string" },
+                    slideType: { type: "string", enum: ["title", "section", "content", "twoColumn", "imageFeature", "data", "closing"] },
+                    imageAngle: { type: "string" },
                   },
+                  required: ["title", "subtitle", "bodyPoints", "speakerNotes", "slideType"],
                 },
-                required: ["slides"],
-                additionalProperties: false,
               },
             },
+            required: ["slides"],
           },
-        ],
-        tool_choice: { type: "function", function: { name: "create_presentation" } },
-      }),
+        },
+      ],
+      toolChoice: { type: "tool", name: "create_presentation" },
+      maxTokens: 8192,
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited — please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Credits exhausted — please add funds." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      throw new Error("AI generation failed");
-    }
-
-    const aiData = await response.json();
-    console.log("AI response structure:", JSON.stringify({
-      hasChoices: !!aiData.choices,
-      hasToolCalls: !!aiData.choices?.[0]?.message?.tool_calls,
-      contentPreview: (aiData.choices?.[0]?.message?.content || "").substring(0, 200),
-      finishReason: aiData.choices?.[0]?.finish_reason,
-    }));
-
-    let slides;
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    if (toolCall?.function?.arguments) {
-      const args = typeof toolCall.function.arguments === "string"
-        ? toolCall.function.arguments
-        : JSON.stringify(toolCall.function.arguments);
-      const parsed = JSON.parse(args);
-      slides = parsed.slides;
-    }
-
-    if (!slides) {
-      // Fallback: try parsing content as JSON
-      const content = aiData.choices?.[0]?.message?.content || "";
-      // Try direct JSON parse first
-      try {
-        const parsed = JSON.parse(content);
-        slides = parsed.slides || (Array.isArray(parsed) ? parsed : null);
-      } catch {
-        // Try extracting from markdown code block
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[1]);
-          slides = parsed.slides || (Array.isArray(parsed) ? parsed : null);
-        }
-        // Try finding a JSON array directly
-        if (!slides) {
-          const arrayMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
-          if (arrayMatch) {
-            slides = JSON.parse(arrayMatch[0]);
-          }
-        }
-      }
-    }
+    const presentation = aiResult.toolCalls?.[0]?.arguments ?? null;
+    const slides = presentation?.slides;
 
     if (!slides || !Array.isArray(slides) || slides.length === 0) {
-      console.error("Failed to extract slides. Raw content:", aiData.choices?.[0]?.message?.content?.substring(0, 500));
+      console.error("Failed to extract slides from Anthropic response. Text:", aiResult.text?.substring(0, 500));
       throw new Error("Could not parse AI response into slides");
     }
 

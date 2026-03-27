@@ -9,14 +9,16 @@ import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
 import { ActivationTypeManager } from "@/components/admin/ActivationTypeManager";
 import { VenueIntelligenceManager } from "@/components/admin/VenueIntelligenceManager";
 import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
+import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid } from "lucide-react";
 
 export default function AdminSettings() {
   const { data: isAdmin } = useIsAdmin();
   const { data: isSuperAdmin } = useIsSuperAdmin();
+  const { previewMode } = usePlatformOwner();
 
   // Platform owners default to Accounts; agency admins default to project types
-  const [tab, setTab] = useState(isSuperAdmin ? "accounts" : "project-types");
+  const [tab, setTab] = useState((isSuperAdmin && !previewMode) ? "accounts" : "project-types");
 
   return (
     <AppLayout>
@@ -54,8 +56,8 @@ export default function AdminSettings() {
               </TabsTrigger>
             )}
 
-            {/* Agency admin tabs — visible to both roles */}
-            {isAdmin && !isSuperAdmin && (
+            {/* Agency admin tabs — visible to agency admins and super admins in preview mode */}
+            {(isAdmin && !isSuperAdmin) || (isSuperAdmin && previewMode) ? (
               <>
                 <TabsTrigger value="project-types" className="gap-2">
                   <Layers className="h-4 w-4" />
@@ -82,7 +84,7 @@ export default function AdminSettings() {
                   Team
                 </TabsTrigger>
               </>
-            )}
+            ) : null}
 
             {/* Super admin also has access to invite + user management */}
             {isSuperAdmin && (

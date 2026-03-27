@@ -65,47 +65,47 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/projects" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Projects />
                 </ProtectedRoute>
               } />
               <Route path="/upload" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Upload />
                 </ProtectedRoute>
               } />
               <Route path="/review" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="client">
                   <Review />
                 </ProtectedRoute>
               } />
               <Route path="/generate" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Generate />
                 </ProtectedRoute>
               } />
               <Route path="/spatial" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Spatial />
                 </ProtectedRoute>
               } />
               <Route path="/prompts" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Prompts />
                 </ProtectedRoute>
               } />
               <Route path="/rhino" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Rhino />
                 </ProtectedRoute>
               } />
               <Route path="/files" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="client">
                   <Files />
                 </ProtectedRoute>
               } />
               <Route path="/export" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Export />
                 </ProtectedRoute>
               } />
@@ -115,32 +115,32 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/company" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="admin">
                   <CompanyProfile />
                 </ProtectedRoute>
               } />
               <Route path="/admin" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="admin">
                   <AdminSettings />
                 </ProtectedRoute>
               } />
               <Route path="/account/:userId" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="super_admin">
                   <AgencyAccount />
                 </ProtectedRoute>
               } />
               <Route path="/team" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="admin">
                   <Team />
                 </ProtectedRoute>
               } />
               <Route path="/suite" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="member">
                   <Suite />
                 </ProtectedRoute>
               } />
               <Route path="/explore" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="client">
                   <Explore />
                 </ProtectedRoute>
               } />

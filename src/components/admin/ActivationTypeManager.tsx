@@ -43,9 +43,11 @@ import {
   Edit,
   Loader2,
   Zap,
-  Lock,
+  BookOpen,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActivationTypeKnowledgeBase } from "./ActivationTypeKnowledgeBase";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

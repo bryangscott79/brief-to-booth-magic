@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      activation_type_kb_files: {
+        Row: {
+          activation_type_id: string
+          created_at: string
+          extracted_text: string | null
+          file_name: string
+          file_size_bytes: number | null
+          file_type: string
+          id: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          activation_type_id: string
+          created_at?: string
+          extracted_text?: string | null
+          file_name: string
+          file_size_bytes?: number | null
+          file_type: string
+          id?: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          activation_type_id?: string
+          created_at?: string
+          extracted_text?: string | null
+          file_name?: string
+          file_size_bytes?: number | null
+          file_type?: string
+          id?: string
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_type_kb_files_activation_type_id_fkey"
+            columns: ["activation_type_id"]
+            isOneToOne: false
+            referencedRelation: "activation_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activation_types: {
         Row: {
           category: string

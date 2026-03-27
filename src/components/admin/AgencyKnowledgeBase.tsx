@@ -59,15 +59,15 @@ function getFileIcon(type: string) {
   return <File className="h-5 w-5 text-muted-foreground" />;
 }
 
-const CATEGORIES = [
-  { value: "all", label: "All" },
-  { value: "branding", label: "Branding" },
-  { value: "pricing", label: "Pricing" },
-  { value: "process", label: "Process" },
-  { value: "materials", label: "Materials" },
-  { value: "vendors", label: "Vendors" },
-  { value: "templates", label: "Templates" },
-  { value: "case-studies", label: "Case Studies" },
+const FOLDERS = [
+  { value: "activation-types", label: "Activation Types", icon: "⚡" },
+  { value: "cost", label: "Cost & Pricing", icon: "💰" },
+  { value: "operations", label: "Operations", icon: "⚙️" },
+  { value: "branding", label: "Branding", icon: "🎨" },
+  { value: "vendors", label: "Vendors", icon: "🏭" },
+  { value: "templates", label: "Templates", icon: "📄" },
+  { value: "case-studies", label: "Case Studies", icon: "📊" },
+  { value: "general", label: "General", icon: "📁" },
 ];
 
 export function AgencyKnowledgeBase() {

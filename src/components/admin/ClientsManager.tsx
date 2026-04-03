@@ -393,6 +393,55 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
         </div>
       )}
 
+      {/* Scrape from URL */}
+      {showScrapeInput && (
+        <Card className="border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary shrink-0" />
+              <Input
+                value={scrapeUrl}
+                onChange={e => setScrapeUrl(e.target.value)}
+                placeholder="https://brand-website.com"
+                className="flex-1"
+                onKeyDown={e => e.key === "Enter" && handleScrape()}
+              />
+              <Button size="sm" onClick={handleScrape} disabled={isScraping || !scrapeUrl.trim()}>
+                {isScraping ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Globe className="h-3.5 w-3.5 mr-1" />}
+                {isScraping ? "Scraping…" : "Scrape"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowScrapeInput(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 ml-6">
+              Extracts brand colors, typography, logos, and messaging from any website. Results appear as pending entries for your review.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Duplicate detection warning */}
+      {duplicateGroups.length > 0 && (
+        <Card className="border-orange-400/30 bg-orange-400/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Merge className="h-4 w-4 text-orange-500" />
+                <span className="text-sm font-medium">{duplicateGroups.length} duplicate group(s) detected</span>
+              </div>
+              <div className="flex gap-2">
+                {duplicateGroups.map((group, i) => (
+                  <Button key={i} size="sm" variant="outline" onClick={() => handleMergeDuplicates(group)}>
+                    Merge "{group[0].title}" ({group.length})
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Pending approvals */}
       {pending.length > 0 && (
         <Card className="border-amber-500/30 bg-amber-500/5">
@@ -433,7 +482,7 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <Button size="sm" variant="ghost" className="h-7 text-green-600 hover:text-green-700"
-                      onClick={() => approve.mutate({ id: entry.id, clientId: client.id })}>
+                      onClick={() => handleApprove(entry)}>
                       <Check className="h-3.5 w-3.5" />
                     </Button>
                     <Button size="sm" variant="ghost" className="h-7 text-destructive hover:text-destructive"

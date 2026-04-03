@@ -200,6 +200,7 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<BrandIntelligenceEntry | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const pending = entries.filter(e => !e.is_approved);
   const approved = entries.filter(e => e.is_approved);

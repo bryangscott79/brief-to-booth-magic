@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import {
   Plus, Trash2, Edit, Building2, Brain, Palette,
   ShoppingCart, DollarSign, BookOpen, Star, ChevronRight, Sparkles,
-  Check, X, MessageSquare, Loader2, Globe, Search
+  Check, X, MessageSquare, Loader2, Globe, Search, ChevronDown, ChevronUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

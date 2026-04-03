@@ -316,9 +316,8 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
     toast({ title: "Duplicates merged" });
   };
 
-  const duplicateGroups = getDuplicateGroups();
-
   const pending = entries.filter(e => !e.is_approved);
+  const duplicateGroups = getDuplicateGroups();
   const approved = entries.filter(e => e.is_approved);
   const filtered = filterCategory === "all" ? approved : approved.filter(e => e.category === filterCategory);
 

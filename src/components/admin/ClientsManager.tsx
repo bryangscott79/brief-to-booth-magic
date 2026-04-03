@@ -292,6 +292,21 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
                       <Badge variant="secondary" className="text-xs">{meta.label}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{entry.content}</p>
+                    {/* Render color swatches for entries containing hex values */}
+                    {(() => {
+                      const hexMatches = entry.content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+                      if (!hexMatches || hexMatches.length === 0) return null;
+                      return (
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {hexMatches.map((hex, i) => (
+                            <div key={i} className="flex items-center gap-1">
+                              <div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
+                              <span className="text-[10px] font-mono text-muted-foreground">{hex}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <Button size="sm" variant="ghost" className="h-7 text-green-600 hover:text-green-700"

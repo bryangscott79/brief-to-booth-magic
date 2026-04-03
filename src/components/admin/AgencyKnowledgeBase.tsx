@@ -60,14 +60,17 @@ function getFileIcon(type: string) {
 }
 
 const FOLDERS = [
-  { value: "activation-types", label: "Activation Types", icon: "⚡" },
-  { value: "cost", label: "Cost & Pricing", icon: "💰" },
-  { value: "operations", label: "Operations", icon: "⚙️" },
-  { value: "branding", label: "Branding", icon: "🎨" },
-  { value: "vendors", label: "Vendors", icon: "🏭" },
-  { value: "templates", label: "Templates", icon: "📄" },
-  { value: "case-studies", label: "Case Studies", icon: "📊" },
-  { value: "general", label: "General", icon: "📁" },
+  { value: "capabilities", label: "Agency Capabilities", icon: "🏢", hint: "L3_OPS_AgencyCapabilitiesOverview" },
+  { value: "cost", label: "Pricing & Cost", icon: "💰", hint: "L3_OPS_PricingCostStructure" },
+  { value: "process", label: "Design → Fabrication", icon: "⚙️", hint: "L3_OPS_DesignToFabricationProcess" },
+  { value: "elements", label: "Exhibit Elements", icon: "📐", hint: "L3_OPS_ExhibitElementsReference" },
+  { value: "brief-discovery", label: "Brief & Discovery", icon: "📋", hint: "L3_OPS_ClientBriefDiscoveryTemplate" },
+  { value: "show-markets", label: "Show Markets", icon: "📍", hint: "L3_OPS_ShowMarkets" },
+  { value: "vendors", label: "Vendors", icon: "🏭", hint: "L3_OPS_VendorCapability" },
+  { value: "regulatory", label: "Regulatory Overlays", icon: "⚖️", hint: "L3_OPS_RegulatoryOverlay" },
+  { value: "case-studies", label: "Case Studies", icon: "📊", hint: "L3_OPS_HistoricalScope" },
+  { value: "templates", label: "Templates", icon: "📄", hint: "L3_OPS_Templates" },
+  { value: "general", label: "General", icon: "📁", hint: "L3_OPS_General" },
 ];
 
 export function AgencyKnowledgeBase() {
@@ -200,10 +203,13 @@ export function AgencyKnowledgeBase() {
       <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-4">
         <Building2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-semibold">Agency Knowledge Base</p>
+          <p className="text-sm font-semibold">Layer 3 — Operational Context Library</p>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
-            Upload agency-level documents that inform all projects. Organize by folder to keep activation types,
-            cost data, operations docs, and branding materials structured for AI reference.
+            Agency-wide reference documents that ground AI outputs in what's actually buildable, how it's priced,
+            and how the process works. One document per concept for best RAG retrieval.
+          </p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            Naming convention: <code className="bg-muted px-1 rounded">L3_OPS_[Topic]</code>
           </p>
         </div>
       </div>
@@ -242,6 +248,11 @@ export function AgencyKnowledgeBase() {
           {isDragActive ? "Drop files here…" : `Upload to ${currentFolderMeta?.label ?? "folder"}`}
         </p>
         <p className="text-xs text-muted-foreground mt-1">Up to 20MB each</p>
+        {currentFolderMeta?.hint && (
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+            Suggested prefix: <code className="bg-muted px-1 rounded">{currentFolderMeta.hint}</code>
+          </p>
+        )}
         {uploadMutation.isPending && (
           <div className="mt-3 flex items-center justify-center gap-2 text-sm text-primary">
             <Loader2 className="h-4 w-4 animate-spin" />

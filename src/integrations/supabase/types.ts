@@ -18,40 +18,55 @@ export type Database = {
         Row: {
           activation_type_id: string
           created_at: string
+          doc_type: string
           extracted_text: string | null
           file_name: string
           file_size_bytes: number | null
           file_type: string
           folder: string
           id: string
+          last_reviewed_at: string | null
+          layer: string
           public_url: string
+          scope: string
           storage_path: string
+          topics: string[] | null
           user_id: string
         }
         Insert: {
           activation_type_id: string
           created_at?: string
+          doc_type?: string
           extracted_text?: string | null
           file_name: string
           file_size_bytes?: number | null
           file_type: string
           folder?: string
           id?: string
+          last_reviewed_at?: string | null
+          layer?: string
           public_url: string
+          scope?: string
           storage_path: string
+          topics?: string[] | null
           user_id: string
         }
         Update: {
           activation_type_id?: string
           created_at?: string
+          doc_type?: string
           extracted_text?: string | null
           file_name?: string
           file_size_bytes?: number | null
           file_type?: string
           folder?: string
           id?: string
+          last_reviewed_at?: string | null
+          layer?: string
           public_url?: string
+          scope?: string
           storage_path?: string
+          topics?: string[] | null
           user_id?: string
         }
         Relationships: [
@@ -353,41 +368,56 @@ export type Database = {
       knowledge_base_files: {
         Row: {
           created_at: string
+          doc_type: string
           extracted_text: string | null
           file_name: string
           file_size_bytes: number | null
           file_type: string
           folder: string
           id: string
+          last_reviewed_at: string | null
+          layer: string
           project_id: string
           public_url: string
+          scope: string
           storage_path: string
+          topics: string[] | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          doc_type?: string
           extracted_text?: string | null
           file_name: string
           file_size_bytes?: number | null
           file_type: string
           folder?: string
           id?: string
+          last_reviewed_at?: string | null
+          layer?: string
           project_id: string
           public_url: string
+          scope?: string
           storage_path: string
+          topics?: string[] | null
           user_id: string
         }
         Update: {
           created_at?: string
+          doc_type?: string
           extracted_text?: string | null
           file_name?: string
           file_size_bytes?: number | null
           file_type?: string
           folder?: string
           id?: string
+          last_reviewed_at?: string | null
+          layer?: string
           project_id?: string
           public_url?: string
+          scope?: string
           storage_path?: string
+          topics?: string[] | null
           user_id?: string
         }
         Relationships: [

@@ -6,6 +6,7 @@ import {
 } from "@/hooks/useClients";
 import { BrandGuidelinesEditor } from "@/components/admin/BrandGuidelinesEditor";
 import { BrandAssetLibrary } from "@/components/admin/BrandAssetLibrary";
+import { ClientBrandKnowledgeBase } from "@/components/admin/ClientBrandKnowledgeBase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -421,6 +422,11 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
           })}
         </div>
       )}
+
+      {/* Client Brand Knowledge Base (Layer 2) */}
+      <div className="border-t border-border pt-6">
+        <ClientBrandKnowledgeBase clientId={client.id} clientName={client.name} />
+      </div>
 
       {/* Brand Guidelines */}
       <div className="border-t border-border pt-6">

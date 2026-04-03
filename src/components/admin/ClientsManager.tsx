@@ -298,13 +298,12 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
 
   const handleMergeDuplicates = async (dupes: BrandIntelligenceEntry[]) => {
     if (dupes.length < 2) return;
-    // Keep first, merge content, delete rest
     const merged = dupes[0];
     const extraContent = dupes.slice(1).map(d => d.content).join("\n---\n");
     const mergedContent = `${merged.content}\n---\n${extraContent}`;
     const mergedTags = [...new Set(dupes.flatMap(d => d.tags || []))];
 
-    await useUpsertBrandIntelligence().mutateAsync({
+    await upsertIntelligence.mutateAsync({
       id: merged.id,
       client_id: client.id,
       category: merged.category,
@@ -318,6 +317,8 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
     }
     toast({ title: "Duplicates merged" });
   };
+
+  const duplicateGroups = getDuplicateGroups();
 
   const pending = entries.filter(e => !e.is_approved);
   const approved = entries.filter(e => e.is_approved);

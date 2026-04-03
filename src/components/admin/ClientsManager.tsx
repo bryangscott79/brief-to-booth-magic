@@ -24,9 +24,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import {
   Plus, Trash2, Edit, Building2, Brain, Palette,
   ShoppingCart, DollarSign, BookOpen, Star, ChevronRight, Sparkles,
-  Check, X, MessageSquare, Loader2, Globe, Search, ChevronDown
+  Check, X, MessageSquare, Loader2, Globe, Search, ChevronDown,
+  Link, FileUp, Merge, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const CATEGORY_META: Record<BrandIntelligenceEntry["category"], { label: string; icon: any; color: string; description: string }> = {
   visual_identity: { label: "Visual Identity", icon: Palette, color: "text-purple-500", description: "Logo, colors, typography, imagery dos and don'ts" },

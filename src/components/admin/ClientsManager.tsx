@@ -215,21 +215,22 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
   const [isScraping, setIsScraping] = useState(false);
   const [showScrapeInput, setShowScrapeInput] = useState(false);
 
-  // Auto-populate brand guidelines when approving an entry with color data
+  // Auto-populate brand guidelines when approving an entry
   const handleApprove = useCallback(async (entry: BrandIntelligenceEntry) => {
     await approve.mutateAsync({ id: entry.id, clientId: client.id });
+    const content = entry.content;
+    const synced: string[] = [];
 
-    // Auto-populate guidelines with color data
-    if (entry.category === "visual_identity") {
-      const hexMatches = entry.content.match(/#[0-9A-Fa-f]{3,8}\b/g);
-      if (hexMatches && hexMatches.length > 0) {
-        const existingColors = guidelines?.colorSystem?.primary || [];
-        const newColors = hexMatches
-          .filter(hex => !existingColors.some((c: any) => c.hex?.toLowerCase() === hex.toLowerCase()))
-          .map(hex => ({ hex, name: "", usage: "" }));
-
-        if (newColors.length > 0) {
-          try {
+    try {
+      if (entry.category === "visual_identity") {
+        // Sync hex colors to colorSystem
+        const hexMatches = content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+        if (hexMatches && hexMatches.length > 0) {
+          const existingColors = guidelines?.colorSystem?.primary || [];
+          const newColors = hexMatches
+            .filter(hex => !existingColors.some((c: any) => c.hex?.toLowerCase() === hex.toLowerCase()))
+            .map(hex => ({ hex, name: "", usage: "" }));
+          if (newColors.length > 0) {
             await upsertGuidelines.mutateAsync({
               clientId: client.id,
               colorSystem: {
@@ -239,10 +240,99 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
                 forbidden: guidelines?.colorSystem?.forbidden || [],
               },
             });
-            toast({ title: `${newColors.length} color(s) added to Brand Guidelines` });
-          } catch { /* silent fail — approval still succeeded */ }
+            synced.push(`${newColors.length} color(s)`);
+          }
+        }
+        // Sync typography mentions
+        const titleLower = entry.title.toLowerCase();
+        if (titleLower.includes("typograph") || titleLower.includes("font") || titleLower.includes("typeface")) {
+          const existing = guidelines?.typography;
+          if (!existing?.primaryTypeface) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              typography: {
+                primaryTypeface: content.split("\n")[0].slice(0, 100),
+                secondaryTypeface: existing?.secondaryTypeface || "",
+                sizeScale: existing?.sizeScale || "",
+                usageRules: existing?.usageRules || content,
+              },
+            });
+            synced.push("typography");
+          }
+        }
+        // Sync photography/imagery rules
+        if (titleLower.includes("photo") || titleLower.includes("imager")) {
+          const existing = guidelines?.photographyStyle;
+          if (!existing?.style) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              photographyStyle: {
+                style: content,
+                dos: existing?.dos || [],
+                donts: existing?.donts || [],
+              },
+            });
+            synced.push("photography style");
+          }
+        }
+        // Sync logo rules
+        if (titleLower.includes("logo")) {
+          const existing = guidelines?.logoRules;
+          if (!existing?.usageNotes) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              logoRules: {
+                clearSpace: existing?.clearSpace || "",
+                minSize: existing?.minSize || "",
+                forbiddenTreatments: existing?.forbiddenTreatments || [],
+                usageNotes: content,
+              },
+            });
+            synced.push("logo rules");
+          }
         }
       }
+
+      if (entry.category === "strategic_voice") {
+        const existing = guidelines?.toneOfVoice;
+        const pillars = existing?.messagingPillars || [];
+        const newPillar = entry.title;
+        if (!pillars.some(p => p.toLowerCase() === newPillar.toLowerCase())) {
+          await upsertGuidelines.mutateAsync({
+            clientId: client.id,
+            toneOfVoice: {
+              description: existing?.description || content,
+              messagingPillars: [...pillars, newPillar],
+              taglines: existing?.taglines || [],
+            },
+          });
+          synced.push("tone of voice");
+        }
+      }
+
+      if (entry.category === "vendor_material") {
+        const existing = guidelines?.materialsFinishes;
+        const preferred = existing?.preferred || [];
+        if (!preferred.some(p => p.toLowerCase() === entry.title.toLowerCase())) {
+          await upsertGuidelines.mutateAsync({
+            clientId: client.id,
+            materialsFinishes: {
+              preferred: [...preferred, entry.title],
+              forbidden: existing?.forbidden || [],
+              finishNotes: existing?.finishNotes
+                ? `${existing.finishNotes}\n${content}`
+                : content,
+            },
+          });
+          synced.push("materials & finishes");
+        }
+      }
+
+      if (synced.length > 0) {
+        toast({ title: `Synced to Brand Guidelines: ${synced.join(", ")}` });
+      }
+    } catch {
+      /* approval still succeeded even if guideline sync fails */
     }
   }, [approve, client.id, guidelines, upsertGuidelines, toast]);
 

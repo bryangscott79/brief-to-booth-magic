@@ -248,6 +248,11 @@ export function AgencyKnowledgeBase() {
           {isDragActive ? "Drop files here…" : `Upload to ${currentFolderMeta?.label ?? "folder"}`}
         </p>
         <p className="text-xs text-muted-foreground mt-1">Up to 20MB each</p>
+        {currentFolderMeta?.hint && (
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+            Suggested prefix: <code className="bg-muted px-1 rounded">{currentFolderMeta.hint}</code>
+          </p>
+        )}
         {uploadMutation.isPending && (
           <div className="mt-3 flex items-center justify-center gap-2 text-sm text-primary">
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -60,14 +60,17 @@ function getFileIcon(type: string) {
 }
 
 const FOLDERS = [
-  { value: "activation-types", label: "Activation Types", icon: "⚡" },
-  { value: "cost", label: "Cost & Pricing", icon: "💰" },
-  { value: "operations", label: "Operations", icon: "⚙️" },
-  { value: "branding", label: "Branding", icon: "🎨" },
-  { value: "vendors", label: "Vendors", icon: "🏭" },
-  { value: "templates", label: "Templates", icon: "📄" },
-  { value: "case-studies", label: "Case Studies", icon: "📊" },
-  { value: "general", label: "General", icon: "📁" },
+  { value: "capabilities", label: "Agency Capabilities", icon: "🏢", hint: "L3_OPS_AgencyCapabilitiesOverview" },
+  { value: "cost", label: "Pricing & Cost", icon: "💰", hint: "L3_OPS_PricingCostStructure" },
+  { value: "process", label: "Design → Fabrication", icon: "⚙️", hint: "L3_OPS_DesignToFabricationProcess" },
+  { value: "elements", label: "Exhibit Elements", icon: "📐", hint: "L3_OPS_ExhibitElementsReference" },
+  { value: "brief-discovery", label: "Brief & Discovery", icon: "📋", hint: "L3_OPS_ClientBriefDiscoveryTemplate" },
+  { value: "show-markets", label: "Show Markets", icon: "📍", hint: "L3_OPS_ShowMarkets" },
+  { value: "vendors", label: "Vendors", icon: "🏭", hint: "L3_OPS_VendorCapability" },
+  { value: "regulatory", label: "Regulatory Overlays", icon: "⚖️", hint: "L3_OPS_RegulatoryOverlay" },
+  { value: "case-studies", label: "Case Studies", icon: "📊", hint: "L3_OPS_HistoricalScope" },
+  { value: "templates", label: "Templates", icon: "📄", hint: "L3_OPS_Templates" },
+  { value: "general", label: "General", icon: "📁", hint: "L3_OPS_General" },
 ];
 
 export function AgencyKnowledgeBase() {

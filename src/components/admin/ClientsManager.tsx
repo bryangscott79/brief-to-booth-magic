@@ -206,8 +206,8 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
   const upsertGuidelines = useUpsertBrandGuidelines();
   const { data: guidelines } = useBrandGuidelines(client.id);
   const batchCreate = useBatchCreateIntelligence();
+  const upsertIntelligence = useUpsertBrandIntelligence();
   const { toast } = useToast();
-  const { user } = useAuth();
 
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<BrandIntelligenceEntry | null>(null);

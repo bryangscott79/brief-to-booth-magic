@@ -440,22 +440,6 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
 
       {/* Layer 2 — Client Brand Knowledge Base */}
       <div className="border-t border-border pt-6">
-        <Card className="border-primary/20 bg-primary/5 mb-4">
-          <CardContent className="py-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Layer 2 — Client Brand RAG</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Brand-specific documents, past booth photography, messaging guides, and visual assets for {client.name}. These files are injected into AI prompts when this client is active.
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 font-mono">Naming convention: L2_BRAND_{client.name.replace(/\s+/g, '_').toUpperCase()}_[Folder]</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
         <ClientBrandKnowledgeBase clientId={client.id} clientName={client.name} />
       </div>
 

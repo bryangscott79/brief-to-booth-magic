@@ -29,10 +29,10 @@ interface KBFile {
 }
 
 const ACTIVATION_FOLDERS = [
-  { value: "images", label: "Images", icon: ImageIcon, description: "Reference images, mood boards, inspiration" },
-  { value: "docs", label: "Documents", icon: FileText, description: "Specs, briefs, guidelines" },
-  { value: "video", label: "Video", icon: Video, description: "Walkthrough videos, reference clips" },
-  { value: "reference", label: "Reference", icon: File, description: "General reference materials" },
+  { value: "images", label: "Images", icon: ImageIcon, description: "Reference images, mood boards, inspiration", hint: "L1_AT_[Type]_Images" },
+  { value: "docs", label: "Documents", icon: FileText, description: "Core activation type document, spatial logic, staffing", hint: "L1_AT_[Type]_CoreDocument" },
+  { value: "video", label: "Video", icon: Video, description: "Walkthrough videos, reference clips", hint: "L1_AT_[Type]_Video" },
+  { value: "reference", label: "Reference", icon: File, description: "Zone planning guides, pitfall notes, budget signals", hint: "L1_AT_[Type]_Reference" },
 ];
 
 function formatBytes(bytes: number | null) {

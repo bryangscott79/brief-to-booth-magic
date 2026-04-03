@@ -212,42 +212,44 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            ← Clients
-          </button>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-4 -mx-1 px-1 border-b border-border">
+        <div className="flex items-start justify-between pt-1">
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white text-lg font-bold"
-              style={{ backgroundColor: client.primary_color || "hsl(var(--primary))" }}
-            >
-              {client.name.charAt(0)}
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">{client.name}</h2>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {client.industry && <span>{client.industry}</span>}
-                {client.website && (
-                  <>
-                    <span>·</span>
-                    <a href={client.website} target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-foreground">
-                      <Globe className="h-3 w-3" />
-                      {client.website.replace(/^https?:\/\//, "")}
-                    </a>
-                  </>
-                )}
+            <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+              ← Clients
+            </button>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-white text-lg font-bold"
+                style={{ backgroundColor: client.primary_color || "hsl(var(--primary))" }}
+              >
+                {client.name.charAt(0)}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">{client.name}</h2>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {client.industry && <span>{client.industry}</span>}
+                  {client.website && (
+                    <>
+                      <span>·</span>
+                      <a href={client.website} target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-foreground">
+                        <Globe className="h-3 w-3" />
+                        {client.website.replace(/^https?:\/\//, "")}
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => setShowAddEntry(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Add Intelligence
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => setShowAddEntry(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add Intelligence
+            </Button>
+          </div>
         </div>
       </div>
 

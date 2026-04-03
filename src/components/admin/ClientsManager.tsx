@@ -384,14 +384,19 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
             const catEntries = filtered.filter(e => e.category === cat);
             if (catEntries.length === 0) return null;
             const Icon = meta.icon;
+            const isCollapsed = collapsedSections[cat] ?? false;
             return (
               <div key={cat} className="space-y-2">
-                <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCollapsedSections(prev => ({ ...prev, [cat]: !isCollapsed }))}
+                  className="flex items-center gap-2 w-full text-left hover:bg-muted/30 rounded-md px-1 py-1 -mx-1 transition-colors"
+                >
+                  {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                   <Icon className={cn("h-4 w-4", meta.color)} />
                   <span className="text-sm font-semibold">{meta.label}</span>
                   <span className="text-xs text-muted-foreground">({catEntries.length})</span>
-                </div>
-                {catEntries.map(entry => (
+                </button>
+                {!isCollapsed && catEntries.map(entry => (
                   <div key={entry.id} className="flex items-start gap-3 p-3 border border-border rounded-lg hover:bg-muted/30 group transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -402,6 +407,21 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2">{entry.content}</p>
+                      {/* Color swatches for entries with hex values */}
+                      {(() => {
+                        const hexMatches = entry.content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+                        if (!hexMatches || hexMatches.length === 0) return null;
+                        return (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {hexMatches.map((hex, i) => (
+                              <div key={i} className="flex items-center gap-1">
+                                <div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
+                                <span className="text-[10px] font-mono text-muted-foreground">{hex}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {entry.tags && entry.tags.length > 0 && (
                         <div className="flex gap-1 mt-1.5 flex-wrap">
                           {entry.tags.map(tag => (

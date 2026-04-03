@@ -204,6 +204,11 @@ export function ActivationTypeKnowledgeBase({ activationTypeId }: { activationTy
             <p className="text-xs text-muted-foreground">
               Drop files into <span className="font-medium text-foreground">{currentFolderMeta?.label}</span> — {currentFolderMeta?.description}
             </p>
+            {currentFolderMeta?.hint && (
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                Suggested prefix: <code className="bg-muted px-1 rounded">{currentFolderMeta.hint}</code>
+              </p>
+            )}
           </>
         )}
       </div>

@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   useClients, useUpsertClient, useDeleteClient,
   useBrandIntelligence, useUpsertBrandIntelligence, useDeleteBrandIntelligence, useApproveBrandIntelligence,
+  useBatchCreateIntelligence,
   type Client, type BrandIntelligenceEntry,
 } from "@/hooks/useClients";
+import { useUpsertBrandGuidelines } from "@/hooks/useBrandGuidelines";
+import { useBrandGuidelines } from "@/hooks/useBrandGuidelines";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { BrandGuidelinesEditor } from "@/components/admin/BrandGuidelinesEditor";
 import { BrandAssetLibrary } from "@/components/admin/BrandAssetLibrary";
 import { ClientBrandKnowledgeBase } from "@/components/admin/ClientBrandKnowledgeBase";

@@ -203,11 +203,121 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
   const { data: entries = [], isLoading } = useBrandIntelligence(client.id);
   const deleteEntry = useDeleteBrandIntelligence();
   const approve = useApproveBrandIntelligence();
+  const upsertGuidelines = useUpsertBrandGuidelines();
+  const { data: guidelines } = useBrandGuidelines(client.id);
+  const batchCreate = useBatchCreateIntelligence();
+  const { toast } = useToast();
+  const { user } = useAuth();
 
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<BrandIntelligenceEntry | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [isScraping, setIsScraping] = useState(false);
+  const [showScrapeInput, setShowScrapeInput] = useState(false);
+
+  // Auto-populate brand guidelines when approving an entry with color data
+  const handleApprove = useCallback(async (entry: BrandIntelligenceEntry) => {
+    await approve.mutateAsync({ id: entry.id, clientId: client.id });
+
+    // Auto-populate guidelines with color data
+    if (entry.category === "visual_identity") {
+      const hexMatches = entry.content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+      if (hexMatches && hexMatches.length > 0) {
+        const existingColors = guidelines?.colorSystem?.primary || [];
+        const newColors = hexMatches
+          .filter(hex => !existingColors.some((c: any) => c.hex?.toLowerCase() === hex.toLowerCase()))
+          .map(hex => ({ hex, name: "", usage: "" }));
+
+        if (newColors.length > 0) {
+          try {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              colorSystem: {
+                primary: [...existingColors, ...newColors],
+                secondary: guidelines?.colorSystem?.secondary || [],
+                accent: guidelines?.colorSystem?.accent || [],
+                forbidden: guidelines?.colorSystem?.forbidden || [],
+              },
+            });
+            toast({ title: `${newColors.length} color(s) added to Brand Guidelines` });
+          } catch { /* silent fail — approval still succeeded */ }
+        }
+      }
+    }
+  }, [approve, client.id, guidelines, upsertGuidelines, toast]);
+
+  // Scrape brand guidelines from URL
+  const handleScrape = async () => {
+    if (!scrapeUrl.trim()) return;
+    setIsScraping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-brand-guidelines", {
+        body: { url: scrapeUrl },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      if (data.entries && data.entries.length > 0) {
+        await batchCreate.mutateAsync(
+          data.entries.map((e: any) => ({
+            client_id: client.id,
+            category: e.category,
+            title: e.title,
+            content: e.content,
+            tags: e.tags,
+            source: "ai_extracted" as const,
+            is_approved: false,
+            confidence_score: 0.8,
+          }))
+        );
+        toast({ title: `Scraped ${data.entries.length} brand intelligence entries from URL` });
+      } else {
+        toast({ title: "No brand data found", description: "Try a different URL or upload a PDF instead", variant: "destructive" });
+      }
+      setScrapeUrl("");
+      setShowScrapeInput(false);
+    } catch (e: any) {
+      toast({ title: "Scrape failed", description: e.message, variant: "destructive" });
+    } finally {
+      setIsScraping(false);
+    }
+  };
+
+  // Detect duplicate entries in pending
+  const getDuplicateGroups = () => {
+    const groups: Record<string, BrandIntelligenceEntry[]> = {};
+    pending.forEach(entry => {
+      const key = `${entry.category}::${entry.title.toLowerCase().trim()}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(entry);
+    });
+    return Object.values(groups).filter(g => g.length > 1);
+  };
+
+  const handleMergeDuplicates = async (dupes: BrandIntelligenceEntry[]) => {
+    if (dupes.length < 2) return;
+    // Keep first, merge content, delete rest
+    const merged = dupes[0];
+    const extraContent = dupes.slice(1).map(d => d.content).join("\n---\n");
+    const mergedContent = `${merged.content}\n---\n${extraContent}`;
+    const mergedTags = [...new Set(dupes.flatMap(d => d.tags || []))];
+
+    await useUpsertBrandIntelligence().mutateAsync({
+      id: merged.id,
+      client_id: client.id,
+      category: merged.category,
+      title: merged.title,
+      content: mergedContent,
+      tags: mergedTags,
+    });
+
+    for (const dupe of dupes.slice(1)) {
+      await deleteEntry.mutateAsync({ id: dupe.id, clientId: client.id });
+    }
+    toast({ title: "Duplicates merged" });
+  };
 
   const pending = entries.filter(e => !e.is_approved);
   const approved = entries.filter(e => e.is_approved);

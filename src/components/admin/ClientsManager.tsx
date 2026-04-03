@@ -6,6 +6,7 @@ import {
 } from "@/hooks/useClients";
 import { BrandGuidelinesEditor } from "@/components/admin/BrandGuidelinesEditor";
 import { BrandAssetLibrary } from "@/components/admin/BrandAssetLibrary";
+import { ClientBrandKnowledgeBase } from "@/components/admin/ClientBrandKnowledgeBase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

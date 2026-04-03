@@ -203,10 +203,13 @@ export function AgencyKnowledgeBase() {
       <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-4">
         <Building2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-semibold">Agency Knowledge Base</p>
+          <p className="text-sm font-semibold">Layer 3 — Operational Context Library</p>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
-            Upload agency-level documents that inform all projects. Organize by folder to keep activation types,
-            cost data, operations docs, and branding materials structured for AI reference.
+            Agency-wide reference documents that ground AI outputs in what's actually buildable, how it's priced,
+            and how the process works. One document per concept for best RAG retrieval.
+          </p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            Naming convention: <code className="bg-muted px-1 rounded">L3_OPS_[Topic]</code>
           </p>
         </div>
       </div>

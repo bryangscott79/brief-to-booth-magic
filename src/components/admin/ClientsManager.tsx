@@ -362,6 +362,10 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
             </div>
           </div>
           <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowScrapeInput(!showScrapeInput)}>
+              <Link2 className="h-3.5 w-3.5 mr-1" />
+              Scrape from URL
+            </Button>
             <Button size="sm" onClick={() => setShowAddEntry(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add Intelligence

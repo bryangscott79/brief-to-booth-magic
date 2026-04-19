@@ -34,7 +34,14 @@ const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Rhino = lazy(() => import("./pages/Rhino"));
 const Suite = lazy(() => import("./pages/Suite"));
 const AgencyAccount = lazy(() => import("./pages/AgencyAccount"));
-const Explore = lazy(() => import("./pages/Explore"));
+const Clients = lazy(() => import("./pages/Clients"));
+const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
+const AgencyKnowledge = lazy(() => import("./pages/AgencyKnowledge"));
+const ActivationTypes = lazy(() => import("./pages/ActivationTypes"));
+const ActivationTypeDashboard = lazy(() => import("./pages/ActivationTypeDashboard"));
+const AgencyTeam = lazy(() => import("./pages/AgencyTeam"));
+const SuperAdmins = lazy(() => import("./pages/SuperAdmins"));
+// const Explore = lazy(() => import("./pages/Explore")); // Hidden — 360° Explorer
 
 const queryClient = new QueryClient();
 
@@ -134,16 +141,52 @@ const App = () => (
                   <Team />
                 </ProtectedRoute>
               } />
+              <Route path="/clients" element={
+                <ProtectedRoute>
+                  <Clients />
+                </ProtectedRoute>
+              } />
+              <Route path="/clients/:clientId" element={
+                <ProtectedRoute>
+                  <ClientDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/agency/knowledge" element={
+                <ProtectedRoute>
+                  <AgencyKnowledge />
+                </ProtectedRoute>
+              } />
+              <Route path="/agency/activation-types" element={
+                <ProtectedRoute>
+                  <ActivationTypes />
+                </ProtectedRoute>
+              } />
+              <Route path="/agency/activation-types/:typeId" element={
+                <ProtectedRoute>
+                  <ActivationTypeDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/agency/team" element={
+                <ProtectedRoute>
+                  <AgencyTeam />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/super-admins" element={
+                <ProtectedRoute>
+                  <SuperAdmins />
+                </ProtectedRoute>
+              } />
               <Route path="/suite" element={
                 <ProtectedRoute>
                   <Suite />
                 </ProtectedRoute>
               } />
-              <Route path="/explore" element={
+              {/* 360° Explorer hidden — kept for future re-enable */}
+              {/* <Route path="/explore" element={
                 <ProtectedRoute>
                   <Explore />
                 </ProtectedRoute>
-              } />
+              } /> */}
               <Route path="/invite/:token" element={<AcceptInvite />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

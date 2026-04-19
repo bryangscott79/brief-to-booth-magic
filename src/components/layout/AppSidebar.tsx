@@ -14,6 +14,8 @@ import {
   LayoutGrid,
   Eye,
   EyeOff,
+  BookOpen,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,14 +38,18 @@ import { cn } from "@/lib/utils";
 
 // ─── Nav sets ─────────────────────────────────────────────────────────────────
 const agencyNavItems = [
-  { path: "/projects", label: "All Projects", icon: FolderOpen },
-  { path: "/company",  label: "Company Profile", icon: Building2 },
-  { path: "/team",     label: "Team", icon: Users },
+  { path: "/projects",                 label: "All Projects",      icon: FolderOpen },
+  { path: "/clients",                  label: "Clients",           icon: Users },
+  { path: "/agency/activation-types",  label: "Activation Types",  icon: Sparkles },
+  { path: "/agency/knowledge",         label: "Agency Knowledge",  icon: BookOpen },
+  { path: "/company",                  label: "Company Profile",   icon: Building2 },
+  { path: "/agency/team",              label: "Team",              icon: Users },
 ];
 
 const platformOwnerNavItems = [
-  { path: "/admin",    label: "Accounts", icon: LayoutGrid },
-  { path: "/platform-invites", label: "Invites", icon: Mail },
+  { path: "/admin",               label: "Accounts",     icon: LayoutGrid },
+  { path: "/admin/super-admins",  label: "Super Admins", icon: Crown },
+  { path: "/platform-invites",    label: "Invites",      icon: Mail },
 ];
 
 export function AppSidebar() {
@@ -56,7 +62,14 @@ export function AppSidebar() {
   const { data: isSuperAdmin } = useIsSuperAdmin();
   const { previewMode, setPreviewMode } = usePlatformOwner();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (location.pathname === path) return true;
+    // "/clients" should stay active on "/clients/:id" detail routes
+    if (path === "/clients" && location.pathname.startsWith("/clients/")) return true;
+    // "/agency/activation-types" should stay active on its detail routes
+    if (path === "/agency/activation-types" && location.pathname.startsWith("/agency/activation-types/")) return true;
+    return false;
+  };
 
   const handleSignOut = async () => {
     await signOut();

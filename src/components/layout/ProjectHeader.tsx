@@ -9,7 +9,7 @@ import {
   Download,
   ChevronRight,
   FolderOpen,
-  Compass,
+  // Compass, // Hidden — 360° Explorer
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectSync } from "@/hooks/useProjectSync";
@@ -24,7 +24,7 @@ const PROJECT_STEPS = [
   { path: "/spatial",  label: "Spatial",  shortLabel: "Spatial",  icon: Grid3X3 },
   { path: "/prompts",  label: "Prompts",  shortLabel: "Prompts",  icon: FileText },
   { path: "/files",    label: "Files",    shortLabel: "Files",    icon: ImageIcon },
-  { path: "/explore",  label: "360°",     shortLabel: "360°",     icon: Compass },
+  // { path: "/explore",  label: "360°",     shortLabel: "360°",     icon: Compass }, // Hidden — low value for now
   { path: "/export",   label: "Export",   shortLabel: "Export",   icon: Download },
 ];
 

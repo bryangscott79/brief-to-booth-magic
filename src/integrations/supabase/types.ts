@@ -10,116 +10,190 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "12.2.3 (519615d)"
   }
   public: {
     Tables: {
       activation_types: {
         Row: {
           category: string
-          created_at: string
+          created_at: string | null
           default_scale: string | null
           default_sqft: number | null
           description: string | null
           element_emphasis: Json | null
           icon: string | null
           id: string
-          is_builtin: boolean
+          is_builtin: boolean | null
           label: string
-          parent_type_affinity: string[]
+          parent_type_affinity: string[] | null
           render_context_override: string | null
           slug: string
-          updated_at: string
+          updated_at: string | null
           user_id: string | null
         }
         Insert: {
-          category?: string
-          created_at?: string
+          category: string
+          created_at?: string | null
           default_scale?: string | null
           default_sqft?: number | null
           description?: string | null
           element_emphasis?: Json | null
           icon?: string | null
           id?: string
-          is_builtin?: boolean
+          is_builtin?: boolean | null
           label: string
-          parent_type_affinity?: string[]
+          parent_type_affinity?: string[] | null
           render_context_override?: string | null
           slug: string
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Update: {
           category?: string
-          created_at?: string
+          created_at?: string | null
           default_scale?: string | null
           default_sqft?: number | null
           description?: string | null
           element_emphasis?: Json | null
           icon?: string | null
           id?: string
-          is_builtin?: boolean
+          is_builtin?: boolean | null
           label?: string
-          parent_type_affinity?: string[]
+          parent_type_affinity?: string[] | null
           render_context_override?: string | null
           slug?: string
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Relationships: []
       }
-      brand_intelligence: {
+      agencies: {
         Row: {
-          approved_at: string | null
-          category: string
-          client_id: string
-          confidence_score: number | null
-          content: string
           created_at: string
+          default_booth_sizes: string | null
           id: string
-          is_approved: boolean
-          source: string
-          source_project_id: string | null
-          tags: string[] | null
-          title: string
+          industry: string | null
+          logo_dark_url: string | null
+          logo_url: string | null
+          name: string
+          primary_color: string | null
+          primary_owner_id: string
+          secondary_color: string | null
+          settings: Json
+          slug: string | null
+          tagline: string | null
           updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_booth_sizes?: string | null
+          id?: string
+          industry?: string | null
+          logo_dark_url?: string | null
+          logo_url?: string | null
+          name: string
+          primary_color?: string | null
+          primary_owner_id: string
+          secondary_color?: string | null
+          settings?: Json
+          slug?: string | null
+          tagline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_booth_sizes?: string | null
+          id?: string
+          industry?: string | null
+          logo_dark_url?: string | null
+          logo_url?: string | null
+          name?: string
+          primary_color?: string | null
+          primary_owner_id?: string
+          secondary_color?: string | null
+          settings?: Json
+          slug?: string | null
+          tagline?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agency_members: {
+        Row: {
+          agency_id: string
+          id: string
+          invited_by: string | null
+          joined_at: string
+          role: string
           user_id: string
         }
         Insert: {
-          approved_at?: string | null
-          category: string
-          client_id: string
-          confidence_score?: number | null
-          content: string
-          created_at?: string
+          agency_id: string
           id?: string
-          is_approved?: boolean
-          source?: string
-          source_project_id?: string | null
-          tags?: string[] | null
-          title: string
-          updated_at?: string
+          invited_by?: string | null
+          joined_at?: string
+          role?: string
           user_id: string
         }
         Update: {
-          approved_at?: string | null
-          category?: string
-          client_id?: string
-          confidence_score?: number | null
-          content?: string
-          created_at?: string
+          agency_id?: string
           id?: string
-          is_approved?: boolean
-          source?: string
-          source_project_id?: string | null
-          tags?: string[] | null
-          title?: string
-          updated_at?: string
+          invited_by?: string | null
+          joined_at?: string
+          role?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "brand_intelligence_client_id_fkey"
+            foreignKeyName: "agency_members_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_assets: {
+        Row: {
+          asset_type: string
+          client_id: string
+          created_at: string | null
+          file_type: string | null
+          id: string
+          label: string
+          metadata: Json | null
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          asset_type: string
+          client_id: string
+          created_at?: string | null
+          file_type?: string | null
+          id?: string
+          label: string
+          metadata?: Json | null
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          asset_type?: string
+          client_id?: string
+          created_at?: string | null
+          file_type?: string | null
+          id?: string
+          label?: string
+          metadata?: Json | null
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_assets_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -127,373 +201,527 @@ export type Database = {
           },
         ]
       }
+      brand_guidelines: {
+        Row: {
+          client_id: string
+          color_system: Json | null
+          created_at: string | null
+          guidelines_version: string | null
+          id: string
+          logo_rules: Json | null
+          materials_finishes: Json | null
+          photography_style: Json | null
+          tone_of_voice: Json | null
+          typography: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          color_system?: Json | null
+          created_at?: string | null
+          guidelines_version?: string | null
+          id?: string
+          logo_rules?: Json | null
+          materials_finishes?: Json | null
+          photography_style?: Json | null
+          tone_of_voice?: Json | null
+          typography?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          color_system?: Json | null
+          created_at?: string | null
+          guidelines_version?: string | null
+          id?: string
+          logo_rules?: Json | null
+          materials_finishes?: Json | null
+          photography_style?: Json | null
+          tone_of_voice?: Json | null
+          typography?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_guidelines_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_intelligence: {
+        Row: {
+          category: string
+          created_at: string | null
+          id: string
+          key: string
+          metadata: Json | null
+          project_id: string | null
+          relevance_weight: number | null
+          source: string | null
+          updated_at: string | null
+          user_id: string
+          value: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          id?: string
+          key: string
+          metadata?: Json | null
+          project_id?: string | null
+          relevance_weight?: number | null
+          source?: string | null
+          updated_at?: string | null
+          user_id: string
+          value: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          id?: string
+          key?: string
+          metadata?: Json | null
+          project_id?: string | null
+          relevance_weight?: number | null
+          source?: string | null
+          updated_at?: string | null
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_intelligence_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
-          created_at: string
-          description: string | null
+          agency_id: string | null
+          created_at: string | null
           id: string
           industry: string | null
           logo_url: string | null
           name: string
-          primary_color: string | null
-          secondary_color: string | null
-          updated_at: string
+          notes: string | null
+          updated_at: string | null
           user_id: string
           website: string | null
         }
         Insert: {
-          created_at?: string
-          description?: string | null
+          agency_id?: string | null
+          created_at?: string | null
           id?: string
           industry?: string | null
           logo_url?: string | null
           name: string
-          primary_color?: string | null
-          secondary_color?: string | null
-          updated_at?: string
+          notes?: string | null
+          updated_at?: string | null
           user_id: string
           website?: string | null
         }
         Update: {
-          created_at?: string
-          description?: string | null
+          agency_id?: string | null
+          created_at?: string | null
           id?: string
           industry?: string | null
           logo_url?: string | null
           name?: string
-          primary_color?: string | null
-          secondary_color?: string | null
-          updated_at?: string
-          user_id?: string
-          website?: string | null
-        }
-        Relationships: []
-      }
-      company_profiles: {
-        Row: {
-          address: string | null
-          brand_color: string | null
-          company_name: string | null
-          contact_email: string | null
-          contact_name: string | null
-          contact_phone: string | null
-          created_at: string
-          default_booth_sizes: string[] | null
-          id: string
-          industry: string | null
-          logo_dark_url: string | null
-          logo_url: string | null
-          notes: string | null
-          secondary_color: string | null
-          tagline: string | null
-          updated_at: string
-          user_id: string
-          website: string | null
-        }
-        Insert: {
-          address?: string | null
-          brand_color?: string | null
-          company_name?: string | null
-          contact_email?: string | null
-          contact_name?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          default_booth_sizes?: string[] | null
-          id?: string
-          industry?: string | null
-          logo_dark_url?: string | null
-          logo_url?: string | null
           notes?: string | null
-          secondary_color?: string | null
-          tagline?: string | null
-          updated_at?: string
-          user_id: string
-          website?: string | null
-        }
-        Update: {
-          address?: string | null
-          brand_color?: string | null
-          company_name?: string | null
-          contact_email?: string | null
-          contact_name?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          default_booth_sizes?: string[] | null
-          id?: string
-          industry?: string | null
-          logo_dark_url?: string | null
-          logo_url?: string | null
-          notes?: string | null
-          secondary_color?: string | null
-          tagline?: string | null
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string
           website?: string | null
-        }
-        Relationships: []
-      }
-      custom_project_types: {
-        Row: {
-          accent_color: string | null
-          confirmed_by_user: boolean
-          created_at: string
-          default_size: number | null
-          description: string | null
-          icon: string | null
-          id: string
-          is_ai_detected: boolean
-          label: string
-          render_context: string | null
-          short_label: string | null
-          source_brief_id: string | null
-          spatial_unit: string | null
-          tagline: string | null
-          type_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          accent_color?: string | null
-          confirmed_by_user?: boolean
-          created_at?: string
-          default_size?: number | null
-          description?: string | null
-          icon?: string | null
-          id?: string
-          is_ai_detected?: boolean
-          label: string
-          render_context?: string | null
-          short_label?: string | null
-          source_brief_id?: string | null
-          spatial_unit?: string | null
-          tagline?: string | null
-          type_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          accent_color?: string | null
-          confirmed_by_user?: boolean
-          created_at?: string
-          default_size?: number | null
-          description?: string | null
-          icon?: string | null
-          id?: string
-          is_ai_detected?: boolean
-          label?: string
-          render_context?: string | null
-          short_label?: string | null
-          source_brief_id?: string | null
-          spatial_unit?: string | null
-          tagline?: string | null
-          type_id?: string
-          updated_at?: string
-          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "custom_project_types_source_brief_id_fkey"
-            columns: ["source_brief_id"]
+            foreignKeyName: "clients_agency_id_fkey"
+            columns: ["agency_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "agencies"
             referencedColumns: ["id"]
           },
         ]
       }
-      knowledge_base_files: {
+      company_members: {
         Row: {
-          created_at: string
-          extracted_text: string | null
-          file_name: string
-          file_size_bytes: number | null
-          file_type: string
+          company_id: string
+          created_at: string | null
           id: string
-          project_id: string
-          public_url: string
-          storage_path: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          extracted_text?: string | null
-          file_name: string
-          file_size_bytes?: number | null
-          file_type: string
-          id?: string
-          project_id: string
-          public_url: string
-          storage_path: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          extracted_text?: string | null
-          file_name?: string
-          file_size_bytes?: number | null
-          file_type?: string
-          id?: string
-          project_id?: string
-          public_url?: string
-          storage_path?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "knowledge_base_files_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      platform_invites: {
-        Row: {
-          accepted_at: string | null
-          created_at: string
-          email: string
-          expires_at: string
-          id: string
-          invited_by: string
           role: string
+          user_id: string
         }
         Insert: {
-          accepted_at?: string | null
-          created_at?: string
-          email: string
-          expires_at?: string
+          company_id: string
+          created_at?: string | null
           id?: string
-          invited_by: string
           role?: string
+          user_id: string
         }
         Update: {
-          accepted_at?: string | null
-          created_at?: string
-          email?: string
-          expires_at?: string
+          company_id?: string
+          created_at?: string | null
           id?: string
-          invited_by?: string
           role?: string
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          avatar_url: string | null
-          created_at: string
-          display_name: string | null
-          email: string | null
-          id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string
-          display_name?: string | null
-          email?: string | null
-          id?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string
-          display_name?: string | null
-          email?: string | null
-          id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      project_images: {
-        Row: {
-          angle_id: string
-          angle_name: string
-          created_at: string
-          id: string
-          is_current: boolean
-          project_id: string
-          public_url: string
-          storage_path: string
-          user_id: string
-        }
-        Insert: {
-          angle_id: string
-          angle_name: string
-          created_at?: string
-          id?: string
-          is_current?: boolean
-          project_id: string
-          public_url: string
-          storage_path: string
-          user_id: string
-        }
-        Update: {
-          angle_id?: string
-          angle_name?: string
-          created_at?: string
-          id?: string
-          is_current?: boolean
-          project_id?: string
-          public_url?: string
-          storage_path?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "project_images_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
       }
-      project_invites: {
+      jobs: {
+        Row: {
+          booth_size: string
+          client: string
+          created_at: string
+          id: string
+          name: string
+          show_city: string
+          show_date: string
+          show_name: string
+          status: string
+        }
+        Insert: {
+          booth_size: string
+          client: string
+          created_at?: string
+          id?: string
+          name: string
+          show_city: string
+          show_date: string
+          show_name: string
+          status: string
+        }
+        Update: {
+          booth_size?: string
+          client?: string
+          created_at?: string
+          id?: string
+          name?: string
+          show_city?: string
+          show_date?: string
+          show_name?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      knowledge_chunks: {
+        Row: {
+          agency_id: string
+          chunk_index: number
+          content: string
+          content_tsv: unknown
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          scope: string
+          scope_id: string
+          token_count: number | null
+        }
+        Insert: {
+          agency_id: string
+          chunk_index: number
+          content: string
+          content_tsv?: unknown
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          scope: string
+          scope_id: string
+          token_count?: number | null
+        }
+        Update: {
+          agency_id?: string
+          chunk_index?: number
+          content?: string
+          content_tsv?: unknown
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          scope?: string
+          scope_id?: string
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_documents: {
+        Row: {
+          agency_id: string
+          auto_tags: string[]
+          chunk_count: number
+          created_at: string
+          doc_type: string | null
+          extracted_text: string | null
+          file_size_bytes: number | null
+          filename: string
+          id: string
+          metadata: Json
+          mime_type: string | null
+          processing_error: string | null
+          scope: string
+          scope_id: string
+          status: string
+          storage_bucket: string
+          storage_path: string
+          summary: string | null
+          title: string | null
+          updated_at: string
+          uploaded_by: string
+          user_tags: string[]
+        }
+        Insert: {
+          agency_id: string
+          auto_tags?: string[]
+          chunk_count?: number
+          created_at?: string
+          doc_type?: string | null
+          extracted_text?: string | null
+          file_size_bytes?: number | null
+          filename: string
+          id?: string
+          metadata?: Json
+          mime_type?: string | null
+          processing_error?: string | null
+          scope: string
+          scope_id: string
+          status?: string
+          storage_bucket?: string
+          storage_path: string
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          uploaded_by: string
+          user_tags?: string[]
+        }
+        Update: {
+          agency_id?: string
+          auto_tags?: string[]
+          chunk_count?: number
+          created_at?: string
+          doc_type?: string | null
+          extracted_text?: string | null
+          file_size_bytes?: number | null
+          filename?: string
+          id?: string
+          metadata?: Json
+          mime_type?: string | null
+          processing_error?: string | null
+          scope?: string
+          scope_id?: string
+          status?: string
+          storage_bucket?: string
+          storage_path?: string
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          uploaded_by?: string
+          user_tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parsed_bills: {
+        Row: {
+          applied: boolean
+          file_name: string | null
+          file_path: string | null
+          id: string
+          invoice_number: string | null
+          job_id: string
+          parsed_at: string
+          raw_text: string | null
+          show_name: string | null
+          total: number | null
+          vendor: string
+        }
+        Insert: {
+          applied?: boolean
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          invoice_number?: string | null
+          job_id: string
+          parsed_at?: string
+          raw_text?: string | null
+          show_name?: string | null
+          total?: number | null
+          vendor: string
+        }
+        Update: {
+          applied?: boolean
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          invoice_number?: string | null
+          job_id?: string
+          parsed_at?: string
+          raw_text?: string | null
+          show_name?: string | null
+          total?: number | null
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parsed_bills_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parsed_line_items: {
+        Row: {
+          amount: number | null
+          bill_id: string
+          description: string
+          id: string
+          pi_category: string | null
+        }
+        Insert: {
+          amount?: number | null
+          bill_id: string
+          description: string
+          id?: string
+          pi_category?: string | null
+        }
+        Update: {
+          amount?: number | null
+          bill_id?: string
+          description?: string
+          id?: string
+          pi_category?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parsed_line_items_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "parsed_bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_invites: {
         Row: {
           accepted_at: string | null
           accepted_by: string | null
+          agency_id: string | null
           created_at: string
-          created_by: string
-          email: string | null
-          expires_at: string
+          email: string
+          expires_at: string | null
           id: string
-          label: string | null
-          project_id: string
-          scope: string
-          token: string
+          invite_type: string
+          invited_by: string
+          role: string | null
+          status: string
         }
         Insert: {
           accepted_at?: string | null
           accepted_by?: string | null
+          agency_id?: string | null
           created_at?: string
-          created_by: string
-          email?: string | null
-          expires_at: string
+          email: string
+          expires_at?: string | null
           id?: string
-          label?: string | null
-          project_id: string
-          scope?: string
-          token?: string
+          invite_type: string
+          invited_by: string
+          role?: string | null
+          status?: string
         }
         Update: {
           accepted_at?: string | null
           accepted_by?: string | null
+          agency_id?: string | null
           created_at?: string
-          created_by?: string
-          email?: string | null
-          expires_at?: string
+          email?: string
+          expires_at?: string | null
           id?: string
-          label?: string | null
-          project_id?: string
-          scope?: string
-          token?: string
+          invite_type?: string
+          invited_by?: string
+          role?: string | null
+          status?: string
         }
         Relationships: [
           {
-            foreignKeyName: "project_invites_project_id_fkey"
+            foreignKeyName: "pending_invites_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_assignments: {
+        Row: {
+          assigned_by: string | null
+          created_at: string | null
+          id: string
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          project_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          project_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_assignments_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -501,155 +729,141 @@ export type Database = {
           },
         ]
       }
-      project_type_configs: {
-        Row: {
-          cost_category_overrides: Json | null
-          created_at: string
-          description: string | null
-          element_overrides: Json | null
-          id: string
-          is_enabled: boolean
-          label: string | null
-          project_type_id: string
-          render_context: string | null
-          sort_order: number
-          tagline: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          cost_category_overrides?: Json | null
-          created_at?: string
-          description?: string | null
-          element_overrides?: Json | null
-          id?: string
-          is_enabled?: boolean
-          label?: string | null
-          project_type_id: string
-          render_context?: string | null
-          sort_order?: number
-          tagline?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          cost_category_overrides?: Json | null
-          created_at?: string
-          description?: string | null
-          element_overrides?: Json | null
-          id?: string
-          is_enabled?: boolean
-          label?: string | null
-          project_type_id?: string
-          render_context?: string | null
-          sort_order?: number
-          tagline?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       projects: {
         Row: {
+          account_executive: string | null
           activation_type: string | null
-          adjacent_activations: Json | null
-          big_idea: Json | null
-          brief_file_name: string | null
-          brief_file_url: string | null
-          brief_text: string | null
-          budget_logic: Json | null
+          agency_id: string | null
+          booth_size: string
+          booth_style: string
+          budget: Json | null
           client_id: string | null
+          client_logo: string | null
+          client_name: string
+          completion: string | null
           created_at: string
-          digital_storytelling: Json | null
-          experience_framework: Json | null
+          description: string | null
+          design_start: string | null
+          event_dates: string | null
+          files: Json | null
           footprint_sqft: number | null
-          hero_prompt: string | null
-          hero_style_confirmed: boolean | null
-          human_connection: Json | null
           id: string
-          inherits_brand: boolean
-          inherits_brief: boolean
-          interactive_mechanics: Json | null
-          is_suite: boolean
-          name: string
+          industry: string
+          inherits_brand: boolean | null
+          inherits_brief: boolean | null
+          job_number: string
+          milestones: Json | null
           parent_id: string | null
-          parsed_brief: Json | null
-          project_type: string
-          render_prompts: Json | null
+          project_manager: string | null
+          project_title: string
+          related_projects: string[] | null
           scale_classification: string | null
-          spatial_strategy: Json | null
+          show_name: string
+          sort_order: number | null
+          specifications: Json | null
           status: string
           suite_notes: string | null
+          tags: string[] | null
+          team: Json | null
+          thumbnail: string | null
+          total_value: number
           updated_at: string
-          user_id: string
+          user_id: string | null
+          venue: string
+          year: number
         }
         Insert: {
+          account_executive?: string | null
           activation_type?: string | null
-          adjacent_activations?: Json | null
-          big_idea?: Json | null
-          brief_file_name?: string | null
-          brief_file_url?: string | null
-          brief_text?: string | null
-          budget_logic?: Json | null
+          agency_id?: string | null
+          booth_size: string
+          booth_style: string
+          budget?: Json | null
           client_id?: string | null
+          client_logo?: string | null
+          client_name: string
+          completion?: string | null
           created_at?: string
-          digital_storytelling?: Json | null
-          experience_framework?: Json | null
+          description?: string | null
+          design_start?: string | null
+          event_dates?: string | null
+          files?: Json | null
           footprint_sqft?: number | null
-          hero_prompt?: string | null
-          hero_style_confirmed?: boolean | null
-          human_connection?: Json | null
           id?: string
-          inherits_brand?: boolean
-          inherits_brief?: boolean
-          interactive_mechanics?: Json | null
-          is_suite?: boolean
-          name: string
+          industry: string
+          inherits_brand?: boolean | null
+          inherits_brief?: boolean | null
+          job_number: string
+          milestones?: Json | null
           parent_id?: string | null
-          parsed_brief?: Json | null
-          project_type?: string
-          render_prompts?: Json | null
+          project_manager?: string | null
+          project_title: string
+          related_projects?: string[] | null
           scale_classification?: string | null
-          spatial_strategy?: Json | null
+          show_name: string
+          sort_order?: number | null
+          specifications?: Json | null
           status?: string
           suite_notes?: string | null
+          tags?: string[] | null
+          team?: Json | null
+          thumbnail?: string | null
+          total_value?: number
           updated_at?: string
-          user_id: string
+          user_id?: string | null
+          venue: string
+          year: number
         }
         Update: {
+          account_executive?: string | null
           activation_type?: string | null
-          adjacent_activations?: Json | null
-          big_idea?: Json | null
-          brief_file_name?: string | null
-          brief_file_url?: string | null
-          brief_text?: string | null
-          budget_logic?: Json | null
+          agency_id?: string | null
+          booth_size?: string
+          booth_style?: string
+          budget?: Json | null
           client_id?: string | null
+          client_logo?: string | null
+          client_name?: string
+          completion?: string | null
           created_at?: string
-          digital_storytelling?: Json | null
-          experience_framework?: Json | null
+          description?: string | null
+          design_start?: string | null
+          event_dates?: string | null
+          files?: Json | null
           footprint_sqft?: number | null
-          hero_prompt?: string | null
-          hero_style_confirmed?: boolean | null
-          human_connection?: Json | null
           id?: string
-          inherits_brand?: boolean
-          inherits_brief?: boolean
-          interactive_mechanics?: Json | null
-          is_suite?: boolean
-          name?: string
+          industry?: string
+          inherits_brand?: boolean | null
+          inherits_brief?: boolean | null
+          job_number?: string
+          milestones?: Json | null
           parent_id?: string | null
-          parsed_brief?: Json | null
-          project_type?: string
-          render_prompts?: Json | null
+          project_manager?: string | null
+          project_title?: string
+          related_projects?: string[] | null
           scale_classification?: string | null
-          spatial_strategy?: Json | null
+          show_name?: string
+          sort_order?: number | null
+          specifications?: Json | null
           status?: string
           suite_notes?: string | null
+          tags?: string[] | null
+          team?: Json | null
+          thumbnail?: string | null
+          total_value?: number
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
+          venue?: string
+          year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "projects_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "projects_client_id_fkey"
             columns: ["client_id"]
@@ -666,212 +880,251 @@ export type Database = {
           },
         ]
       }
-      rhino_renders: {
+      recon_lines: {
         Row: {
+          actual_cost: number | null
           created_at: string
+          est_cost: number | null
+          est_sell: number | null
+          full_markup: number | null
           id: string
-          notes: string | null
-          original_public_url: string
-          original_storage_path: string
-          polish_feedback: string | null
-          polish_prompt: string | null
-          polish_status: string
-          polished_public_url: string | null
-          polished_storage_path: string | null
-          project_id: string
-          updated_at: string
-          user_id: string
-          view_name: string | null
+          job_id: string
+          pi_category: string
+          pi_item: string
+          sell_price: number | null
+          sort_order: number
+          vendor: string
         }
         Insert: {
+          actual_cost?: number | null
           created_at?: string
+          est_cost?: number | null
+          est_sell?: number | null
+          full_markup?: number | null
           id?: string
-          notes?: string | null
-          original_public_url: string
-          original_storage_path: string
-          polish_feedback?: string | null
-          polish_prompt?: string | null
-          polish_status?: string
-          polished_public_url?: string | null
-          polished_storage_path?: string | null
-          project_id: string
-          updated_at?: string
-          user_id: string
-          view_name?: string | null
+          job_id: string
+          pi_category: string
+          pi_item: string
+          sell_price?: number | null
+          sort_order?: number
+          vendor: string
         }
         Update: {
+          actual_cost?: number | null
           created_at?: string
+          est_cost?: number | null
+          est_sell?: number | null
+          full_markup?: number | null
           id?: string
-          notes?: string | null
-          original_public_url?: string
-          original_storage_path?: string
-          polish_feedback?: string | null
-          polish_prompt?: string | null
-          polish_status?: string
-          polished_public_url?: string | null
-          polished_storage_path?: string | null
-          project_id?: string
-          updated_at?: string
-          user_id?: string
-          view_name?: string | null
+          job_id?: string
+          pi_category?: string
+          pi_item?: string
+          sell_price?: number | null
+          sort_order?: number
+          vendor?: string
         }
         Relationships: [
           {
-            foreignKeyName: "rhino_renders_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "recon_lines_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          role: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          role: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          role?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_intelligence: {
+        Row: {
+          audience_notes: string | null
+          booth_placement_tips: string | null
+          city: string | null
+          created_at: string | null
+          design_tips: string[] | null
+          id: string
+          industry: string | null
+          logistics_notes: string | null
+          show_name: string
+          source: string | null
+          source_project_id: string | null
+          traffic_patterns: string | null
+          typical_booth_sizes: string[] | null
+          union_labor_required: boolean | null
+          updated_at: string | null
+          user_id: string
+          venue: string | null
+        }
+        Insert: {
+          audience_notes?: string | null
+          booth_placement_tips?: string | null
+          city?: string | null
+          created_at?: string | null
+          design_tips?: string[] | null
+          id?: string
+          industry?: string | null
+          logistics_notes?: string | null
+          show_name: string
+          source?: string | null
+          source_project_id?: string | null
+          traffic_patterns?: string | null
+          typical_booth_sizes?: string[] | null
+          union_labor_required?: boolean | null
+          updated_at?: string | null
+          user_id: string
+          venue?: string | null
+        }
+        Update: {
+          audience_notes?: string | null
+          booth_placement_tips?: string | null
+          city?: string | null
+          created_at?: string | null
+          design_tips?: string[] | null
+          id?: string
+          industry?: string | null
+          logistics_notes?: string | null
+          show_name?: string
+          source?: string | null
+          source_project_id?: string | null
+          traffic_patterns?: string | null
+          typical_booth_sizes?: string[] | null
+          union_labor_required?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_intelligence_source_project_id_fkey"
+            columns: ["source_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
       }
-      show_costs: {
-        Row: {
-          badge_scan_cost: number | null
-          city: string
-          created_at: string
-          estimated_booth_cost_per_sqft: number | null
-          estimated_drayage_per_cwt: number | null
-          estimated_electrical_per_outlet: number | null
-          estimated_internet_cost: number | null
-          estimated_labor_rate_per_hr: number | null
-          estimated_lead_retrieval_cost: number | null
-          id: string
-          industry: string | null
-          is_preset: boolean | null
-          notes: string | null
-          show_name: string
-          union_labor_required: boolean | null
-          updated_at: string
-          user_id: string
-          venue: string | null
-        }
-        Insert: {
-          badge_scan_cost?: number | null
-          city: string
-          created_at?: string
-          estimated_booth_cost_per_sqft?: number | null
-          estimated_drayage_per_cwt?: number | null
-          estimated_electrical_per_outlet?: number | null
-          estimated_internet_cost?: number | null
-          estimated_labor_rate_per_hr?: number | null
-          estimated_lead_retrieval_cost?: number | null
-          id?: string
-          industry?: string | null
-          is_preset?: boolean | null
-          notes?: string | null
-          show_name: string
-          union_labor_required?: boolean | null
-          updated_at?: string
-          user_id: string
-          venue?: string | null
-        }
-        Update: {
-          badge_scan_cost?: number | null
-          city?: string
-          created_at?: string
-          estimated_booth_cost_per_sqft?: number | null
-          estimated_drayage_per_cwt?: number | null
-          estimated_electrical_per_outlet?: number | null
-          estimated_internet_cost?: number | null
-          estimated_labor_rate_per_hr?: number | null
-          estimated_lead_retrieval_cost?: number | null
-          id?: string
-          industry?: string | null
-          is_preset?: boolean | null
-          notes?: string | null
-          show_name?: string
-          union_labor_required?: boolean | null
-          updated_at?: string
-          user_id?: string
-          venue?: string | null
-        }
-        Relationships: []
-      }
-      team_members: {
-        Row: {
-          accepted_at: string | null
-          created_at: string
-          display_name: string
-          id: string
-          invited_by: string | null
-          invited_email: string | null
-          role: string
-          team_owner_id: string
-          user_id: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          created_at?: string
-          display_name?: string
-          id?: string
-          invited_by?: string | null
-          invited_email?: string | null
-          role?: string
-          team_owner_id: string
-          user_id: string
-        }
-        Update: {
-          accepted_at?: string | null
-          created_at?: string
-          display_name?: string
-          id?: string
-          invited_by?: string | null
-          invited_email?: string | null
-          role?: string
-          team_owner_id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_roles: {
-        Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      get_all_user_profiles: {
-        Args: never
+      accept_pending_invite: { Args: { _invite_id: string }; Returns: boolean }
+      current_agency_id: { Args: never; Returns: string }
+      has_project_access: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
+      is_agency_admin: {
+        Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_agency_member: {
+        Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_company_member: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      list_agency_members: {
+        Args: { _agency_id: string }
         Returns: {
-          avatar_url: string
-          created_at: string
-          display_name: string
           email: string
-          is_admin: boolean
-          is_super_admin: boolean
+          id: string
+          is_primary_owner: boolean
+          joined_at: string
+          role: string
           user_id: string
         }[]
       }
-      has_role: {
+      list_super_admins: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          user_id: string
+        }[]
+      }
+      match_knowledge_chunks: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
+          _agency_id: string
+          _match_count?: number
+          _query_embedding: string
+          _query_text: string
+          _scope_ids?: string[]
+          _scopes?: string[]
+          _vector_weight?: number
         }
+        Returns: {
+          bm25_score: number
+          chunk_id: string
+          content: string
+          document_id: string
+          hybrid_score: number
+          metadata: Json
+          scope: string
+          scope_id: string
+          similarity: number
+        }[]
+      }
+      my_pending_invites: {
+        Args: never
+        Returns: {
+          agency_id: string
+          agency_name: string
+          created_at: string
+          expires_at: string
+          id: string
+          invite_type: string
+          invited_by: string
+          role: string
+        }[]
+      }
+      revoke_super_admin: {
+        Args: { _target_user_id: string }
         Returns: boolean
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
-      app_role: "admin" | "member" | "super_admin"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -998,8 +1251,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      app_role: ["admin", "member", "super_admin"],
-    },
+    Enums: {},
   },
 } as const

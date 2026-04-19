@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +24,10 @@ interface GenerateHeroRequest {
   brandIntelligence?: BrandIntelEntry[];
   brandContext?: string;
   suiteContext?: string;
+  agency_id?: string;
+  client_id?: string;
+  activation_type_id?: string;
+  project_id?: string;
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
@@ -134,7 +140,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "" }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id }: GenerateHeroRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -164,6 +170,33 @@ serve(async (req) => {
     const scaleBlock = buildScaleBlock(boothSize);
     const designBlock = buildDesignContextBlock(designContext);
     const brandBlock = buildBrandIntelBlock(brandIntelligence);
+
+    // ── RAG: Retrieve knowledge base context ──
+    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    if (agency_id) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const ragQuery = [
+        prompt,
+        designContext?.heroInstallation?.name,
+        designContext?.creativeEmbrace?.join(", "),
+        designContext?.brandColors?.join(", "),
+      ].filter(Boolean).join(" — ").slice(0, 4000);
+      ragContext = await buildRagContext(supabase, {
+        query: ragQuery,
+        agencyId: agency_id,
+        clientId: client_id,
+        activationTypeId: activation_type_id,
+        projectId: project_id,
+      });
+      if (ragContext.chunks.length > 0) {
+        console.log(`[generate-hero] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
+      }
+    }
+    const ragBlock = ragContext.formatted ? `\n\n${ragContext.formatted}` : "";
+
     console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType, brandIntelEntries: brandIntelligence?.length ?? 0 });
 
     let messages;
@@ -178,7 +211,7 @@ ORIGINAL DESIGN REQUIREMENTS:
 ${prompt}
 ${scaleBlock}
 ${designBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
 
 Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
 
@@ -198,7 +231,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
           content: `${prompt}
 ${scaleBlock}
 ${designBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
 
 ${genSuffix}`,
         },

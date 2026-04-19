@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,7 +12,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { parsedBrief, elements, projectName, imageUrls } = await req.json();
+    const { parsedBrief, elements, projectName, imageUrls, agency_id, client_id, activation_type_id, project_id } = await req.json();
 
     if (!parsedBrief || typeof parsedBrief !== "object") {
       return new Response(JSON.stringify({ error: "parsedBrief is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -92,8 +94,39 @@ Structure the presentation as:
 
 Make it persuasive and strategic — this is a pitch deck for creative services.`;
 
+    // ── RAG: Retrieve knowledge base context ──
+    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    if (agency_id) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const ragQuery = [
+        `Pitch deck for ${projectName || brand.name || "project"}`,
+        brand.name,
+        brand.category,
+        objectives.primary,
+        elements.bigIdea?.data?.headline,
+        elements.bigIdea?.data?.subheadline,
+      ].filter(Boolean).join(" — ").slice(0, 4000);
+      ragContext = await buildRagContext(supabase, {
+        query: ragQuery,
+        agencyId: agency_id,
+        clientId: client_id,
+        activationTypeId: activation_type_id,
+        projectId: project_id,
+      });
+      if (ragContext.chunks.length > 0) {
+        console.log(`[generate-presentation] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
+      }
+    }
+
+    const finalSystemPrompt = ragContext.formatted
+      ? `${systemPrompt}\n\n${ragContext.formatted}`
+      : systemPrompt;
+
     const aiResult = await callAnthropic({
-      system: systemPrompt,
+      system: finalSystemPrompt,
       messages: [
         { role: "user", content: `Create a presentation deck for this project:\n\n${dataSummary}` },
       ],

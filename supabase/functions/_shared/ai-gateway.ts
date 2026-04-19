@@ -38,6 +38,8 @@ export interface GeminiOptions {
 }
 
 export interface AnthropicOptions {
+  /** Model name. Defaults to Sonnet 4. Pass a Haiku model for cheap classification. */
+  model?: string;
   /** System prompt (top-level, not in messages). */
   system?: string;
   /** Messages array. */
@@ -48,6 +50,8 @@ export interface AnthropicOptions {
   toolChoice?: any;
   /** Maximum output tokens. Defaults to 8192. */
   maxTokens?: number;
+  /** Sampling temperature (0-1). */
+  temperature?: number;
 }
 
 export interface AIResponse {
@@ -490,10 +494,14 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
   }
 
   const body: Record<string, any> = {
-    model: "claude-sonnet-4-20250514",
+    model: options.model ?? "claude-sonnet-4-20250514",
     max_tokens: options.maxTokens ?? 8192,
     messages: options.messages,
   };
+
+  if (options.temperature !== undefined) {
+    body.temperature = options.temperature;
+  }
 
   if (options.system) {
     body.system = options.system;
@@ -520,7 +528,7 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
       },
       body: JSON.stringify(body),
     },
-    "Anthropic/claude-sonnet-4",
+    `Anthropic/${body.model}`,
   );
 
   const data = await response.json();

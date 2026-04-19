@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -351,6 +353,7 @@ async function callAIWithRetry(
   attempt = 1,
   brandContext = "",
   suiteContext = "",
+  ragFormatted = "",
 ): Promise<Record<string, unknown>> {
   let userMessage = `You are parsing a brief document. Extract ALL data — scan every line including tables (formatted as tab-separated text).
 
@@ -369,7 +372,7 @@ ${briefText}
   const result = await callGemini({
     model: "google/gemini-2.5-flash",
     messages: [
-      { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}` },
+      { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragFormatted ? `\n\n${ragFormatted}` : ""}` },
       { role: "user", content: userMessage },
     ],
     tools: [toolSchema],
@@ -406,7 +409,7 @@ ${briefText}
   if (attempt < 3) {
     console.warn(`No tool call or parseable content (attempt ${attempt}), retrying...`);
     await new Promise((r) => setTimeout(r, 1500));
-    return callAIWithRetry(briefText, brandIntelligence, attempt + 1, brandContext, suiteContext);
+    return callAIWithRetry(briefText, brandIntelligence, attempt + 1, brandContext, suiteContext, ragFormatted);
   }
 
   throw new Error("AI returned empty or unparseable response after 3 attempts");
@@ -461,6 +464,11 @@ serve(async (req) => {
     const brandContext = (body.brandContext as string) || "";
     const suiteContext = (body.suiteContext as string) || "";
 
+    const agency_id = (body.agency_id as string) || undefined;
+    const client_id = (body.client_id as string) || undefined;
+    const activation_type_id = (body.activation_type_id as string) || undefined;
+    const project_id = (body.project_id as string) || undefined;
+
     let briefText = (body.briefText as string) || "";
 
     // ── DOCX: Extract text server-side ──
@@ -482,7 +490,31 @@ serve(async (req) => {
       console.log("Handling PDF via Gemini vision...");
       const brandIntelligence = body.brandIntelligence as Array<{ category: string; title: string; content: string }> | undefined;
 
-      const systemMsg = PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`;
+      // Build RAG context for PDF path — use brandContext/suiteContext as the query proxy
+      // since the PDF text isn't extracted yet.
+      let pdfRagContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+      if (agency_id) {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const ragQuery = [brandContext, suiteContext, "experiential design brief trade show booth activation"]
+          .filter(Boolean)
+          .join("\n")
+          .slice(0, 4000);
+        pdfRagContext = await buildRagContext(supabase, {
+          query: ragQuery,
+          agencyId: agency_id,
+          clientId: client_id,
+          activationTypeId: activation_type_id,
+          projectId: project_id,
+        });
+        if (pdfRagContext.chunks.length > 0) {
+          console.log(`[parse-brief] RAG (pdf): ${pdfRagContext.chunks.length} chunks from scopes: ${Object.entries(pdfRagContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
+        }
+      }
+
+      const systemMsg = PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${pdfRagContext.formatted ? `\n\n${pdfRagContext.formatted}` : ""}`;
       let userMsg = "Parse this PDF brief document. Extract ALL data — scan every page including tables, sidebars, headers, and footnotes.\n\nReturn ALL fields as completely as possible.";
 
       if (brandIntelligence && brandIntelligence.length > 0) {
@@ -545,7 +577,26 @@ serve(async (req) => {
 
     console.log(`Parsing brief: ${briefText.length} chars | brand intel: ${brandIntelligence?.length ?? 0} entries`);
 
-    const parsed = await callAIWithRetry(briefText, brandIntelligence, 1, brandContext, suiteContext);
+    // ── RAG: Retrieve knowledge base context for the text path ──
+    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    if (agency_id) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      ragContext = await buildRagContext(supabase, {
+        query: briefText.slice(0, 4000),
+        agencyId: agency_id,
+        clientId: client_id,
+        activationTypeId: activation_type_id,
+        projectId: project_id,
+      });
+      if (ragContext.chunks.length > 0) {
+        console.log(`[parse-brief] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
+      }
+    }
+
+    const parsed = await callAIWithRetry(briefText, brandIntelligence, 1, brandContext, suiteContext, ragContext.formatted);
 
     console.log("Final parsed brand:", (parsed.brand as any)?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
 

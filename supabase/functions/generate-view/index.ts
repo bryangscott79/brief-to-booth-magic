@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,6 +25,10 @@ interface GenerateViewRequest {
   brandIntelligence?: BrandIntelEntry[];
   brandContext?: string;
   suiteContext?: string;
+  agency_id?: string;
+  client_id?: string;
+  activation_type_id?: string;
+  project_id?: string;
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
     brandColors?: string[];
@@ -139,7 +145,7 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "" }: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id }: GenerateViewRequest = await req.json();
 
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -151,6 +157,33 @@ serve(async (req) => {
     const scaleBlock = buildScaleBlock(boothSize);
     const consistencyBlock = buildConsistencyBlock(consistencyTokens);
     const brandBlock = buildBrandIntelBlock(brandIntelligence);
+
+    // ── RAG: Retrieve knowledge base context ──
+    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    if (agency_id) {
+      const serviceSupabase = createServiceClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const ragQuery = [
+        viewName,
+        viewPrompt,
+        consistencyTokens?.heroInstallationName,
+        consistencyTokens?.styleKeywords?.join(", "),
+        consistencyTokens?.materialKeywords?.join(", "),
+      ].filter(Boolean).join(" — ").slice(0, 4000);
+      ragContext = await buildRagContext(serviceSupabase, {
+        query: ragQuery,
+        agencyId: agency_id,
+        clientId: client_id,
+        activationTypeId: activation_type_id,
+        projectId: project_id,
+      });
+      if (ragContext.chunks.length > 0) {
+        console.log(`[generate-view] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
+      }
+    }
+    const ragBlock = ragContext.formatted ? `\n\n${ragContext.formatted}` : "";
 
     console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`, { hasConsistencyTokens: !!consistencyTokens, brandIntelEntries: brandIntelligence?.length ?? 0 });
 
@@ -201,7 +234,7 @@ COMPOSITION:
 OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.
 ${scaleBlock}
 ${consistencyBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`
       : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 ${scaleBlock}
 
@@ -220,7 +253,7 @@ CONSISTENCY RULES (maintain from reference):
 
 OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.
 ${consistencyBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}`;
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`;
 
     const result = await callGemini({
       model: "google/gemini-3-pro-image-preview",

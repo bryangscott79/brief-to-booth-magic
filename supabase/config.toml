@@ -32,3 +32,24 @@ verify_jwt = false
 
 [functions.polish-rhino-render]
 verify_jwt = false
+
+[functions.embed-document]
+verify_jwt = true
+
+[functions.rag-retrieve]
+verify_jwt = true
+
+[functions.auto-tag-document]
+verify_jwt = true
+
+[functions.summarize-document]
+verify_jwt = true
+
+[functions.extract-pricing]
+verify_jwt = true
+
+[functions.brand-compliance-check]
+verify_jwt = true
+
+[functions.best-practices-suggest]
+verify_jwt = true

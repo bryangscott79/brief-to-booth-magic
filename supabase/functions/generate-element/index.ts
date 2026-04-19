@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -243,7 +245,7 @@ serve(async (req) => {
   }
 
   try {
-    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType, brandContext = "", suiteContext = "" } = await req.json();
+    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id } = await req.json();
 
     const validTypes = ["bigIdea", "experienceFramework", "interactiveMechanics", "digitalStorytelling", "humanConnection", "adjacentActivations", "spatialStrategy", "budgetLogic"];
     if (!elementType || !validTypes.includes(elementType)) {
@@ -361,13 +363,41 @@ END UPSTREAM CONTEXT
     // Define the tool schema for structured output
     const toolSchema = getToolSchema(elementType);
 
+    // ── RAG: Retrieve knowledge base context ──
+    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    if (agency_id) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      // Characterize the generation: element type + brand/brief summary
+      const briefSummary = [
+        briefData?.brand?.name,
+        briefData?.brand?.category,
+        briefData?.brand?.pov,
+        briefData?.objectives?.primary,
+        Array.isArray(briefData?.creative?.moodKeywords) ? briefData.creative.moodKeywords.join(", ") : "",
+      ].filter(Boolean).join(" — ");
+      const ragQuery = `${elementType} for ${getStructureNoun(projectType)}: ${briefSummary}`.slice(0, 4000);
+      ragContext = await buildRagContext(supabase, {
+        query: ragQuery,
+        agencyId: agency_id,
+        clientId: client_id,
+        activationTypeId: activation_type_id,
+        projectId: project_id,
+      });
+      if (ragContext.chunks.length > 0) {
+        console.log(`[generate-element] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
+      }
+    }
+
     console.log("Calling AI for element:", elementType);
 
     const result = await callGemini({
       model: "google/gemini-2.5-pro",
       temperature: existingData || feedback ? 1.2 : 0.9,
       messages: [
-        { role: "system", content: systemPrompt + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}` + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
+        { role: "system", content: systemPrompt + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragContext.formatted ? `\n\n${ragContext.formatted}` : ""}` + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
         { role: "user", content: userPrompt },
       ],
       tools: [toolSchema],

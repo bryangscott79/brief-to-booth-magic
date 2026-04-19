@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      activation_type_kb_files: {
+        Row: {
+          activation_type_id: string
+          created_at: string
+          doc_type: string
+          extracted_text: string | null
+          file_name: string
+          file_size_bytes: number | null
+          file_type: string
+          folder: string
+          id: string
+          last_reviewed_at: string | null
+          layer: string
+          public_url: string
+          scope: string
+          storage_path: string
+          topics: string[] | null
+          user_id: string
+        }
+        Insert: {
+          activation_type_id: string
+          created_at?: string
+          doc_type?: string
+          extracted_text?: string | null
+          file_name: string
+          file_size_bytes?: number | null
+          file_type: string
+          folder?: string
+          id?: string
+          last_reviewed_at?: string | null
+          layer?: string
+          public_url: string
+          scope?: string
+          storage_path: string
+          topics?: string[] | null
+          user_id: string
+        }
+        Update: {
+          activation_type_id?: string
+          created_at?: string
+          doc_type?: string
+          extracted_text?: string | null
+          file_name?: string
+          file_size_bytes?: number | null
+          file_type?: string
+          folder?: string
+          id?: string
+          last_reviewed_at?: string | null
+          layer?: string
+          public_url?: string
+          scope?: string
+          storage_path?: string
+          topics?: string[] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_type_kb_files_activation_type_id_fkey"
+            columns: ["activation_type_id"]
+            isOneToOne: false
+            referencedRelation: "activation_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activation_types: {
         Row: {
           category: string
@@ -382,6 +447,111 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      // ─── Lovable-side tables (exist only on Lovable's DB) ─────────────────────
+      knowledge_base_files: {
+        Row: {
+          created_at: string
+          doc_type: string
+          extracted_text: string | null
+          file_name: string
+          file_size_bytes: number | null
+          file_type: string
+          folder: string
+          id: string
+          last_reviewed_at: string | null
+          layer: string
+          project_id: string
+          public_url: string
+          scope: string
+          storage_path: string
+          topics: string[] | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_type?: string
+          extracted_text?: string | null
+          file_name: string
+          file_size_bytes?: number | null
+          file_type: string
+          folder?: string
+          id?: string
+          last_reviewed_at?: string | null
+          layer?: string
+          project_id: string
+          public_url: string
+          scope?: string
+          storage_path: string
+          topics?: string[] | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          extracted_text?: string | null
+          file_name?: string
+          file_size_bytes?: number | null
+          file_type?: string
+          folder?: string
+          id?: string
+          last_reviewed_at?: string | null
+          layer?: string
+          project_id?: string
+          public_url?: string
+          scope?: string
+          storage_path?: string
+          topics?: string[] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: string
+          status: string
+          token: string
+          used_by: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          role?: string
+          status?: string
+          token?: string
+          used_by?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: string
+          status?: string
+          token?: string
+          used_by?: string | null
+        }
+        Relationships: []
       }
       jobs: {
         Row: {

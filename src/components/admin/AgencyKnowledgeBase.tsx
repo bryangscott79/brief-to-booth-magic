@@ -2,7 +2,8 @@
 // RAG-backed KnowledgeBasePanel scoped to the agency.
 //
 // Preserves the same mount point used in AdminSettings while swapping the
-// implementation to the new knowledge_documents pipeline.
+// implementation to the new knowledge_documents pipeline (pgvector embeddings,
+// scope-stacked retrieval, auto-tag + summarize Claude skills).
 
 import { Loader2 } from "lucide-react";
 import { useAgency } from "@/hooks/useAgency";

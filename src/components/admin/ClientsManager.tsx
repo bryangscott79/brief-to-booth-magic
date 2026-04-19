@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   useClients, useUpsertClient, useDeleteClient,
   useBrandIntelligence, useUpsertBrandIntelligence, useDeleteBrandIntelligence, useApproveBrandIntelligence,
+  useBatchCreateIntelligence,
   type Client, type BrandIntelligenceEntry,
 } from "@/hooks/useClients";
+import { useUpsertBrandGuidelines } from "@/hooks/useBrandGuidelines";
+import { useBrandGuidelines } from "@/hooks/useBrandGuidelines";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { BrandGuidelinesEditor } from "@/components/admin/BrandGuidelinesEditor";
 import { BrandAssetLibrary } from "@/components/admin/BrandAssetLibrary";
+import { ClientBrandKnowledgeBase } from "@/components/admin/ClientBrandKnowledgeBase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import {
   Plus, Trash2, Edit, Building2, Brain, Palette,
   ShoppingCart, DollarSign, BookOpen, Star, ChevronRight, Sparkles,
-  Check, X, MessageSquare, Loader2, Globe, Search
+  Check, X, MessageSquare, Loader2, Globe, Search, ChevronDown, Link2, Merge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -195,12 +201,213 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
   const { data: entries = [], isLoading } = useBrandIntelligence(client.id);
   const deleteEntry = useDeleteBrandIntelligence();
   const approve = useApproveBrandIntelligence();
+  const upsertGuidelines = useUpsertBrandGuidelines();
+  const { data: guidelines } = useBrandGuidelines(client.id);
+  const batchCreate = useBatchCreateIntelligence();
+  const upsertIntelligence = useUpsertBrandIntelligence();
+  const { toast } = useToast();
 
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<BrandIntelligenceEntry | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [isScraping, setIsScraping] = useState(false);
+  const [showScrapeInput, setShowScrapeInput] = useState(false);
+
+  // Auto-populate brand guidelines when approving an entry
+  const handleApprove = useCallback(async (entry: BrandIntelligenceEntry) => {
+    await approve.mutateAsync({ id: entry.id, clientId: client.id });
+    const content = entry.content;
+    const synced: string[] = [];
+
+    try {
+      if (entry.category === "visual_identity") {
+        // Sync hex colors to colorSystem
+        const hexMatches = content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+        if (hexMatches && hexMatches.length > 0) {
+          const existingColors = guidelines?.colorSystem?.primary || [];
+          const newColors = hexMatches
+            .filter(hex => !existingColors.some((c: any) => c.hex?.toLowerCase() === hex.toLowerCase()))
+            .map(hex => ({ hex, name: "", usage: "" }));
+          if (newColors.length > 0) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              colorSystem: {
+                primary: [...existingColors, ...newColors],
+                secondary: guidelines?.colorSystem?.secondary || [],
+                accent: guidelines?.colorSystem?.accent || [],
+                forbidden: guidelines?.colorSystem?.forbidden || [],
+              },
+            });
+            synced.push(`${newColors.length} color(s)`);
+          }
+        }
+        // Sync typography mentions
+        const titleLower = entry.title.toLowerCase();
+        if (titleLower.includes("typograph") || titleLower.includes("font") || titleLower.includes("typeface")) {
+          const existing = guidelines?.typography;
+          if (!existing?.primaryTypeface) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              typography: {
+                primaryTypeface: content.split("\n")[0].slice(0, 100),
+                secondaryTypeface: existing?.secondaryTypeface || "",
+                sizeScale: existing?.sizeScale || "",
+                usageRules: existing?.usageRules || content,
+              },
+            });
+            synced.push("typography");
+          }
+        }
+        // Sync photography/imagery rules
+        if (titleLower.includes("photo") || titleLower.includes("imager")) {
+          const existing = guidelines?.photographyStyle;
+          if (!existing?.style) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              photographyStyle: {
+                style: content,
+                dos: existing?.dos || [],
+                donts: existing?.donts || [],
+              },
+            });
+            synced.push("photography style");
+          }
+        }
+        // Sync logo rules
+        if (titleLower.includes("logo")) {
+          const existing = guidelines?.logoRules;
+          if (!existing?.usageNotes) {
+            await upsertGuidelines.mutateAsync({
+              clientId: client.id,
+              logoRules: {
+                clearSpace: existing?.clearSpace || "",
+                minSize: existing?.minSize || "",
+                forbiddenTreatments: existing?.forbiddenTreatments || [],
+                usageNotes: content,
+              },
+            });
+            synced.push("logo rules");
+          }
+        }
+      }
+
+      if (entry.category === "strategic_voice") {
+        const existing = guidelines?.toneOfVoice;
+        const pillars = existing?.messagingPillars || [];
+        const newPillar = entry.title;
+        if (!pillars.some(p => p.toLowerCase() === newPillar.toLowerCase())) {
+          await upsertGuidelines.mutateAsync({
+            clientId: client.id,
+            toneOfVoice: {
+              description: existing?.description || content,
+              messagingPillars: [...pillars, newPillar],
+              taglines: existing?.taglines || [],
+            },
+          });
+          synced.push("tone of voice");
+        }
+      }
+
+      if (entry.category === "vendor_material") {
+        const existing = guidelines?.materialsFinishes;
+        const preferred = existing?.preferred || [];
+        if (!preferred.some(p => p.toLowerCase() === entry.title.toLowerCase())) {
+          await upsertGuidelines.mutateAsync({
+            clientId: client.id,
+            materialsFinishes: {
+              preferred: [...preferred, entry.title],
+              forbidden: existing?.forbidden || [],
+              finishNotes: existing?.finishNotes
+                ? `${existing.finishNotes}\n${content}`
+                : content,
+            },
+          });
+          synced.push("materials & finishes");
+        }
+      }
+
+      if (synced.length > 0) {
+        toast({ title: `Synced to Brand Guidelines: ${synced.join(", ")}` });
+      }
+    } catch {
+      /* approval still succeeded even if guideline sync fails */
+    }
+  }, [approve, client.id, guidelines, upsertGuidelines, toast]);
+
+  // Scrape brand guidelines from URL
+  const handleScrape = async () => {
+    if (!scrapeUrl.trim()) return;
+    setIsScraping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-brand-guidelines", {
+        body: { url: scrapeUrl },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      if (data.entries && data.entries.length > 0) {
+        await batchCreate.mutateAsync(
+          data.entries.map((e: any) => ({
+            client_id: client.id,
+            category: e.category,
+            title: e.title,
+            content: e.content,
+            tags: e.tags,
+            source: "ai_extracted" as const,
+            is_approved: false,
+            confidence_score: 0.8,
+          }))
+        );
+        toast({ title: `Scraped ${data.entries.length} brand intelligence entries from URL` });
+      } else {
+        toast({ title: "No brand data found", description: "Try a different URL or upload a PDF instead", variant: "destructive" });
+      }
+      setScrapeUrl("");
+      setShowScrapeInput(false);
+    } catch (e: any) {
+      toast({ title: "Scrape failed", description: e.message, variant: "destructive" });
+    } finally {
+      setIsScraping(false);
+    }
+  };
+
+  // Detect duplicate entries in pending
+  const getDuplicateGroups = () => {
+    const groups: Record<string, BrandIntelligenceEntry[]> = {};
+    pending.forEach(entry => {
+      const key = `${entry.category}::${entry.title.toLowerCase().trim()}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(entry);
+    });
+    return Object.values(groups).filter(g => g.length > 1);
+  };
+
+  const handleMergeDuplicates = async (dupes: BrandIntelligenceEntry[]) => {
+    if (dupes.length < 2) return;
+    const merged = dupes[0];
+    const extraContent = dupes.slice(1).map(d => d.content).join("\n---\n");
+    const mergedContent = `${merged.content}\n---\n${extraContent}`;
+    const mergedTags = [...new Set(dupes.flatMap(d => d.tags || []))];
+
+    await upsertIntelligence.mutateAsync({
+      id: merged.id,
+      client_id: client.id,
+      category: merged.category,
+      title: merged.title,
+      content: mergedContent,
+      tags: mergedTags,
+    });
+
+    for (const dupe of dupes.slice(1)) {
+      await deleteEntry.mutateAsync({ id: dupe.id, clientId: client.id });
+    }
+    toast({ title: "Duplicates merged" });
+  };
 
   const pending = entries.filter(e => !e.is_approved);
+  const duplicateGroups = getDuplicateGroups();
   const approved = entries.filter(e => e.is_approved);
   const filtered = filterCategory === "all" ? approved : approved.filter(e => e.category === filterCategory);
 
@@ -211,42 +418,48 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            ← Clients
-          </button>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-4 -mx-1 px-1 border-b border-border">
+        <div className="flex items-start justify-between pt-1">
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white text-lg font-bold"
-              style={{ backgroundColor: client.primary_color || "hsl(var(--primary))" }}
-            >
-              {client.name.charAt(0)}
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">{client.name}</h2>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {client.industry && <span>{client.industry}</span>}
-                {client.website && (
-                  <>
-                    <span>·</span>
-                    <a href={client.website} target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-foreground">
-                      <Globe className="h-3 w-3" />
-                      {client.website.replace(/^https?:\/\//, "")}
-                    </a>
-                  </>
-                )}
+            <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+              ← Clients
+            </button>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-white text-lg font-bold"
+                style={{ backgroundColor: client.primary_color || "hsl(var(--primary))" }}
+              >
+                {client.name.charAt(0)}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">{client.name}</h2>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {client.industry && <span>{client.industry}</span>}
+                  {client.website && (
+                    <>
+                      <span>·</span>
+                      <a href={client.website} target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-foreground">
+                        <Globe className="h-3 w-3" />
+                        {client.website.replace(/^https?:\/\//, "")}
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => setShowAddEntry(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Add Intelligence
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowScrapeInput(!showScrapeInput)}>
+              <Link2 className="h-3.5 w-3.5 mr-1" />
+              Scrape from URL
+            </Button>
+            <Button size="sm" onClick={() => setShowAddEntry(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add Intelligence
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -267,6 +480,55 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
             </div>
           )}
         </div>
+      )}
+
+      {/* Scrape from URL */}
+      {showScrapeInput && (
+        <Card className="border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary shrink-0" />
+              <Input
+                value={scrapeUrl}
+                onChange={e => setScrapeUrl(e.target.value)}
+                placeholder="https://brand-website.com"
+                className="flex-1"
+                onKeyDown={e => e.key === "Enter" && handleScrape()}
+              />
+              <Button size="sm" onClick={handleScrape} disabled={isScraping || !scrapeUrl.trim()}>
+                {isScraping ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Globe className="h-3.5 w-3.5 mr-1" />}
+                {isScraping ? "Scraping…" : "Scrape"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowScrapeInput(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 ml-6">
+              Extracts brand colors, typography, logos, and messaging from any website. Results appear as pending entries for your review.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Duplicate detection warning */}
+      {duplicateGroups.length > 0 && (
+        <Card className="border-orange-400/30 bg-orange-400/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Merge className="h-4 w-4 text-orange-500" />
+                <span className="text-sm font-medium">{duplicateGroups.length} duplicate group(s) detected</span>
+              </div>
+              <div className="flex gap-2">
+                {duplicateGroups.map((group, i) => (
+                  <Button key={i} size="sm" variant="outline" onClick={() => handleMergeDuplicates(group)}>
+                    Merge "{group[0].title}" ({group.length})
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Pending approvals */}
@@ -291,10 +553,25 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
                       <Badge variant="secondary" className="text-xs">{meta.label}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{entry.content}</p>
+                    {/* Render color swatches for entries containing hex values */}
+                    {(() => {
+                      const hexMatches = entry.content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+                      if (!hexMatches || hexMatches.length === 0) return null;
+                      return (
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {hexMatches.map((hex, i) => (
+                            <div key={i} className="flex items-center gap-1">
+                              <div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
+                              <span className="text-[10px] font-mono text-muted-foreground">{hex}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <Button size="sm" variant="ghost" className="h-7 text-green-600 hover:text-green-700"
-                      onClick={() => approve.mutate({ id: entry.id, clientId: client.id })}>
+                      onClick={() => handleApprove(entry)}>
                       <Check className="h-3.5 w-3.5" />
                     </Button>
                     <Button size="sm" variant="ghost" className="h-7 text-destructive hover:text-destructive"
@@ -365,14 +642,19 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
             const catEntries = filtered.filter(e => e.category === cat);
             if (catEntries.length === 0) return null;
             const Icon = meta.icon;
+            const isCollapsed = collapsedSections[cat] ?? false;
             return (
               <div key={cat} className="space-y-2">
-                <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCollapsedSections(prev => ({ ...prev, [cat]: !isCollapsed }))}
+                  className="flex items-center gap-2 w-full text-left hover:bg-muted/30 rounded-md px-1 py-1 -mx-1 transition-colors"
+                >
+                  {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                   <Icon className={cn("h-4 w-4", meta.color)} />
                   <span className="text-sm font-semibold">{meta.label}</span>
                   <span className="text-xs text-muted-foreground">({catEntries.length})</span>
-                </div>
-                {catEntries.map(entry => (
+                </button>
+                {!isCollapsed && catEntries.map(entry => (
                   <div key={entry.id} className="flex items-start gap-3 p-3 border border-border rounded-lg hover:bg-muted/30 group transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -383,6 +665,21 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2">{entry.content}</p>
+                      {/* Color swatches for entries with hex values */}
+                      {(() => {
+                        const hexMatches = entry.content.match(/#[0-9A-Fa-f]{3,8}\b/g);
+                        if (!hexMatches || hexMatches.length === 0) return null;
+                        return (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {hexMatches.map((hex, i) => (
+                              <div key={i} className="flex items-center gap-1">
+                                <div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
+                                <span className="text-[10px] font-mono text-muted-foreground">{hex}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {entry.tags && entry.tags.length > 0 && (
                         <div className="flex gap-1 mt-1.5 flex-wrap">
                           {entry.tags.map(tag => (
@@ -421,6 +718,11 @@ function ClientDetail({ client, onBack }: { client: Client; onBack: () => void }
           })}
         </div>
       )}
+
+      {/* Layer 2 — Client Brand Knowledge Base */}
+      <div className="border-t border-border pt-6">
+        <ClientBrandKnowledgeBase clientId={client.id} clientName={client.name} />
+      </div>
 
       {/* Brand Guidelines */}
       <div className="border-t border-border pt-6">

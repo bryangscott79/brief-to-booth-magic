@@ -33,6 +33,14 @@ verify_jwt = false
 [functions.polish-rhino-render]
 verify_jwt = false
 
+[functions.generate-panorama]
+verify_jwt = false
+
+# Firecrawl brand-guidelines scraper (auto-populate client brand from URL)
+[functions.scrape-brand-guidelines]
+verify_jwt = true
+
+# RAG pipeline + Claude skill functions (require JWT)
 [functions.embed-document]
 verify_jwt = true
 

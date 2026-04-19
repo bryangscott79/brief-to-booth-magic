@@ -223,14 +223,14 @@ export function AppSidebar() {
               {navItems.map((item) => (
                 <NavItem key={item.path} {...item} />
               ))}
-              {/* Agency admins still get admin settings */}
-              {isAdmin && !isSuperAdmin && (
+              {/* Agency admins get admin settings; super admins in preview mode too */}
+              {(isAdmin && !isSuperAdmin) || (isSuperAdmin && previewMode) ? (
                 <NavItem
                   path="/admin"
                   label="Admin Settings"
                   icon={Shield}
                 />
-              )}
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -68,7 +68,7 @@ export function useProjects(adminMode = false) {
           user_id: user.id,
           name,
           status: "draft",
-        })
+        } as any)
         .select()
         .single();
       

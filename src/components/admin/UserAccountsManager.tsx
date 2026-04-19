@@ -387,7 +387,7 @@ export function UserAccountsManager() {
       p.email?.toLowerCase().includes(q) ||
       p.display_name?.toLowerCase().includes(q) ||
       p.user_id.toLowerCase().includes(q) ||
-      p.projects?.some((proj) => proj.name.toLowerCase().includes(q))
+      p.projects?.some((proj) => proj.project_title.toLowerCase().includes(q))
     );
   });
 

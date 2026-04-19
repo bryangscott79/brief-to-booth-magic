@@ -12,7 +12,7 @@ export function useProjectSuite(projectId: string | null | undefined, parentId: 
       // Fetch children of the suite parent
       const { data: childRows, error: childErr } = await supabase
         .from("projects")
-        .select("id, name, project_type, activation_type, status, scale_classification, footprint_sqft")
+        .select("id, project_title, activation_type, status, scale_classification, footprint_sqft")
         .eq("parent_id" as any, suiteParentId!)
         .order("sort_order" as any, { ascending: true });
 
@@ -20,8 +20,8 @@ export function useProjectSuite(projectId: string | null | undefined, parentId: 
 
       const children: ProjectSummary[] = (childRows ?? []).map((r: any) => ({
         id: r.id,
-        name: r.name,
-        projectType: r.project_type,
+        name: r.project_title,
+        projectType: r.activation_type ?? "",
         activationType: r.activation_type,
         status: r.status,
         scaleClassification: r.scale_classification,
@@ -32,15 +32,15 @@ export function useProjectSuite(projectId: string | null | undefined, parentId: 
       if (parentId) {
         const { data: parentRow } = await supabase
           .from("projects")
-          .select("id, name, project_type, activation_type, status, scale_classification, footprint_sqft")
+          .select("id, project_title, activation_type, status, scale_classification, footprint_sqft")
           .eq("id", parentId)
           .single();
         if (parentRow) {
           const p = parentRow as any;
           parent = {
             id: p.id,
-            name: p.name,
-            projectType: p.project_type,
+            name: p.project_title,
+            projectType: p.activation_type ?? "",
             activationType: p.activation_type,
             status: p.status,
             scaleClassification: p.scale_classification,

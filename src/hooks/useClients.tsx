@@ -1,16 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useAgency } from "@/hooks/useAgency";
 import { useToast } from "@/hooks/use-toast";
 
 export interface Client {
   id: string;
   user_id: string;
+  agency_id: string | null;
   name: string;
   industry: string | null;
   website: string | null;
   description: string | null;
   logo_url: string | null;
+  notes: string | null;
   primary_color: string | null;
   secondary_color: string | null;
   created_at: string;
@@ -54,17 +57,19 @@ export interface ProjectTypeConfig {
 
 export function useClients() {
   const { user } = useAuth();
+  const { agency } = useAgency();
   return useQuery({
-    queryKey: ["clients", user?.id],
+    queryKey: ["clients", agency?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .order("name");
+      let query = supabase.from("clients").select("*").order("name");
+      if (agency?.id) {
+        query = query.eq("agency_id", agency.id);
+      }
+      const { data, error } = await query;
       if (error) throw error;
-      return data as Client[];
+      return (data ?? []) as unknown as Client[];
     },
-    enabled: !!user,
+    enabled: !!user && !!agency?.id,
   });
 }
 
@@ -78,7 +83,7 @@ export function useClient(clientId?: string | null) {
         .eq("id", clientId!)
         .single();
       if (error) throw error;
-      return data as Client;
+      return data as unknown as Client;
     },
     enabled: !!clientId,
   });
@@ -87,14 +92,20 @@ export function useClient(clientId?: string | null) {
 export function useUpsertClient() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { agency } = useAgency();
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (data: Partial<Client> & { name: string }) => {
-      const payload = { ...data, user_id: user!.id };
+      const payload: Partial<Client> & { name: string; user_id: string; agency_id?: string | null } = {
+        ...data,
+        user_id: user!.id,
+      };
+      // Stamp agency_id on new clients (and keep it in sync on updates when present).
+      if (agency?.id) payload.agency_id = agency.id;
       if (data.id) {
         const { data: result, error } = await supabase
           .from("clients")
-          .update(payload)
+          .update(payload as any)
           .eq("id", data.id)
           .select()
           .single();
@@ -103,7 +114,7 @@ export function useUpsertClient() {
       } else {
         const { data: result, error } = await supabase
           .from("clients")
-          .insert(payload)
+          .insert(payload as any)
           .select()
           .single();
         if (error) throw error;
@@ -143,11 +154,11 @@ export function useBrandIntelligence(clientId?: string | null) {
       const { data, error } = await supabase
         .from("brand_intelligence")
         .select("*")
-        .eq("client_id", clientId!)
+        .eq("client_id" as any, clientId!)
         .order("category")
         .order("created_at");
       if (error) throw error;
-      return data as BrandIntelligenceEntry[];
+      return data as unknown as BrandIntelligenceEntry[];
     },
     enabled: !!clientId,
   });
@@ -163,7 +174,7 @@ export function useUpsertBrandIntelligence() {
       if (data.id) {
         const { data: result, error } = await supabase
           .from("brand_intelligence")
-          .update(payload)
+          .update(payload as any)
           .eq("id", data.id)
           .select()
           .single();
@@ -172,7 +183,7 @@ export function useUpsertBrandIntelligence() {
       } else {
         const { data: result, error } = await supabase
           .from("brand_intelligence")
-          .insert(payload)
+          .insert(payload as any)
           .select()
           .single();
         if (error) throw error;
@@ -210,7 +221,7 @@ export function useApproveBrandIntelligence() {
     mutationFn: async ({ id, clientId }: { id: string; clientId: string }) => {
       const { error } = await supabase
         .from("brand_intelligence")
-        .update({ is_approved: true, approved_at: new Date().toISOString() })
+        .update({ is_approved: true, approved_at: new Date().toISOString() } as any)
         .eq("id", id);
       if (error) throw error;
       return clientId;
@@ -232,7 +243,7 @@ export function useBatchCreateIntelligence() {
         .insert(payload as any)
         .select();
       if (error) throw error;
-      return data as BrandIntelligenceEntry[];
+      return data as unknown as BrandIntelligenceEntry[];
     },
     onSuccess: (data) => {
       if (data.length > 0) {
@@ -252,11 +263,11 @@ export function useProjectTypeConfigs() {
     queryKey: ["project-type-configs", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("project_type_configs")
+        .from("project_type_configs" as any)
         .select("*")
         .order("sort_order");
       if (error) throw error;
-      return data as ProjectTypeConfig[];
+      return data as unknown as ProjectTypeConfig[];
     },
     enabled: !!user,
   });
@@ -270,8 +281,8 @@ export function useUpsertProjectTypeConfig() {
     mutationFn: async (data: Partial<ProjectTypeConfig> & { project_type_id: string }) => {
       const payload = { ...data, user_id: user!.id };
       const { data: result, error } = await supabase
-        .from("project_type_configs")
-        .upsert(payload, { onConflict: "user_id,project_type_id" })
+        .from("project_type_configs" as any)
+        .upsert(payload as any, { onConflict: "user_id,project_type_id" })
         .select()
         .single();
       if (error) throw error;

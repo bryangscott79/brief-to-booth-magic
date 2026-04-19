@@ -41,7 +41,7 @@ export function useTeamMembers() {
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
-        .from("team_members")
+        .from("team_members" as any)
         .select("*")
         .or(`team_owner_id.eq.${user.id},user_id.eq.${user.id}`)
         .order("created_at", { ascending: false });
@@ -74,7 +74,7 @@ export function useInviteTeamMember() {
       // When the invited user signs up / accepts, we update user_id.
       // We use the owner's ID as a placeholder — the accept flow will update it.
       const { data, error } = await supabase
-        .from("team_members")
+        .from("team_members" as any)
         .insert({
           user_id: user.id, // placeholder until invite is accepted
           team_owner_id: user.id,
@@ -82,7 +82,7 @@ export function useInviteTeamMember() {
           display_name: displayName,
           invited_email: email,
           invited_by: user.id,
-        })
+        } as any)
         .select()
         .single();
 
@@ -113,7 +113,7 @@ export function useUpdateTeamMember() {
       updates: Partial<Pick<TeamMember, "role" | "display_name">>;
     }) => {
       const { data, error } = await supabase
-        .from("team_members")
+        .from("team_members" as any)
         .update(updates as any)
         .eq("id", id)
         .select()
@@ -140,7 +140,7 @@ export function useRemoveTeamMember() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from("team_members")
+        .from("team_members" as any)
         .delete()
         .eq("id", id);
 
@@ -164,7 +164,7 @@ export function useProjectInvites(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
       const { data, error } = await supabase
-        .from("project_invites")
+        .from("project_invites" as any)
         .select("*")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false });
@@ -201,7 +201,7 @@ export function useCreateInviteLink() {
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
       const { data, error } = await supabase
-        .from("project_invites")
+        .from("project_invites" as any)
         .insert({
           project_id: projectId,
           created_by: user.id,
@@ -209,7 +209,7 @@ export function useCreateInviteLink() {
           label: label || null,
           email: email || null,
           expires_at: expiresAt.toISOString(),
-        })
+        } as any)
         .select()
         .single();
 
@@ -233,7 +233,7 @@ export function useRevokeInvite() {
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
       const { error } = await supabase
-        .from("project_invites")
+        .from("project_invites" as any)
         .delete()
         .eq("id", id);
 
@@ -260,7 +260,7 @@ export function useAcceptInvite() {
 
       // Find the invite by token
       const { data: invite, error: fetchError } = await supabase
-        .from("project_invites")
+        .from("project_invites" as any)
         .select("*")
         .eq("token", token)
         .is("accepted_at", null)
@@ -277,7 +277,7 @@ export function useAcceptInvite() {
 
       // Accept the invite
       const { error: updateError } = await supabase
-        .from("project_invites")
+        .from("project_invites" as any)
         .update({
           accepted_at: new Date().toISOString(),
           accepted_by: user.id,

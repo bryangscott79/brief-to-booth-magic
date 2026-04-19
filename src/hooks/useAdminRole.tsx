@@ -59,9 +59,10 @@ export interface UserProfile {
 
 export interface ProjectSummary {
   id: string;
-  name: string;
+  project_title: string;
   status: string;
   project_type: string;
+  activation_type?: string | null;
   updated_at: string;
   created_at: string;
 }
@@ -80,14 +81,15 @@ export function useAdminProfiles() {
 
       const { data: projects, error: projectsErr } = await supabase
         .from("projects")
-        .select("id, name, status, project_type, user_id, created_at, updated_at")
+        .select("id, project_title, status, activation_type, user_id, created_at, updated_at")
         .order("updated_at", { ascending: false });
       if (projectsErr) throw projectsErr;
 
       const byUser: Record<string, ProjectSummary[]> = {};
-      for (const p of projects ?? []) {
+      for (const p of (projects ?? []) as any[]) {
+        if (!p.user_id) continue;
         if (!byUser[p.user_id]) byUser[p.user_id] = [];
-        byUser[p.user_id].push(p);
+        byUser[p.user_id].push({ ...p, project_type: p.activation_type ?? "" } as ProjectSummary);
       }
 
       return ((profiles as UserProfile[]) ?? []).map((profile) => ({
@@ -109,13 +111,14 @@ export function useAdminUsers() {
     queryFn: async () => {
       const { data: projects, error } = await supabase
         .from("projects")
-        .select("id, name, status, project_type, user_id, created_at, updated_at, client_id")
+        .select("id, project_title, status, activation_type, user_id, created_at, updated_at, client_id")
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
 
-      const byUser: Record<string, typeof projects> = {};
-      for (const p of projects ?? []) {
+      const byUser: Record<string, any[]> = {};
+      for (const p of (projects ?? []) as any[]) {
+        if (!p.user_id) continue;
         if (!byUser[p.user_id]) byUser[p.user_id] = [];
         byUser[p.user_id].push(p);
       }

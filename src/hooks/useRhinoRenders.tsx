@@ -30,12 +30,12 @@ export function useRhinoRenders(projectId: string | null | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
       const { data, error } = await supabase
-        .from("rhino_renders")
+        .from("rhino_renders" as any)
         .select("*")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as RhinoRender[];
+      return data as unknown as RhinoRender[];
     },
     enabled: !!projectId,
   });
@@ -75,7 +75,7 @@ export function useUploadRhino() {
 
       // Insert row
       const { data, error } = await supabase
-        .from("rhino_renders")
+        .from("rhino_renders" as any)
         .insert({
           project_id: projectId,
           user_id: user.id,
@@ -83,11 +83,11 @@ export function useUploadRhino() {
           original_public_url: urlData.publicUrl,
           view_name: viewName || null,
           notes: notes || null,
-        })
+        } as any)
         .select()
         .single();
       if (error) throw error;
-      return data as RhinoRender;
+      return data as unknown as RhinoRender;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["rhino-renders", data.project_id] });
@@ -128,8 +128,8 @@ export function usePolishRhino() {
     }: PolishRhinoParams) => {
       // Set status to processing
       await supabase
-        .from("rhino_renders")
-        .update({ polish_status: "processing", polish_prompt: polishInstructions || null })
+        .from("rhino_renders" as any)
+        .update({ polish_status: "processing", polish_prompt: polishInstructions || null } as any)
         .eq("id", renderId);
 
       // Call edge function
@@ -162,13 +162,13 @@ export function usePolishRhino() {
 
       // Update record with polished image
       const { error: updateError } = await supabase
-        .from("rhino_renders")
+        .from("rhino_renders" as any)
         .update({
           polished_public_url: data.imageUrl,
           polished_storage_path: data.storagePath || null,
           polish_status: "complete",
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq("id", renderId);
       if (updateError) throw updateError;
 
@@ -201,7 +201,7 @@ export function useUpdateRhino() {
       if (viewName !== undefined) updates.view_name = viewName;
       if (notes !== undefined) updates.notes = notes;
 
-      const { error } = await supabase.from("rhino_renders").update(updates).eq("id", renderId);
+      const { error } = await supabase.from("rhino_renders" as any).update(updates).eq("id", renderId);
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {
@@ -229,7 +229,7 @@ export function useDeleteRhino() {
       await supabase.storage.from("rhino-renders").remove(paths);
 
       // Delete DB row
-      const { error } = await supabase.from("rhino_renders").delete().eq("id", renderId);
+      const { error } = await supabase.from("rhino_renders" as any).delete().eq("id", renderId);
       if (error) throw error;
       return { projectId };
     },

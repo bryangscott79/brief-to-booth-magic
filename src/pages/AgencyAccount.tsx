@@ -91,7 +91,7 @@ export default function AgencyAccountPage() {
       // Projects
       const { data: projects } = await supabase
         .from("projects")
-        .select("id, name, status, project_type, created_at, updated_at")
+        .select("id, project_title, status, activation_type, created_at, updated_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
@@ -340,7 +340,7 @@ export default function AgencyAccountPage() {
                     className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{project.name}</p>
+                      <p className="text-sm font-medium truncate">{project.project_title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span
                           className={cn(
@@ -351,7 +351,7 @@ export default function AgencyAccountPage() {
                           {project.status}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
-                          {project.project_type.replace(/_/g, " ")}
+                          {(project.activation_type ?? project.project_type ?? "").replace(/_/g, " ")}
                         </span>
                       </div>
                     </div>

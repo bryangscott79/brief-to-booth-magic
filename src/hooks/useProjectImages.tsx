@@ -19,12 +19,12 @@ export function useProjectImages(projectId: string | null | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
       const { data, error } = await supabase
-        .from("project_images")
+        .from("project_images" as any)
         .select("*")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as ProjectImage[];
+      return data as unknown as ProjectImage[];
     },
     enabled: !!projectId,
   });

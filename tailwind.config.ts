@@ -63,11 +63,20 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         zone: {
-          hero: "hsl(38 92% 50%)",
-          storytelling: "hsl(200 85% 50%)",
-          lounge: "hsl(150 70% 45%)",
-          reception: "hsl(280 75% 55%)",
+          hero: "hsl(var(--canopy-magenta))",
+          storytelling: "hsl(var(--canopy-blue))",
+          lounge: "hsl(var(--canopy-sky))",
+          reception: "hsl(var(--canopy-violet))",
           service: "hsl(220 15% 50%)",
+        },
+        canopy: {
+          sky: "hsl(var(--canopy-sky))",
+          blue: "hsl(var(--canopy-blue))",
+          violet: "hsl(var(--canopy-violet))",
+          purple: "hsl(var(--canopy-purple))",
+          magenta: "hsl(var(--canopy-magenta))",
+          navy: "hsl(var(--canopy-navy))",
+          charcoal: "hsl(var(--canopy-charcoal))",
         },
         surface: {
           elevated: "hsl(var(--surface-elevated))",
@@ -75,7 +84,7 @@ export default {
         },
         status: {
           pending: "hsl(var(--muted))",
-          generating: "hsl(38 92% 50%)",
+          generating: "hsl(var(--canopy-violet))",
           complete: "hsl(150 70% 45%)",
           error: "hsl(var(--destructive))",
         },
@@ -86,16 +95,16 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "sans-serif"],
+        sans: ["Inter", "Helvetica Neue", "Arial", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
       },
       boxShadow: {
-        "glow-sm": "0 0 20px hsl(38 92% 50% / 0.15)",
-        "glow-md": "0 0 40px hsl(38 92% 50% / 0.2)",
-        "glow-lg": "0 8px 60px hsl(38 92% 50% / 0.3)",
+        "glow-sm": "0 0 20px hsl(255 92% 76% / 0.2)",
+        "glow-md": "0 0 40px hsl(255 92% 76% / 0.25)",
+        "glow-lg": "0 8px 60px hsl(255 92% 76% / 0.35)",
       },
       keyframes: {
         "accordion-down": {
@@ -128,7 +137,8 @@ export default {
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        shimmer: "linear-gradient(90deg, transparent, hsl(var(--primary) / 0.1), transparent)",
+        "gradient-canopy": "linear-gradient(135deg, hsl(var(--canopy-sky)) 0%, hsl(var(--canopy-blue)) 25%, hsl(var(--canopy-violet)) 50%, hsl(var(--canopy-purple)) 75%, hsl(var(--canopy-magenta)) 100%)",
+        shimmer: "linear-gradient(90deg, transparent, hsl(var(--canopy-violet) / 0.15), transparent)",
       },
     },
   },

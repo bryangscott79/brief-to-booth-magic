@@ -24,6 +24,7 @@ import { SaveLearningsButton } from "./SaveLearningsButton";
 import { useRhinoRenders } from "@/hooks/useRhinoRenders";
 import { useBrandIntelligence } from "@/hooks/useClients";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { useAgency } from "@/hooks/useAgency";
 
 interface MaterialItem {
   name: string;

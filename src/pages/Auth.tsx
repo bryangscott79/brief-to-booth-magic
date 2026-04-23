@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Layers, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import canopyLogo from "@/assets/canopy-logo.png";
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -94,11 +95,9 @@ export default function AuthPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <Link to="/" className="flex items-center justify-center gap-3 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-            <Layers className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <img src={canopyLogo} alt="Canopy" className="h-10 w-10 object-contain" />
           <span className="text-xl font-semibold tracking-tight text-white">
-            BriefEngine
+            Canopy
           </span>
         </Link>
 

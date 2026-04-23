@@ -17,6 +17,7 @@ import {
   BookOpen,
   Sparkles,
 } from "lucide-react";
+import canopyLogo from "@/assets/canopy-logo.png";
 import {
   Sidebar,
   SidebarContent,
@@ -130,19 +131,21 @@ export function AppSidebar() {
       <SidebarHeader className="flex flex-col border-b border-border">
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
           <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-3 min-w-0">
-            <div className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-              isSuperAdmin && !previewMode ? "bg-amber-500" : "bg-primary"
-            )}>
-              {isSuperAdmin && !previewMode
-                ? <Crown className="h-5 w-5 text-white" />
-                : <Grid3X3 className="h-5 w-5 text-primary-foreground" />
-              }
-            </div>
+            {isSuperAdmin && !previewMode ? (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500">
+                <Crown className="h-5 w-5 text-white" />
+              </div>
+            ) : (
+              <img
+                src={canopyLogo}
+                alt="Canopy"
+                className="h-10 w-10 shrink-0 object-contain"
+              />
+            )}
             {!collapsed && (
               <div className="min-w-0">
                 <span className="text-lg font-semibold tracking-tight truncate block">
-                  BriefEngine
+                  Canopy
                 </span>
                 {isSuperAdmin && !previewMode && (
                   <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">

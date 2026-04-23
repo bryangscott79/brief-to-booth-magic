@@ -20,6 +20,7 @@ import {
   Play,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
+import canopyLogo from "@/assets/canopy-logo.png";
 import heroBoothImage from "@/assets/hero-visualization.jpg";
 import heroActivationImage from "@/assets/hero-activation.jpg";
 import heroInstallationImage from "@/assets/hero-installation.jpg";
@@ -164,11 +165,9 @@ export default function Index() {
       <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary shadow-[0_0_16px_hsl(38_92%_50%/0.4)]">
-              <Layers className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <img src={canopyLogo} alt="Canopy" className="h-9 w-9 object-contain" />
             <span className="text-lg font-bold tracking-tight text-foreground">
-              BriefEngine
+              Canopy
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
@@ -475,7 +474,7 @@ export default function Index() {
                   Stop reinventing the wheel on every pitch.
                 </h2>
                 <p className="text-muted-foreground text-lg mb-8 leading-relaxed">
-                  BriefEngine captures your agency's strategy, spatial thinking, and visual
+                  Canopy captures your agency's strategy, spatial thinking, and visual
                   language — and applies it consistently across every brief type, every time.
                 </p>
                 <ul className="space-y-3 mb-10">
@@ -533,7 +532,7 @@ export default function Index() {
             <span className="hero-text-gradient">starts with one brief.</span>
           </h2>
           <p className="text-white/60 text-lg max-w-xl mx-auto mb-10">
-            Upload any brief — booth, activation, premiere, or architectural — and watch BriefEngine
+            Upload any brief — booth, activation, premiere, or architectural — and watch Canopy
             transform it into a complete, coordinated design response.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -560,10 +559,8 @@ export default function Index() {
       <footer className="py-10 border-t border-border bg-background">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Layers className="h-4 w-4 text-primary" />
-            </div>
-            <span className="font-bold text-sm">BriefEngine</span>
+            <img src={canopyLogo} alt="Canopy" className="h-8 w-8 object-contain" />
+            <span className="font-bold text-sm">Canopy</span>
           </div>
           <p className="text-sm text-muted-foreground">
             The experiential design intelligence platform. Powered by AI.

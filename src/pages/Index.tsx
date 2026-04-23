@@ -20,7 +20,7 @@ import {
   Play,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
-import canopyLogo from "@/assets/canopy-logo.png";
+import canopyMark from "@/assets/canopy-mark.png";
 import heroBoothImage from "@/assets/hero-visualization.jpg";
 import heroActivationImage from "@/assets/hero-activation.jpg";
 import heroInstallationImage from "@/assets/hero-installation.jpg";
@@ -164,11 +164,8 @@ export default function Index() {
       {/* ── Header ──────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
         <div className="container flex h-16 items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <img src={canopyLogo} alt="Canopy" className="h-9 w-9 object-contain" />
-            <span className="text-lg font-bold tracking-tight text-foreground">
-              Canopy
-            </span>
+          <Link to="/" aria-label="Canopy" className="flex items-center">
+            <img src={canopyMark} alt="Canopy" className="h-12 w-12 object-contain" />
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -558,9 +555,8 @@ export default function Index() {
       {/* ── Footer ──────────────────────────────────── */}
       <footer className="py-10 border-t border-border bg-background">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <img src={canopyLogo} alt="Canopy" className="h-8 w-8 object-contain" />
-            <span className="font-bold text-sm">Canopy</span>
+          <div className="flex items-center">
+            <img src={canopyMark} alt="Canopy" className="h-10 w-10 object-contain" />
           </div>
           <p className="text-sm text-muted-foreground">
             The experiential design intelligence platform. Powered by AI.

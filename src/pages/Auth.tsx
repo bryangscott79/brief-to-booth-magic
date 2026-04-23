@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import canopyLogo from "@/assets/canopy-logo.png";
+import canopyMark from "@/assets/canopy-mark.png";
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -91,14 +91,21 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen hero-gradient flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen hero-gradient flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Node network ambient background */}
+      <div className="absolute inset-0 pointer-events-none opacity-60">
+        <div className="absolute top-[15%] left-[12%] h-2.5 w-2.5 rounded-full canopy-node animate-pulse" />
+        <div className="absolute top-[28%] right-[18%] h-2 w-2 rounded-full canopy-node animate-pulse [animation-delay:600ms]" />
+        <div className="absolute bottom-[22%] left-[20%] h-3 w-3 rounded-full canopy-node animate-pulse [animation-delay:1200ms]" />
+        <div className="absolute bottom-[18%] right-[14%] h-2 w-2 rounded-full canopy-node animate-pulse [animation-delay:300ms]" />
+        <div className="absolute top-[55%] left-[8%] h-1.5 w-1.5 rounded-full canopy-node animate-pulse [animation-delay:900ms]" />
+        <div className="absolute top-[70%] right-[10%] h-2.5 w-2.5 rounded-full canopy-node animate-pulse [animation-delay:1500ms]" />
+        <div className="absolute inset-0" style={{ background: 'var(--glow-soft)' }} />
+      </div>
+      <div className="w-full max-w-md relative z-10">
         {/* Logo */}
-        <Link to="/" className="flex items-center justify-center gap-3 mb-8">
-          <img src={canopyLogo} alt="Canopy" className="h-10 w-10 object-contain" />
-          <span className="text-xl font-semibold tracking-tight text-white">
-            Canopy
-          </span>
+        <Link to="/" aria-label="Canopy" className="flex items-center justify-center mb-8">
+          <img src={canopyMark} alt="Canopy" className="h-20 w-20 object-contain drop-shadow-[0_0_24px_hsl(255_92%_76%/0.5)]" />
         </Link>
 
         <Card className="element-card">

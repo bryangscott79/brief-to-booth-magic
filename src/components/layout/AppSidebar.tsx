@@ -16,7 +16,7 @@ import {
   BookOpen,
   Sparkles,
 } from "lucide-react";
-import canopyLogo from "@/assets/canopy-logo.png";
+import canopyMark from "@/assets/canopy-mark.png";
 import {
   Sidebar,
   SidebarContent,
@@ -128,30 +128,26 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-border">
       {/* Logo / Header */}
       <SidebarHeader className="flex flex-col border-b border-border">
-        <div className="flex items-center justify-between px-3 pt-3 pb-2">
-          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center justify-between px-3 pt-4 pb-3">
+          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-2 min-w-0">
             {isSuperAdmin && !previewMode ? (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500">
-                <Crown className="h-5 w-5 text-white" />
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-500">
+                <Crown className="h-7 w-7 text-white" />
               </div>
             ) : (
               <img
-                src={canopyLogo}
+                src={canopyMark}
                 alt="Canopy"
-                className="h-10 w-10 shrink-0 object-contain"
+                className={cn(
+                  "shrink-0 object-contain transition-all",
+                  collapsed ? "h-10 w-10" : "h-14 w-14"
+                )}
               />
             )}
-            {!collapsed && (
-              <div className="min-w-0">
-                <span className="text-lg font-semibold tracking-tight truncate block">
-                  Canopy
-                </span>
-                {isSuperAdmin && !previewMode && (
-                  <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">
-                    Platform Admin
-                  </span>
-                )}
-              </div>
+            {!collapsed && isSuperAdmin && !previewMode && (
+              <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">
+                Platform Admin
+              </span>
             )}
           </Link>
           {!collapsed && (

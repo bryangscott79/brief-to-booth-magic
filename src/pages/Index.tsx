@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import canopyMark from "@/assets/canopy-mark.png";
+import canopyLogoFull from "@/assets/canopy-logo-full.png";
 import heroBoothImage from "@/assets/hero-visualization.jpg";
 import heroActivationImage from "@/assets/hero-activation.jpg";
 import heroInstallationImage from "@/assets/hero-installation.jpg";
@@ -165,7 +166,7 @@ export default function Index() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-border">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" aria-label="Canopy" className="flex items-center">
-            <img src={canopyMark} alt="Canopy" className="h-9 w-9 object-contain" />
+            <img src={canopyLogoFull} alt="Canopy" className="h-8 w-auto object-contain" />
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

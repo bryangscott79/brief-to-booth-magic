@@ -133,6 +133,74 @@ export type Database = {
         }
         Relationships: []
       }
+      agencies: {
+        Row: {
+          brand_colors: Json | null
+          created_at: string
+          id: string
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          brand_colors?: Json | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          owner_user_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          brand_colors?: Json | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          owner_user_id?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agency_members: {
+        Row: {
+          agency_id: string
+          id: string
+          invited_by: string | null
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          agency_id: string
+          id?: string
+          invited_by?: string | null
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          agency_id?: string
+          id?: string
+          invited_by?: string | null
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_members_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_intelligence: {
         Row: {
           approved_at: string | null
@@ -426,6 +494,193 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_chunks: {
+        Row: {
+          agency_id: string
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          scope: string
+          scope_id: string
+          token_count: number | null
+        }
+        Insert: {
+          agency_id: string
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          scope: string
+          scope_id: string
+          token_count?: number | null
+        }
+        Update: {
+          agency_id?: string
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          scope?: string
+          scope_id?: string
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_documents: {
+        Row: {
+          agency_id: string
+          auto_tags: string[]
+          chunk_count: number
+          created_at: string
+          doc_type: string | null
+          extracted_text: string | null
+          file_size_bytes: number | null
+          filename: string
+          id: string
+          metadata: Json | null
+          mime_type: string | null
+          processing_error: string | null
+          scope: string
+          scope_id: string
+          status: string
+          storage_bucket: string
+          storage_path: string
+          summary: string | null
+          title: string | null
+          updated_at: string
+          uploaded_by: string
+          user_tags: string[]
+        }
+        Insert: {
+          agency_id: string
+          auto_tags?: string[]
+          chunk_count?: number
+          created_at?: string
+          doc_type?: string | null
+          extracted_text?: string | null
+          file_size_bytes?: number | null
+          filename: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          processing_error?: string | null
+          scope: string
+          scope_id: string
+          status?: string
+          storage_bucket?: string
+          storage_path: string
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          uploaded_by: string
+          user_tags?: string[]
+        }
+        Update: {
+          agency_id?: string
+          auto_tags?: string[]
+          chunk_count?: number
+          created_at?: string
+          doc_type?: string | null
+          extracted_text?: string | null
+          file_size_bytes?: number | null
+          filename?: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          processing_error?: string | null
+          scope?: string
+          scope_id?: string
+          status?: string
+          storage_bucket?: string
+          storage_path?: string
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          uploaded_by?: string
+          user_tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_invites: {
+        Row: {
+          accepted_at: string | null
+          agency_id: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invite_type: string
+          invited_by: string
+          role: string | null
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          agency_id?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invite_type: string
+          invited_by: string
+          role?: string | null
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          agency_id?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invite_type?: string
+          invited_by?: string
+          role?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_invites_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
             referencedColumns: ["id"]
           },
         ]
@@ -933,6 +1188,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_pending_invite: { Args: { _invite_id: string }; Returns: boolean }
       get_all_user_profiles: {
         Args: never
         Returns: {
@@ -952,6 +1208,75 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_agency_admin: {
+        Args: { _agency_id: string; _user_id?: string }
+        Returns: boolean
+      }
+      is_agency_member: {
+        Args: { _agency_id: string; _user_id?: string }
+        Returns: boolean
+      }
+      is_super_admin: { Args: { _user_id?: string }; Returns: boolean }
+      list_agency_members: {
+        Args: { _agency_id: string }
+        Returns: {
+          email: string
+          id: string
+          is_primary_owner: boolean
+          joined_at: string
+          role: string
+          user_id: string
+        }[]
+      }
+      list_super_admins: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          user_id: string
+        }[]
+      }
+      match_knowledge_chunks: {
+        Args: {
+          _agency_id: string
+          _match_count?: number
+          _query_embedding: string
+          _query_text: string
+          _scope_ids: string[]
+          _scopes: string[]
+          _vector_weight?: number
+        }
+        Returns: {
+          bm25_score: number
+          chunk_id: string
+          content: string
+          document_id: string
+          hybrid_score: number
+          metadata: Json
+          scope: string
+          scope_id: string
+          similarity: number
+        }[]
+      }
+      my_pending_invites: {
+        Args: never
+        Returns: {
+          agency_id: string
+          agency_name: string
+          created_at: string
+          expires_at: string
+          id: string
+          invite_type: string
+          invited_by: string
+          role: string
+        }[]
+      }
+      revoke_super_admin: {
+        Args: { _target_user_id: string }
+        Returns: boolean
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "member" | "super_admin"

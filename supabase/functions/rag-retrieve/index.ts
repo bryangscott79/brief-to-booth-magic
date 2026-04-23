@@ -263,6 +263,7 @@ serve(async (req) => {
         similarity: r.similarity,
         bm25_score: r.bm25_score,
         hybrid_score: r.hybrid_score,
+        weighted_score: r.weighted_score,
         filename: meta?.filename ?? "",
         title: meta?.title ?? null,
         doc_type: meta?.doc_type ?? null,

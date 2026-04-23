@@ -162,10 +162,10 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ──────────────────────────────────── */}
-      <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-border">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" aria-label="Canopy" className="flex items-center">
-            <img src={canopyMark} alt="Canopy" className="h-12 w-12 object-contain" />
+            <img src={canopyMark} alt="Canopy" className="h-9 w-9 object-contain" />
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

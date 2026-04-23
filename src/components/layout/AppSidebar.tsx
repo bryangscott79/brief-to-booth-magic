@@ -1,7 +1,6 @@
 import { useLocation, Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import {
-  Grid3X3,
   FolderOpen,
   LogOut,
   Building2,

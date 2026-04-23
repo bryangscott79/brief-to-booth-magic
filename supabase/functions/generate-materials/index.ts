@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,13 +12,54 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { parsedBrief, spatialStrategy, budgetLogic, boothSize } = await req.json();
+    const {
+      parsedBrief,
+      spatialStrategy,
+      budgetLogic,
+      boothSize,
+      agency_id,
+      client_id,
+      activation_type_id,
+      project_id,
+    } = await req.json();
 
     if (!parsedBrief || typeof parsedBrief !== "object") {
       return new Response(JSON.stringify({ error: "parsedBrief is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (!spatialStrategy || typeof spatialStrategy !== "object") {
       return new Response(JSON.stringify({ error: "spatialStrategy is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ─── RAG: pull cost benchmarks, vendor pricing, materials specs ────────
+    let ragBlock = "";
+    if (agency_id) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const query = [
+          "trade show booth materials list, vendor pricing, cost benchmarks, fabrication estimate",
+          parsedBrief?.brand?.name,
+          boothSize,
+          parsedBrief?.show?.name,
+        ].filter(Boolean).join(" — ");
+
+        const ragContext = await buildRagContext(supabase, {
+          query,
+          agencyId: agency_id,
+          clientId: client_id,
+          activationTypeId: activation_type_id,
+          projectId: project_id,
+          topK: 8,
+        });
+        if (ragContext.chunks.length > 0) {
+          console.log(`[generate-materials] RAG: ${ragContext.chunks.length} chunks`);
+          ragBlock = `\n\n${ragContext.formatted}`;
+        }
+      } catch (e) {
+        console.warn("[generate-materials] RAG retrieval failed:", e);
+      }
     }
 
     const prompt = `You are a trade show booth construction estimator. Based on the following project data, generate a comprehensive materials list with estimated costs.
@@ -44,12 +87,12 @@ Categories should include:
 - Electrical & Infrastructure (power distribution, data, HVAC)
 - Finishing & Accessories (carpet, plants, accessories)
 
-Be realistic with trade show industry pricing.`;
+Be realistic with trade show industry pricing. When the prompt includes RETRIEVED KNOWLEDGE BASE CONTEXT with vendor quotes, historical bids, or cost benchmarks, prefer those numbers over generic estimates.${ragBlock}`;
 
     const result = await callGemini({
       model: "google/gemini-3-flash-preview",
       messages: [
-        { role: "system", content: "You are a trade show booth construction cost estimator. Return structured JSON only." },
+        { role: "system", content: "You are a trade show booth construction cost estimator. Return structured JSON only. Ground unit costs in any retrieved vendor / historical pricing context when available." },
         { role: "user", content: prompt },
       ],
       tools: [

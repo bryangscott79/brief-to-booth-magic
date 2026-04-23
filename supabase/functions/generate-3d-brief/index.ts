@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,13 +12,55 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { parsedBrief, spatialStrategy, renderPrompts, imageUrls, boothSize } = await req.json();
+    const {
+      parsedBrief,
+      spatialStrategy,
+      renderPrompts,
+      imageUrls,
+      boothSize,
+      agency_id,
+      client_id,
+      activation_type_id,
+      project_id,
+    } = await req.json();
 
     if (!parsedBrief || typeof parsedBrief !== "object") {
       return new Response(JSON.stringify({ error: "parsedBrief is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (!spatialStrategy || typeof spatialStrategy !== "object") {
       return new Response(JSON.stringify({ error: "spatialStrategy is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ─── RAG: pull materials/fabrication knowledge from KB ─────────────────
+    let ragBlock = "";
+    if (agency_id) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const query = [
+          "3D modeling brief, fabrication specs, material finishes, layer structure",
+          parsedBrief?.brand?.name,
+          boothSize,
+          spatialStrategy?.zones?.map((z: any) => z.name).join(", "),
+        ].filter(Boolean).join(" — ");
+
+        const ragContext = await buildRagContext(supabase, {
+          query,
+          agencyId: agency_id,
+          clientId: client_id,
+          activationTypeId: activation_type_id,
+          projectId: project_id,
+          topK: 6,
+        });
+        if (ragContext.chunks.length > 0) {
+          console.log(`[generate-3d-brief] RAG: ${ragContext.chunks.length} chunks`);
+          ragBlock = `\n\n${ragContext.formatted}`;
+        }
+      } catch (e) {
+        console.warn("[generate-3d-brief] RAG retrieval failed:", e);
+      }
     }
 
     const prompt = `You are a 3D modeling consultant specializing in trade show booth design. Based on the following project data, generate two outputs:
@@ -36,12 +80,12 @@ ${JSON.stringify(renderPrompts, null, 2)}
 
 BOOTH SIZE: ${boothSize || "30x30"}
 
-AVAILABLE VIEW IMAGES: ${JSON.stringify(imageUrls || [])}`;
+AVAILABLE VIEW IMAGES: ${JSON.stringify(imageUrls || [])}${ragBlock}`;
 
     const result = await callGemini({
       model: "google/gemini-3-flash-preview",
       messages: [
-        { role: "system", content: "You are a 3D modeling and fabrication consultant. Return structured JSON only." },
+        { role: "system", content: "You are a 3D modeling and fabrication consultant. Return structured JSON only. When the prompt contains RETRIEVED KNOWLEDGE BASE CONTEXT, give material/finish/layer guidance grounded in those references." },
         { role: "user", content: prompt },
       ],
       tools: [

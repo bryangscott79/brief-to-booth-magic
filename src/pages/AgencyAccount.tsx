@@ -89,7 +89,7 @@ export default function AgencyAccountPage() {
       if (!profile) throw new Error("User not found");
 
       // Projects
-      const { data: projects } = await supabase
+      const { data: projects } = await (supabase as any)
         .from("projects")
         .select("id, project_title, status, activation_type, created_at, updated_at")
         .eq("user_id", userId)

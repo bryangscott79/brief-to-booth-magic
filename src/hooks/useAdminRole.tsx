@@ -119,7 +119,7 @@ export function useAdminUsers() {
     queryFn: async () => {
       const { data: projects, error } = await supabase
         .from("projects")
-        .select("id, project_title, status, activation_type, user_id, created_at, updated_at, client_id")
+        .select("id, name, status, project_type, activation_type, user_id, created_at, updated_at, client_id")
         .order("updated_at", { ascending: false });
 
       if (error) throw error;

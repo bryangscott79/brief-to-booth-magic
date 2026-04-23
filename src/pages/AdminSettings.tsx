@@ -8,9 +8,10 @@ import { UserAccountsManager } from "@/components/admin/UserAccountsManager";
 import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
 import { ActivationTypeManager } from "@/components/admin/ActivationTypeManager";
 import { VenueIntelligenceManager } from "@/components/admin/VenueIntelligenceManager";
+import { KnowledgeHealthDashboard } from "@/components/admin/KnowledgeHealthDashboard";
 import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
-import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid } from "lucide-react";
+import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid, Activity } from "lucide-react";
 
 export default function AdminSettings() {
   const { data: isAdmin } = useIsAdmin();
@@ -79,6 +80,10 @@ export default function AdminSettings() {
                   <BookOpen className="h-4 w-4" />
                   Agency Knowledge Base
                 </TabsTrigger>
+                <TabsTrigger value="kb-health" className="gap-2">
+                  <Activity className="h-4 w-4" />
+                  KB Health
+                </TabsTrigger>
                 <TabsTrigger value="team" className="gap-2">
                   <UserCog className="h-4 w-4" />
                   Team
@@ -117,6 +122,9 @@ export default function AdminSettings() {
           </TabsContent>
           <TabsContent value="agency-kb">
             <AgencyKnowledgeBase />
+          </TabsContent>
+          <TabsContent value="kb-health">
+            <KnowledgeHealthDashboard />
           </TabsContent>
           <TabsContent value="team">
             <TeamManager />

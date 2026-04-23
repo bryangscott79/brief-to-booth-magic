@@ -33,6 +33,7 @@ interface RawMatch {
   similarity: number;
   bm25_score: number;
   hybrid_score: number;
+  weighted_score?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -41,6 +42,17 @@ interface EnrichedResult extends RawMatch {
   title: string | null;
   doc_type: string | null;
 }
+
+/**
+ * Volta RAG FRD § 6.3 — scope weighting.
+ * Project-specific knowledge outranks generic agency context.
+ */
+const SCOPE_WEIGHTS: Record<ScopeName, number> = {
+  project: 1.0,
+  client: 0.85,
+  activation_type: 0.75,
+  agency: 0.6,
+};
 
 // ─── EMBEDDINGS ───────────────────────────────────────────────────────────────
 
@@ -193,20 +205,28 @@ serve(async (req) => {
       }),
     );
 
-    // 3. Merge and de-dupe by chunk_id (keep highest hybrid_score)
-    const merged = new Map<string, RawMatch>();
+    // 3. Apply scope-weighting (FRD §6.3) so project knowledge outranks agency knowledge.
+    const allMatches: RawMatch[] = [];
     for (const list of rpcResults) {
       for (const row of list) {
-        const existing = merged.get(row.chunk_id);
-        if (!existing || (row.hybrid_score ?? 0) > (existing.hybrid_score ?? 0)) {
-          merged.set(row.chunk_id, row);
-        }
+        const w = SCOPE_WEIGHTS[row.scope as ScopeName] ?? 1;
+        row.weighted_score = (row.hybrid_score ?? 0) * w;
+        allMatches.push(row);
       }
     }
 
-    // 4. Sort by hybrid_score desc, take top_k
+    // 4. De-dupe by chunk_id (keep highest weighted_score in case of overlap)
+    const merged = new Map<string, RawMatch>();
+    for (const row of allMatches) {
+      const existing = merged.get(row.chunk_id);
+      if (!existing || (row.weighted_score ?? 0) > (existing.weighted_score ?? 0)) {
+        merged.set(row.chunk_id, row);
+      }
+    }
+
+    // 5. Sort by weighted_score desc, take top_k
     const sorted = Array.from(merged.values()).sort(
-      (a, b) => (b.hybrid_score ?? 0) - (a.hybrid_score ?? 0),
+      (a, b) => (b.weighted_score ?? 0) - (a.weighted_score ?? 0),
     );
     const top = sorted.slice(0, topK);
 
@@ -243,6 +263,7 @@ serve(async (req) => {
         similarity: r.similarity,
         bm25_score: r.bm25_score,
         hybrid_score: r.hybrid_score,
+        weighted_score: r.weighted_score,
         filename: meta?.filename ?? "",
         title: meta?.title ?? null,
         doc_type: meta?.doc_type ?? null,

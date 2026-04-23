@@ -45,6 +45,11 @@
 
     --radius: 0.75rem;
 
+    /* Spacing scale (Spatial UI System) */
+    --spacing-sm: 16px;
+    --spacing-md: 24px;
+    --spacing-lg: 32px;
+
     /* Custom tokens */
     --surface-elevated: 0 0% 100%;
     --surface-sunken: 220 25% 96%;
@@ -61,6 +66,10 @@
 
     --violet-glow: 255 92% 76% / 0.25;
     --magenta-glow: 327 87% 70% / 0.35;
+
+    /* Glass / spatial surface tokens (used over dark canvases) */
+    --border-subtle: 255 255 255 / 0.08;
+    --surface-glass: 255 255 255 / 0.04;
 
     /* Gradients — the living identity layer */
     --gradient-primary: linear-gradient(
@@ -177,10 +186,74 @@
     background-clip: text;
   }
 
-  /* Canopy brand mark — radial node */
+  /* ─── SPATIAL UI SYSTEM ─────────────────────────────────── */
+
+  /* Glass panel — used over navy canvases (hero, dark surfaces) */
+  .panel-glass {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius);
+  }
+
+  /* Spatial card (light surfaces) */
+  .panel-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  /* Canopy brand mark — radial node (Node System foundation) */
   .canopy-node {
+    width: 10px;
+    height: 10px;
+    border-radius: 9999px;
     background: var(--gradient-primary);
     box-shadow: 0 0 12px hsl(255 92% 76% / 0.6);
+    transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .canopy-node:hover {
+    transform: scale(1.3);
+    box-shadow: 0 0 18px hsl(255 92% 76% / 0.85);
+  }
+
+  .canopy-node.active {
+    animation: nodePulse 1.5s ease-in-out infinite;
+  }
+
+  /* Ambient glow blob — drop into any relative container */
+  .ambient-glow {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: var(--gradient-primary);
+    filter: blur(120px);
+    opacity: 0.15;
+    pointer-events: none;
+    border-radius: 9999px;
+  }
+
+  .ambient-glow-soft {
+    background: var(--glow-soft);
+  }
+
+  .ambient-glow-strong {
+    background: var(--glow-strong);
+  }
+
+  /* Connection line (use inside SVG <line stroke="..."> or as a div border) */
+  .connection-line {
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1;
+  }
+
+  /* Spatial focus ring — for inputs over dark canvases */
+  .focus-spatial:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(255 92% 76% / 0.4);
   }
 
   /* Card with subtle glow */
@@ -194,7 +267,7 @@
     transform: translateY(-2px);
   }
 
-  /* Canopy gradient button glow */
+  /* Canopy gradient button glow (used by .btn-glow & Button hero variant) */
   .btn-glow {
     box-shadow: var(--shadow-glow);
     transition: all 0.2s ease;
@@ -203,6 +276,23 @@
   .btn-glow:hover {
     box-shadow: 0 12px 32px hsl(255 92% 76% / 0.45);
     transform: translateY(-1px);
+  }
+
+  /* Pill button with full Canopy gradient (spec §7.1) */
+  .btn-canopy {
+    background: var(--gradient-primary);
+    color: hsl(var(--canopy-navy));
+    padding: 12px 20px;
+    border-radius: 999px;
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 8px 24px hsl(255 92% 76% / 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn-canopy:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 32px hsl(255 92% 76% / 0.5);
   }
 
   /* Upload zone styles */
@@ -312,6 +402,22 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
   }
+
+  /* Node-system pulse (spec §4.3) */
+  @keyframes nodePulse {
+    0%   { transform: scale(1);   opacity: 0.85; box-shadow: 0 0 12px hsl(255 92% 76% / 0.6); }
+    50%  { transform: scale(1.4); opacity: 1;    box-shadow: 0 0 22px hsl(327 87% 70% / 0.85); }
+    100% { transform: scale(1);   opacity: 0.85; box-shadow: 0 0 12px hsl(255 92% 76% / 0.6); }
+  }
+
+  /* Drift — subtle ambient motion for floating node fields */
+  @keyframes nodeDrift {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(4px, -6px); }
+  }
+
+  .animate-node-pulse { animation: nodePulse 1.5s ease-in-out infinite; }
+  .animate-node-drift { animation: nodeDrift 6s ease-in-out infinite; }
 
   @keyframes flowDash {
     0% { stroke-dashoffset: 24; }

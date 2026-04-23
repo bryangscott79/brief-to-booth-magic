@@ -22,6 +22,7 @@ import {
 import { useState, useEffect, useCallback } from "react";
 import canopyMark from "@/assets/canopy-mark.png";
 import canopyLogoFull from "@/assets/canopy-logo-full.png";
+import { NodeField } from "@/components/canopy/NodeField";
 import heroBoothImage from "@/assets/hero-visualization.jpg";
 import heroActivationImage from "@/assets/hero-activation.jpg";
 import heroInstallationImage from "@/assets/hero-installation.jpg";
@@ -190,12 +191,15 @@ export default function Index() {
 
       {/* ── Hero Rotator ────────────────────────────── */}
       <section className="relative min-h-screen flex items-center overflow-hidden hero-gradient pt-16">
-        {/* Ambient glow */}
+        {/* Ambient gradient blobs */}
         <div
           className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none transition-colors duration-1000"
           style={{ backgroundColor: `${slide.accent}15` }}
         />
         <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-blue-500/6 blur-[100px] pointer-events-none" />
+
+        {/* Canopy spatial node field — signature interaction */}
+        <NodeField count={18} activeCount={4} />
 
         {/* Slides */}
         {HERO_SLIDES.map((s, i) => (

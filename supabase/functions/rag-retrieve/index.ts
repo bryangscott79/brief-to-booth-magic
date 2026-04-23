@@ -33,6 +33,7 @@ interface RawMatch {
   similarity: number;
   bm25_score: number;
   hybrid_score: number;
+  weighted_score?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -41,6 +42,17 @@ interface EnrichedResult extends RawMatch {
   title: string | null;
   doc_type: string | null;
 }
+
+/**
+ * Volta RAG FRD § 6.3 — scope weighting.
+ * Project-specific knowledge outranks generic agency context.
+ */
+const SCOPE_WEIGHTS: Record<ScopeName, number> = {
+  project: 1.0,
+  client: 0.85,
+  activation_type: 0.75,
+  agency: 0.6,
+};
 
 // ─── EMBEDDINGS ───────────────────────────────────────────────────────────────
 

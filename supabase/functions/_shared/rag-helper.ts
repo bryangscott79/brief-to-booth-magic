@@ -26,7 +26,24 @@ interface RagContextOptions {
   topK?: number;
   /** Hybrid search vector weight 0-1 (default 0.7). */
   vectorWeight?: number;
+  /**
+   * Per-scope multiplier applied to the hybrid_score AFTER retrieval, before
+   * cross-scope re-ranking. Lets project-specific knowledge outrank generic
+   * agency context when both are relevant. Defaults follow the Volta FRD.
+   */
+  scopeWeights?: Partial<Record<"agency" | "activation_type" | "client" | "project", number>>;
 }
+
+/**
+ * Default scope weights per Volta RAG FRD § 6.3 (Scope Weighting).
+ * Project-specific knowledge is most relevant; broad agency knowledge least.
+ */
+export const DEFAULT_SCOPE_WEIGHTS: Record<"agency" | "activation_type" | "client" | "project", number> = {
+  project: 1.0,
+  client: 0.85,
+  activation_type: 0.75,
+  agency: 0.6,
+};
 
 export interface RetrievedChunk {
   chunk_id: string;
@@ -37,6 +54,8 @@ export interface RetrievedChunk {
   hybrid_score: number;
   similarity: number;
   bm25_score: number;
+  /** Score after applying the per-scope weight (used for cross-scope ranking). */
+  weighted_score?: number;
 }
 
 export interface RagContext {
@@ -136,8 +155,15 @@ export async function buildRagContext(
       if (r.data) allChunks.push(...(r.data as any));
     }
 
-    // 4. Re-rank across scopes (hybrid_score already calculated per chunk)
-    allChunks.sort((a, b) => b.hybrid_score - a.hybrid_score);
+    // 4. Apply scope-weighting (project > client > activation_type > agency).
+    const weights = { ...DEFAULT_SCOPE_WEIGHTS, ...(opts.scopeWeights || {}) };
+    for (const c of allChunks) {
+      const w = weights[c.scope] ?? 1;
+      c.weighted_score = c.hybrid_score * w;
+    }
+
+    // 5. Re-rank across scopes by weighted_score (FRD §6.3).
+    allChunks.sort((a, b) => (b.weighted_score ?? 0) - (a.weighted_score ?? 0));
     const top = allChunks.slice(0, topK);
 
     // 5. Group by scope

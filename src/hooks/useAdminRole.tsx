@@ -81,7 +81,7 @@ export function useAdminProfiles() {
 
       const { data: projects, error: projectsErr } = await supabase
         .from("projects")
-        .select("id, project_title, status, activation_type, user_id, created_at, updated_at")
+        .select("id, name, status, project_type, activation_type, user_id, created_at, updated_at")
         .order("updated_at", { ascending: false });
       if (projectsErr) throw projectsErr;
 
@@ -89,7 +89,15 @@ export function useAdminProfiles() {
       for (const p of (projects ?? []) as any[]) {
         if (!p.user_id) continue;
         if (!byUser[p.user_id]) byUser[p.user_id] = [];
-        byUser[p.user_id].push({ ...p, project_type: p.activation_type ?? "" } as ProjectSummary);
+        byUser[p.user_id].push({
+          id: p.id,
+          project_title: p.name ?? "Untitled",
+          status: p.status,
+          project_type: p.project_type ?? "",
+          activation_type: p.activation_type ?? null,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        } as ProjectSummary);
       }
 
       return ((profiles as UserProfile[]) ?? []).map((profile) => ({

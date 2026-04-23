@@ -24,6 +24,7 @@ import { SaveLearningsButton } from "./SaveLearningsButton";
 import { useRhinoRenders } from "@/hooks/useRhinoRenders";
 import { useBrandIntelligence } from "@/hooks/useClients";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { useAgency } from "@/hooks/useAgency";
 
 interface MaterialItem {
   name: string;
@@ -93,6 +94,9 @@ export function ExportPackage() {
   const { data: brandIntelligence = [] } = useBrandIntelligence(clientId);
   const approvedIntel = brandIntelligence.filter((e: any) => e.is_approved);
   const { profile } = useCompanyProfile();
+  const { agency } = useAgency();
+  const agencyId = agency?.id ?? null;
+  const activationTypeId = (currentProject as any)?.activation_type_id ?? (currentProject as any)?.activationTypeId ?? null;
 
   const [materials, setMaterials] = useState<MaterialsData | null>(null);
   const [threeDData, setThreeDData] = useState<ThreeDData | null>(null);
@@ -126,6 +130,10 @@ export function ExportPackage() {
           spatialStrategy: elements.spatialStrategy?.data,
           budgetLogic: elements.budgetLogic?.data,
           boothSize: brief.spatial?.footprints?.[0]?.size || "30x30",
+          agency_id: agencyId,
+          client_id: clientId,
+          activation_type_id: activationTypeId,
+          project_id: projectId,
         },
       });
       if (error) throw error;
@@ -153,6 +161,10 @@ export function ExportPackage() {
           renderPrompts: currentProject?.renderPrompts,
           imageUrls,
           boothSize: brief.spatial?.footprints?.[0]?.size || "30x30",
+          agency_id: agencyId,
+          client_id: clientId,
+          activation_type_id: activationTypeId,
+          project_id: projectId,
         },
       });
       if (error) throw error;

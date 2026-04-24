@@ -367,7 +367,11 @@ export type ActivationCategory =
   | "hospitality"
   | "support"
   | "outdoor"
-  | "digital";
+  | "digital"
+  | "experience"
+  | "product"
+  | "anchor"
+  | "operations";
 
 export type ElementEmphasis = "required" | "inherit" | "skip" | "normal";
 

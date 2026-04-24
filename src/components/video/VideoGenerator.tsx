@@ -167,7 +167,7 @@ export function VideoGenerator({ projectId, generatedImages, boothSize, angleNam
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">{preset.icon}</span>
+                    <LucideIcon name={preset.icon} className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">{preset.name}</span>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">{preset.description}</p>
@@ -348,7 +348,7 @@ function VideoCard({ video, projectId: _projectId, boothSize: _boothSize }: { vi
         <div className="flex items-center justify-between mb-1">
           <h4 className="text-sm font-medium truncate">{video.sourceAngleName}</h4>
           <Badge variant="outline" className="text-xs ml-2 shrink-0">
-            {motionPreset?.icon} {motionPreset?.name}
+            <LucideIcon name={motionPreset?.icon} className="h-3 w-3 mr-1" /> {motionPreset?.name}
           </Badge>
         </div>
         <div className="flex items-center justify-between">

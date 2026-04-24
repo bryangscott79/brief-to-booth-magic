@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 import { ALL_PROJECT_TYPES, type ProjectTypeId } from "@/lib/projectTypes";
 import type { CustomProjectType } from "@/hooks/useCustomProjectTypes";
 import { CheckCircle2, Sparkles, Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react";

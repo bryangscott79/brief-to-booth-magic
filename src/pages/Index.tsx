@@ -32,8 +32,6 @@ import { useScrollY } from "@/hooks/useScrollReveal";
 import { cn } from "@/lib/utils";
 
 import showcaseEnergy from "@/assets/showcase-energy.jpg";
-import showcaseTech from "@/assets/showcase-tech.jpg";
-import showcaseAuto from "@/assets/showcase-auto.jpg";
 import showcaseLounge from "@/assets/showcase-lounge.jpg";
 import showcaseInstallation from "@/assets/showcase-installation.jpg";
 import showcaseKeynote from "@/assets/showcase-keynote.jpg";
@@ -41,29 +39,55 @@ import showcaseFloorplan from "@/assets/showcase-floorplan.jpg";
 import intelligenceNetwork from "@/assets/intelligence-network.jpg";
 import heroArchitecture from "@/assets/hero-architecture.jpg";
 import heroInstallation from "@/assets/hero-installation.jpg";
+import showcaseUber from "@/assets/showcase-uber.png";
+import showcaseSamsung from "@/assets/showcase-samsung.png";
+import showcaseTesla from "@/assets/showcase-tesla.png";
+import showcaseTopps from "@/assets/showcase-topps.png";
+
+const HERO_ROTATION = [
+  showcaseUber,
+  showcaseSamsung,
+  showcaseTesla,
+  showcaseTopps,
+  showcaseEnergy,
+];
 
 // ─── CONTENT ──────────────────────────────────────────────────────────────
 
 const SHOWCASE = [
   {
-    img: showcaseEnergy,
-    label: "Energy / Sport",
-    title: "Athletic brand activation",
-    sub: "Sculptural canopy. Ramp installation. Crowd-flow optimized.",
+    img: showcaseUber,
+    label: "Festival / Mobility",
+    title: "Uber — Music moves",
+    sub: "Pickup zone, lounge & stage activation. Wayfinding-led.",
     span: "lg:col-span-2 lg:row-span-2",
   },
   {
-    img: showcaseTech,
+    img: showcaseSamsung,
     label: "Consumer Tech",
-    title: "Immersive product reveal",
-    sub: "Wraparound LED. Floating displays.",
+    title: "Samsung — AI for All",
+    sub: "Halo ring architecture. Multi-zone product theater.",
     span: "lg:col-span-2 lg:row-span-1",
   },
   {
-    img: showcaseAuto,
+    img: showcaseTesla,
     label: "Automotive",
-    title: "Cinematic vehicle reveal",
-    sub: "Theatrical staging. Projection mapped.",
+    title: "Tesla — Sustainable Energy",
+    sub: "Floating canopy. Vehicle + ecosystem staging.",
+    span: "lg:col-span-1 lg:row-span-1",
+  },
+  {
+    img: showcaseTopps,
+    label: "Sports / Retail",
+    title: "Topps — Collect. Connect.",
+    sub: "Hero LED. Pack rip moments. Trade zones.",
+    span: "lg:col-span-1 lg:row-span-1",
+  },
+  {
+    img: showcaseEnergy,
+    label: "Energy / Sport",
+    title: "Athletic brand activation",
+    sub: "Sculptural canopy. Crowd-flow optimized.",
     span: "lg:col-span-1 lg:row-span-1",
   },
   {
@@ -71,20 +95,6 @@ const SHOWCASE = [
     label: "Hospitality",
     title: "VIP brand lounge",
     sub: "Curated for intimate conversations.",
-    span: "lg:col-span-1 lg:row-span-1",
-  },
-  {
-    img: showcaseInstallation,
-    label: "Art / Storytelling",
-    title: "Walk-through installation",
-    sub: "Sequential narrative architecture.",
-    span: "lg:col-span-1 lg:row-span-1",
-  },
-  {
-    img: showcaseKeynote,
-    label: "Keynote",
-    title: "Conference main stage",
-    sub: "Built for the moment of reveal.",
     span: "lg:col-span-1 lg:row-span-1",
   },
 ];

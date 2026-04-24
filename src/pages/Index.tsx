@@ -664,7 +664,7 @@ export default function Index() {
           className="flex gap-5 px-6"
           style={{ transform: `translateX(${-scrollY * 0.06}px)` }}
         >
-          {[heroArchitecture, showcaseEnergy, showcaseTech, heroInstallation, showcaseAuto, showcaseLounge, showcaseInstallation].map((src, i) => (
+          {[heroArchitecture, showcaseUber, showcaseSamsung, heroInstallation, showcaseTesla, showcaseTopps, showcaseLounge, showcaseInstallation].map((src, i) => (
             <div
               key={i}
               className="shrink-0 w-[320px] md:w-[440px] h-[260px] md:h-[320px] rounded-2xl overflow-hidden border border-white/10 relative"

@@ -1,12 +1,14 @@
 /**
- * Image generation model registry.
+ * Render quality tier registry.
  *
- * Single source of truth for which AI image models the app exposes to users.
- * The `id` is the model identifier sent to the Lovable AI gateway / direct
- * Gemini gateway. The agency's default lives in `agencies.image_model` and any
- * per-render override is passed via the `image_model` body param of the
- * `generate-hero`, `generate-view`, `generate-panorama`, and
- * `polish-rhino-render` edge functions.
+ * IMPORTANT — user-facing language: never expose underlying model names or
+ * providers (no "Gemini", "Nano Banana", "OpenAI", "GPT", etc). Users see
+ * only abstract quality tiers ("Signature", "Studio", "Draft") so the
+ * rendering pipeline feels like part of the platform they're paying for.
+ *
+ * The `id` is the underlying model identifier sent to the AI gateway and is
+ * for internal/backend use only. Persisted on `agencies.image_model` and
+ * passed to image edge functions via the `image_model` body param.
  */
 
 export type ImageModelId =
@@ -28,32 +30,32 @@ export interface ImageModel {
 export const IMAGE_MODELS: ImageModel[] = [
   {
     id: "google/gemini-3-pro-image-preview",
-    label: "Nano Banana Pro",
-    shortLabel: "Pro",
-    description: "Highest fidelity. Best for hero renders and presentation imagery.",
+    label: "Signature",
+    shortLabel: "Signature",
+    description: "Highest fidelity. Best for hero renders and final presentation imagery.",
     badge: "Best quality",
     available: true,
   },
   {
     id: "google/gemini-3.1-flash-image-preview",
-    label: "Nano Banana 2",
-    shortLabel: "2",
-    description: "Pro-quality at faster speeds. Great for iteration and editing.",
-    badge: "New",
+    label: "Studio",
+    shortLabel: "Studio",
+    description: "Premium quality at faster speeds. Great for iteration and editing.",
+    badge: "Recommended",
     available: true,
   },
   {
     id: "google/gemini-2.5-flash-image",
-    label: "Nano Banana",
-    shortLabel: "Standard",
-    description: "Fastest and most economical. Good for drafts and bulk renders.",
+    label: "Draft",
+    shortLabel: "Draft",
+    description: "Fastest turnaround. Good for early concepts and bulk variations.",
     available: true,
   },
   {
     id: "openai/gpt-image-1",
-    label: "OpenAI GPT Image",
-    shortLabel: "GPT",
-    description: "Strong on legible text and stylized renders. Coming soon.",
+    label: "Typographic",
+    shortLabel: "Typographic",
+    description: "Tuned for legible on-render text and graphic-led compositions.",
     badge: "Coming soon",
     available: false,
   },

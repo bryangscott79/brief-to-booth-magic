@@ -210,7 +210,7 @@ export const PROJECT_TYPE_REGISTRY: Record<ProjectTypeId, ProjectTypeDef> = {
     shortLabel: "Architecture",
     tagline: "From concept to construction-ready spatial intelligence",
     description: "Commercial interiors, brand environments, hospitality spaces, cultural buildings, and mixed-use development concepts.",
-    icon: "🏢",
+    icon: "Building",
     accentColor: "hsl(200 60% 50%)",
     renderContext: "architectural interior visualization of a modern commercial or hospitality space with high-end finishes and natural light",
     spatialDefaults: { primaryUnit: "sqm", defaultSize: 500, sizeLabel: "sq m" },

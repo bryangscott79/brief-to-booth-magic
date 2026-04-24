@@ -39,14 +39,14 @@ interface KbFile {
 }
 
 const BRAND_FOLDERS = [
-  { value: "brand-guide", label: "Brand Guide", icon: "🎨", description: "Logo, colors, fonts, brand book" },
-  { value: "messaging", label: "Messaging & Voice", icon: "💬", description: "Tone of voice, messaging pillars, taglines" },
-  { value: "campaign", label: "Campaigns", icon: "📣", description: "Current campaign themes, press releases" },
-  { value: "past-booths", label: "Past Booths", icon: "🏗️", description: "Previous booth photos, design files" },
-  { value: "products", label: "Products & Services", icon: "📦", description: "Product descriptions, features, demos" },
-  { value: "audience", label: "Audience & Personas", icon: "👥", description: "Target audience, journey maps, personas" },
-  { value: "competitive", label: "Competitive", icon: "⚔️", description: "Competitor references, differentiation" },
-  { value: "general", label: "General", icon: "📁", description: "Other brand-related materials" },
+  { value: "brand-guide", label: "Brand Guide", icon: "Palette", description: "Logo, colors, fonts, brand book" },
+  { value: "messaging", label: "Messaging & Voice", icon: "MessageSquare", description: "Tone of voice, messaging pillars, taglines" },
+  { value: "campaign", label: "Campaigns", icon: "Megaphone", description: "Current campaign themes, press releases" },
+  { value: "past-booths", label: "Past Booths", icon: "Building2", description: "Previous booth photos, design files" },
+  { value: "products", label: "Products & Services", icon: "Package", description: "Product descriptions, features, demos" },
+  { value: "audience", label: "Audience & Personas", icon: "Users", description: "Target audience, journey maps, personas" },
+  { value: "competitive", label: "Competitive", icon: "Swords", description: "Competitor references, differentiation" },
+  { value: "general", label: "General", icon: "Folder", description: "Other brand-related materials" },
 ];
 
 function formatBytes(bytes: number | null) {

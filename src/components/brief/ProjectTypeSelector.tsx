@@ -57,7 +57,7 @@ export function ProjectTypeSelector({
   const [newType, setNewType] = useState<NewCustomType>({
     type_id: "",
     label: "",
-    icon: "🏷️",
+    icon: "Tag",
   });
 
   const confirmedCustomTypes = customTypes.filter((t) => t.confirmed_by_user);
@@ -71,7 +71,7 @@ export function ProjectTypeSelector({
     if (!newType.label.trim()) return;
     const type_id = newType.type_id || slugify(newType.label);
     onAddCustomType?.({ ...newType, type_id });
-    setNewType({ type_id: "", label: "", icon: "🏷️" });
+    setNewType({ type_id: "", label: "", icon: "Tag" });
     setShowCustomForm(false);
   };
 
@@ -161,7 +161,7 @@ export function ProjectTypeSelector({
                   label={type.label}
                   tagline={type.tagline ?? ""}
                   description={type.description ?? ""}
-                  icon={type.icon ?? "🏷️"}
+                  icon={type.icon ?? "Tag"}
                   accentColor={type.accent_color ?? "hsl(220 70% 55%)"}
                   elementCount={8}
                   isSelected={isSelected}
@@ -188,7 +188,7 @@ export function ProjectTypeSelector({
                   label={type.label}
                   tagline={type.tagline ?? ""}
                   description={type.description ?? ""}
-                  icon={type.icon ?? "🏷️"}
+                  icon={type.icon ?? "Tag"}
                   accentColor="hsl(220 70% 55%)"
                   elementCount={8}
                   isSelected={selected === type.type_id}

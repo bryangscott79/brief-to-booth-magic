@@ -10,7 +10,7 @@ import { useAuth } from "./useAuth";
 import { useAgency } from "./useAgency";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type KnowledgeScope = "agency" | "activation_type" | "client" | "project";
+export type KnowledgeScope = "agency" | "activation_type" | "activation_type_agency" | "client" | "project";
 export type KnowledgeDocument = Tables<"knowledge_documents">;
 
 interface UseKnowledgeDocumentsOptions {

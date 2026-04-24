@@ -218,11 +218,19 @@ const TIERS = [
 
 export default function Index() {
   const [mounted, setMounted] = useState(false);
+  const [heroIdx, setHeroIdx] = useState(0);
   const scrollY = useScrollY();
 
   useEffect(() => {
     const t = window.setTimeout(() => setMounted(true), 60);
     return () => window.clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setHeroIdx((i) => (i + 1) % HERO_ROTATION.length);
+    }, 5500);
+    return () => window.clearInterval(id);
   }, []);
 
   return (
@@ -262,8 +270,28 @@ export default function Index() {
       </header>
 
       {/* ═══ HERO ═════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100svh] flex items-center">
-        <div className="absolute inset-0 canopy-grid-pattern opacity-60" aria-hidden />
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden">
+        {/* Rotating background imagery */}
+        <div className="absolute inset-0" aria-hidden>
+          {HERO_ROTATION.map((src, i) => (
+            <img
+              key={i}
+              src={src}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[2200ms] ease-in-out"
+              style={{
+                opacity: i === heroIdx ? 0.32 : 0,
+                transform: `scale(${i === heroIdx ? 1.04 : 1}) translateY(${scrollY * 0.08}px)`,
+                transition:
+                  "opacity 2200ms ease-in-out, transform 9000ms ease-out",
+              }}
+            />
+          ))}
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/60" />
+        </div>
+
+        <div className="absolute inset-0 canopy-grid-pattern opacity-40" aria-hidden />
 
         <CanopyAmbientGlow position="top-1/4 -left-32" size={520} tone="violet" opacity={0.32} animate />
         <CanopyAmbientGlow position="bottom-0 right-0 translate-x-1/3 translate-y-1/3" size={600} tone="pink" opacity={0.28} animate />

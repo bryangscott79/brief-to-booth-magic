@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/integrations/supabase/types";
@@ -84,4 +84,24 @@ export function useAgency(): UseAgencyResult {
       queryClient.invalidateQueries({ queryKey });
     },
   };
+}
+
+/** Mutation: update fields on the user's primary agency. */
+export function useUpdateAgency() {
+  const { agency } = useAgency();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: Partial<Tables<"agencies">>) => {
+      if (!agency?.id) throw new Error("No active agency");
+      const { error } = await supabase
+        .from("agencies")
+        .update(updates)
+        .eq("id", agency.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agency"] });
+    },
+  });
 }

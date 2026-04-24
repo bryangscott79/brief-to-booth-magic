@@ -186,6 +186,7 @@ export type Database = {
           brand_colors: Json | null
           created_at: string
           id: string
+          image_model: string
           logo_url: string | null
           name: string
           owner_user_id: string
@@ -196,6 +197,7 @@ export type Database = {
           brand_colors?: Json | null
           created_at?: string
           id?: string
+          image_model?: string
           logo_url?: string | null
           name: string
           owner_user_id: string
@@ -206,6 +208,7 @@ export type Database = {
           brand_colors?: Json | null
           created_at?: string
           id?: string
+          image_model?: string
           logo_url?: string | null
           name?: string
           owner_user_id?: string

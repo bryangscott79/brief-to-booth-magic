@@ -257,6 +257,33 @@ export function KnowledgeBasePanel({
   );
 }
 
+// ─── File visual helper ──────────────────────────────────────────────────────
+
+function getFileVisual(filename: string, mimeType: string | null) {
+  const lower = (filename || "").toLowerCase();
+  const mt = (mimeType || "").toLowerCase();
+
+  if (mt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|tiff?)$/.test(lower)) {
+    return { Icon: FileImage, tone: "bg-primary/10 text-primary" };
+  }
+  if (mt.includes("pdf") || lower.endsWith(".pdf")) {
+    return { Icon: FileText, tone: "bg-destructive/10 text-destructive" };
+  }
+  if (mt.includes("spreadsheet") || mt.includes("excel") || /\.(xlsx?|csv|tsv|numbers)$/.test(lower)) {
+    return { Icon: FileSpreadsheet, tone: "bg-accent/20 text-accent-foreground" };
+  }
+  if (mt.includes("presentation") || /\.(pptx?|key)$/.test(lower)) {
+    return { Icon: Presentation, tone: "bg-accent/20 text-accent-foreground" };
+  }
+  if (mt.includes("word") || /\.(docx?|rtf|odt)$/.test(lower)) {
+    return { Icon: FileText, tone: "bg-primary/10 text-primary" };
+  }
+  if (/\.(json|xml|ya?ml|toml|js|ts|tsx|jsx|py|rb|go|rs|java|c|cpp|sh|html?|css|svg)$/.test(lower)) {
+    return { Icon: FileCode, tone: "bg-muted text-muted-foreground" };
+  }
+  return { Icon: FileIcon, tone: "bg-muted text-muted-foreground" };
+}
+
 // ─── DocumentRow ─────────────────────────────────────────────────────────────
 
 interface DocumentRowProps {

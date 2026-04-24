@@ -64,8 +64,22 @@ const CHUNK_OVERLAP = 100;
  * Split text into ~1000-char chunks with ~100-char overlap, preferring paragraph
  * boundaries. Skips empty chunks.
  */
+/**
+ * Strip characters Postgres text/jsonb cannot store:
+ * - NUL bytes (\u0000) — Postgres rejects these in text columns
+ * - Other C0 control chars except \t \n \r
+ * - Lone UTF-16 surrogates that produce "unsupported Unicode escape sequence"
+ */
+function sanitizeForPg(text: string): string {
+  return text
+    .replace(/\u0000/g, "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/[\uD800-\uDFFF]/g, "");
+}
+
 function chunkText(text: string): string[] {
-  const cleaned = text.replace(/\r\n/g, "\n").trim();
+  const cleaned = sanitizeForPg(text).replace(/\r\n/g, "\n").trim();
   if (!cleaned) return [];
 
   // Split into paragraphs first
@@ -288,7 +302,7 @@ serve(async (req) => {
     // 7. Embed + insert each chunk sequentially with small delay
     let insertedCount = 0;
     for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
+      const chunk = sanitizeForPg(chunks[i]);
       const embedding = await embedChunk(chunk, GOOGLE_AI_API_KEY, "RETRIEVAL_DOCUMENT");
       const embeddingLiteral = `[${embedding.join(",")}]`;
 

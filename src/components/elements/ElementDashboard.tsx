@@ -554,7 +554,7 @@ function ElementCard({ element, meta, onClick, onGenerate, isGenerating }: Eleme
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
-          <span className="text-2xl">{meta.icon}</span>
+          <LucideIcon name={meta.icon} className="h-6 w-6 text-primary" />
           <Badge 
             variant="secondary" 
             className={cn("text-xs", statusStyles[element.status])}

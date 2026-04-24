@@ -67,7 +67,7 @@ export function ElementDetailPanel({
             Back
           </Button>
           <Separator orientation="vertical" className="h-6" />
-          <span className="text-2xl">{meta.icon}</span>
+          <LucideIcon name={meta.icon} className="h-6 w-6 text-primary" />
           <div>
             <h2 className="text-2xl font-semibold">{meta.title}</h2>
             <p className="text-sm text-muted-foreground">{meta.description}</p>

@@ -403,9 +403,16 @@ async function fetchWithRateLimitRetry(
  * ```
  */
 export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
+  // Prefer the Lovable AI gateway when available — it pools quota across
+  // workspaces and avoids the per-key Google free-tier rate limits.
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (lovableKey) {
+    return callGeminiViaLovable(options, lovableKey);
+  }
+
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) {
-    throw new Error("[ai-gateway] GOOGLE_AI_API_KEY is not configured");
+    throw new Error("[ai-gateway] Neither LOVABLE_API_KEY nor GOOGLE_AI_API_KEY is configured");
   }
 
   // Resolve model name
@@ -452,7 +459,7 @@ export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
   // Make API call
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${apiKey}`;
 
-  console.log(`[ai-gateway] Gemini call: model=${resolvedModel}, parts=${contents.length}, tools=${options.tools?.length ?? 0}`);
+  console.log(`[ai-gateway] Gemini call (direct): model=${resolvedModel}, parts=${contents.length}, tools=${options.tools?.length ?? 0}`);
 
   const response = await fetchWithRateLimitRetry(
     url,
@@ -466,6 +473,83 @@ export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
 
   const data = await response.json();
   return parseGeminiResponse(data);
+}
+
+/**
+ * Calls Gemini via the Lovable AI gateway (OpenAI-compatible chat completions).
+ * Uses the gateway's pooled quota instead of the project's Google API key.
+ */
+async function callGeminiViaLovable(
+  options: GeminiOptions,
+  lovableKey: string,
+): Promise<AIResponse> {
+  // The gateway expects the "google/<model>" form — no mapping needed.
+  const model = options.model.startsWith("google/") || options.model.startsWith("openai/")
+    ? options.model
+    : `google/${options.model}`;
+
+  const body: Record<string, any> = {
+    model,
+    messages: options.messages,
+  };
+
+  if (options.temperature !== undefined) body.temperature = options.temperature;
+  if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
+  if (options.tools && options.tools.length > 0) body.tools = options.tools;
+  if (options.toolChoice) body.tool_choice = options.toolChoice;
+  if (options.modalities && options.modalities.length > 0) body.modalities = options.modalities;
+
+  console.log(`[ai-gateway] Gemini call (lovable): model=${model}, messages=${options.messages.length}, tools=${options.tools?.length ?? 0}`);
+
+  const response = await fetchWithRateLimitRetry(
+    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${lovableKey}`,
+      },
+      body: JSON.stringify(body),
+    },
+    `Lovable/${model}`,
+  );
+
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  if (!choice) {
+    throw new Error(`[ai-gateway] Lovable returned no choices: ${JSON.stringify(data).substring(0, 300)}`);
+  }
+
+  const result: AIResponse = {};
+  const msg = choice.message ?? {};
+
+  if (typeof msg.content === "string" && msg.content.length > 0) {
+    result.text = msg.content;
+  } else if (Array.isArray(msg.content)) {
+    const texts: string[] = [];
+    const images: Array<{ mimeType: string; base64Data: string }> = [];
+    for (const part of msg.content) {
+      if (part?.type === "text" && part.text) texts.push(part.text);
+      if (part?.type === "image_url" && part.image_url?.url?.startsWith("data:")) {
+        const m = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+        if (m) images.push({ mimeType: m[1], base64Data: m[2] });
+      }
+    }
+    if (texts.length) result.text = texts.join("");
+    if (images.length) result.images = images;
+  }
+
+  if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+    result.toolCalls = msg.tool_calls.map((tc: any) => {
+      let args: any = tc.function?.arguments;
+      if (typeof args === "string") {
+        try { args = JSON.parse(args); } catch { /* keep as string */ }
+      }
+      return { name: tc.function?.name, arguments: args };
+    });
+  }
+
+  return result;
 }
 
 /**

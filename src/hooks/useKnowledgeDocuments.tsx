@@ -135,7 +135,7 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
       updates,
     }: {
       id: string;
-      updates: Partial<Pick<KnowledgeDocument, "title" | "user_tags" | "summary">>;
+      updates: Partial<Pick<KnowledgeDocument, "title" | "user_tags" | "summary" | "priority_weight" | "is_pinned">>;
     }) => {
       const { error } = await supabase
         .from("knowledge_documents")

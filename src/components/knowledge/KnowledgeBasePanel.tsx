@@ -20,6 +20,8 @@ import {
   CheckCircle2,
   Tag,
   RefreshCw,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +72,7 @@ export function KnowledgeBasePanel({
   filterTags,
 }: Props) {
   const { toast } = useToast();
-  const { documents, isLoading, uploadDocument, deleteDocument, reembedDocument } =
+  const { documents, isLoading, uploadDocument, deleteDocument, reembedDocument, updateDocument } =
     useKnowledgeDocuments({ scope, scopeId });
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -143,6 +145,19 @@ export function KnowledgeBasePanel({
     } catch (e) {
       toast({
         title: "Delete failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTogglePin = async (doc: KnowledgeDocument) => {
+    try {
+      await updateDocument.mutateAsync({ id: doc.id, updates: { is_pinned: !doc.is_pinned } });
+      toast({ title: doc.is_pinned ? "Unpinned" : "Pinned", description: doc.filename });
+    } catch (e) {
+      toast({
+        title: "Update failed",
         description: e instanceof Error ? e.message : String(e),
         variant: "destructive",
       });
@@ -229,6 +244,7 @@ export function KnowledgeBasePanel({
               document={doc}
               onDelete={() => handleDelete(doc)}
               onReembed={() => handleReembed(doc)}
+              onTogglePin={() => handleTogglePin(doc)}
             />
           ))}
         </div>
@@ -243,13 +259,14 @@ interface DocumentRowProps {
   document: KnowledgeDocument;
   onDelete: () => void;
   onReembed: () => void;
+  onTogglePin: () => void;
 }
 
-function DocumentRow({ document: doc, onDelete, onReembed }: DocumentRowProps) {
+function DocumentRow({ document: doc, onDelete, onReembed, onTogglePin }: DocumentRowProps) {
   const tags = [...(doc.auto_tags || []), ...(doc.user_tags || [])];
 
   return (
-    <Card className="p-3 flex items-start gap-3">
+    <Card className={cn("p-3 flex items-start gap-3", doc.is_pinned && "border-primary/40 bg-primary/5")}>
       <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
         <FileIcon className="h-5 w-5 text-muted-foreground" />
       </div>
@@ -295,6 +312,18 @@ function DocumentRow({ document: doc, onDelete, onReembed }: DocumentRowProps) {
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onTogglePin}
+          title={doc.is_pinned ? "Unpin (let ranking decide)" : "Pin (always include in retrieval)"}
+        >
+          {doc.is_pinned ? (
+            <Pin className="h-4 w-4 fill-primary text-primary" />
+          ) : (
+            <PinOff className="h-4 w-4 text-muted-foreground" />
+          )}
+        </Button>
         {doc.status === "failed" && (
           <Button size="icon" variant="ghost" onClick={onReembed} title="Retry embedding">
             <RefreshCw className="h-4 w-4" />

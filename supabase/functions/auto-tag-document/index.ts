@@ -7,7 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callAnthropic } from "../_shared/ai-gateway.ts";
+import { callGemini } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +15,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const HAIKU_MODEL = "claude-3-5-haiku-20241022";
+const TAGGING_MODEL = "google/gemini-2.5-flash-lite";
 
 interface AutoTagResult {
   doc_type: "brief" | "rate_card" | "research" | "past_work" | "brand_guide" | "spec_sheet" | "contract" | "other";
@@ -24,32 +24,36 @@ interface AutoTagResult {
   summary: string;
 }
 
+// OpenAI-format tool used by callGemini (which converts to Gemini functionDeclarations)
 const TAG_TOOL = {
-  name: "classify_document",
-  description: "Classify a trade-show/experiential-marketing agency document and extract keyword tags.",
-  input_schema: {
-    type: "object",
-    properties: {
-      doc_type: {
-        type: "string",
-        enum: ["brief", "rate_card", "research", "past_work", "brand_guide", "spec_sheet", "contract", "other"],
-        description: "The primary document type.",
+  type: "function",
+  function: {
+    name: "classify_document",
+    description: "Classify a trade-show/experiential-marketing agency document and extract keyword tags.",
+    parameters: {
+      type: "object",
+      properties: {
+        doc_type: {
+          type: "string",
+          enum: ["brief", "rate_card", "research", "past_work", "brand_guide", "spec_sheet", "contract", "other"],
+          description: "The primary document type.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "3-8 short, lowercase tags describing the content (e.g. 'pricing', 'floorplan', 'brand-voice', 'aerospace', 'trade-show').",
+        },
+        confidence: {
+          type: "number",
+          description: "0-1 confidence in the doc_type classification.",
+        },
+        summary: {
+          type: "string",
+          description: "One-sentence summary of the document content (under 30 words).",
+        },
       },
-      tags: {
-        type: "array",
-        items: { type: "string" },
-        description: "3-8 short, lowercase tags describing the content (e.g. 'pricing', 'floorplan', 'brand-voice', 'aerospace', 'trade-show').",
-      },
-      confidence: {
-        type: "number",
-        description: "0-1 confidence in the doc_type classification.",
-      },
-      summary: {
-        type: "string",
-        description: "One-sentence summary of the document content (under 30 words).",
-      },
+      required: ["doc_type", "tags", "confidence", "summary"],
     },
-    required: ["doc_type", "tags", "confidence", "summary"],
   },
 };
 
@@ -82,23 +86,26 @@ serve(async (req) => {
       );
     }
 
-    const result = await callAnthropic({
-      model: HAIKU_MODEL,
-      system: "You are a document classifier for a trade show / experiential marketing agency. Categorize documents and extract descriptive keyword tags.",
+    const result = await callGemini({
+      model: TAGGING_MODEL,
       messages: [
+        {
+          role: "system",
+          content: "You are a document classifier for a trade show / experiential marketing agency. Categorize documents and extract descriptive keyword tags.",
+        },
         {
           role: "user",
           content: `Filename: ${doc.filename}\nContent:\n\n${text}\n\nClassify this document.`,
         },
       ],
       tools: [TAG_TOOL],
-      toolChoice: { type: "tool", name: "classify_document" },
+      toolChoice: { type: "function", function: { name: "classify_document" } },
       maxTokens: 1024,
       temperature: 0,
     });
 
     const parsed = result.toolCalls?.[0]?.arguments as AutoTagResult | undefined;
-    if (!parsed) throw new Error("Claude returned no tool call");
+    if (!parsed) throw new Error("Gemini returned no tool call");
 
     // Update the document
     const { error: updErr } = await supabase

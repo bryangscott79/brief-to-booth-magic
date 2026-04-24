@@ -49,6 +49,7 @@ import showcaseTeslaTrain from "@/assets/showcase-tesla-train.png";
 import showcasePremiere from "@/assets/showcase-premiere.png";
 import showcaseEsports from "@/assets/showcase-esports.png";
 import showcaseAirmax from "@/assets/showcase-airmax.png";
+import showcaseRivian from "@/assets/showcase-rivian.png";
 
 const HERO_ROTATION = [
   showcaseUber,
@@ -60,6 +61,7 @@ const HERO_ROTATION = [
   showcaseGalaxy,
   showcaseAurora,
   showcaseTeslaTrain,
+  showcaseRivian,
   showcasePremiere,
   showcaseEsports,
   showcaseAirmax,

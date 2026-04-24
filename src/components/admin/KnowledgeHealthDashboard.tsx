@@ -5,7 +5,7 @@
 //
 // Mounts inside AdminSettings as the "KB Health" tab.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -21,6 +21,7 @@ import {
   Zap,
   FolderKanban,
   Sparkles,
+  Archive,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

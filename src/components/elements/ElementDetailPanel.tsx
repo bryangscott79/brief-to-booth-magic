@@ -433,9 +433,9 @@ function ExperienceFrameworkDetail({ data, onUpdateField }: { data: any; onUpdat
                     </span>
                   ))}
                 </div>
-                <div className="flex gap-2 text-xs text-muted-foreground">
-                  <span>⏱ {route.timing}</span>
-                  {route.engagementGoal && <span>🎯 {route.engagementGoal}</span>}
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {route.timing}</span>
+                  {route.engagementGoal && <span className="inline-flex items-center gap-1"><Target className="h-3 w-3" /> {route.engagementGoal}</span>}
                 </div>
               </div>
             ))}
@@ -464,7 +464,7 @@ function ExperienceFrameworkDetail({ data, onUpdateField }: { data: any; onUpdat
                 <Badge variant="outline" className="shrink-0 h-fit">{staff.role}</Badge>
                 <div>
                   <p className="text-sm">{staff.responsibility}</p>
-                  {staff.location && <p className="text-xs text-muted-foreground mt-1">📍 {staff.location}</p>}
+                  {staff.location && <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {staff.location}</p>}
                 </div>
               </div>
             ))}
@@ -591,9 +591,9 @@ function InteractiveMechanicsDetail({ data, onUpdateField }: { data: any; onUpda
                   <Badge variant="outline" className="text-xs">{s.type}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{s.description}</p>
-                <div className="flex gap-2 text-xs text-muted-foreground">
-                  <span>📍 {s.location}</span>
-                  <span>🎯 {s.purpose}</span>
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {s.location}</span>
+                  <span className="inline-flex items-center gap-1"><Target className="h-3 w-3" /> {s.purpose}</span>
                 </div>
                 {s.technicalNotes && <p className="text-xs text-muted-foreground italic">{s.technicalNotes}</p>}
               </div>
@@ -707,8 +707,8 @@ function HumanConnectionDetail({ data, onUpdateField }: { data: any; onUpdateFie
                     <Badge key={fi} variant="secondary" className="text-xs">{f}</Badge>
                   ))}
                 </div>
-                <p className="text-xs text-primary font-medium">🎯 {zone.purpose}</p>
-                {zone.furniture && <p className="text-xs text-muted-foreground">🪑 {zone.furniture}</p>}
+                <p className="text-xs text-primary font-medium inline-flex items-center gap-1"><Target className="h-3 w-3" /> {zone.purpose}</p>
+                {zone.furniture && <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Armchair className="h-3 w-3" /> {zone.furniture}</p>}
                 {zone.atmosphere && <p className="text-xs text-muted-foreground italic">{zone.atmosphere}</p>}
               </div>
             ))}
@@ -724,7 +724,7 @@ function HumanConnectionDetail({ data, onUpdateField }: { data: any; onUpdateFie
                 <Badge variant="outline" className="shrink-0 h-fit">{mt.type}</Badge>
                 <div>
                   <p className="text-sm">{mt.description}</p>
-                  {mt.duration && <p className="text-xs text-muted-foreground mt-1">⏱ {mt.duration}</p>}
+                  {mt.duration && <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {mt.duration}</p>}
                   {mt.requirements && <p className="text-xs text-muted-foreground">{mt.requirements}</p>}
                 </div>
               </div>
@@ -805,7 +805,7 @@ function AdjacentActivationsDetail({ data, onUpdateField }: { data: any; onUpdat
                 <p className="text-sm">{act.contentProgram}</p>
               </div>
             )}
-            {act.estimatedBudget && <Badge variant="outline">💰 {act.estimatedBudget}</Badge>}
+            {act.estimatedBudget && <Badge variant="outline" className="inline-flex items-center gap-1"><Wallet className="h-3 w-3" /> {act.estimatedBudget}</Badge>}
             {act.briefAlignment?.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {act.briefAlignment.map((a: string, j: number) => (

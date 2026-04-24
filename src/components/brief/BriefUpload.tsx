@@ -4,6 +4,7 @@ import {
   Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft,
   Building2, Plus, CheckCircle2, Sparkles, ChevronDown, ChevronUp, Tag,
   Target, MapPin, DollarSign, Users, Palette, Star, List, Brain, Zap,
+  Recycle, Check, X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -640,7 +641,7 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
                 </div>
               ))}
               {pb.spatial.reuseRequirement && (
-                <p className="text-muted-foreground text-[11px] mt-0.5">♻ {pb.spatial.reuseRequirement}</p>
+                <p className="text-muted-foreground text-[11px] mt-0.5 inline-flex items-center gap-1"><Recycle className="h-3 w-3" /> {pb.spatial.reuseRequirement}</p>
               )}
             </ExtractedSection>
           ) : null}
@@ -654,10 +655,10 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
                 <p className="font-semibold">${pb.budget.range.min?.toLocaleString()} – ${pb.budget.range.max?.toLocaleString()}</p>
               ) : null}
               {pb.budget?.inclusions?.slice(0, 2).map((inc, i) => (
-                <p key={i} className="text-muted-foreground text-[11px]">✓ {inc}</p>
+                <p key={i} className="text-muted-foreground text-[11px] inline-flex items-center gap-1"><Check className="h-3 w-3" /> {inc}</p>
               ))}
               {(pb.budget?.exclusions?.length ?? 0) > 0 && (
-                <p className="text-muted-foreground text-[11px]">✗ {pb.budget!.exclusions[0]}{pb.budget!.exclusions.length > 1 ? ` +${pb.budget!.exclusions.length - 1} more` : ""}</p>
+                <p className="text-muted-foreground text-[11px] inline-flex items-center gap-1"><XIcon className="h-3 w-3" /> {pb.budget!.exclusions[0]}{pb.budget!.exclusions.length > 1 ? ` +${pb.budget!.exclusions.length - 1} more` : ""}</p>
               )}
             </ExtractedSection>
           ) : null}

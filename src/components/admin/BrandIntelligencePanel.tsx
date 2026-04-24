@@ -24,7 +24,6 @@ import {
   Type,
   Image as ImageIcon,
   Check,
-  X,
   Trash2,
 } from "lucide-react";
 import {
@@ -344,7 +343,7 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                               Pending
                             </Badge>
                           )}
-                          {entry.source === "past_project" && entry.source_project_id && (
+                          {entry.source_project_id && (
                             <Badge variant="secondary" className="text-[9px] py-0 h-4">
                               From past project
                             </Badge>
@@ -356,7 +355,7 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                               size="sm"
                               variant="ghost"
                               className="h-6 w-6 p-0"
-                              onClick={() => approve.mutate(entry.id)}
+                              onClick={() => approve.mutate({ id: entry.id, clientId: client.id })}
                               title="Approve"
                             >
                               <Check className="h-3 w-3 text-primary" />
@@ -366,7 +365,7 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                             size="sm"
                             variant="ghost"
                             className="h-6 w-6 p-0"
-                            onClick={() => remove.mutate(entry.id)}
+                            onClick={() => remove.mutate({ id: entry.id, clientId: client.id })}
                             title="Delete"
                           >
                             <Trash2 className="h-3 w-3 text-destructive" />

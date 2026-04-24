@@ -433,6 +433,44 @@ export type Database = {
           },
         ]
       }
+      kb_migration_log: {
+        Row: {
+          created_at: string
+          document_id: string | null
+          error: string | null
+          id: string
+          source_row_id: string
+          source_table: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          document_id?: string | null
+          error?: string | null
+          id?: string
+          source_row_id: string
+          source_table: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string | null
+          error?: string | null
+          id?: string
+          source_row_id?: string
+          source_table?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_migration_log_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_base_files: {
         Row: {
           created_at: string
@@ -566,8 +604,10 @@ export type Database = {
           file_size_bytes: number | null
           filename: string
           id: string
+          is_pinned: boolean
           metadata: Json | null
           mime_type: string | null
+          priority_weight: number
           processing_error: string | null
           scope: string
           scope_id: string
@@ -590,8 +630,10 @@ export type Database = {
           file_size_bytes?: number | null
           filename: string
           id?: string
+          is_pinned?: boolean
           metadata?: Json | null
           mime_type?: string | null
+          priority_weight?: number
           processing_error?: string | null
           scope: string
           scope_id: string
@@ -614,8 +656,10 @@ export type Database = {
           file_size_bytes?: number | null
           filename?: string
           id?: string
+          is_pinned?: boolean
           metadata?: Json | null
           mime_type?: string | null
+          priority_weight?: number
           processing_error?: string | null
           scope?: string
           scope_id?: string
@@ -1004,6 +1048,68 @@ export type Database = {
           },
         ]
       }
+      rag_query_log: {
+        Row: {
+          agency_id: string
+          created_at: string
+          duration_ms: number | null
+          id: string
+          pinned_doc_ids: string[]
+          query: string
+          query_truncated: string | null
+          reranked: boolean
+          result_chunk_ids: string[]
+          result_doc_ids: string[]
+          scope_ids: string[]
+          scopes: string[]
+          source: string
+          top_k: number
+          user_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          pinned_doc_ids?: string[]
+          query: string
+          query_truncated?: string | null
+          reranked?: boolean
+          result_chunk_ids?: string[]
+          result_doc_ids?: string[]
+          scope_ids?: string[]
+          scopes?: string[]
+          source?: string
+          top_k?: number
+          user_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          pinned_doc_ids?: string[]
+          query?: string
+          query_truncated?: string | null
+          reranked?: boolean
+          result_chunk_ids?: string[]
+          result_doc_ids?: string[]
+          scope_ids?: string[]
+          scopes?: string[]
+          source?: string
+          top_k?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_query_log_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rhino_renders: {
         Row: {
           created_at: string
@@ -1252,7 +1358,9 @@ export type Database = {
           content: string
           document_id: string
           hybrid_score: number
+          is_pinned: boolean
           metadata: Json
+          priority_weight: number
           scope: string
           scope_id: string
           similarity: number

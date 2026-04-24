@@ -99,10 +99,6 @@ export default function AdminSettings() {
                 <Layers className="h-4 w-4" />
                 Project Types
               </TabsTrigger>
-              <TabsTrigger value="activation-types" className="gap-2">
-                <Zap className="h-4 w-4" />
-                Activation Types
-              </TabsTrigger>
               <TabsTrigger value="clients" className="gap-2">
                 <Users className="h-4 w-4" />
                 Clients &amp; Brand Intelligence
@@ -123,9 +119,6 @@ export default function AdminSettings() {
 
             <TabsContent value="project-types">
               <ProjectTypeManager />
-            </TabsContent>
-            <TabsContent value="activation-types">
-              <ActivationTypeManager />
             </TabsContent>
             <TabsContent value="clients">
               <ClientsManager />

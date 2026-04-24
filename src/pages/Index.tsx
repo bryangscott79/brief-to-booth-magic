@@ -10,7 +10,6 @@ import {
   Grid3X3,
   Download,
   Target,
-  FileText,
   Boxes,
   BookOpen,
   ShieldCheck,

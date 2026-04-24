@@ -129,29 +129,18 @@ export function AppSidebar() {
       {/* Logo / Header */}
       <SidebarHeader className="flex flex-col border-b border-border">
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
-          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-3 min-w-0" aria-label="Canopy home">
+          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-2 min-w-0" aria-label="Canopy home">
             {isSuperAdmin && !previewMode ? (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500">
-                <Crown className="h-5 w-5 text-white" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500">
+                <Crown className="h-6 w-6 text-white" />
               </div>
             ) : (
-              <CanopyLogo variant="icon" size="lg" />
+              <CanopyLogo variant="icon" size="xl" />
             )}
-            {!collapsed && (
-              <div className="min-w-0 leading-none">
-                <span className="text-base font-semibold tracking-[0.15em] truncate block">
-                  CANOPY
-                </span>
-                {isSuperAdmin && !previewMode ? (
-                  <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest mt-0.5 block">
-                    Platform Admin
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-muted-foreground tracking-widest mt-0.5 block">
-                    BY EXHIBITUS
-                  </span>
-                )}
-              </div>
+            {!collapsed && isSuperAdmin && !previewMode && (
+              <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">
+                Platform Admin
+              </span>
             )}
           </Link>
           {!collapsed && (

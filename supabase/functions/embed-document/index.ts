@@ -302,7 +302,7 @@ serve(async (req) => {
     // 7. Embed + insert each chunk sequentially with small delay
     let insertedCount = 0;
     for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
+      const chunk = sanitizeForPg(chunks[i]);
       const embedding = await embedChunk(chunk, GOOGLE_AI_API_KEY, "RETRIEVAL_DOCUMENT");
       const embeddingLiteral = `[${embedding.join(",")}]`;
 

@@ -292,7 +292,8 @@ serve(async (req) => {
 
     // 4. Extract text
     const fullText = await extractText(bytes, doc.filename, doc.mime_type);
-    if (!fullText || fullText.trim().length < 10) {
+    const isImg = isImage(doc.filename, doc.mime_type);
+    if (!fullText || fullText.trim().length < (isImg ? 1 : 10)) {
       throw new Error("Extracted text is empty or too short");
     }
 

@@ -370,7 +370,7 @@ export default function Index() {
           </Reveal>
 
           {/* Bento-style showcase */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2 gap-4 lg:gap-5 lg:auto-rows-[280px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 lg:grid-rows-3 gap-4 lg:gap-5 lg:auto-rows-[220px]">
             {SHOWCASE.map((s, i) => (
               <Reveal
                 key={s.title}

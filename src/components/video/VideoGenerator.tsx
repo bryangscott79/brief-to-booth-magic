@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { Play, Video, Loader2, Download, RefreshCw, AlertCircle } from "lucide-react";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";

@@ -1,12 +1,14 @@
-// CanopyLogo — the radial canopy mark: 8 gradient nodes + spokes + center.
-// Used in the header, auth page, and anywhere the brand mark appears.
+// CanopyLogo — the official Canopy brand mark (radial 8-point canopy).
+// Renders the uploaded brand PNG so the same logo appears everywhere:
+// header/sidebar, auth page, landing page, footer, etc.
 //
 // Variants:
-//   - "icon"         Just the radial geometry
-//   - "horizontal"   Icon + wordmark CANOPY side-by-side
-//   - "stacked"      Icon above wordmark
+//   - "icon"         Just the mark
+//   - "horizontal"   Mark + CANOPY wordmark side-by-side
+//   - "stacked"      Mark above wordmark
 
 import { cn } from "@/lib/utils";
+import canopyMark from "@/assets/canopy-logo.png";
 
 interface CanopyLogoProps {
   variant?: "icon" | "horizontal" | "stacked";
@@ -14,7 +16,7 @@ interface CanopyLogoProps {
   className?: string;
   /** Show "By Exhibitus" underline */
   showByline?: boolean;
-  /** Animate the nodes on mount */
+  /** Animate the mark on mount */
   animate?: boolean;
 }
 
@@ -35,71 +37,18 @@ export function CanopyLogo({
   const dims = SIZES[size];
 
   const icon = (
-    <svg
+    <img
+      src={canopyMark}
+      alt="Canopy"
       width={dims.icon}
       height={dims.icon}
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn("shrink-0", animate && "animate-canopy-spin-slow")}
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="canopy-mark-gradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#8FD3F4" />
-          <stop offset="25%" stopColor="#6FA8FF" />
-          <stop offset="50%" stopColor="#A78BFA" />
-          <stop offset="75%" stopColor="#C084FC" />
-          <stop offset="100%" stopColor="#F472B6" />
-        </linearGradient>
-        <radialGradient id="canopy-mark-fill" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0%" stopColor="#A78BFA" stopOpacity="0.9" />
-          <stop offset="60%" stopColor="#C084FC" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#F472B6" stopOpacity="0.2" />
-        </radialGradient>
-      </defs>
-
-      {/* 8-pointed canopy: gradient-filled polygon with center node */}
-      <polygon
-        points="32,6 47.5,12.5 54,28 54,36 47.5,51.5 32,58 16.5,51.5 10,36 10,28 16.5,12.5"
-        fill="url(#canopy-mark-fill)"
-        stroke="url(#canopy-mark-gradient)"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
-
-      {/* Spokes from center */}
-      <g stroke="url(#canopy-mark-gradient)" strokeWidth="0.6" opacity="0.5">
-        <line x1="32" y1="32" x2="32" y2="6" />
-        <line x1="32" y1="32" x2="47.5" y2="12.5" />
-        <line x1="32" y1="32" x2="54" y2="28" />
-        <line x1="32" y1="32" x2="54" y2="36" />
-        <line x1="32" y1="32" x2="47.5" y2="51.5" />
-        <line x1="32" y1="32" x2="32" y2="58" />
-        <line x1="32" y1="32" x2="16.5" y2="51.5" />
-        <line x1="32" y1="32" x2="10" y2="36" />
-        <line x1="32" y1="32" x2="10" y2="28" />
-        <line x1="32" y1="32" x2="16.5" y2="12.5" />
-      </g>
-
-      {/* Outer nodes at each vertex */}
-      <g fill="url(#canopy-mark-gradient)">
-        <circle cx="32" cy="6" r="2" />
-        <circle cx="47.5" cy="12.5" r="2" />
-        <circle cx="54" cy="28" r="2" />
-        <circle cx="54" cy="36" r="2" />
-        <circle cx="47.5" cy="51.5" r="2" />
-        <circle cx="32" cy="58" r="2" />
-        <circle cx="16.5" cy="51.5" r="2" />
-        <circle cx="10" cy="36" r="2" />
-        <circle cx="10" cy="28" r="2" />
-        <circle cx="16.5" cy="12.5" r="2" />
-      </g>
-
-      {/* Center node (brightest) */}
-      <circle cx="32" cy="32" r="3" fill="white" />
-      <circle cx="32" cy="32" r="6" fill="white" opacity="0.15" />
-    </svg>
+      className={cn(
+        "shrink-0 select-none object-contain",
+        animate && "animate-canopy-spin-slow"
+      )}
+      style={{ width: dims.icon, height: dims.icon }}
+      draggable={false}
+    />
   );
 
   if (variant === "icon") {
@@ -132,3 +81,4 @@ export function CanopyLogo({
     </div>
   );
 }
+

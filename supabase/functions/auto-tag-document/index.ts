@@ -15,7 +15,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const TAGGING_MODEL = "google/gemini-2.5-flash-lite";
+const TAGGING_MODEL = "google/gemini-2.5-flash";
 
 interface AutoTagResult {
   doc_type: "brief" | "rate_card" | "research" | "past_work" | "brand_guide" | "spec_sheet" | "contract" | "other";

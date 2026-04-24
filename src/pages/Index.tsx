@@ -565,6 +565,8 @@ export default function Index() {
             <img
               src={intelligenceNetwork}
               alt="RAG knowledge network visualization"
+              width={1920}
+              height={1080}
               loading="lazy"
               className="w-full h-[280px] md:h-[360px] object-cover"
             />

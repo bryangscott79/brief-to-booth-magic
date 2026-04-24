@@ -269,10 +269,12 @@ interface DocumentRowProps {
 function DocumentRow({ document: doc, onDelete, onReembed, onTogglePin }: DocumentRowProps) {
   const tags = [...(doc.auto_tags || []), ...(doc.user_tags || [])];
 
+  const { Icon, tone } = getFileVisual(doc.filename, doc.mime_type);
+
   return (
     <Card className={cn("p-3 flex items-start gap-3", doc.is_pinned && "border-primary/40 bg-primary/5")}>
-      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
-        <FileIcon className="h-5 w-5 text-muted-foreground" />
+      <div className={cn("h-10 w-10 rounded flex items-center justify-center shrink-0", tone)}>
+        <Icon className="h-5 w-5" />
       </div>
 
       <div className="flex-1 min-w-0">

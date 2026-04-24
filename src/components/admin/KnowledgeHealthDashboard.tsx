@@ -157,6 +157,37 @@ export function KnowledgeHealthDashboard() {
     }, 2000);
   };
 
+  const handleMigrateLegacy = async () => {
+    if (!confirm(
+      "Backfill legacy KB files (knowledge_base_files + activation_type_kb_files) into the new RAG system?\n\n" +
+        "Files already migrated or conflicting with existing documents will be skipped.",
+    )) return;
+    setMigrating(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("migrate-legacy-kb", {
+        body: { limit: 200 },
+      });
+      if (error) throw error;
+      const stats = (res as any)?.stats ?? [];
+      const summary = stats
+        .map(
+          (s: any) =>
+            `${s.source_table}: ${s.migrated} migrated, ${s.skipped_already_done} already done, ${s.skipped_conflict} conflicts, ${s.failed} failed`,
+        )
+        .join(" • ");
+      toast({ title: "Legacy KB migration complete", description: summary || "Nothing to migrate." });
+      queryClient.invalidateQueries({ queryKey: ["kb-health", agencyId] });
+    } catch (e) {
+      toast({
+        title: "Migration failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   if (agencyLoading || isLoading) {
     return (
       <div className="flex items-center justify-center py-16">

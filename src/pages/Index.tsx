@@ -376,7 +376,7 @@ export default function Index() {
                 key={s.title}
                 delay={i * 80}
                 className={cn(
-                  "group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]",
+                  "group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] min-h-[260px]",
                   s.span,
                 )}
               >

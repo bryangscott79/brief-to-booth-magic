@@ -12,8 +12,9 @@
 
 /** Maps Lovable gateway model names to Google AI direct model names. */
 const GEMINI_MODEL_MAP: Record<string, string> = {
-  "google/gemini-2.5-flash": "gemini-2.5-flash-preview-05-20",
-  "google/gemini-2.5-pro": "gemini-2.5-pro-preview-05-06",
+  "google/gemini-2.5-flash": "gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+  "google/gemini-2.5-pro": "gemini-2.5-pro",
   "google/gemini-3-pro-image-preview": "gemini-2.0-flash-exp",
   "google/gemini-3-flash-preview": "gemini-2.0-flash",
 };

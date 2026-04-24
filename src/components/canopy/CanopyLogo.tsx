@@ -9,8 +9,10 @@
 import { cn } from "@/lib/utils";
 import canopyLogo from "@/assets/canopy-logo.png";
 
-// Logo dimensions: 345 × 329 (mark only, ≈ 1.05:1)
-const LOGO_ASPECT = 345 / 329;
+// Logo dimensions: 1001 × 329 (full lockup, ≈ 3.04:1)
+const LOGO_ASPECT = 1001 / 329;
+// The umbrella mark occupies roughly the left ~33% of the lockup (square-ish)
+const MARK_ASPECT = 329 / 329;
 
 interface CanopyLogoProps {
   variant?: "icon" | "horizontal" | "stacked";

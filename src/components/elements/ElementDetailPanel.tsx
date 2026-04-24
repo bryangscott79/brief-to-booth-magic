@@ -28,6 +28,10 @@ import {
   Sparkles,
   BarChart3,
   MessageSquare,
+  Clock,
+  MapPin,
+  Armchair,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

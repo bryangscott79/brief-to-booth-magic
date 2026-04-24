@@ -1,12 +1,14 @@
 /**
- * Image generation model registry.
+ * Render quality tier registry.
  *
- * Single source of truth for which AI image models the app exposes to users.
- * The `id` is the model identifier sent to the Lovable AI gateway / direct
- * Gemini gateway. The agency's default lives in `agencies.image_model` and any
- * per-render override is passed via the `image_model` body param of the
- * `generate-hero`, `generate-view`, `generate-panorama`, and
- * `polish-rhino-render` edge functions.
+ * IMPORTANT — user-facing language: never expose underlying model names or
+ * providers (no "Gemini", "Nano Banana", "OpenAI", "GPT", etc). Users see
+ * only abstract quality tiers ("Signature", "Studio", "Draft") so the
+ * rendering pipeline feels like part of the platform they're paying for.
+ *
+ * The `id` is the underlying model identifier sent to the AI gateway and is
+ * for internal/backend use only. Persisted on `agencies.image_model` and
+ * passed to image edge functions via the `image_model` body param.
  */
 
 export type ImageModelId =

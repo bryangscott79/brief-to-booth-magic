@@ -278,23 +278,24 @@ export default function Index() {
               key={i}
               src={src}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[2200ms] ease-in-out"
+              className="absolute inset-0 w-full h-full object-cover"
               style={{
-                opacity: i === heroIdx ? 0.32 : 0,
-                transform: `scale(${i === heroIdx ? 1.04 : 1}) translateY(${scrollY * 0.08}px)`,
+                opacity: i === heroIdx ? 0.85 : 0,
+                transform: `scale(${i === heroIdx ? 1.06 : 1.02}) translateY(${scrollY * 0.08}px)`,
                 transition:
                   "opacity 2200ms ease-in-out, transform 9000ms ease-out",
               }}
             />
           ))}
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/60" />
+          {/* Readability scrims — left-weighted so copy stays legible, right side shows imagery */}
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-background/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/95 via-transparent to-background/40" />
         </div>
 
-        <div className="absolute inset-0 canopy-grid-pattern opacity-40" aria-hidden />
+        <div className="absolute inset-0 canopy-grid-pattern opacity-20" aria-hidden />
 
-        <CanopyAmbientGlow position="top-1/4 -left-32" size={520} tone="violet" opacity={0.32} animate />
-        <CanopyAmbientGlow position="bottom-0 right-0 translate-x-1/3 translate-y-1/3" size={600} tone="pink" opacity={0.28} animate />
+        <CanopyAmbientGlow position="top-1/4 -left-32" size={520} tone="violet" opacity={0.22} animate />
+        <CanopyAmbientGlow position="bottom-0 right-0 translate-x-1/3 translate-y-1/3" size={600} tone="pink" opacity={0.18} animate />
 
         {/* Right-half: node field with subtle parallax */}
         <div

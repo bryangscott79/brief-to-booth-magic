@@ -89,11 +89,12 @@ export default function AgencyAccountPage() {
       if (!profile) throw new Error("User not found");
 
       // Projects
-      const { data: projects } = await (supabase as any)
+      const { data: projects, error: projectsError } = await (supabase as any)
         .from("projects")
-        .select("id, project_title, status, activation_type, created_at, updated_at")
+        .select("id, name, status, activation_type, project_type, created_at, updated_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
+      if (projectsError) console.error("[AgencyAccount] projects load error", projectsError);
 
       // Team members (where this user is the team owner)
       const { data: teamMembers } = await (supabase as any)

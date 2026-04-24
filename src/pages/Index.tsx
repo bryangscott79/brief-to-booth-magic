@@ -522,13 +522,33 @@ export default function Index() {
             </Reveal>
 
             <Reveal from="right" delay={100}>
-              <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02]">
-                <img
-                  src={showcaseFloorplan}
-                  alt="Spatial floor plan with activation zones"
-                  loading="lazy"
-                  className="w-full h-auto"
-                />
+              <div
+                className="relative rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02] floorplan-3d"
+                style={{ perspective: "1400px" }}
+              >
+                <div className="floorplan-tilt relative">
+                  <img
+                    src={showcaseFloorplan}
+                    alt="Spatial floor plan with activation zones"
+                    loading="lazy"
+                    className="w-full h-auto block"
+                  />
+                  {/* Sweeping scan line */}
+                  <div className="floorplan-scan pointer-events-none absolute inset-0" />
+                  {/* Floating metric chips */}
+                  <div className="floorplan-chip floorplan-chip-a absolute top-[14%] left-[10%] rounded-md border border-white/15 bg-background/70 backdrop-blur px-2.5 py-1.5 text-[10px] font-medium text-foreground/85 shadow-lg">
+                    <span className="text-[#A78BFA]">●</span> Demo · 142 sqft
+                  </div>
+                  <div className="floorplan-chip floorplan-chip-b absolute top-[34%] right-[8%] rounded-md border border-white/15 bg-background/70 backdrop-blur px-2.5 py-1.5 text-[10px] font-medium text-foreground/85 shadow-lg">
+                    <span className="text-[#F472B6]">●</span> Reception · flow A+
+                  </div>
+                  <div className="floorplan-chip floorplan-chip-c absolute bottom-[18%] left-[18%] rounded-md border border-white/15 bg-background/70 backdrop-blur px-2.5 py-1.5 text-[10px] font-medium text-foreground/85 shadow-lg">
+                    <span className="text-[#6FA8FF]">●</span> VIP Lounge · 96 sqft
+                  </div>
+                  <div className="floorplan-chip floorplan-chip-d absolute bottom-[28%] right-[18%] rounded-md border border-white/15 bg-background/70 backdrop-blur px-2.5 py-1.5 text-[10px] font-medium text-foreground/85 shadow-lg">
+                    <span className="text-[#FBBF24]">●</span> Meeting · adj ✓
+                  </div>
+                </div>
                 <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-2xl pointer-events-none" />
               </div>
               <div className="mt-3 flex items-center gap-2 text-xs text-foreground/45">
@@ -565,6 +585,8 @@ export default function Index() {
             <img
               src={intelligenceNetwork}
               alt="RAG knowledge network visualization"
+              width={1920}
+              height={1080}
               loading="lazy"
               className="w-full h-[280px] md:h-[360px] object-cover"
             />

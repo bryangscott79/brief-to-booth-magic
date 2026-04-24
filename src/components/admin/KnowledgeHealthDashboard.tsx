@@ -60,6 +60,7 @@ export function KnowledgeHealthDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const agencyId = agency?.id;
+  const [migrating, setMigrating] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["kb-health", agencyId],

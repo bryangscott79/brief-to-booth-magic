@@ -8,7 +8,7 @@
 //   - "stacked"      Mark above wordmark
 
 import { cn } from "@/lib/utils";
-import canopyMark from "@/assets/canopy-logo.png";
+import canopyMark from "@/assets/canopy-mark.png";
 
 interface CanopyLogoProps {
   variant?: "icon" | "horizontal" | "stacked";

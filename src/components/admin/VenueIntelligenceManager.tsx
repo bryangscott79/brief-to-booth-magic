@@ -46,8 +46,11 @@ import {
   ChevronRight,
   Building2,
   Info,
+  Sparkles,
+  Link as LinkIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // ─── Form ────────────────────────────────────────────────────────────────────
 

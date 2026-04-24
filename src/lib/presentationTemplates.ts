@@ -85,7 +85,7 @@ const executiveSummary: PresentationTemplate = {
   id: "executive-summary",
   name: "Executive Summary",
   description: "Concise 8-10 slide deck for executive stakeholders. Strategy-first with hero visuals.",
-  icon: "📊",
+  icon: "BarChart3",
   slideRange: { min: 8, max: 10 },
   slides: [
     { sectionId: SECTION_IDS.COVER, title: "Cover", type: "cover", included: true, required: true },
@@ -110,7 +110,7 @@ const fullProposal: PresentationTemplate = {
   id: "full-proposal",
   name: "Full Proposal",
   description: "Comprehensive 18-25 slide deck covering all strategic and design elements.",
-  icon: "📑",
+  icon: "Files",
   slideRange: { min: 18, max: 25 },
   slides: [
     { sectionId: SECTION_IDS.COVER, title: "Cover", type: "cover", included: true, required: true },
@@ -147,7 +147,7 @@ const designShowcase: PresentationTemplate = {
   id: "design-showcase",
   name: "Design Showcase",
   description: "Visual-first 10-12 slide deck. Renders take center stage with minimal text.",
-  icon: "🎨",
+  icon: "Palette",
   slideRange: { min: 10, max: 12 },
   slides: [
     { sectionId: SECTION_IDS.COVER, title: "Cover", type: "cover", included: true, required: true },
@@ -174,7 +174,7 @@ const budgetReview: PresentationTemplate = {
   id: "budget-review",
   name: "Budget Review",
   description: "Cost-focused 8-10 slide deck with detailed investment breakdown and ROI projections.",
-  icon: "💰",
+  icon: "Wallet",
   slideRange: { min: 8, max: 10 },
   slides: [
     { sectionId: SECTION_IDS.COVER, title: "Cover", type: "cover", included: true, required: true },
@@ -199,7 +199,7 @@ const design3DShowcase: PresentationTemplate = {
   id: "design-3d-showcase",
   name: "Design + 3D Showcase",
   description: "Visual-heavy 12-16 slide deck featuring Rhino 3D renders with before/after comparisons.",
-  icon: "🏗️",
+  icon: "Building2",
   slideRange: { min: 12, max: 16 },
   slides: [
     { sectionId: SECTION_IDS.COVER, title: "Cover", type: "cover", included: true, required: true },

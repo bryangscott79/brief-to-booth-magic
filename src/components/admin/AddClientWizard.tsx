@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Sparkles, Check, X, Trash2, Globe, ArrowRight, Brain } from "lucide-react";
+import { Loader2, Sparkles, Check, Trash2, Globe, ArrowRight, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useUpsertClient,

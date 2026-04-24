@@ -14,6 +14,10 @@ import {
   Upload,
   FileText,
   FileIcon,
+  FileSpreadsheet,
+  FileImage,
+  FileCode,
+  Presentation,
   Trash2,
   Loader2,
   AlertCircle,
@@ -253,6 +257,33 @@ export function KnowledgeBasePanel({
   );
 }
 
+// ─── File visual helper ──────────────────────────────────────────────────────
+
+function getFileVisual(filename: string, mimeType: string | null) {
+  const lower = (filename || "").toLowerCase();
+  const mt = (mimeType || "").toLowerCase();
+
+  if (mt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|tiff?)$/.test(lower)) {
+    return { Icon: FileImage, tone: "bg-primary/10 text-primary" };
+  }
+  if (mt.includes("pdf") || lower.endsWith(".pdf")) {
+    return { Icon: FileText, tone: "bg-destructive/10 text-destructive" };
+  }
+  if (mt.includes("spreadsheet") || mt.includes("excel") || /\.(xlsx?|csv|tsv|numbers)$/.test(lower)) {
+    return { Icon: FileSpreadsheet, tone: "bg-accent/20 text-accent-foreground" };
+  }
+  if (mt.includes("presentation") || /\.(pptx?|key)$/.test(lower)) {
+    return { Icon: Presentation, tone: "bg-accent/20 text-accent-foreground" };
+  }
+  if (mt.includes("word") || /\.(docx?|rtf|odt)$/.test(lower)) {
+    return { Icon: FileText, tone: "bg-primary/10 text-primary" };
+  }
+  if (/\.(json|xml|ya?ml|toml|js|ts|tsx|jsx|py|rb|go|rs|java|c|cpp|sh|html?|css|svg)$/.test(lower)) {
+    return { Icon: FileCode, tone: "bg-muted text-muted-foreground" };
+  }
+  return { Icon: FileIcon, tone: "bg-muted text-muted-foreground" };
+}
+
 // ─── DocumentRow ─────────────────────────────────────────────────────────────
 
 interface DocumentRowProps {
@@ -265,10 +296,12 @@ interface DocumentRowProps {
 function DocumentRow({ document: doc, onDelete, onReembed, onTogglePin }: DocumentRowProps) {
   const tags = [...(doc.auto_tags || []), ...(doc.user_tags || [])];
 
+  const { Icon, tone } = getFileVisual(doc.filename, doc.mime_type);
+
   return (
     <Card className={cn("p-3 flex items-start gap-3", doc.is_pinned && "border-primary/40 bg-primary/5")}>
-      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
-        <FileIcon className="h-5 w-5 text-muted-foreground" />
+      <div className={cn("h-10 w-10 rounded flex items-center justify-center shrink-0", tone)}>
+        <Icon className="h-5 w-5" />
       </div>
 
       <div className="flex-1 min-w-0">

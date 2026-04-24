@@ -13,6 +13,14 @@ const corsHeaders = {
 
 // ─── TEXT EXTRACTION ──────────────────────────────────────────────────────────
 
+const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".heic", ".heif", ".tif", ".tiff"];
+
+function isImage(filename: string, mimeType: string | null): boolean {
+  const lower = filename.toLowerCase();
+  const mt = (mimeType || "").toLowerCase();
+  return mt.startsWith("image/") || IMAGE_EXTS.some((ext) => lower.endsWith(ext));
+}
+
 async function extractText(
   bytes: Uint8Array,
   filename: string,
@@ -20,6 +28,14 @@ async function extractText(
 ): Promise<string> {
   const lowerName = filename.toLowerCase();
   const mt = (mimeType || "").toLowerCase();
+
+  // Images — do NOT decode bytes as text. Build a synthetic caption so the
+  // image still appears in retrieval by filename. (Vision tagging happens in
+  // a separate step.)
+  if (isImage(filename, mimeType)) {
+    const stem = filename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+    return `Image asset: ${filename}. Reference: ${stem || filename}.`;
+  }
 
   // PDF
   if (mt.includes("pdf") || lowerName.endsWith(".pdf")) {
@@ -276,7 +292,8 @@ serve(async (req) => {
 
     // 4. Extract text
     const fullText = await extractText(bytes, doc.filename, doc.mime_type);
-    if (!fullText || fullText.trim().length < 10) {
+    const isImg = isImage(doc.filename, doc.mime_type);
+    if (!fullText || fullText.trim().length < (isImg ? 1 : 10)) {
       throw new Error("Extracted text is empty or too short");
     }
 

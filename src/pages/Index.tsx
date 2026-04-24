@@ -847,9 +847,6 @@ export default function Index() {
 
         <div className="container relative text-center max-w-3xl">
           <Reveal>
-            <div className="flex justify-center mb-8">
-              <CanopyLogo variant="icon" size="xl" animate />
-            </div>
             <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-6 leading-tight">
               Plan spatially.
               <br />

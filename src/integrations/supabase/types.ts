@@ -1351,6 +1351,74 @@ export type Database = {
         }
         Relationships: []
       }
+      venue_intelligence: {
+        Row: {
+          audience_notes: string | null
+          booth_placement_tips: string | null
+          city: string | null
+          created_at: string
+          design_tips: string[]
+          id: string
+          industry: string | null
+          logistics_notes: string | null
+          show_name: string
+          source: string
+          source_project_id: string | null
+          traffic_patterns: string | null
+          typical_booth_sizes: string[]
+          union_labor_required: boolean | null
+          updated_at: string
+          user_id: string
+          venue: string | null
+        }
+        Insert: {
+          audience_notes?: string | null
+          booth_placement_tips?: string | null
+          city?: string | null
+          created_at?: string
+          design_tips?: string[]
+          id?: string
+          industry?: string | null
+          logistics_notes?: string | null
+          show_name: string
+          source?: string
+          source_project_id?: string | null
+          traffic_patterns?: string | null
+          typical_booth_sizes?: string[]
+          union_labor_required?: boolean | null
+          updated_at?: string
+          user_id: string
+          venue?: string | null
+        }
+        Update: {
+          audience_notes?: string | null
+          booth_placement_tips?: string | null
+          city?: string | null
+          created_at?: string
+          design_tips?: string[]
+          id?: string
+          industry?: string | null
+          logistics_notes?: string | null
+          show_name?: string
+          source?: string
+          source_project_id?: string | null
+          traffic_patterns?: string | null
+          typical_booth_sizes?: string[]
+          union_labor_required?: boolean | null
+          updated_at?: string
+          user_id?: string
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_intelligence_source_project_id_fkey"
+            columns: ["source_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

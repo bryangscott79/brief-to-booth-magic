@@ -40,6 +40,10 @@ verify_jwt = false
 [functions.scrape-brand-guidelines]
 verify_jwt = true
 
+# Deep-dive brand profile (Firecrawl + Gemini, runs without JWT for new-client flow)
+[functions.deep-dive-brand]
+verify_jwt = false
+
 # RAG pipeline + Claude skill functions (require JWT)
 [functions.embed-document]
 verify_jwt = true

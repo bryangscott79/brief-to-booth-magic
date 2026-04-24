@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { BrandGuidelinesEditor } from "@/components/admin/BrandGuidelinesEditor";
 import { BrandAssetLibrary } from "@/components/admin/BrandAssetLibrary";
 import { ClientBrandKnowledgeBase } from "@/components/admin/ClientBrandKnowledgeBase";
+import { AddClientWizard } from "@/components/admin/AddClientWizard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -896,16 +897,28 @@ export function ClientsManager() {
         </div>
       )}
 
-      {/* Add/Edit client dialog */}
-      <Dialog open={showAddClient || !!editingClient} onOpenChange={(v) => { if (!v) { setShowAddClient(false); setEditingClient(null); } }}>
+      {/* New client wizard (deep-dive) */}
+      <Dialog open={showAddClient} onOpenChange={(v) => { if (!v) setShowAddClient(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New client</DialogTitle>
+          </DialogHeader>
+          <AddClientWizard onClose={() => setShowAddClient(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit existing client */}
+      <Dialog open={!!editingClient} onOpenChange={(v) => { if (!v) setEditingClient(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingClient ? `Edit ${editingClient.name}` : "New Client"}</DialogTitle>
+            <DialogTitle>{editingClient ? `Edit ${editingClient.name}` : ""}</DialogTitle>
           </DialogHeader>
-          <ClientForm
-            client={editingClient ?? undefined}
-            onClose={() => { setShowAddClient(false); setEditingClient(null); }}
-          />
+          {editingClient && (
+            <ClientForm
+              client={editingClient}
+              onClose={() => setEditingClient(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

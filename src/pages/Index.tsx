@@ -57,30 +57,35 @@ const SHOWCASE = [
     label: "Consumer Tech",
     title: "Immersive product reveal",
     sub: "Wraparound LED. Floating displays.",
+    span: "lg:col-span-2 lg:row-span-1",
   },
   {
     img: showcaseAuto,
     label: "Automotive",
     title: "Cinematic vehicle reveal",
     sub: "Theatrical staging. Projection mapped.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
   {
     img: showcaseLounge,
     label: "Hospitality",
     title: "VIP brand lounge",
     sub: "Curated for intimate conversations.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
   {
     img: showcaseInstallation,
     label: "Art / Storytelling",
     title: "Walk-through installation",
     sub: "Sequential narrative architecture.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
   {
     img: showcaseKeynote,
     label: "Keynote",
     title: "Conference main stage",
     sub: "Built for the moment of reveal.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
 ];
 
@@ -365,13 +370,13 @@ export default function Index() {
           </Reveal>
 
           {/* Bento-style showcase */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2 gap-4 lg:gap-5 lg:auto-rows-[280px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 lg:grid-rows-3 gap-4 lg:gap-5 lg:auto-rows-[220px]">
             {SHOWCASE.map((s, i) => (
               <Reveal
                 key={s.title}
                 delay={i * 80}
                 className={cn(
-                  "group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]",
+                  "group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] min-h-[260px]",
                   s.span,
                 )}
               >

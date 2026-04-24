@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
 import type { ElementType, ElementState } from "@/types/brief";
 import { cn } from "@/lib/utils";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 import {
   Play,
   Check,

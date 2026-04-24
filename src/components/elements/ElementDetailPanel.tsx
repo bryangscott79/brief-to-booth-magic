@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ElementType } from "@/types/brief";
 import { ELEMENT_META } from "@/store/projectStore";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";

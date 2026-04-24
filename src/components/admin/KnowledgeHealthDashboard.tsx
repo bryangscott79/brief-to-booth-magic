@@ -5,7 +5,7 @@
 //
 // Mounts inside AdminSettings as the "KB Health" tab.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -21,6 +21,7 @@ import {
   Zap,
   FolderKanban,
   Sparkles,
+  Archive,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,7 @@ export function KnowledgeHealthDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const agencyId = agency?.id;
+  const [migrating, setMigrating] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["kb-health", agencyId],
@@ -155,6 +157,37 @@ export function KnowledgeHealthDashboard() {
     }, 2000);
   };
 
+  const handleMigrateLegacy = async () => {
+    if (!confirm(
+      "Backfill legacy KB files (knowledge_base_files + activation_type_kb_files) into the new RAG system?\n\n" +
+        "Files already migrated or conflicting with existing documents will be skipped.",
+    )) return;
+    setMigrating(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("migrate-legacy-kb", {
+        body: { limit: 200 },
+      });
+      if (error) throw error;
+      const stats = (res as any)?.stats ?? [];
+      const summary = stats
+        .map(
+          (s: any) =>
+            `${s.source_table}: ${s.migrated} migrated, ${s.skipped_already_done} already done, ${s.skipped_conflict} conflicts, ${s.failed} failed`,
+        )
+        .join(" • ");
+      toast({ title: "Legacy KB migration complete", description: summary || "Nothing to migrate." });
+      queryClient.invalidateQueries({ queryKey: ["kb-health", agencyId] });
+    } catch (e) {
+      toast({
+        title: "Migration failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   if (agencyLoading || isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -184,15 +217,27 @@ export function KnowledgeHealthDashboard() {
             Live telemetry for the RAG pipeline across all scopes.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMigrateLegacy}
+            disabled={migrating}
+            title="Backfill legacy knowledge_base_files into the new RAG system"
+          >
+            <Archive className={`h-4 w-4 mr-2 ${migrating ? "animate-pulse" : ""}`} />
+            {migrating ? "Migrating…" : "Migrate legacy KB"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Top stats */}

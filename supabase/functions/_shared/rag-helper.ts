@@ -334,7 +334,7 @@ Example: [0.92, 0.31, 0.76]`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: "google/gemini-2.5-flash",
           messages: [{ role: "user", content: prompt }],
           temperature: 0,
         }),
@@ -346,7 +346,7 @@ Example: [0.92, 0.31, 0.76]`;
     }
     if (!raw) {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

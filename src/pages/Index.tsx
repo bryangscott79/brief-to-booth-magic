@@ -41,13 +41,16 @@ import showcaseUber from "@/assets/showcase-uber.png";
 import showcaseSamsung from "@/assets/showcase-samsung.png";
 import showcaseTesla from "@/assets/showcase-tesla.png";
 import showcaseTopps from "@/assets/showcase-topps.png";
+import showcaseNike from "@/assets/showcase-nike.png";
+import showcaseNetflix from "@/assets/showcase-netflix.png";
 
 const HERO_ROTATION = [
   showcaseUber,
   showcaseSamsung,
   showcaseTesla,
   showcaseTopps,
-  showcaseEnergy,
+  showcaseNike,
+  showcaseNetflix,
 ];
 
 // ─── CONTENT ──────────────────────────────────────────────────────────────

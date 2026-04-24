@@ -43,6 +43,12 @@ import showcaseTesla from "@/assets/showcase-tesla.png";
 import showcaseTopps from "@/assets/showcase-topps.png";
 import showcaseNike from "@/assets/showcase-nike.png";
 import showcaseNetflix from "@/assets/showcase-netflix.png";
+import showcaseGalaxy from "@/assets/showcase-galaxy.png";
+import showcaseAurora from "@/assets/showcase-aurora.png";
+import showcaseTeslaTrain from "@/assets/showcase-tesla-train.png";
+import showcasePremiere from "@/assets/showcase-premiere.png";
+import showcaseEsports from "@/assets/showcase-esports.png";
+import showcaseAirmax from "@/assets/showcase-airmax.png";
 
 const HERO_ROTATION = [
   showcaseUber,
@@ -51,6 +57,12 @@ const HERO_ROTATION = [
   showcaseTopps,
   showcaseNike,
   showcaseNetflix,
+  showcaseGalaxy,
+  showcaseAurora,
+  showcaseTeslaTrain,
+  showcasePremiere,
+  showcaseEsports,
+  showcaseAirmax,
 ];
 
 // ─── CONTENT ──────────────────────────────────────────────────────────────

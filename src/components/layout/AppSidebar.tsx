@@ -135,7 +135,7 @@ export function AppSidebar() {
                 <Crown className="h-6 w-6 text-white" />
               </div>
             ) : (
-              <CanopyLogo variant="icon" size="xl" />
+              <CanopyLogo variant="horizontal" size="lg" />
             )}
             {!collapsed && isSuperAdmin && !previewMode && (
               <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">

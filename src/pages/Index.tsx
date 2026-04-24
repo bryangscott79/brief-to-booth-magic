@@ -570,7 +570,7 @@ export default function Index() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
                 {[
                   { label: "Agency", weight: "1.00", color: "#A78BFA" },
                   { label: "Activation Type", weight: "0.92", color: "#C084FC" },

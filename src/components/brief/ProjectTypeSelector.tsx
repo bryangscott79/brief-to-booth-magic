@@ -111,7 +111,7 @@ export function ProjectTypeSelector({
           </div>
 
           <div className="flex items-start gap-3 bg-background/60 rounded-lg p-3">
-            <span className="text-2xl leading-none">{aiSuggestion.icon}</span>
+            <LucideIcon name={aiSuggestion.icon} className="h-6 w-6 mt-0.5 text-primary" />
             <div>
               <p className="font-bold text-sm">{aiSuggestion.label}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{aiSuggestion.tagline}</p>
@@ -403,7 +403,7 @@ function TypeCard({
       />
 
       <div className="flex items-start gap-3 mb-3">
-        <span className="text-2xl leading-none mt-0.5">{icon}</span>
+        <LucideIcon name={icon} className="h-6 w-6 mt-0.5" style={{ color: accentColor }} />
         <div className="min-w-0">
           <div className="font-bold text-sm leading-tight">{label}</div>
           <div

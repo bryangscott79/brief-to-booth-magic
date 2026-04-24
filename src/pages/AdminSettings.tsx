@@ -9,12 +9,11 @@ import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
 import { ActivationTypeManager } from "@/components/admin/ActivationTypeManager";
 import { VenueIntelligenceManager } from "@/components/admin/VenueIntelligenceManager";
 import { KnowledgeHealthDashboard } from "@/components/admin/KnowledgeHealthDashboard";
-import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
+import { useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid, Activity } from "lucide-react";
 
 export default function AdminSettings() {
-  const { data: isAdmin } = useIsAdmin();
   const { data: isSuperAdmin } = useIsSuperAdmin();
   const { previewMode } = usePlatformOwner();
 

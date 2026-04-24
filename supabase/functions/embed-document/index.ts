@@ -24,23 +24,8 @@ async function extractText(
   // PDF
   if (mt.includes("pdf") || lowerName.endsWith(".pdf")) {
     try {
-      const loadingTask = getDocument({
-        data: bytes,
-        useSystemFonts: true,
-        disableFontFace: true,
-        verbosity: 0,
-      });
-      const pdf = await loadingTask.promise;
-      const pageTexts: string[] = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const text = content.items
-          .map((item: any) => (typeof item.str === "string" ? item.str : ""))
-          .join(" ");
-        pageTexts.push(text);
-      }
-      return pageTexts.join("\n\n");
+      const { text } = await unpdfExtractText(bytes, { mergePages: true });
+      return Array.isArray(text) ? text.join("\n\n") : (text ?? "");
     } catch (e) {
       console.error("PDF extraction failed:", e);
       throw new Error(`Failed to extract PDF text: ${e instanceof Error ? e.message : String(e)}`);

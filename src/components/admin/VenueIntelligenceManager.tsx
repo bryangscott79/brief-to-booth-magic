@@ -46,8 +46,11 @@ import {
   ChevronRight,
   Building2,
   Info,
+  Sparkles,
+  Link as LinkIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // ─── Form ────────────────────────────────────────────────────────────────────
 
@@ -153,8 +156,97 @@ function VenueForm({
 
   const isPending = create.isPending || update.isPending;
 
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+
+  const handleScrape = async () => {
+    if (!scrapeUrl.trim()) return;
+    setScraping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "scrape-venue-info",
+        { body: { url: scrapeUrl.trim() } },
+      );
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Scrape failed");
+
+      const d = data.data;
+      setForm({
+        showName: d.showName || "",
+        venue: d.venue || "",
+        city: d.city || "",
+        industry: d.industry || "",
+        designTips: (d.designTips || []).join("\n"),
+        trafficPatterns: d.trafficPatterns || "",
+        audienceNotes: d.audienceNotes || "",
+        logisticsNotes: d.logisticsNotes || "",
+        boothPlacementTips: d.boothPlacementTips || "",
+        typicalBoothSizes: (d.typicalBoothSizes || []).join(", "),
+        unionLaborRequired: !!d.unionLaborRequired,
+      });
+
+      toast({
+        title: "Venue details extracted",
+        description: "Review and edit the fields below before saving.",
+      });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast({
+        title: "Scrape failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setScraping(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+      {!isEditing && (
+        <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-primary">
+            <Sparkles className="h-3.5 w-3.5" />
+            Auto-fill from a show or venue URL
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <LinkIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={scrapeUrl}
+                onChange={(e) => setScrapeUrl(e.target.value)}
+                placeholder="https://www.ces.tech or venue website"
+                className="pl-8 h-9"
+                disabled={scraping}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleScrape();
+                  }
+                }}
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleScrape}
+              disabled={scraping || !scrapeUrl.trim()}
+              className="h-9"
+            >
+              {scraping ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+              )}
+              {scraping ? "Extracting…" : "Extract"}
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            We'll scrape the page and pre-fill the fields below. Review before saving.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5 col-span-2">
           <Label>Show Name *</Label>

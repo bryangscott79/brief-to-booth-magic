@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useProjectStore, ELEMENT_META } from "@/store/projectStore";
 import type { ElementType, ElementState } from "@/types/brief";
 import { cn } from "@/lib/utils";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 import {
   Play,
   Check,
@@ -554,7 +555,7 @@ function ElementCard({ element, meta, onClick, onGenerate, isGenerating }: Eleme
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
-          <span className="text-2xl">{meta.icon}</span>
+          <LucideIcon name={meta.icon} className="h-6 w-6 text-primary" />
           <Badge 
             variant="secondary" 
             className={cn("text-xs", statusStyles[element.status])}

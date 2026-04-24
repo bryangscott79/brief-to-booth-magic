@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 import { ALL_PROJECT_TYPES, type ProjectTypeId } from "@/lib/projectTypes";
 import type { CustomProjectType } from "@/hooks/useCustomProjectTypes";
 import { CheckCircle2, Sparkles, Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react";
@@ -57,7 +58,7 @@ export function ProjectTypeSelector({
   const [newType, setNewType] = useState<NewCustomType>({
     type_id: "",
     label: "",
-    icon: "🏷️",
+    icon: "Tag",
   });
 
   const confirmedCustomTypes = customTypes.filter((t) => t.confirmed_by_user);
@@ -71,7 +72,7 @@ export function ProjectTypeSelector({
     if (!newType.label.trim()) return;
     const type_id = newType.type_id || slugify(newType.label);
     onAddCustomType?.({ ...newType, type_id });
-    setNewType({ type_id: "", label: "", icon: "🏷️" });
+    setNewType({ type_id: "", label: "", icon: "Tag" });
     setShowCustomForm(false);
   };
 
@@ -111,7 +112,7 @@ export function ProjectTypeSelector({
           </div>
 
           <div className="flex items-start gap-3 bg-background/60 rounded-lg p-3">
-            <span className="text-2xl leading-none">{aiSuggestion.icon}</span>
+            <LucideIcon name={aiSuggestion.icon} className="h-6 w-6 mt-0.5 text-primary" />
             <div>
               <p className="font-bold text-sm">{aiSuggestion.label}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{aiSuggestion.tagline}</p>
@@ -161,7 +162,7 @@ export function ProjectTypeSelector({
                   label={type.label}
                   tagline={type.tagline ?? ""}
                   description={type.description ?? ""}
-                  icon={type.icon ?? "🏷️"}
+                  icon={type.icon ?? "Tag"}
                   accentColor={type.accent_color ?? "hsl(220 70% 55%)"}
                   elementCount={8}
                   isSelected={isSelected}
@@ -188,7 +189,7 @@ export function ProjectTypeSelector({
                   label={type.label}
                   tagline={type.tagline ?? ""}
                   description={type.description ?? ""}
-                  icon={type.icon ?? "🏷️"}
+                  icon={type.icon ?? "Tag"}
                   accentColor="hsl(220 70% 55%)"
                   elementCount={8}
                   isSelected={selected === type.type_id}
@@ -403,7 +404,7 @@ function TypeCard({
       />
 
       <div className="flex items-start gap-3 mb-3">
-        <span className="text-2xl leading-none mt-0.5">{icon}</span>
+        <LucideIcon name={icon} className="h-6 w-6 mt-0.5" style={{ color: accentColor }} />
         <div className="min-w-0">
           <div className="font-bold text-sm leading-tight">{label}</div>
           <div

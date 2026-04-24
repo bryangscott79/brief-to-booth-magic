@@ -79,6 +79,54 @@ export type Database = {
           },
         ]
       }
+      activation_type_overrides: {
+        Row: {
+          activation_type_id: string
+          agency_id: string
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          template: Json
+          updated_at: string
+        }
+        Insert: {
+          activation_type_id: string
+          agency_id: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          template?: Json
+          updated_at?: string
+        }
+        Update: {
+          activation_type_id?: string
+          agency_id?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          template?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_type_overrides_activation_type_id_fkey"
+            columns: ["activation_type_id"]
+            isOneToOne: false
+            referencedRelation: "activation_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_type_overrides_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activation_types: {
         Row: {
           category: string

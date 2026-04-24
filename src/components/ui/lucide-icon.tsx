@@ -15,7 +15,7 @@ import * as Icons from "lucide-react";
 import { LucideProps } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface LucideIconProps extends Omit<LucideProps, "ref"> {
+interface LucideIconProps extends Omit<LucideProps, "ref" | "name"> {
   /** PascalCase lucide icon name (e.g. "Lightbulb", "Target", "Zap") */
   name?: string | null;
   /** Fallback icon name if `name` is missing/unknown. Default: "Sparkles" */

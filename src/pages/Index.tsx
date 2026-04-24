@@ -57,30 +57,35 @@ const SHOWCASE = [
     label: "Consumer Tech",
     title: "Immersive product reveal",
     sub: "Wraparound LED. Floating displays.",
+    span: "lg:col-span-2 lg:row-span-1",
   },
   {
     img: showcaseAuto,
     label: "Automotive",
     title: "Cinematic vehicle reveal",
     sub: "Theatrical staging. Projection mapped.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
   {
     img: showcaseLounge,
     label: "Hospitality",
     title: "VIP brand lounge",
     sub: "Curated for intimate conversations.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
   {
     img: showcaseInstallation,
     label: "Art / Storytelling",
     title: "Walk-through installation",
     sub: "Sequential narrative architecture.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
   {
     img: showcaseKeynote,
     label: "Keynote",
     title: "Conference main stage",
     sub: "Built for the moment of reveal.",
+    span: "lg:col-span-1 lg:row-span-1",
   },
 ];
 

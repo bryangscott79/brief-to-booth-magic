@@ -217,15 +217,27 @@ export function KnowledgeHealthDashboard() {
             Live telemetry for the RAG pipeline across all scopes.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMigrateLegacy}
+            disabled={migrating}
+            title="Backfill legacy knowledge_base_files into the new RAG system"
+          >
+            <Archive className={`h-4 w-4 mr-2 ${migrating ? "animate-pulse" : ""}`} />
+            {migrating ? "Migrating…" : "Migrate legacy KB"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Top stats */}

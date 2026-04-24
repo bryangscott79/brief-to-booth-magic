@@ -85,3 +85,23 @@ export function useAgency(): UseAgencyResult {
     },
   };
 }
+
+/** Mutation: update fields on the user's primary agency. */
+export function useUpdateAgency() {
+  const { agency } = useAgency();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: Partial<Tables<"agencies">>) => {
+      if (!agency?.id) throw new Error("No active agency");
+      const { error } = await supabase
+        .from("agencies")
+        .update(updates)
+        .eq("id", agency.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agency"] });
+    },
+  });
+}

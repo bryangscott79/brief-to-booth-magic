@@ -7,7 +7,7 @@
 //   - Client KB:           <KnowledgeBasePanel scope="client"          scopeId={clientId} />
 //   - Project KB:          <KnowledgeBasePanel scope="project"         scopeId={projectId} />
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -26,13 +26,23 @@ import {
   RefreshCw,
   Pin,
   PinOff,
+  Eye,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   useKnowledgeDocuments,
   type KnowledgeScope,

@@ -310,6 +310,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          agency_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -323,6 +324,7 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          agency_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -336,6 +338,7 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          agency_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -348,7 +351,15 @@ export type Database = {
           user_id?: string
           website?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_profiles: {
         Row: {

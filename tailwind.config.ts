@@ -63,11 +63,20 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         zone: {
-          hero: "hsl(38 92% 50%)",
-          storytelling: "hsl(200 85% 50%)",
-          lounge: "hsl(150 70% 45%)",
-          reception: "hsl(280 75% 55%)",
-          service: "hsl(220 15% 50%)",
+          hero: "hsl(329 86% 70%)",
+          storytelling: "hsl(220 100% 72%)",
+          lounge: "hsl(197 83% 76%)",
+          reception: "hsl(272 91% 74%)",
+          service: "hsl(258 95% 77%)",
+        },
+        canopy: {
+          sky: "#8FD3F4",
+          blue: "#6FA8FF",
+          violet: "#A78BFA",
+          purple: "#C084FC",
+          pink: "#F472B6",
+          navy: "#0B1B2B",
+          charcoal: "#1F2937",
         },
         surface: {
           elevated: "hsl(var(--surface-elevated))",
@@ -86,16 +95,19 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "sans-serif"],
+        sans: ["Inter", "system-ui", "-apple-system", "Helvetica Neue", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
       },
       boxShadow: {
-        "glow-sm": "0 0 20px hsl(38 92% 50% / 0.15)",
-        "glow-md": "0 0 40px hsl(38 92% 50% / 0.2)",
-        "glow-lg": "0 8px 60px hsl(38 92% 50% / 0.3)",
+        "glow-sm": "0 0 20px rgba(167, 139, 250, 0.2)",
+        "glow-md": "0 0 40px rgba(167, 139, 250, 0.3)",
+        "glow-lg": "0 8px 60px rgba(244, 114, 182, 0.35)",
+        "glow-sky": "0 0 32px rgba(111, 168, 255, 0.35)",
+        "glow-violet": "0 0 32px rgba(167, 139, 250, 0.45)",
+        "glow-pink": "0 0 32px rgba(244, 114, 182, 0.45)",
       },
       keyframes: {
         "accordion-down": {

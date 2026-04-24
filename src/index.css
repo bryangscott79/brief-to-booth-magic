@@ -2,126 +2,147 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 
- * CREATIVE BRIEF RESPONSE ENGINE
- * Design System: Architectural Editorial
- * Palette: Deep slate + warm amber accents
+/*
+ * ─── CANOPY SPATIAL UI SYSTEM ─────────────────────────────────────────────
+ * A living system interface for experiential planning.
+ * Dark-first. Gradient-accented. Node-driven.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
-    /* Core palette - Warm slate with amber accents */
-    --background: 220 20% 97%;
-    --foreground: 220 25% 10%;
+    /* ═══ CANOPY CORE PALETTE ═══════════════════════════════════════════
+     * Dark-first. Navy base with charcoal surfaces. Glass overlays.
+     */
+    --background: 212 60% 11%;              /* #0B1B2B navy */
+    --foreground: 220 15% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 25% 10%;
+    --card: 217 33% 13%;                    /* #1F2937 charcoal lightened */
+    --card-foreground: 220 15% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 10%;
+    --popover: 217 33% 13%;
+    --popover-foreground: 220 15% 98%;
 
-    /* Amber accent - warm, professional, distinctive */
-    --primary: 38 92% 50%;
-    --primary-foreground: 220 25% 10%;
+    /* Primary = Canopy gradient purple anchor */
+    --primary: 260 88% 76%;                 /* #A78BFA */
+    --primary-foreground: 212 60% 11%;
 
-    /* Cool slate secondary */
-    --secondary: 220 15% 92%;
-    --secondary-foreground: 220 25% 25%;
+    --secondary: 217 20% 18%;
+    --secondary-foreground: 220 15% 92%;
 
-    --muted: 220 15% 95%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 217 25% 16%;
+    --muted-foreground: 220 10% 65%;
 
-    --accent: 220 15% 92%;
-    --accent-foreground: 220 25% 15%;
+    --accent: 272 91% 74%;                  /* #C084FC */
+    --accent-foreground: 212 60% 11%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 38 92% 50%;
+    --border: 220 15% 100% / 0.08;          /* rgba(255,255,255,0.08) */
+    --input: 220 15% 100% / 0.1;
+    --ring: 260 88% 76%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
-    /* Custom tokens */
-    --surface-elevated: 0 0% 100%;
-    --surface-sunken: 220 20% 95%;
-    --amber-glow: 38 100% 50% / 0.15;
-    --slate-glow: 220 30% 50% / 0.1;
-    
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(38, 92%, 50%), hsl(28, 90%, 55%));
-    --gradient-surface: linear-gradient(180deg, hsl(0, 0%, 100%), hsl(220, 20%, 98%));
-    --gradient-hero: linear-gradient(135deg, hsl(220, 25%, 12%) 0%, hsl(220, 30%, 18%) 100%);
-    
-    /* Shadows */
-    --shadow-sm: 0 1px 2px hsl(220 25% 10% / 0.04);
-    --shadow-md: 0 4px 12px hsl(220 25% 10% / 0.06);
-    --shadow-lg: 0 12px 32px hsl(220 25% 10% / 0.1);
-    --shadow-amber: 0 8px 24px hsl(38 92% 50% / 0.25);
+    /* ═══ CANOPY GRADIENT STOPS ═══════════════════════════════════════ */
+    --canopy-sky: 197 83% 76%;              /* #8FD3F4 */
+    --canopy-blue: 220 100% 72%;            /* #6FA8FF */
+    --canopy-violet: 258 95% 77%;           /* #A78BFA */
+    --canopy-purple: 272 91% 74%;           /* #C084FC */
+    --canopy-pink: 329 86% 70%;             /* #F472B6 */
 
-    /* Sidebar */
-    --sidebar-background: 220 20% 97%;
-    --sidebar-foreground: 220 25% 25%;
-    --sidebar-primary: 38 92% 50%;
-    --sidebar-primary-foreground: 220 25% 10%;
-    --sidebar-accent: 220 15% 92%;
-    --sidebar-accent-foreground: 220 25% 15%;
-    --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 38 92% 50%;
-  }
+    /* ═══ PRIMARY GRADIENT (brand identity) ═════════════════════════ */
+    --gradient-canopy: linear-gradient(
+      135deg,
+      #8FD3F4 0%,
+      #6FA8FF 25%,
+      #A78BFA 50%,
+      #C084FC 75%,
+      #F472B6 100%
+    );
 
-  .dark {
-    --background: 220 25% 8%;
-    --foreground: 220 15% 95%;
+    --gradient-canopy-soft: linear-gradient(
+      135deg,
+      rgba(143, 211, 244, 0.8) 0%,
+      rgba(111, 168, 255, 0.75) 25%,
+      rgba(167, 139, 250, 0.7) 50%,
+      rgba(192, 132, 252, 0.7) 75%,
+      rgba(244, 114, 182, 0.75) 100%
+    );
 
-    --card: 220 25% 11%;
-    --card-foreground: 220 15% 95%;
+    --gradient-text: linear-gradient(
+      135deg,
+      #8FD3F4 0%,
+      #A78BFA 50%,
+      #F472B6 100%
+    );
 
-    --popover: 220 25% 11%;
-    --popover-foreground: 220 15% 95%;
+    /* ═══ GLOW SYSTEM (critical for brand feel) ══════════════════════ */
+    --glow-soft: radial-gradient(circle at center, rgba(167, 139, 250, 0.25), transparent 70%);
+    --glow-strong: radial-gradient(circle at center, rgba(244, 114, 182, 0.35), transparent 65%);
+    --glow-sky: radial-gradient(circle at center, rgba(111, 168, 255, 0.25), transparent 65%);
 
-    --primary: 38 92% 55%;
-    --primary-foreground: 220 25% 8%;
+    /* Shadow glows for interactive elements */
+    --shadow-glow-violet: 0 0 32px rgba(167, 139, 250, 0.35);
+    --shadow-glow-pink: 0 0 32px rgba(244, 114, 182, 0.35);
+    --shadow-glow-sky: 0 0 32px rgba(111, 168, 255, 0.3);
 
-    --secondary: 220 20% 18%;
-    --secondary-foreground: 220 15% 85%;
+    /* Surface shadows */
+    --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -16px rgba(0, 0, 0, 0.5);
 
-    --muted: 220 20% 15%;
-    --muted-foreground: 220 10% 55%;
+    /* Glass surface layers */
+    --surface-glass: rgba(255, 255, 255, 0.04);
+    --surface-glass-hover: rgba(255, 255, 255, 0.07);
+    --surface-glass-active: rgba(255, 255, 255, 0.1);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-subtle-strong: rgba(255, 255, 255, 0.14);
 
-    --accent: 220 20% 18%;
-    --accent-foreground: 220 15% 95%;
-
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 20% 18%;
-    --input: 220 20% 18%;
-    --ring: 38 92% 55%;
-
-    --surface-elevated: 220 25% 13%;
-    --surface-sunken: 220 25% 6%;
-    --amber-glow: 38 100% 55% / 0.2;
+    /* Legacy compatibility (kept for components that still reference these) */
+    --surface-elevated: 217 33% 13%;
+    --surface-sunken: 212 60% 9%;
+    --amber-glow: 260 88% 76% / 0.15;
     --slate-glow: 220 30% 70% / 0.08;
 
-    --gradient-hero: linear-gradient(135deg, hsl(220, 30%, 6%) 0%, hsl(220, 25%, 12%) 100%);
+    --gradient-primary: var(--gradient-canopy);
+    --gradient-hero: linear-gradient(180deg, #0B1B2B 0%, #0F2438 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(217, 33%, 13%), hsl(212, 60%, 11%));
 
-    --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.2);
-    --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.3);
-    --shadow-lg: 0 12px 32px hsl(0 0% 0% / 0.4);
-    --shadow-amber: 0 8px 24px hsl(38 92% 55% / 0.3);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --shadow-amber: var(--shadow-glow-violet);
 
-    --sidebar-background: 220 25% 8%;
+    /* Sidebar */
+    --sidebar-background: 212 60% 9%;
     --sidebar-foreground: 220 15% 85%;
-    --sidebar-primary: 38 92% 55%;
-    --sidebar-primary-foreground: 220 25% 8%;
-    --sidebar-accent: 220 20% 15%;
+    --sidebar-primary: 260 88% 76%;
+    --sidebar-primary-foreground: 212 60% 11%;
+    --sidebar-accent: 217 25% 15%;
     --sidebar-accent-foreground: 220 15% 95%;
-    --sidebar-border: 220 20% 18%;
-    --sidebar-ring: 38 92% 55%;
+    --sidebar-border: 220 15% 100% / 0.06;
+    --sidebar-ring: 260 88% 76%;
+  }
+
+  /* Canopy is dark-first. The .dark class mirrors :root for anything that opts in. */
+  .dark {
+    /* Same tokens as :root — canopy is always dark */
+  }
+
+  /* Light mode override is explicitly disabled under canopy brand. */
+  .light {
+    --background: 220 20% 98%;
+    --foreground: 212 60% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 212 60% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 60% 11%;
+    --primary: 258 95% 60%;
+    --primary-foreground: 0 0% 100%;
+    --border: 220 15% 88%;
+    --muted: 220 15% 95%;
+    --muted-foreground: 220 10% 45%;
   }
 }
 
@@ -130,142 +151,275 @@
     @apply border-border;
   }
 
+  html {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
+    letter-spacing: -0.015em;
   }
+
+  h1 { letter-spacing: -0.025em; }
 
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
+
+  /* Selection color */
+  ::selection {
+    background: rgba(167, 139, 250, 0.35);
+    color: white;
+  }
 }
 
+/* ─── CANOPY COMPONENT LAYER ───────────────────────────────────────────── */
+
 @layer components {
-  /* Hero section styles */
+  /* Glass panel — the core Canopy surface */
+  .canopy-panel {
+    background: var(--surface-glass);
+    border: 1px solid var(--border-subtle);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .canopy-panel-hover {
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .canopy-panel-hover:hover {
+    background: var(--surface-glass-hover);
+    border-color: var(--border-subtle-strong);
+    box-shadow: var(--shadow-panel), var(--shadow-glow-violet);
+  }
+
+  /* Canopy gradient text */
+  .canopy-text-gradient {
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .canopy-text-full-gradient {
+    background: var(--gradient-canopy);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Primary canopy button */
+  .canopy-button-primary {
+    background: var(--gradient-canopy);
+    color: #0B1B2B;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 999px;
+    border: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    box-shadow: var(--shadow-glow-violet);
+  }
+
+  .canopy-button-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-glow-pink);
+    filter: brightness(1.08);
+  }
+
+  /* Canopy gradient border (for key CTAs, hero frames) */
+  .canopy-gradient-border {
+    position: relative;
+    background: var(--card);
+    border-radius: inherit;
+  }
+
+  .canopy-gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-canopy);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Ambient glow (hero backgrounds, section dividers) */
+  .canopy-glow-ambient {
+    position: absolute;
+    pointer-events: none;
+    filter: blur(120px);
+    opacity: 0.25;
+    border-radius: 9999px;
+    background: var(--gradient-canopy);
+  }
+
+  /* Node */
+  .canopy-node {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gradient-canopy);
+    box-shadow: 0 0 12px rgba(167, 139, 250, 0.6);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+
+  .canopy-node:hover,
+  .canopy-node[data-active="true"] {
+    transform: scale(1.3);
+    box-shadow: 0 0 24px rgba(244, 114, 182, 0.8);
+  }
+
+  .canopy-node-pulse {
+    animation: canopy-pulse 2.4s ease-in-out infinite;
+  }
+
+  /* Connection line (SVG stroke class) */
+  .canopy-line {
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 1;
+    fill: none;
+  }
+
+  .canopy-line-active {
+    stroke: url(#canopy-line-gradient);
+    stroke-width: 1.25;
+  }
+
+  /* Radial grid pattern (for empty states, hero backgrounds) */
+  .canopy-grid-pattern {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+  }
+
+  /* ─── Legacy components kept for non-landing pages ─── */
+
+  /* Hero section styles (still used by some pages) */
   .hero-gradient {
     background: var(--gradient-hero);
   }
 
   .hero-text-gradient {
-    background: linear-gradient(135deg, hsl(38, 92%, 55%) 0%, hsl(45, 95%, 65%) 100%);
+    background: var(--gradient-text);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
-  /* Card with subtle glow */
   .card-glow {
     box-shadow: var(--shadow-md);
     transition: box-shadow 0.3s ease, transform 0.3s ease;
   }
 
   .card-glow:hover {
-    box-shadow: var(--shadow-lg), 0 0 0 1px hsl(var(--primary) / 0.1);
+    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(167, 139, 250, 0.2);
     transform: translateY(-2px);
   }
 
-  /* Amber button glow */
   .btn-glow {
-    box-shadow: var(--shadow-amber);
+    box-shadow: var(--shadow-glow-violet);
     transition: all 0.2s ease;
   }
 
   .btn-glow:hover {
-    box-shadow: 0 12px 32px hsl(38 92% 50% / 0.35);
+    box-shadow: var(--shadow-glow-pink);
     transform: translateY(-1px);
   }
 
-  /* Upload zone styles */
   .upload-zone {
-    border: 2px dashed hsl(var(--border));
-    background: linear-gradient(180deg, hsl(var(--surface-elevated)), hsl(var(--surface-sunken)));
+    border: 2px dashed var(--border-subtle);
+    background: var(--surface-glass);
     transition: all 0.3s ease;
   }
 
   .upload-zone:hover,
   .upload-zone.dragging {
-    border-color: hsl(var(--primary));
-    background: linear-gradient(180deg, hsl(var(--primary) / 0.05), hsl(var(--primary) / 0.02));
+    border-color: rgba(167, 139, 250, 0.6);
+    background: var(--surface-glass-hover);
+    box-shadow: var(--shadow-glow-violet);
   }
 
-  /* Element cards */
   .element-card {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
+    background: var(--surface-glass);
+    border: 1px solid var(--border-subtle);
     transition: all 0.2s ease;
   }
 
   .element-card:hover {
-    border-color: hsl(var(--primary) / 0.3);
-    box-shadow: var(--shadow-md);
+    border-color: rgba(167, 139, 250, 0.4);
+    box-shadow: var(--shadow-glow-violet);
   }
 
   .element-card.active {
-    border-color: hsl(var(--primary));
-    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1);
+    border-color: rgba(167, 139, 250, 0.8);
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15);
   }
 
-  /* Status indicators */
-  .status-pending {
-    @apply bg-muted text-muted-foreground;
-  }
-
+  .status-pending { @apply bg-muted text-muted-foreground; }
   .status-generating {
-    @apply bg-amber-500/10 text-amber-600;
-    animation: pulse 2s ease-in-out infinite;
+    background: rgba(167, 139, 250, 0.12);
+    color: #A78BFA;
+    animation: canopy-pulse-subtle 2s ease-in-out infinite;
   }
-
   .status-complete {
-    @apply bg-emerald-500/10 text-emerald-600;
+    background: rgba(111, 168, 255, 0.12);
+    color: #6FA8FF;
   }
-
   .status-error {
-    @apply bg-destructive/10 text-destructive;
+    @apply bg-destructive/15 text-destructive;
   }
 
-  /* Floor plan zones */
-  .zone-hero { background: hsl(38 92% 50% / 0.3); border-color: hsl(38 92% 50%); }
-  .zone-storytelling { background: hsl(200 85% 50% / 0.3); border-color: hsl(200 85% 50%); }
-  .zone-lounge { background: hsl(150 70% 45% / 0.3); border-color: hsl(150 70% 45%); }
-  .zone-reception { background: hsl(280 75% 55% / 0.3); border-color: hsl(280 75% 55%); }
-  .zone-service { background: hsl(220 15% 50% / 0.3); border-color: hsl(220 15% 50%); }
+  /* Zones (legacy floor plan) — remapped to canopy palette */
+  .zone-hero { background: rgba(244, 114, 182, 0.2); border-color: rgba(244, 114, 182, 0.6); }
+  .zone-storytelling { background: rgba(111, 168, 255, 0.2); border-color: rgba(111, 168, 255, 0.6); }
+  .zone-lounge { background: rgba(143, 211, 244, 0.2); border-color: rgba(143, 211, 244, 0.6); }
+  .zone-reception { background: rgba(192, 132, 252, 0.2); border-color: rgba(192, 132, 252, 0.6); }
+  .zone-service { background: rgba(167, 139, 250, 0.15); border-color: rgba(167, 139, 250, 0.4); }
 
-  /* Prompt cards */
   .prompt-card {
     @apply bg-card border border-border rounded-lg overflow-hidden;
     transition: all 0.2s ease;
   }
 
   .prompt-card:hover {
-    @apply border-primary/30;
+    border-color: rgba(167, 139, 250, 0.4);
   }
 
-  /* Grid patterns */
   .grid-pattern {
-    background-image: 
-      linear-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     background-size: 20px 20px;
   }
 }
 
+/* ─── UTILITIES & KEYFRAMES ───────────────────────────────────────────── */
+
 @layer utilities {
-  /* Animation utilities */
-  .animate-fade-in {
-    animation: fadeIn 0.5s ease forwards;
-  }
-
-  .animate-slide-up {
-    animation: slideUp 0.5s ease forwards;
-  }
-
-  .animate-scale-in {
-    animation: scaleIn 0.3s ease forwards;
-  }
+  .animate-fade-in { animation: fadeIn 0.5s ease forwards; }
+  .animate-slide-up { animation: slideUp 0.5s ease forwards; }
+  .animate-scale-in { animation: scaleIn 0.3s ease forwards; }
+  .animate-canopy-pulse { animation: canopy-pulse 2.4s ease-in-out infinite; }
+  .animate-canopy-float { animation: canopy-float 6s ease-in-out infinite; }
+  .animate-canopy-spin-slow { animation: canopy-spin-slow 40s linear infinite; }
+  .animate-canopy-glow { animation: canopy-glow 4s ease-in-out infinite; }
 
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -287,6 +441,32 @@
     50% { opacity: 0.6; }
   }
 
+  @keyframes canopy-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.85; }
+    50% { transform: scale(1.35); opacity: 1; }
+  }
+
+  @keyframes canopy-pulse-subtle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
+  }
+
+  @keyframes canopy-float {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    33% { transform: translateY(-8px) translateX(4px); }
+    66% { transform: translateY(4px) translateX(-3px); }
+  }
+
+  @keyframes canopy-spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes canopy-glow {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 0.4; }
+  }
+
   @keyframes flowDash {
     0% { stroke-dashoffset: 24; }
     100% { stroke-dashoffset: 0; }
@@ -296,13 +476,19 @@
     animation: flowDash 1.5s linear infinite;
   }
 
+  /* Canopy gradient utilities for ad-hoc use */
+  .bg-canopy-gradient { background: var(--gradient-canopy); }
+  .bg-canopy-gradient-soft { background: var(--gradient-canopy-soft); }
+  .bg-canopy-glow-soft { background: var(--glow-soft); }
+  .bg-canopy-glow-strong { background: var(--glow-strong); }
+
   /* Glass effect */
   .glass {
     backdrop-filter: blur(12px);
-    background: hsl(var(--background) / 0.8);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(11, 27, 43, 0.7);
   }
 
-  /* Text utilities */
   .text-balance {
     text-wrap: balance;
   }

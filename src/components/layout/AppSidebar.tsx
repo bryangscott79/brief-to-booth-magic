@@ -1,7 +1,6 @@
 import { useLocation, Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import {
-  Grid3X3,
   FolderOpen,
   LogOut,
   Building2,
@@ -17,6 +16,7 @@ import {
   BookOpen,
   Sparkles,
 } from "lucide-react";
+import { CanopyLogo } from "@/components/canopy";
 import {
   Sidebar,
   SidebarContent,
@@ -129,24 +129,26 @@ export function AppSidebar() {
       {/* Logo / Header */}
       <SidebarHeader className="flex flex-col border-b border-border">
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
-          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-3 min-w-0">
-            <div className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-              isSuperAdmin && !previewMode ? "bg-amber-500" : "bg-primary"
-            )}>
-              {isSuperAdmin && !previewMode
-                ? <Crown className="h-5 w-5 text-white" />
-                : <Grid3X3 className="h-5 w-5 text-primary-foreground" />
-              }
-            </div>
+          <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-3 min-w-0" aria-label="Canopy home">
+            {isSuperAdmin && !previewMode ? (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500">
+                <Crown className="h-5 w-5 text-white" />
+              </div>
+            ) : (
+              <CanopyLogo variant="icon" size="lg" />
+            )}
             {!collapsed && (
-              <div className="min-w-0">
-                <span className="text-lg font-semibold tracking-tight truncate block">
-                  BriefEngine
+              <div className="min-w-0 leading-none">
+                <span className="text-base font-semibold tracking-[0.15em] truncate block">
+                  CANOPY
                 </span>
-                {isSuperAdmin && !previewMode && (
-                  <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">
+                {isSuperAdmin && !previewMode ? (
+                  <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest mt-0.5 block">
                     Platform Admin
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground tracking-widest mt-0.5 block">
+                    BY EXHIBITUS
                   </span>
                 )}
               </div>

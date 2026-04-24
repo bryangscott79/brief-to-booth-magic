@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { KnowledgeBasePanel } from "@/components/knowledge/KnowledgeBasePanel";
+import { BrandIntelligencePanel } from "@/components/admin/BrandIntelligencePanel";
 
 function initialsFromName(name: string) {
   return name
@@ -319,49 +320,7 @@ function OverviewTab({ client, projectCount }: { client: Client; projectCount: n
 }
 
 function BrandTab({ client }: { client: Client }) {
-  // Full brand guidelines editor comes in a later pass; surface the basics now.
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Brand</CardTitle>
-        <CardDescription>
-          Brand colors, tone, typography, logo rules, and reference materials.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {client.primary_color && (
-            <div>
-              <Label className="text-xs text-muted-foreground">Primary color</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <div
-                  className="w-8 h-8 rounded border"
-                  style={{ backgroundColor: client.primary_color }}
-                />
-                <span className="text-sm font-mono">{client.primary_color}</span>
-              </div>
-            </div>
-          )}
-          {client.secondary_color && (
-            <div>
-              <Label className="text-xs text-muted-foreground">Secondary color</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <div
-                  className="w-8 h-8 rounded border"
-                  style={{ backgroundColor: client.secondary_color }}
-                />
-                <span className="text-sm font-mono">{client.secondary_color}</span>
-              </div>
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Upload brand guide PDFs and reference imagery in the Knowledge tab — the AI will extract
-          tone, typography, and usage rules automatically.
-        </p>
-      </CardContent>
-    </Card>
-  );
+  return <BrandIntelligencePanel client={client} />;
 }
 
 function KnowledgeTab({ clientId }: { clientId: string }) {

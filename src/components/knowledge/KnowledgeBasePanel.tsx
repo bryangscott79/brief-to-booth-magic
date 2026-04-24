@@ -7,7 +7,7 @@
 //   - Client KB:           <KnowledgeBasePanel scope="client"          scopeId={clientId} />
 //   - Project KB:          <KnowledgeBasePanel scope="project"         scopeId={projectId} />
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -26,13 +26,23 @@ import {
   RefreshCw,
   Pin,
   PinOff,
+  Eye,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   useKnowledgeDocuments,
   type KnowledgeScope,
@@ -284,6 +294,51 @@ function getFileVisual(filename: string, mimeType: string | null) {
   return { Icon: FileIcon, tone: "bg-muted text-muted-foreground" };
 }
 
+// ─── Signed URL helper ───────────────────────────────────────────────────────
+
+function isImageDoc(doc: KnowledgeDocument) {
+  const mt = (doc.mime_type || "").toLowerCase();
+  const lower = (doc.filename || "").toLowerCase();
+  return mt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|svg)$/.test(lower);
+}
+
+function isPdfDoc(doc: KnowledgeDocument) {
+  return (doc.mime_type || "").toLowerCase().includes("pdf") ||
+    (doc.filename || "").toLowerCase().endsWith(".pdf");
+}
+
+function useSignedUrl(doc: KnowledgeDocument | null, enabled: boolean) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!doc || !enabled) {
+      setUrl(null);
+      return;
+    }
+    setLoading(true);
+    supabase.storage
+      .from(doc.storage_bucket)
+      .createSignedUrl(doc.storage_path, 60 * 60)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("[KnowledgeBasePanel] signed URL error:", error);
+          setUrl(null);
+        } else {
+          setUrl(data?.signedUrl || null);
+        }
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, enabled]);
+
+  return { url, loading };
+}
+
 // ─── DocumentRow ─────────────────────────────────────────────────────────────
 
 interface DocumentRowProps {
@@ -295,85 +350,190 @@ interface DocumentRowProps {
 
 function DocumentRow({ document: doc, onDelete, onReembed, onTogglePin }: DocumentRowProps) {
   const tags = [...(doc.auto_tags || []), ...(doc.user_tags || [])];
-
   const { Icon, tone } = getFileVisual(doc.filename, doc.mime_type);
 
+  const isImage = isImageDoc(doc);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Inline thumbnail for images
+  const { url: thumbUrl } = useSignedUrl(doc, isImage);
+
   return (
-    <Card className={cn("p-3 flex items-start gap-3", doc.is_pinned && "border-primary/40 bg-primary/5")}>
-      <div className={cn("h-10 w-10 rounded flex items-center justify-center shrink-0", tone)}>
-        <Icon className="h-5 w-5" />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm truncate">
-              {doc.title || doc.filename}
-            </div>
-            {doc.title && (
-              <div className="text-xs text-muted-foreground truncate">{doc.filename}</div>
-            )}
-            {doc.summary && (
-              <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                {doc.summary}
-              </div>
-            )}
-          </div>
-          <StatusBadge status={doc.status} error={doc.processing_error} />
-        </div>
-
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          {doc.doc_type && (
-            <Badge variant="secondary" className="text-xs">
-              {doc.doc_type.replace(/_/g, " ")}
-            </Badge>
+    <>
+      <Card className={cn("p-3 flex items-start gap-3", doc.is_pinned && "border-primary/40 bg-primary/5")}>
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className={cn(
+            "h-12 w-12 rounded overflow-hidden flex items-center justify-center shrink-0 transition hover:ring-2 hover:ring-primary/50",
+            !isImage && tone,
           )}
-          {tags.slice(0, 5).map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs gap-1">
-              <Tag className="h-2.5 w-2.5" />
-              {tag}
-            </Badge>
-          ))}
-          {tags.length > 5 && (
-            <span className="text-xs text-muted-foreground">+{tags.length - 5} more</span>
-          )}
-          <span className="text-xs text-muted-foreground ml-auto">
-            {doc.chunk_count > 0 && `${doc.chunk_count} chunks · `}
-            {formatDistanceToNow(new Date(doc.created_at), { addSuffix: true })}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={onTogglePin}
-          title={doc.is_pinned ? "Unpin (let ranking decide)" : "Pin (always include in retrieval)"}
+          title="Preview"
         >
-          {doc.is_pinned ? (
-            <Pin className="h-4 w-4 fill-primary text-primary" />
+          {isImage && thumbUrl ? (
+            <img
+              src={thumbUrl}
+              alt={doc.filename}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
           ) : (
-            <PinOff className="h-4 w-4 text-muted-foreground" />
+            <Icon className="h-5 w-5" />
           )}
-        </Button>
-        {doc.status === "failed" && (
-          <Button size="icon" variant="ghost" onClick={onReembed} title="Retry embedding">
-            <RefreshCw className="h-4 w-4" />
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                className="font-medium text-sm truncate text-left hover:underline block w-full"
+              >
+                {doc.title || doc.filename}
+              </button>
+              {doc.title && (
+                <div className="text-xs text-muted-foreground truncate">{doc.filename}</div>
+              )}
+              {doc.summary && (
+                <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                  {doc.summary}
+                </div>
+              )}
+            </div>
+            <StatusBadge status={doc.status} error={doc.processing_error} />
+          </div>
+
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {doc.doc_type && (
+              <Badge variant="secondary" className="text-xs">
+                {doc.doc_type.replace(/_/g, " ")}
+              </Badge>
+            )}
+            {tags.slice(0, 5).map((tag) => (
+              <Badge key={tag} variant="outline" className="text-xs gap-1">
+                <Tag className="h-2.5 w-2.5" />
+                {tag}
+              </Badge>
+            ))}
+            {tags.length > 5 && (
+              <span className="text-xs text-muted-foreground">+{tags.length - 5} more</span>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              {doc.chunk_count > 0 && `${doc.chunk_count} chunks · `}
+              {formatDistanceToNow(new Date(doc.created_at), { addSuffix: true })}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setPreviewOpen(true)}
+            title="Preview"
+          >
+            <Eye className="h-4 w-4 text-muted-foreground" />
           </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onTogglePin}
+            title={doc.is_pinned ? "Unpin (let ranking decide)" : "Pin (always include in retrieval)"}
+          >
+            {doc.is_pinned ? (
+              <Pin className="h-4 w-4 fill-primary text-primary" />
+            ) : (
+              <PinOff className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
+          {doc.status === "failed" && (
+            <Button size="icon" variant="ghost" onClick={onReembed} title="Retry embedding">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
+          <Button size="icon" variant="ghost" onClick={onDelete} title="Delete">
+            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+          </Button>
+        </div>
+      </Card>
+
+      <PreviewDialog doc={doc} open={previewOpen} onOpenChange={setPreviewOpen} />
+    </>
+  );
+}
+
+// ─── Preview Dialog ──────────────────────────────────────────────────────────
+
+function PreviewDialog({
+  doc,
+  open,
+  onOpenChange,
+}: {
+  doc: KnowledgeDocument;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { url, loading } = useSignedUrl(doc, open);
+  const isImage = isImageDoc(doc);
+  const isPdf = isPdfDoc(doc);
+  const isText = !isImage && !isPdf && /\.(txt|md|csv|json|xml|ya?ml|html?|css|tsv)$/i.test(doc.filename || "");
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="truncate pr-8">{doc.title || doc.filename}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto rounded-md bg-muted/30 flex items-center justify-center min-h-[400px]">
+          {loading ? (
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          ) : !url ? (
+            <p className="text-sm text-muted-foreground">Could not load preview.</p>
+          ) : isImage ? (
+            <img src={url} alt={doc.filename} className="max-h-[70vh] max-w-full object-contain" />
+          ) : isPdf || isText ? (
+            <iframe
+              src={url}
+              title={doc.filename}
+              className="w-full h-[70vh] bg-background"
+            />
+          ) : (
+            <div className="text-center p-8 space-y-3">
+              <FileIcon className="h-12 w-12 mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Preview not available for this file type.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {url && (
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button asChild variant="outline" size="sm">
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open in new tab
+              </a>
+            </Button>
+            <Button asChild size="sm">
+              <a href={url} download={doc.filename}>
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </a>
+            </Button>
+          </div>
         )}
-        <Button size="icon" variant="ghost" onClick={onDelete} title="Delete">
-          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-        </Button>
-      </div>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function StatusBadge({ status, error }: { status: string; error: string | null }) {
   if (status === "embedded") {
     return (
-      <Badge variant="secondary" className="gap-1 text-xs bg-green-100 text-green-900 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-100">
+      <Badge variant="secondary" className="gap-1 text-xs bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-300">
         <CheckCircle2 className="h-3 w-3" />
         Ready
       </Badge>

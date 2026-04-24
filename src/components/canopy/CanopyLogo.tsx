@@ -9,8 +9,8 @@
 import { cn } from "@/lib/utils";
 import canopyLogo from "@/assets/canopy-logo.png";
 
-// Logo dimensions: 941 × 272 (aspect ≈ 3.46:1)
-const LOGO_ASPECT = 941 / 272;
+// Logo dimensions: 345 × 329 (mark only, ≈ 1.05:1)
+const LOGO_ASPECT = 345 / 329;
 
 interface CanopyLogoProps {
   variant?: "icon" | "horizontal" | "stacked";

@@ -23,7 +23,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   CanopyLogo,
-  CanopyNodeField,
   CanopyAmbientGlow,
   CanopyPanel,
 } from "@/components/canopy";
@@ -296,14 +295,6 @@ export default function Index() {
 
         <CanopyAmbientGlow position="top-1/4 -left-32" size={520} tone="violet" opacity={0.22} animate />
         <CanopyAmbientGlow position="bottom-0 right-0 translate-x-1/3 translate-y-1/3" size={600} tone="pink" opacity={0.18} animate />
-
-        {/* Right-half: node field with subtle parallax */}
-        <div
-          className="absolute inset-y-0 right-0 w-full md:w-1/2"
-          style={{ transform: `translateY(${scrollY * 0.15}px)` }}
-        >
-          <CanopyNodeField count={12} interactive showCanopyStructure />
-        </div>
 
         <div className="container relative z-10 pt-24 pb-16">
           <div className="max-w-2xl">

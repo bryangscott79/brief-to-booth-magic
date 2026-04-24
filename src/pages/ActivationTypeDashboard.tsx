@@ -414,13 +414,26 @@ export default function ActivationTypeDashboard() {
           </TabsContent>
 
           {/* KNOWLEDGE TAB */}
-          <TabsContent value="knowledge" className="mt-6">
+          <TabsContent value="knowledge" className="mt-6 space-y-6">
             <Card className="p-6">
+              <KnowledgeBasePanel
+                scope="activation_type_agency"
+                scopeId={type.id}
+                title={`${type.label} — Your agency's knowledge`}
+                description="Reference materials specific to your agency: visual case studies, client-approved photos, brand-aligned examples. Only your agency sees and is grounded by these."
+              />
+            </Card>
+
+            <Card className="p-6 border-dashed">
+              <div className="mb-3 flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">System foundation</Badge>
+                <span className="text-xs text-muted-foreground">Managed by platform admins</span>
+              </div>
               <KnowledgeBasePanel
                 scope="activation_type"
                 scopeId={type.id}
-                title={`${type.label} — Knowledge`}
-                description="Upload reference PDFs, briefs, photos, or markdown notes that describe this activation type. The AI uses these as grounding when generating."
+                title={`${type.label} — Foundation`}
+                description="Platform-wide standards, metrics, and quality benchmarks for this activation type. Used as baseline grounding across every agency."
               />
             </Card>
           </TabsContent>

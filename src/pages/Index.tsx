@@ -35,6 +35,7 @@ import showcaseEnergy from "@/assets/showcase-energy.jpg";
 import showcaseLounge from "@/assets/showcase-lounge.jpg";
 import showcaseInstallation from "@/assets/showcase-installation.jpg";
 import showcaseKeynote from "@/assets/showcase-keynote.jpg";
+// keep import for potential future use; suppress unused warning by referencing in array if needed
 import showcaseFloorplan from "@/assets/showcase-floorplan.jpg";
 import intelligenceNetwork from "@/assets/intelligence-network.jpg";
 import heroArchitecture from "@/assets/hero-architecture.jpg";

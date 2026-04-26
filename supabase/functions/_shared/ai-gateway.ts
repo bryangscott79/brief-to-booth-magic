@@ -544,22 +544,35 @@ async function callGeminiViaLovable(
 
   const result: AIResponse = {};
   const msg = choice.message ?? {};
+  const collectedImages: Array<{ mimeType: string; base64Data: string }> = [];
 
   if (typeof msg.content === "string" && msg.content.length > 0) {
     result.text = msg.content;
   } else if (Array.isArray(msg.content)) {
     const texts: string[] = [];
-    const images: Array<{ mimeType: string; base64Data: string }> = [];
     for (const part of msg.content) {
       if (part?.type === "text" && part.text) texts.push(part.text);
       if (part?.type === "image_url" && part.image_url?.url?.startsWith("data:")) {
         const m = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
-        if (m) images.push({ mimeType: m[1], base64Data: m[2] });
+        if (m) collectedImages.push({ mimeType: m[1], base64Data: m[2] });
       }
     }
     if (texts.length) result.text = texts.join("");
-    if (images.length) result.images = images;
   }
+
+  // Lovable AI gateway (OpenAI-compatible) returns generated images on `message.images`,
+  // separate from `message.content`. Each entry: { type: "image_url", image_url: { url: "data:..." } }.
+  if (Array.isArray(msg.images)) {
+    for (const img of msg.images) {
+      const url = img?.image_url?.url ?? img?.url;
+      if (typeof url === "string" && url.startsWith("data:")) {
+        const m = url.match(/^data:([^;]+);base64,(.+)$/);
+        if (m) collectedImages.push({ mimeType: m[1], base64Data: m[2] });
+      }
+    }
+  }
+
+  if (collectedImages.length) result.images = collectedImages;
 
   if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
     result.toolCalls = msg.tool_calls.map((tc: any) => {

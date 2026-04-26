@@ -59,7 +59,7 @@ export default function UploadPage() {
 
           {mode === "upload" && (
             <div className="space-y-6">
-              {!projectId && (
+              {!hasBriefContent && (
                 <div className="max-w-3xl mx-auto">
                   <button
                     onClick={() => setMode("choose")}

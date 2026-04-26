@@ -493,7 +493,7 @@ export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
     `Gemini/${resolvedModel}`,
   );
 
-  const data = await response.json();
+  const data = await parseJsonResponse(response, `Gemini/${resolvedModel}`);
   return parseGeminiResponse(data);
 }
 
@@ -536,7 +536,7 @@ async function callGeminiViaLovable(
     `Lovable/${model}`,
   );
 
-  const data = await response.json();
+  const data = await parseJsonResponse(response, `Lovable/${model}`);
   const choice = data.choices?.[0];
   if (!choice) {
     throw new Error(`[ai-gateway] Lovable returned no choices: ${JSON.stringify(data).substring(0, 300)}`);
@@ -638,6 +638,6 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
     `Anthropic/${body.model}`,
   );
 
-  const data = await response.json();
+  const data = await parseJsonResponse(response, `Anthropic/${body.model}`);
   return parseAnthropicResponse(data);
 }

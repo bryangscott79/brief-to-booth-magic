@@ -238,16 +238,35 @@ ${genSuffix}`,
       ];
     }
 
-    const result = await callGemini({
+    let result = await callGemini({
       model: "google/gemini-3-pro-image-preview",
       messages,
       modalities: ["image", "text"],
     });
 
-    const image = result.images?.[0];
+    let image = result.images?.[0];
+
+    // Fallback: Pro Image can return empty {} under load or safety filtering.
+    // Retry once with the faster Nano Banana 2 model before failing.
     if (!image) {
-      console.error("No image in response:", JSON.stringify(result));
-      throw new Error("No image generated");
+      console.warn("[generate-hero] Pro Image returned no image, retrying with gemini-3.1-flash-image-preview");
+      try {
+        result = await callGemini({
+          model: "google/gemini-3.1-flash-image-preview",
+          messages,
+          modalities: ["image", "text"],
+        });
+        image = result.images?.[0];
+      } catch (fallbackErr) {
+        console.error("[generate-hero] Fallback model also failed:", fallbackErr);
+      }
+    }
+
+    if (!image) {
+      console.error("No image in response (both models):", JSON.stringify(result).slice(0, 500));
+      throw new Error(
+        "Image model returned no image. This usually means the prompt was filtered or the model is overloaded. Please try regenerating, or simplify the prompt/booth size."
+      );
     }
 
     const generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;

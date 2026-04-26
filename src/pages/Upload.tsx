@@ -11,12 +11,15 @@ import { cn } from "@/lib/utils";
 type Mode = "choose" | "upload" | "guided";
 
 export default function UploadPage() {
-  const { projectId, isLoading } = useProjectSync();
+  const { projectId, isLoading, dbProject } = useProjectSync();
   const [searchParams] = useSearchParams();
   const isSuiteMode = searchParams.get("suite") === "true";
 
-  // If a project already exists in the URL, they're mid-flow — skip the chooser
-  const [mode, setMode] = useState<Mode>(projectId ? "upload" : "choose");
+  // Show chooser for fresh/empty projects; skip only if a brief already exists
+  const hasBriefContent = Boolean(
+    dbProject?.brief_text || dbProject?.brief_file_url || dbProject?.parsed_brief,
+  );
+  const [mode, setMode] = useState<Mode>(hasBriefContent ? "upload" : "choose");
 
   if (isLoading) {
     return (
@@ -56,7 +59,7 @@ export default function UploadPage() {
 
           {mode === "upload" && (
             <div className="space-y-6">
-              {!projectId && (
+              {!hasBriefContent && (
                 <div className="max-w-3xl mx-auto">
                   <button
                     onClick={() => setMode("choose")}

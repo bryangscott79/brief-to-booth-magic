@@ -369,6 +369,28 @@ async function fetchWithRateLimitRetry(
   return response;
 }
 
+/**
+ * Safely parse a JSON response body. Upstream AI providers occasionally return
+ * an empty body on transient failures (502/504, dropped connection, gateway
+ * timeout) which causes `response.json()` to throw the unhelpful
+ * "Unexpected end of JSON input". This wraps the read with a clear error.
+ */
+async function parseJsonResponse(response: Response, label: string): Promise<any> {
+  const raw = await response.text();
+  if (!raw || !raw.trim()) {
+    throw new Error(
+      `[ai-gateway] ${label}: upstream returned empty body (status ${response.status}). The model may be overloaded — please retry.`,
+    );
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    throw new Error(
+      `[ai-gateway] ${label}: upstream returned non-JSON body (status ${response.status}): ${raw.substring(0, 300)}`,
+    );
+  }
+}
+
 // ─── EXPORTS ────────────────────────────────────────────────────────────────
 
 /**
@@ -471,7 +493,7 @@ export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
     `Gemini/${resolvedModel}`,
   );
 
-  const data = await response.json();
+  const data = await parseJsonResponse(response, `Gemini/${resolvedModel}`);
   return parseGeminiResponse(data);
 }
 
@@ -514,7 +536,7 @@ async function callGeminiViaLovable(
     `Lovable/${model}`,
   );
 
-  const data = await response.json();
+  const data = await parseJsonResponse(response, `Lovable/${model}`);
   const choice = data.choices?.[0];
   if (!choice) {
     throw new Error(`[ai-gateway] Lovable returned no choices: ${JSON.stringify(data).substring(0, 300)}`);
@@ -616,6 +638,6 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
     `Anthropic/${body.model}`,
   );
 
-  const data = await response.json();
+  const data = await parseJsonResponse(response, `Anthropic/${body.model}`);
   return parseAnthropicResponse(data);
 }

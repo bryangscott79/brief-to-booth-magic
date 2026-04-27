@@ -17,8 +17,6 @@ import {
   Brain,
   Compass,
   Check,
-  Zap,
-  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -176,60 +174,6 @@ const STATS = [
   { value: "8", label: "Render angles per project" },
 ];
 
-const TIERS = [
-  {
-    name: "Studio",
-    price: "$499",
-    cadence: "/ month",
-    blurb: "For boutique agencies running a handful of pitches a quarter.",
-    features: [
-      "1 agency workspace",
-      "Up to 3 seats",
-      "10 projects / month",
-      "All 15+ activation types",
-      "4-scope RAG engine",
-      "Standard exports (PDF + PPTX)",
-    ],
-    cta: "Start Studio",
-    highlight: false,
-  },
-  {
-    name: "Agency",
-    price: "$1,499",
-    cadence: "/ month",
-    blurb: "For experiential teams shipping multiple briefs every week.",
-    features: [
-      "1 agency workspace",
-      "Up to 15 seats",
-      "Unlimited projects",
-      "Custom activation type playbooks",
-      "Brand intelligence + compliance audits",
-      "Cost intelligence + venue database",
-      "3D Rhino polish + video generation",
-      "Priority AI compute",
-    ],
-    cta: "Start Agency",
-    highlight: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    cadence: "",
-    blurb: "Multi-agency networks, holding companies, and global rollouts.",
-    features: [
-      "Unlimited workspaces",
-      "Unlimited seats",
-      "SSO + custom roles",
-      "Dedicated AI capacity",
-      "White-label exports",
-      "Custom integrations (Figma, CAD, CRM)",
-      "Onboarding + dedicated support",
-    ],
-    cta: "Talk to sales",
-    highlight: false,
-  },
-];
-
 // ─── PAGE ─────────────────────────────────────────────────────────────────
 
 export default function Index() {
@@ -266,9 +210,6 @@ export default function Index() {
             </a>
             <a href="#intelligence" className="text-muted-foreground hover:text-foreground transition-colors">
               Intelligence
-            </a>
-            <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
-              Pricing
             </a>
             <Link to="/auth">
               <Button size="sm" variant="ghost" className="text-foreground/80 hover:text-foreground">
@@ -734,112 +675,6 @@ export default function Index() {
         </div>
       </section>
 
-      {/* ═══ PRICING ════════════════════════════════════════════════ */}
-      <section id="pricing" className="relative py-28 border-t border-white/5">
-        <CanopyAmbientGlow position="top-0 left-1/2 -translate-x-1/2" size={700} tone="full" opacity={0.12} />
-
-        <div className="container relative">
-          <Reveal className="max-w-2xl mx-auto text-center mb-16">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#A78BFA] mb-3">
-              Pricing
-            </div>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-4">
-              Built for agencies.
-              <br />
-              <span className="canopy-text-gradient">Priced for the work.</span>
-            </h2>
-            <p className="text-foreground/60 text-lg">
-              Every tier includes the full system. Choose by team size and project volume.
-            </p>
-          </Reveal>
-
-          <div className="grid md:grid-cols-3 gap-5 max-w-6xl mx-auto">
-            {TIERS.map((tier, i) => (
-              <Reveal key={tier.name} delay={i * 100} from="up">
-                <div
-                  className={cn(
-                    "relative rounded-2xl border p-8 h-full flex flex-col",
-                    tier.highlight
-                      ? "border-transparent bg-gradient-to-b from-[#A78BFA]/[0.08] to-transparent"
-                      : "border-white/[0.08] bg-white/[0.02]",
-                  )}
-                  style={
-                    tier.highlight
-                      ? { boxShadow: "0 0 0 1px rgba(167,139,250,0.4), 0 24px 48px -16px rgba(167,139,250,0.2)" }
-                      : undefined
-                  }
-                >
-                  {tier.highlight && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <div className="px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest text-background bg-canopy-gradient">
-                        Most popular
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2 mb-2">
-                    {tier.name === "Studio" && <Zap className="h-4 w-4 text-[#A78BFA]" />}
-                    {tier.name === "Agency" && <Sparkles className="h-4 w-4 text-[#F472B6]" />}
-                    {tier.name === "Enterprise" && <Building2 className="h-4 w-4 text-[#6FA8FF]" />}
-                    <h3 className="text-xl font-semibold">{tier.name}</h3>
-                  </div>
-
-                  <p className="text-sm text-foreground/60 mb-6 leading-relaxed">{tier.blurb}</p>
-
-                  <div className="mb-6">
-                    <span
-                      className={cn(
-                        "text-4xl font-semibold",
-                        tier.highlight ? "canopy-text-full-gradient" : "text-foreground",
-                      )}
-                    >
-                      {tier.price}
-                    </span>
-                    {tier.cadence && (
-                      <span className="text-sm text-foreground/55 ml-1">{tier.cadence}</span>
-                    )}
-                  </div>
-
-                  <ul className="space-y-3 mb-8 flex-1">
-                    {tier.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-sm text-foreground/75">
-                        <Check
-                          className={cn(
-                            "h-4 w-4 mt-0.5 shrink-0",
-                            tier.highlight ? "text-[#F472B6]" : "text-[#A78BFA]",
-                          )}
-                        />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link to={tier.name === "Enterprise" ? "/auth" : "/projects"}>
-                    <Button
-                      className={cn(
-                        "w-full h-12 rounded-full",
-                        tier.highlight
-                          ? "canopy-button-primary"
-                          : "border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-foreground",
-                      )}
-                      variant={tier.highlight ? "default" : "ghost"}
-                    >
-                      {tier.cta}
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          <Reveal className="mt-10 text-center text-xs text-foreground/45 max-w-2xl mx-auto">
-            All plans include unlimited briefs uploaded, full access to all 15+ activation types,
-            and the complete export package. AI compute is metered fairly per generation.
-          </Reveal>
-        </div>
-      </section>
-
       {/* ═══ FINAL CTA ═════════════════════════════════════════════ */}
       <section className="relative py-32 border-t border-white/5 overflow-hidden">
         <CanopyAmbientGlow position="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" size={900} tone="full" opacity={0.18} animate />
@@ -885,9 +720,6 @@ export default function Index() {
             A spatial operating system for experiential planning.
           </p>
           <div className="flex items-center gap-5 text-sm text-foreground/60">
-            <a href="#pricing" className="hover:text-foreground transition-colors">
-              Pricing
-            </a>
             <Link to="/auth" className="hover:text-foreground transition-colors">
               Sign in
             </Link>

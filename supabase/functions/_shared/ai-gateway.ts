@@ -373,6 +373,11 @@ async function fetchWithRateLimitRetry(
 
   if (!response.ok) {
     const text = await response.text();
+    if (response.status === 402) {
+      throw new PaymentRequiredError(
+        `[ai-gateway] ${label}: insufficient credits (402): ${text.substring(0, 300)}`,
+      );
+    }
     throw new Error(
       `[ai-gateway] ${label}: API error (${response.status}): ${text.substring(0, 500)}`,
     );

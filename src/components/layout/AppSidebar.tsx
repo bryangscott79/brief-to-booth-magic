@@ -48,6 +48,7 @@ const agencyNavItems = [
 
 const platformOwnerNavItems = [
   { path: "/admin",               label: "Accounts",     icon: LayoutGrid },
+  { path: "/admin/agencies",      label: "Agencies",     icon: Building2 },
   { path: "/admin/super-admins",  label: "Super Admins", icon: Crown },
   { path: "/platform-invites",    label: "Invites",      icon: Mail },
 ];

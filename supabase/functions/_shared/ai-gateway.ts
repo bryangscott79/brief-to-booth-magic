@@ -336,6 +336,18 @@ function parseAnthropicResponse(data: any): AIResponse {
 }
 
 /**
+ * Thrown when the upstream provider returns HTTP 402 (insufficient credits).
+ * Lets callers detect billing failures and trigger a cheaper-model fallback.
+ */
+export class PaymentRequiredError extends Error {
+  status = 402;
+  constructor(message: string) {
+    super(message);
+    this.name = "PaymentRequiredError";
+  }
+}
+
+/**
  * Retry wrapper: retries once after a 2-second wait on HTTP 429 (rate limit).
  * Throws on all other errors.
  */

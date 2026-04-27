@@ -185,3 +185,28 @@ export function useSetActivationTypeIndustries() {
     },
   });
 }
+
+/**
+ * Fallback for environments where the seed migration didn't auto-apply:
+ * calls the seed_canopy_defaults() RPC which inserts the 5 launch
+ * industries (idempotent) and returns before/after counts.
+ */
+export function useSeedCanopyDefaults() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await (supabase.rpc as any)("seed_canopy_defaults");
+      if (error) throw error;
+      return data as {
+        industries_before: number;
+        industries_after: number;
+        industries_added: number;
+        types_before: number;
+        types_after: number;
+      };
+    },
+    onSuccess: () => {
+      invalidate(qc);
+    },
+  });
+}

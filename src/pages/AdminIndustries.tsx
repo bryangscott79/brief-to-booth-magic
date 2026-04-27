@@ -22,6 +22,7 @@ import {
   Save,
   Trash2,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,7 @@ import {
   useAdminIndustries,
   useCreateIndustry,
   useDeleteIndustry,
+  useSeedCanopyDefaults,
   type AdminIndustryRow,
 } from "@/hooks/useAdminIndustries";
 
@@ -77,10 +79,36 @@ function getIcon(name: string | null | undefined) {
 export default function AdminIndustries() {
   const { data: isSuper, isLoading: roleLoading } = useIsSuperAdmin();
   const { data: industries = [], isLoading } = useAdminIndustries();
+  const seedDefaults = useSeedCanopyDefaults();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+
+  const handleSeedDefaults = async () => {
+    try {
+      const result = await seedDefaults.mutateAsync();
+      if (result.industries_added === 0) {
+        toast({
+          title: "Already seeded",
+          description: `All ${result.industries_after} canonical industries already exist.`,
+        });
+      } else {
+        toast({
+          title: "Defaults seeded",
+          description: `Added ${result.industries_added} ${
+            result.industries_added === 1 ? "industry" : "industries"
+          }. ${result.industries_after} now active.`,
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Seed failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    }
+  };
 
   if (roleLoading) {
     return (
@@ -173,9 +201,35 @@ export default function AdminIndustries() {
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-12 text-sm text-muted-foreground">
-                {search ? "No industries match your search." : "No industries yet."}
-              </div>
+              search ? (
+                <div className="text-center py-12 text-sm text-muted-foreground">
+                  No industries match your search.
+                </div>
+              ) : (
+                <div className="text-center py-12 px-6">
+                  <Zap className="h-10 w-10 mx-auto mb-3 text-[#A78BFA]/60" />
+                  <p className="text-sm font-medium mb-1">No industries yet</p>
+                  <p className="text-xs text-muted-foreground mb-5 max-w-md mx-auto">
+                    Seed the 5 canonical Canopy industries (Experiential, Architecture,
+                    Landscape, Entertainment, A/V) to get started, or create your own from
+                    scratch.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <Button onClick={handleSeedDefaults} disabled={seedDefaults.isPending}>
+                      {seedDefaults.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4 mr-2" />
+                      )}
+                      Seed Canopy defaults
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowCreate(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create custom industry
+                    </Button>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="divide-y divide-border">
                 {filtered.map((ind) => (

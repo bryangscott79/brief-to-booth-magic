@@ -116,12 +116,12 @@ const PILLARS = [
   {
     icon: Network,
     title: "Spatial intelligence",
-    copy: "Every object, client, and project becomes a node in a living graph. Canopy learns your agency's DNA once — then applies it everywhere.",
+    copy: "Every space, system, client, and project becomes a node in a living graph. Canopy learns your studio's DNA once — then applies it everywhere.",
   },
   {
     icon: BookOpen,
-    title: "4-scope RAG engine",
-    copy: "Agency, activation type, client, and project knowledge stack automatically so every generation is grounded in the right context.",
+    title: "5-scope RAG engine",
+    copy: "Industry, agency, project type, client, and project knowledge stack automatically so every generation is grounded in the right context.",
   },
   {
     icon: Wand2,
@@ -131,17 +131,46 @@ const PILLARS = [
   {
     icon: Compass,
     title: "Brief to render in a day",
-    copy: "Upload any brief. Parse it. Generate strategic elements, hero renders, spatial plans, and a pitch-ready export — in one uninterrupted flow.",
+    copy: "Upload any brief. Parse it. Generate strategic elements, photoreal renderings, spatial plans, and a pitch-ready export — in one uninterrupted flow.",
+  },
+];
+
+// Verticals Canopy currently serves
+const INDUSTRIES = [
+  {
+    label: "Experiential & Trade Show",
+    sub: "Brand activations, booths, pop-ups, event marketing.",
+    accent: "#A78BFA",
+  },
+  {
+    label: "Architecture & Construction",
+    sub: "Residential, commercial, hospitality, civic — new builds and renovations.",
+    accent: "#6FA8FF",
+  },
+  {
+    label: "Landscape & Site Design",
+    sub: "Gardens, parks, plazas, streetscapes, restoration.",
+    accent: "#8FD3F4",
+  },
+  {
+    label: "Entertainment & Production",
+    sub: "Film, TV, theatrical, themed entertainment, concerts.",
+    accent: "#F472B6",
+  },
+  {
+    label: "A/V Integration & Install",
+    sub: "Conference, hospitality, education, worship, residential.",
+    accent: "#C084FC",
   },
 ];
 
 const WORKFLOW = [
-  { n: "01", label: "Brief", detail: "PDF, DOCX, or paste text.", icon: Upload },
-  { n: "02", label: "Parse", detail: "AI extracts brand, budget, audience, spatial needs.", icon: Target },
-  { n: "03", label: "Ground", detail: "Pull relevant chunks from agency + client KB.", icon: BookOpen },
-  { n: "04", label: "Generate", detail: "Strategic elements, hero visual, 8 view angles.", icon: Sparkles },
-  { n: "05", label: "Plan", detail: "Interactive floor plan with activation zones.", icon: Grid3X3 },
-  { n: "06", label: "Deliver", detail: "Pitch deck + prompt suite + cost intelligence.", icon: Download },
+  { n: "01", label: "Brief",    detail: "PDF, DOCX, blueprint, or paste text.",                 icon: Upload },
+  { n: "02", label: "Parse",    detail: "AI extracts brand, budget, audience, site needs.",     icon: Target },
+  { n: "03", label: "Ground",   detail: "Pull relevant chunks from your industry + agency KB.", icon: BookOpen },
+  { n: "04", label: "Generate", detail: "Strategic elements, hero rendering, 8 view angles.",   icon: Sparkles },
+  { n: "05", label: "Plan",     detail: "Interactive floor / site / stage plan with zones.",    icon: Grid3X3 },
+  { n: "06", label: "Deliver",  detail: "Pitch deck + prompt suite + real-time cost roll-up.",  icon: Download },
 ];
 
 const INTELLIGENCE = [
@@ -152,8 +181,8 @@ const INTELLIGENCE = [
   },
   {
     icon: Layers,
-    title: "Activation type playbooks",
-    copy: "Define what a Demo Station, VIP Lounge, or Stage Area means to your agency. Templates and references train the model.",
+    title: "Project type playbooks",
+    copy: "Define what a Demo Station, Single-Family Home, Site Plan, Set Build, or AV Install means to your studio. Templates and references train the model per industry.",
   },
   {
     icon: ShieldCheck,
@@ -163,15 +192,15 @@ const INTELLIGENCE = [
   {
     icon: Boxes,
     title: "Cost intelligence",
-    copy: "Materials, vendors, drayage, labor, and venue costs blend manual entry with AI web research for accurate budget logic.",
+    copy: "Materials, vendors, labor, equipment, drayage, and venue costs — blend agency rate cards, AI web research, and live commodity feeds for budgets that hold up.",
   },
 ];
 
 const STATS = [
   { value: "< 24h", label: "Brief to first render" },
-  { value: "4", label: "Knowledge scopes per generation" },
-  { value: "15+", label: "Activation types supported" },
-  { value: "8", label: "Render angles per project" },
+  { value: "5",     label: "Knowledge scopes per generation" },
+  { value: "5",     label: "Industries supported" },
+  { value: "60+",   label: "Project types across verticals" },
 ];
 
 // ─── PAGE ─────────────────────────────────────────────────────────────────
@@ -204,6 +233,9 @@ export default function Index() {
           <nav className="hidden md:flex items-center gap-6 text-sm">
             <a href="#showcase" className="text-muted-foreground hover:text-foreground transition-colors">
               Work
+            </a>
+            <a href="#industries" className="text-muted-foreground hover:text-foreground transition-colors">
+              Industries
             </a>
             <a href="#system" className="text-muted-foreground hover:text-foreground transition-colors">
               System
@@ -263,7 +295,7 @@ export default function Index() {
               )}
             >
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r from-[#A78BFA] to-[#F472B6] animate-canopy-pulse" />
-              A spatial operating system for experiential planning
+              A spatial operating system for environment design
             </div>
 
             <h1
@@ -272,9 +304,9 @@ export default function Index() {
                 mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
               )}
             >
-              Design the experience
+              Design the space
               <br />
-              <span className="canopy-text-full-gradient">before it happens.</span>
+              <span className="canopy-text-full-gradient">before you build it.</span>
             </h1>
 
             <p
@@ -283,8 +315,9 @@ export default function Index() {
                 mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
               )}
             >
-              Canopy turns a brief into a coordinated spatial response — grounded in your agency's
-              playbooks, your client's brand, and every past project you've ever shipped.
+              Canopy turns any brief — exhibit, building, landscape, set, or install — into a
+              coordinated spatial response. Renderings, blueprints, plans, and real-time pricing,
+              grounded in your industry, your studio's playbooks, and your client's brand.
             </p>
 
             <div
@@ -352,7 +385,9 @@ export default function Index() {
             </h2>
             <p className="mt-5 text-foreground/60 text-lg max-w-2xl">
               From energy giants to consumer tech to luxury auto — every Canopy output is engineered
-              for execution. Not eye candy. Real materials, real labor, real budgets.
+              for execution. Not eye candy. Real materials, real labor, real budgets. Examples shown
+              from the experiential vertical; architecture, landscape, entertainment, and A/V
+              integration coming online with the same rigor.
             </p>
           </Reveal>
 
@@ -426,6 +461,65 @@ export default function Index() {
         </div>
       </section>
 
+      {/* ═══ INDUSTRIES ═══════════════════════════════════════════════ */}
+      <section id="industries" className="relative py-28 border-t border-white/5">
+        <CanopyAmbientGlow position="top-0 right-0" size={500} tone="sky" opacity={0.14} />
+
+        <div className="container relative">
+          <Reveal className="max-w-3xl mb-14">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8FD3F4] mb-3">
+              Industries we serve
+            </div>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight">
+              One platform.
+              <br />
+              <span className="canopy-text-gradient">Every environment.</span>
+            </h2>
+            <p className="mt-5 text-foreground/60 text-lg max-w-2xl">
+              Anywhere a space needs to be visualized, planned, and budgeted — Canopy adapts.
+              Vocabulary, project-type taxonomy, and grounded knowledge bend to your vertical.
+              Experiential is in production today; the others are coming online with the same depth.
+            </p>
+          </Reveal>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-w-6xl">
+            {INDUSTRIES.map((ind, i) => (
+              <Reveal key={ind.label} delay={i * 60} from="up">
+                <div
+                  className="group relative h-full rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 overflow-hidden transition-colors hover:border-white/20"
+                >
+                  {/* Accent corner glow */}
+                  <div
+                    className="absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl opacity-15 group-hover:opacity-30 transition-opacity duration-500"
+                    style={{ background: ind.accent }}
+                  />
+                  <div className="relative">
+                    <div
+                      className="h-1.5 w-12 rounded-full mb-4"
+                      style={{ background: ind.accent }}
+                    />
+                    <h3 className="text-lg font-semibold mb-1.5">{ind.label}</h3>
+                    <p className="text-sm text-foreground/65 leading-relaxed">{ind.sub}</p>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+            {/* Future industries placeholder */}
+            <Reveal delay={INDUSTRIES.length * 60} from="up">
+              <div className="h-full rounded-2xl border border-dashed border-white/10 bg-white/[0.01] p-6 flex flex-col justify-center items-start">
+                <div className="text-xs uppercase tracking-widest text-foreground/45 mb-2">
+                  Beyond the launch verticals
+                </div>
+                <p className="text-sm text-foreground/55 leading-relaxed">
+                  Themed entertainment · Retail design · Hospitality · Sports venues · Public art —
+                  if a brief plus a space drives the work, Canopy can fold it in.
+                </p>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
       {/* ═══ FLOOR PLAN FEATURE ═══════════════════════════════════════ */}
       <section className="relative py-28 border-t border-white/5 overflow-hidden">
         <CanopyAmbientGlow position="bottom-0 left-0" size={500} tone="violet" opacity={0.18} />
@@ -437,21 +531,22 @@ export default function Index() {
                 Spatial planning
               </div>
               <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-5">
-                A floor plan that
+                A plan that
                 <br />
                 <span className="canopy-text-gradient">thinks like a designer.</span>
               </h2>
               <p className="text-foreground/65 text-lg leading-relaxed mb-8">
-                Drag, resize, and re-zone activation areas on an interactive plan. Canopy validates
-                adjacencies, flow, sightlines, and constraints in real time — so your spatial story
-                holds up the moment a CAD lead opens it.
+                Drag, resize, and re-zone spaces on an interactive plan — booth zones, building
+                rooms, site beds, set staging, AV equipment placement. Canopy validates adjacencies,
+                flow, sightlines, and constraints in real time, so your spatial story holds up the
+                moment a CAD lead opens it.
               </p>
 
               <ul className="space-y-3">
                 {[
-                  "Color-coded zones for hero, storytelling, lounge, reception",
-                  "Adjacency + flow rules per activation type",
-                  "Cost overlays tied to zone area and material spec",
+                  "Industry-specific zoning vocabulary (zones, rooms, beds, stages)",
+                  "Adjacency + flow rules per project type",
+                  "Cost overlays tied to area, material spec, and live pricing",
                   "B&W blocking diagrams + photoreal renders, side by side",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3 text-sm text-foreground/75">
@@ -517,8 +612,9 @@ export default function Index() {
               <span className="canopy-text-gradient">Grounded in your brands.</span>
             </h2>
             <p className="text-foreground/60 text-lg">
-              Canopy is not a prompt wrapper. It's a four-scope retrieval engine that pulls the
-              right knowledge — at the right level — into every generation.
+              Canopy is not a prompt wrapper. It's a five-scope retrieval engine that pulls the
+              right knowledge — industry, agency, project type, client, project — into every
+              generation.
             </p>
           </Reveal>
 
@@ -533,12 +629,13 @@ export default function Index() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 max-w-4xl mx-auto">
                 {[
-                  { label: "Agency", weight: "1.00", color: "#A78BFA" },
-                  { label: "Activation Type", weight: "0.92", color: "#C084FC" },
+                  { label: "Industry",     weight: "0.70", color: "#8FD3F4" },
+                  { label: "Agency",       weight: "1.00", color: "#A78BFA" },
+                  { label: "Project Type", weight: "0.92", color: "#C084FC" },
                   { label: "Client Brand", weight: "0.85", color: "#F472B6" },
-                  { label: "Project", weight: "1.00", color: "#6FA8FF" },
+                  { label: "Project",      weight: "1.00", color: "#6FA8FF" },
                 ].map((s) => (
                   <div key={s.label} className="rounded-lg border border-white/10 bg-background/60 backdrop-blur p-3">
                     <div className="text-[10px] uppercase tracking-widest text-foreground/55">{s.label}</div>
@@ -717,7 +814,7 @@ export default function Index() {
         <div className="container py-10 flex flex-col md:flex-row items-center justify-between gap-4">
           <CanopyLogo variant="horizontal" size="sm" showByline />
           <p className="text-xs text-foreground/50">
-            A spatial operating system for experiential planning.
+            A spatial operating system for environment design.
           </p>
           <div className="flex items-center gap-5 text-sm text-foreground/60">
             <Link to="/auth" className="hover:text-foreground transition-colors">

@@ -60,6 +60,8 @@ interface CreateAgencyInput {
   name: string;
   logo_url?: string | null;
   brand_colors?: { primary?: string; secondary?: string } | null;
+  primary_industry?: string;
+  industries?: string[];
 }
 
 /** Mutation: create the caller's agency. Server backfills orphaned data. */
@@ -71,6 +73,8 @@ export function useCreateMyAgency() {
         _name: input.name,
         _logo_url: input.logo_url ?? null,
         _brand_colors: input.brand_colors ?? null,
+        _primary_industry: input.primary_industry ?? "experiential",
+        _industries: input.industries ?? [input.primary_industry ?? "experiential"],
       });
       if (error) throw error;
       return data;
@@ -81,6 +85,31 @@ export function useCreateMyAgency() {
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["my-pending-invites"] });
+    },
+  });
+}
+
+/** Mutation: update the agency's primary + secondary industries (owner/admin only). */
+export function useUpdateMyAgencyIndustries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      primary_industry,
+      industries,
+    }: {
+      primary_industry: string;
+      industries: string[];
+    }) => {
+      const { data, error } = await (supabase.rpc as any)("update_my_agency_industries", {
+        _primary_industry: primary_industry,
+        _industries: industries,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agency"] });
+      qc.invalidateQueries({ queryKey: ["activation-types"] });
     },
   });
 }

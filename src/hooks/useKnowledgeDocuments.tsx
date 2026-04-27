@@ -10,7 +10,13 @@ import { useAuth } from "./useAuth";
 import { useAgency } from "./useAgency";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type KnowledgeScope = "agency" | "activation_type" | "activation_type_agency" | "client" | "project";
+export type KnowledgeScope =
+  | "agency"
+  | "activation_type"
+  | "activation_type_agency"
+  | "client"
+  | "project"
+  | "industry";
 export type KnowledgeDocument = Tables<"knowledge_documents">;
 
 interface UseKnowledgeDocumentsOptions {
@@ -23,22 +29,31 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
   const { agency } = useAgency();
   const queryClient = useQueryClient();
   const agencyId = agency?.id;
+  // Industry-scoped docs are global — they have no agency_id and are
+  // editable only by super admins. The hook still works (RLS handles auth).
+  const isIndustryScope = scope === "industry";
 
   const documentsQuery = useQuery({
-    queryKey: ["knowledge-documents", scope, scopeId, agencyId],
+    queryKey: ["knowledge-documents", scope, scopeId, isIndustryScope ? "global" : agencyId],
     queryFn: async (): Promise<KnowledgeDocument[]> => {
-      if (!scopeId || !agencyId) return [];
-      const { data, error } = await supabase
+      if (!scopeId) return [];
+      if (!isIndustryScope && !agencyId) return [];
+      let q = supabase
         .from("knowledge_documents")
         .select("*")
         .eq("scope", scope)
         .eq("scope_id", scopeId)
-        .eq("agency_id", agencyId)
         .order("created_at", { ascending: false });
+      if (isIndustryScope) {
+        q = q.is("agency_id", null);
+      } else {
+        q = q.eq("agency_id", agencyId!);
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return data as KnowledgeDocument[];
     },
-    enabled: !!scopeId && !!agencyId,
+    enabled: !!scopeId && (isIndustryScope || !!agencyId),
   });
 
   const uploadDocument = useMutation({
@@ -51,13 +66,19 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
       title?: string;
       userTags?: string[];
     }) => {
-      if (!scopeId || !agencyId || !user) {
-        throw new Error("Missing scope_id, agency, or user context");
+      if (!scopeId || !user) {
+        throw new Error("Missing scope_id or user context");
+      }
+      if (!isIndustryScope && !agencyId) {
+        throw new Error("Missing agency context");
       }
 
-      // Storage path: {agency_id}/{scope}/{scope_id}/{timestamp}_{filename}
+      // Storage path. Agency-scoped: {agency_id}/{scope}/{scope_id}/...
+      // Industry-scoped: industry/{industry_uuid}/...
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = `${agencyId}/${scope}/${scopeId}/${Date.now()}_${safeName}`;
+      const storagePath = isIndustryScope
+        ? `industry/${scopeId}/${Date.now()}_${safeName}`
+        : `${agencyId}/${scope}/${scopeId}/${Date.now()}_${safeName}`;
 
       // 1. Upload file to storage
       const { error: uploadErr } = await supabase.storage
@@ -73,7 +94,7 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
         .insert({
           scope,
           scope_id: scopeId,
-          agency_id: agencyId,
+          agency_id: isIndustryScope ? (null as any) : agencyId,
           filename: file.name,
           storage_bucket: "knowledge-documents",
           storage_path: storagePath,
@@ -112,7 +133,7 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
       return doc as KnowledgeDocument;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, agencyId] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, isIndustryScope ? "global" : agencyId] });
     },
   });
 
@@ -125,7 +146,7 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, agencyId] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, isIndustryScope ? "global" : agencyId] });
     },
   });
 
@@ -144,7 +165,7 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, agencyId] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, isIndustryScope ? "global" : agencyId] });
     },
   });
 
@@ -156,7 +177,7 @@ export function useKnowledgeDocuments({ scope, scopeId }: UseKnowledgeDocumentsO
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, agencyId] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge-documents", scope, scopeId, isIndustryScope ? "global" : agencyId] });
     },
   });
 

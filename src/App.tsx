@@ -45,6 +45,8 @@ const AdminAgencies = lazy(() => import("./pages/AdminAgencies"));
 const AccessSuspended = lazy(() => import("./pages/AccessSuspended"));
 const OnboardingCreateAgency = lazy(() => import("./pages/OnboardingCreateAgency"));
 const Pricing = lazy(() => import("./pages/Pricing"));
+const AdminIndustries = lazy(() => import("./pages/AdminIndustries"));
+const AdminIndustryDashboard = lazy(() => import("./pages/AdminIndustryDashboard"));
 // const Explore = lazy(() => import("./pages/Explore")); // Hidden — 360° Explorer
 
 const queryClient = new QueryClient();
@@ -188,6 +190,16 @@ const App = () => (
               <Route path="/admin/agencies" element={
                 <ProtectedRoute>
                   <AdminAgencies />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/industries" element={
+                <ProtectedRoute>
+                  <AdminIndustries />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/industries/:slug" element={
+                <ProtectedRoute>
+                  <AdminIndustryDashboard />
                 </ProtectedRoute>
               } />
               {/* Suspension landing page — disable access gate so locked-out users can land here */}

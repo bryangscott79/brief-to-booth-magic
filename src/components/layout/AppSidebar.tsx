@@ -49,6 +49,7 @@ const agencyNavItems = [
 const platformOwnerNavItems = [
   { path: "/admin",               label: "Accounts",     icon: LayoutGrid },
   { path: "/admin/agencies",      label: "Agencies",     icon: Building2 },
+  { path: "/admin/industries",    label: "Industries",   icon: Sparkles },
   { path: "/admin/super-admins",  label: "Super Admins", icon: Crown },
   { path: "/platform-invites",    label: "Invites",      icon: Mail },
 ];
@@ -69,6 +70,8 @@ export function AppSidebar() {
     if (path === "/clients" && location.pathname.startsWith("/clients/")) return true;
     // "/agency/activation-types" should stay active on its detail routes
     if (path === "/agency/activation-types" && location.pathname.startsWith("/agency/activation-types/")) return true;
+    // "/admin/industries" should stay active on its detail routes
+    if (path === "/admin/industries" && location.pathname.startsWith("/admin/industries/")) return true;
     return false;
   };
 

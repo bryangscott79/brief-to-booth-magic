@@ -67,8 +67,18 @@ export function useActivationTypes() {
   const { user } = useAuth();
   const { agency } = useAgency();
 
+  // Industry isolation: built-in types only surface if they're tagged with at
+  // least one of the agency's industries. Custom (user-owned) types always
+  // pass through — they're agency-scoped by user_id and isolated at creation
+  // by the auto-tagging in useCreateActivationType.
+  const agencyIndustries =
+    ((agency as any)?.industries as string[] | undefined) ??
+    (((agency as any)?.primary_industry as string | undefined)
+      ? [(agency as any).primary_industry as string]
+      : ["experiential"]);
+
   return useQuery({
-    queryKey: ["activation-types", user?.id, agency?.id],
+    queryKey: ["activation-types", user?.id, agency?.id, agencyIndustries.join(",")],
     enabled: !!user?.id,
     queryFn: async (): Promise<ActivationTypeWithOverride[]> => {
       // Fetch builtins + user's custom types
@@ -80,7 +90,18 @@ export function useActivationTypes() {
         .order("label");
 
       if (error) throw error;
-      const baseTypes = ((data ?? []) as unknown as ActivationTypeRow[]).map((r) => ({
+
+      const allRows = ((data ?? []) as unknown as ActivationTypeRow[]).filter((r) => {
+        if (!r.is_builtin) return true; // custom types: always show (they're already agency-scoped)
+        const rowIndustries = (r as any).industries as string[] | null | undefined;
+        // Untagged built-ins default to experiential (matches the Phase 1A
+        // backfill). Show them only when the agency works in experiential.
+        if (!rowIndustries || rowIndustries.length === 0) {
+          return agencyIndustries.includes("experiential");
+        }
+        return rowIndustries.some((slug) => agencyIndustries.includes(slug));
+      });
+      const baseTypes = allRows.map((r) => ({
         row: r,
         type: rowToActivationType(r),
       }));
@@ -141,14 +162,32 @@ interface CreateActivationTypeInput {
   defaultSqft?: number | null;
   elementEmphasis?: Record<string, ElementEmphasis> | null;
   renderContextOverride?: string | null;
+  /** Optional override; defaults to the agency's industries[] */
+  industries?: string[];
 }
 
 export function useCreateActivationType() {
   const { user } = useAuth();
+  const { agency } = useAgency();
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: CreateActivationTypeInput) => {
+      // Strict isolation: agency-created custom types are auto-tagged with the
+      // agency's industries so they only ever appear for agencies in those
+      // verticals. Caller can override but should rarely need to.
+      const agencyIndustries =
+        ((agency as any)?.industries as string[] | undefined) ??
+        (((agency as any)?.primary_industry as string | undefined)
+          ? [(agency as any).primary_industry as string]
+          : []);
+      const resolvedIndustries =
+        input.industries && input.industries.length > 0
+          ? input.industries
+          : agencyIndustries.length > 0
+          ? agencyIndustries
+          : ["experiential"];
+
       const { data, error } = await supabase
         .from("activation_types" as any)
         .insert({
@@ -162,6 +201,7 @@ export function useCreateActivationType() {
           default_sqft: input.defaultSqft ?? null,
           element_emphasis: input.elementEmphasis ?? null,
           render_context_override: input.renderContextOverride ?? null,
+          industries: resolvedIndustries,
           is_builtin: false,
           user_id: user!.id,
         } as any)

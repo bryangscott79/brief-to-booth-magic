@@ -89,27 +89,6 @@ export function useCreateMyAgency() {
   });
 }
 
-/** Mutation: update the agency's primary + secondary industries (owner/admin only). */
-export function useUpdateMyAgencyIndustries() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      primary_industry,
-      industries,
-    }: {
-      primary_industry: string;
-      industries: string[];
-    }) => {
-      const { data, error } = await (supabase.rpc as any)("update_my_agency_industries", {
-        _primary_industry: primary_industry,
-        _industries: industries,
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agency"] });
-      qc.invalidateQueries({ queryKey: ["activation-types"] });
-    },
-  });
-}
+// Industry change is locked once set during onboarding. Only super admins
+// can change an agency's industry post-onboarding — see
+// useAdminSetAgencyIndustries in useAccessControl.tsx.

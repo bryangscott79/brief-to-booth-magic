@@ -209,3 +209,35 @@ export function useUpdateAgencyAdminNotes() {
     onSuccess: () => invalidateAgencies(qc),
   });
 }
+
+/**
+ * Super-admin-only: change an agency's industry assignment after onboarding.
+ * Agency users cannot change their own industries — that's locked at the DB
+ * trigger level. Use this only as an admin escape hatch (e.g. agency
+ * mistakenly picked the wrong industry, or pivoted to a new vertical).
+ */
+export function useAdminSetAgencyIndustries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      agencyId,
+      primaryIndustry,
+      industries,
+    }: {
+      agencyId: string;
+      primaryIndustry: string;
+      industries: string[];
+    }) => {
+      const { error } = await (supabase.rpc as any)("admin_set_agency_industries", {
+        _agency_id: agencyId,
+        _primary_industry: primaryIndustry,
+        _industries: industries,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAgencies(qc);
+      qc.invalidateQueries({ queryKey: ["activation-types"] });
+    },
+  });
+}

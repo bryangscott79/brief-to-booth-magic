@@ -245,9 +245,10 @@ export default function OnboardingCreateAgency() {
             {/* ─── Industry picker ──────────────────────────────────────── */}
             <div className="space-y-3">
               <div>
-                <Label>Primary industry</Label>
+                <Label>Industry</Label>
                 <p className="text-xs text-foreground/55 mt-0.5">
-                  Drives the platform vocabulary and which project types you see by default.
+                  Drives the platform vocabulary and which project types you see.
+                  <span className="text-amber-300/90"> This is locked once your agency is created — contact platform support to change later.</span>
                 </p>
               </div>
               {industriesLoading ? (
@@ -305,13 +306,17 @@ export default function OnboardingCreateAgency() {
                 </div>
               )}
 
-              {/* Extra industries (multi-select chips) */}
+              {/* Extra industries (multi-select chips) — for genuinely cross-vertical agencies */}
               {industries.length > 1 && (
                 <div className="pt-2">
                   <Label className="text-xs text-foreground/65">
-                    Other industries you also work in (optional)
+                    Cross-vertical work? Add other industries (rare)
                   </Label>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  <p className="text-[11px] text-foreground/45 mt-0.5 mb-2">
+                    Most agencies only need one. Pick additional industries only if you genuinely
+                    work across multiple verticals — these are also locked after onboarding.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
                     {industries
                       .filter((i) => i.slug !== primaryIndustry)
                       .map((ind) => {

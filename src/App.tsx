@@ -44,6 +44,7 @@ const SuperAdmins = lazy(() => import("./pages/SuperAdmins"));
 const AdminAgencies = lazy(() => import("./pages/AdminAgencies"));
 const AccessSuspended = lazy(() => import("./pages/AccessSuspended"));
 const OnboardingCreateAgency = lazy(() => import("./pages/OnboardingCreateAgency"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 // const Explore = lazy(() => import("./pages/Explore")); // Hidden — 360° Explorer
 
 const queryClient = new QueryClient();
@@ -97,6 +98,11 @@ const App = () => (
               <Route path="/spatial" element={
                 <ProtectedRoute>
                   <Spatial />
+                </ProtectedRoute>
+              } />
+              <Route path="/pricing" element={
+                <ProtectedRoute>
+                  <Pricing />
                 </ProtectedRoute>
               } />
               <Route path="/prompts" element={

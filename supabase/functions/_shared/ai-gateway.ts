@@ -336,6 +336,18 @@ function parseAnthropicResponse(data: any): AIResponse {
 }
 
 /**
+ * Thrown when the upstream provider returns HTTP 402 (insufficient credits).
+ * Lets callers detect billing failures and trigger a cheaper-model fallback.
+ */
+export class PaymentRequiredError extends Error {
+  status = 402;
+  constructor(message: string) {
+    super(message);
+    this.name = "PaymentRequiredError";
+  }
+}
+
+/**
  * Retry wrapper: retries once after a 2-second wait on HTTP 429 (rate limit).
  * Throws on all other errors.
  */
@@ -361,6 +373,11 @@ async function fetchWithRateLimitRetry(
 
   if (!response.ok) {
     const text = await response.text();
+    if (response.status === 402) {
+      throw new PaymentRequiredError(
+        `[ai-gateway] ${label}: insufficient credits (402): ${text.substring(0, 300)}`,
+      );
+    }
     throw new Error(
       `[ai-gateway] ${label}: API error (${response.status}): ${text.substring(0, 500)}`,
     );
@@ -429,7 +446,38 @@ export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
   // workspaces and avoids the per-key Google free-tier rate limits.
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   if (lovableKey) {
-    return callGeminiViaLovable(options, lovableKey);
+    // Auto-fallback chain for image-generation models when workspace runs out
+    // of credits on the premium tier (402). Order: Pro → Flash preview → 2.5 flash.
+    const isImage = options.modalities?.includes("image");
+    const fallbackChain = isImage
+      ? [
+          options.model,
+          "google/gemini-3.1-flash-image-preview",
+          "google/gemini-2.5-flash-image",
+        ]
+      : [options.model];
+    const tried = new Set<string>();
+    let lastErr: unknown;
+    for (const model of fallbackChain) {
+      if (tried.has(model)) continue;
+      tried.add(model);
+      try {
+        return await callGeminiViaLovable({ ...options, model }, lovableKey);
+      } catch (e) {
+        lastErr = e;
+        if (e instanceof PaymentRequiredError && isImage) {
+          console.warn(`[ai-gateway] ${model} returned 402, trying cheaper image model...`);
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastErr;
+  }
+
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) {
+    throw new Error("[ai-gateway] Neither LOVABLE_API_KEY nor GOOGLE_AI_API_KEY is configured");
   }
 
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");

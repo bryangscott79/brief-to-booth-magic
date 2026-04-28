@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { Component, lazy, Suspense } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -51,6 +52,61 @@ const AdminIndustryDashboard = lazy(() => import("./pages/AdminIndustryDashboard
 
 const queryClient = new QueryClient();
 
+class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  private recoverFromStaleChunk(error: Error) {
+    const message = String(error?.message ?? error);
+    const isChunkFailure = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message);
+    const alreadyRetried = sessionStorage.getItem("canopy:stale-chunk-reload-attempted") === "true";
+
+    if (isChunkFailure && !alreadyRetried) {
+      sessionStorage.setItem("canopy:stale-chunk-reload-attempted", "true");
+      window.location.reload();
+      return true;
+    }
+
+    return false;
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("App render failed", error, errorInfo);
+    this.recoverFromStaleChunk(error);
+  }
+
+  handleReload = () => {
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+          <div className="max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-lg">
+            <h1 className="text-xl font-semibold mb-2">Canopy needs a refresh</h1>
+            <p className="text-sm text-muted-foreground mb-5">
+              A previous app bundle failed to load. Refresh to get the latest version.
+            </p>
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Refresh app
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function CacheClearGuard({ children }: { children: React.ReactNode }) {
   useClearCacheOnUserChange();
   return <>{children}</>;
@@ -65,11 +121,12 @@ function LazyFallback() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <CacheClearGuard>
-        <PlatformOwnerProvider>
-          <TooltipProvider>
+  <AppErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <CacheClearGuard>
+          <PlatformOwnerProvider>
+            <TooltipProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
@@ -233,11 +290,12 @@ const App = () => (
           </BrowserRouter>
           <Analytics />
           <SpeedInsights />
-        </TooltipProvider>
-        </PlatformOwnerProvider>
-      </CacheClearGuard>
-    </AuthProvider>
-  </QueryClientProvider>
+            </TooltipProvider>
+          </PlatformOwnerProvider>
+        </CacheClearGuard>
+      </AuthProvider>
+    </QueryClientProvider>
+  </AppErrorBoundary>
 );
 
 export default App;

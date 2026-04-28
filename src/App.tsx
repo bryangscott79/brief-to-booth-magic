@@ -51,6 +51,8 @@ const AdminIndustryDashboard = lazy(() => import("./pages/AdminIndustryDashboard
 // const Explore = lazy(() => import("./pages/Explore")); // Hidden — 360° Explorer
 
 const queryClient = new QueryClient();
+const STALE_CHUNK_RELOAD_KEY = "canopy:stale-chunk-reload-attempted";
+const STALE_CHUNK_RELOAD_COOLDOWN_MS = 10_000;
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -62,10 +64,11 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
   private recoverFromStaleChunk(error: Error) {
     const message = String(error?.message ?? error);
     const isChunkFailure = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message);
-    const alreadyRetried = sessionStorage.getItem("canopy:stale-chunk-reload-attempted") === "true";
+    const lastReload = Number(sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) ?? 0);
+    const canRetry = Date.now() - lastReload >= STALE_CHUNK_RELOAD_COOLDOWN_MS;
 
-    if (isChunkFailure && !alreadyRetried) {
-      sessionStorage.setItem("canopy:stale-chunk-reload-attempted", "true");
+    if (isChunkFailure && canRetry) {
+      sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, String(Date.now()));
       window.location.reload();
       return true;
     }

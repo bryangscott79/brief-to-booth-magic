@@ -59,8 +59,23 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
     return { hasError: true };
   }
 
+  private recoverFromStaleChunk(error: Error) {
+    const message = String(error?.message ?? error);
+    const isChunkFailure = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message);
+    const alreadyRetried = sessionStorage.getItem("canopy:chunk-reload-attempted") === "true";
+
+    if (isChunkFailure && !alreadyRetried) {
+      sessionStorage.setItem("canopy:chunk-reload-attempted", "true");
+      window.location.reload();
+      return true;
+    }
+
+    return false;
+  }
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("App render failed", error, errorInfo);
+    this.recoverFromStaleChunk(error);
   }
 
   handleReload = () => {

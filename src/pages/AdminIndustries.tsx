@@ -4,8 +4,9 @@
 // and lets super admins create + edit + delete. Drilling in via the row
 // goes to /admin/industries/:slug for the detail tabs.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
   Plus,
@@ -22,7 +23,6 @@ import {
   Save,
   Trash2,
   AlertTriangle,
-  Zap,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,9 +56,10 @@ import {
   useAdminIndustries,
   useCreateIndustry,
   useDeleteIndustry,
-  useSeedCanopyDefaults,
   type AdminIndustryRow,
 } from "@/hooks/useAdminIndustries";
+import { supabase } from "@/integrations/supabase/client";
+import { BUILTIN_INDUSTRIES } from "@/lib/builtinIndustries";
 
 const ICON_MAP: Record<string, typeof Sparkles> = {
   Sparkles,
@@ -79,36 +80,53 @@ function getIcon(name: string | null | undefined) {
 export default function AdminIndustries() {
   const { data: isSuper, isLoading: roleLoading } = useIsSuperAdmin();
   const { data: industries = [], isLoading } = useAdminIndustries();
-  const seedDefaults = useSeedCanopyDefaults();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
-  const handleSeedDefaults = async () => {
-    try {
-      const result = await seedDefaults.mutateAsync();
-      if (result.industries_added === 0) {
-        toast({
-          title: "Already seeded",
-          description: `All ${result.industries_after} canonical industries already exist.`,
-        });
-      } else {
-        toast({
-          title: "Defaults seeded",
-          description: `Added ${result.industries_added} ${
-            result.industries_added === 1 ? "industry" : "industries"
-          }. ${result.industries_after} now active.`,
-        });
-      }
-    } catch (e) {
-      toast({
-        title: "Seed failed",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
+  // Auto-ensure the 5 canonical industries exist on first super-admin visit.
+  // Runs once per page load when the table comes back empty. Super admins
+  // have RLS write access on industries, so this works without an RPC.
+  // Safe / idempotent: ON CONFLICT DO NOTHING via Supabase upsert.
+  const ensuredRef = useRef(false);
+  useEffect(() => {
+    if (
+      ensuredRef.current ||
+      !isSuper ||
+      isLoading ||
+      industries.length > 0
+    ) {
+      return;
     }
-  };
+    ensuredRef.current = true;
+    void (async () => {
+      const rows = BUILTIN_INDUSTRIES.map((b) => ({
+        slug: b.slug,
+        label: b.label,
+        description: b.description,
+        icon: b.icon,
+        vocabulary: b.vocabulary,
+        sort_order: b.sort_order,
+        is_builtin: true,
+      }));
+      const { error } = await (supabase.from("industries" as any) as any)
+        .upsert(rows, { onConflict: "slug", ignoreDuplicates: true });
+      if (error) {
+        // Schema or permissions issue — show one toast, don't retry.
+        toast({
+          title: "Couldn't initialize industries",
+          description: error.message ?? "Database error — please contact platform support.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Refresh the admin list now that the rows exist.
+      queryClient.invalidateQueries({ queryKey: ["admin", "industries"] });
+      queryClient.invalidateQueries({ queryKey: ["industries"] });
+    })();
+  }, [isSuper, isLoading, industries.length, queryClient, toast]);
 
   if (roleLoading) {
     return (
@@ -206,28 +224,14 @@ export default function AdminIndustries() {
                   No industries match your search.
                 </div>
               ) : (
-                <div className="text-center py-12 px-6">
-                  <Zap className="h-10 w-10 mx-auto mb-3 text-[#A78BFA]/60" />
-                  <p className="text-sm font-medium mb-1">No industries yet</p>
-                  <p className="text-xs text-muted-foreground mb-5 max-w-md mx-auto">
-                    Seed the 5 canonical Canopy industries (Experiential, Architecture,
-                    Landscape, Entertainment, A/V) to get started, or create your own from
-                    scratch.
+                // Transient state during auto-upsert. If you see this for
+                // more than a second the upsert hit an error — check the
+                // toast for the message.
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    Initializing canonical industries…
                   </p>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <Button onClick={handleSeedDefaults} disabled={seedDefaults.isPending}>
-                      {seedDefaults.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 mr-2" />
-                      )}
-                      Seed Canopy defaults
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowCreate(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create custom industry
-                    </Button>
-                  </div>
                 </div>
               )
             ) : (

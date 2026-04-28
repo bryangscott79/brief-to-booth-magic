@@ -137,6 +137,7 @@ export type Database = {
           element_emphasis: Json | null
           icon: string | null
           id: string
+          industries: string[]
           is_builtin: boolean
           label: string
           parent_type_affinity: string[]
@@ -154,6 +155,7 @@ export type Database = {
           element_emphasis?: Json | null
           icon?: string | null
           id?: string
+          industries?: string[]
           is_builtin?: boolean
           label: string
           parent_type_affinity?: string[]
@@ -171,6 +173,7 @@ export type Database = {
           element_emphasis?: Json | null
           icon?: string | null
           id?: string
+          industries?: string[]
           is_builtin?: boolean
           label?: string
           parent_type_affinity?: string[]
@@ -187,9 +190,11 @@ export type Database = {
           created_at: string
           id: string
           image_model: string
+          industries: string[]
           logo_url: string | null
           name: string
           owner_user_id: string
+          primary_industry: string | null
           slug: string
           updated_at: string
         }
@@ -198,9 +203,11 @@ export type Database = {
           created_at?: string
           id?: string
           image_model?: string
+          industries?: string[]
           logo_url?: string | null
           name: string
           owner_user_id: string
+          primary_industry?: string | null
           slug: string
           updated_at?: string
         }
@@ -209,9 +216,11 @@ export type Database = {
           created_at?: string
           id?: string
           image_model?: string
+          industries?: string[]
           logo_url?: string | null
           name?: string
           owner_user_id?: string
+          primary_industry?: string | null
           slug?: string
           updated_at?: string
         }
@@ -494,6 +503,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      industries: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_builtin: boolean
+          label: string
+          slug: string
+          sort_order: number
+          updated_at: string
+          vocabulary: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_builtin?: boolean
+          label: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+          vocabulary?: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_builtin?: boolean
+          label?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+          vocabulary?: Json
+        }
+        Relationships: []
       }
       kb_migration_log: {
         Row: {

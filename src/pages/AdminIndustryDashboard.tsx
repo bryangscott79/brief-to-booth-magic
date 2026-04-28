@@ -37,6 +37,7 @@ import {
   useActivationTypesByIndustry,
   useAllActivationTypes,
   useSetActivationTypeIndustries,
+  type AdminIndustryRow,
   type IndustryActivationTypeRow,
 } from "@/hooks/useAdminIndustries";
 import { KnowledgeBasePanel } from "@/components/knowledge/KnowledgeBasePanel";
@@ -59,7 +60,8 @@ function getIcon(name: string | null | undefined) {
 export default function AdminIndustryDashboard() {
   const { slug } = useParams<{ slug: string }>();
   const { data: isSuper, isLoading: roleLoading } = useIsSuperAdmin();
-  const { data: industries = [], isLoading: industriesLoading } = useAdminIndustries();
+  const { data: queryResult, isLoading: industriesLoading } = useAdminIndustries();
+  const industries = queryResult?.rows ?? [];
 
   const industry = industries.find((i) => i.slug === slug);
 
@@ -179,7 +181,7 @@ export default function AdminIndustryDashboard() {
 
 // ─── Overview form ──────────────────────────────────────────────────────────
 
-function OverviewForm({ industry }: { industry: ReturnType<typeof useAdminIndustries>["data"] extends (infer T)[] | undefined ? T : never }) {
+function OverviewForm({ industry }: { industry: AdminIndustryRow }) {
   const update = useUpdateIndustry();
   const { toast } = useToast();
   const [label, setLabel] = useState(industry.label);
@@ -449,7 +451,7 @@ function ProjectTypesTab({
 
 // ─── Vocabulary editor ──────────────────────────────────────────────────────
 
-function VocabularyEditor({ industry }: { industry: ReturnType<typeof useAdminIndustries>["data"] extends (infer T)[] | undefined ? T : never }) {
+function VocabularyEditor({ industry }: { industry: AdminIndustryRow }) {
   const update = useUpdateIndustry();
   const { toast } = useToast();
   const [draft, setDraft] = useState(JSON.stringify(industry.vocabulary ?? {}, null, 2));

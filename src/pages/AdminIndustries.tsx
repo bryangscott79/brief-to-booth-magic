@@ -23,6 +23,9 @@ import {
   Save,
   Trash2,
   AlertTriangle,
+  Copy,
+  Check as CheckIcon,
+  Database,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +63,7 @@ import {
 } from "@/hooks/useAdminIndustries";
 import { supabase } from "@/integrations/supabase/client";
 import { BUILTIN_INDUSTRIES } from "@/lib/builtinIndustries";
+import { INDUSTRIES_SETUP_SQL } from "@/lib/industriesSetupSql";
 
 const ICON_MAP: Record<string, typeof Sparkles> = {
   Sparkles,
@@ -79,24 +83,26 @@ function getIcon(name: string | null | undefined) {
 
 export default function AdminIndustries() {
   const { data: isSuper, isLoading: roleLoading } = useIsSuperAdmin();
-  const { data: industries = [], isLoading } = useAdminIndustries();
+  const { data: queryResult, isLoading } = useAdminIndustries();
+  const industries = queryResult?.rows ?? [];
+  const isSchemaReady = queryResult?.isSchemaReady ?? true;
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
-  // Auto-ensure the 5 canonical industries exist on first super-admin visit.
-  // Runs once per page load when the table comes back empty. Super admins
-  // have RLS write access on industries, so this works without an RPC.
-  // Safe / idempotent: ON CONFLICT DO NOTHING via Supabase upsert.
+  // Auto-ensure the 5 canonical industries exist in the DB on first
+  // super-admin visit, but ONLY when the table actually exists. If the
+  // schema isn't ready, we don't try (the user must run setup SQL first).
   const ensuredRef = useRef(false);
   useEffect(() => {
     if (
       ensuredRef.current ||
       !isSuper ||
       isLoading ||
-      industries.length > 0
+      !isSchemaReady ||
+      industries.some((i) => !i.id.startsWith("00000000-0000-4000-8000")) // already real rows
     ) {
       return;
     }
@@ -114,19 +120,14 @@ export default function AdminIndustries() {
       const { error } = await (supabase.from("industries" as any) as any)
         .upsert(rows, { onConflict: "slug", ignoreDuplicates: true });
       if (error) {
-        // Schema or permissions issue — show one toast, don't retry.
-        toast({
-          title: "Couldn't initialize industries",
-          description: error.message ?? "Database error — please contact platform support.",
-          variant: "destructive",
-        });
+        // Permissions or transient issue — silent. Page still renders from constants.
+        console.warn("[AdminIndustries] auto-upsert failed:", error.message);
         return;
       }
-      // Refresh the admin list now that the rows exist.
       queryClient.invalidateQueries({ queryKey: ["admin", "industries"] });
       queryClient.invalidateQueries({ queryKey: ["industries"] });
     })();
-  }, [isSuper, isLoading, industries.length, queryClient, toast]);
+  }, [isSuper, isLoading, isSchemaReady, industries, queryClient]);
 
   if (roleLoading) {
     return (
@@ -182,6 +183,11 @@ export default function AdminIndustries() {
             </Button>
           </div>
         </div>
+
+        {/* Schema-not-ready banner */}
+        {!isSchemaReady && !isLoading && (
+          <SchemaSetupBanner />
+        )}
 
         {/* Summary */}
         {industries.length > 0 && (
@@ -495,6 +501,83 @@ function CreateIndustryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Schema setup banner ────────────────────────────────────────────────────
+// Shown when the `industries` table doesn't exist on this DB. Provides
+// the SQL needed to bring the schema current. The banner stays until
+// the underlying schema is real.
+
+function SchemaSetupBanner() {
+  const [copied, setCopied] = useState(false);
+  const [showSql, setShowSql] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(INDUSTRIES_SETUP_SQL);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      // Clipboard blocked — fall back to expanding the SQL block so the user can select & copy manually.
+      setShowSql(true);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5">
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+          <Database className="h-4 w-4 text-amber-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm">Database setup required</div>
+          <p className="text-xs text-foreground/65 mt-1 leading-relaxed">
+            The Canopy industries schema isn't initialized on this Supabase project, so the 5
+            verticals below are rendered from code with placeholder counts. Editing vocabulary,
+            uploading industry knowledge, and accurate counts require the underlying tables.
+          </p>
+          <p className="text-xs text-foreground/65 mt-2 leading-relaxed">
+            <span className="font-medium text-foreground/80">To fix:</span>{" "}
+            paste the setup SQL into the{" "}
+            <a
+              href="https://supabase.com/dashboard/project/_/sql/new"
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-foreground"
+            >
+              Supabase SQL Editor
+            </a>{" "}
+            and run it. Idempotent — safe to re-run.
+          </p>
+
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
+            <Button size="sm" onClick={copy}>
+              {copied ? (
+                <>
+                  <CheckIcon className="h-3.5 w-3.5 mr-1.5" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  Copy setup SQL
+                </>
+              )}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowSql((v) => !v)}>
+              {showSql ? "Hide SQL" : "Show SQL"}
+            </Button>
+          </div>
+
+          {showSql && (
+            <pre className="mt-4 rounded-lg border border-white/10 bg-black/40 p-3 text-[10px] font-mono text-foreground/80 overflow-auto max-h-72 whitespace-pre">
+              {INDUSTRIES_SETUP_SQL}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

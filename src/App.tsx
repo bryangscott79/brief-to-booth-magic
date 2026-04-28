@@ -62,10 +62,10 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
   private recoverFromStaleChunk(error: Error) {
     const message = String(error?.message ?? error);
     const isChunkFailure = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message);
-    const alreadyRetried = sessionStorage.getItem("canopy:chunk-reload-attempted") === "true";
+    const alreadyRetried = sessionStorage.getItem("canopy:stale-chunk-reload-attempted") === "true";
 
     if (isChunkFailure && !alreadyRetried) {
-      sessionStorage.setItem("canopy:chunk-reload-attempted", "true");
+      sessionStorage.setItem("canopy:stale-chunk-reload-attempted", "true");
       window.location.reload();
       return true;
     }

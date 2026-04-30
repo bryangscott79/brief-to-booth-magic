@@ -480,11 +480,6 @@ export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
     throw new Error("[ai-gateway] Neither LOVABLE_API_KEY nor GOOGLE_AI_API_KEY is configured");
   }
 
-  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
-  if (!apiKey) {
-    throw new Error("[ai-gateway] Neither LOVABLE_API_KEY nor GOOGLE_AI_API_KEY is configured");
-  }
-
   // Resolve model name
   const resolvedModel = GEMINI_MODEL_MAP[options.model] || options.model;
 

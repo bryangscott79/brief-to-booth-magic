@@ -648,7 +648,7 @@ export type Database = {
       }
       knowledge_chunks: {
         Row: {
-          agency_id: string
+          agency_id: string | null
           chunk_index: number
           content: string
           created_at: string
@@ -661,7 +661,7 @@ export type Database = {
           token_count: number | null
         }
         Insert: {
-          agency_id: string
+          agency_id?: string | null
           chunk_index: number
           content: string
           created_at?: string
@@ -674,7 +674,7 @@ export type Database = {
           token_count?: number | null
         }
         Update: {
-          agency_id?: string
+          agency_id?: string | null
           chunk_index?: number
           content?: string
           created_at?: string
@@ -705,7 +705,7 @@ export type Database = {
       }
       knowledge_documents: {
         Row: {
-          agency_id: string
+          agency_id: string | null
           auto_tags: string[]
           chunk_count: number
           created_at: string
@@ -731,7 +731,7 @@ export type Database = {
           user_tags: string[]
         }
         Insert: {
-          agency_id: string
+          agency_id?: string | null
           auto_tags?: string[]
           chunk_count?: number
           created_at?: string
@@ -757,7 +757,7 @@ export type Database = {
           user_tags?: string[]
         }
         Update: {
-          agency_id?: string
+          agency_id?: string | null
           auto_tags?: string[]
           chunk_count?: number
           created_at?: string
@@ -839,6 +839,96 @@ export type Database = {
           },
         ]
       }
+      plan_items: {
+        Row: {
+          agency_id: string
+          category: string | null
+          created_at: string
+          created_by: string | null
+          csi_division: string | null
+          description: string
+          id: string
+          item_key: string
+          manufacturer: string | null
+          metadata: Json
+          model_number: string | null
+          notes: string | null
+          override_currency: string | null
+          override_reason: string | null
+          override_unit_price: number | null
+          position: Json | null
+          project_id: string
+          quality_tier: string
+          quantity: number
+          uniformat_class: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          agency_id: string
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          csi_division?: string | null
+          description: string
+          id?: string
+          item_key: string
+          manufacturer?: string | null
+          metadata?: Json
+          model_number?: string | null
+          notes?: string | null
+          override_currency?: string | null
+          override_reason?: string | null
+          override_unit_price?: number | null
+          position?: Json | null
+          project_id: string
+          quality_tier?: string
+          quantity?: number
+          uniformat_class?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          csi_division?: string | null
+          description?: string
+          id?: string
+          item_key?: string
+          manufacturer?: string | null
+          metadata?: Json
+          model_number?: string | null
+          notes?: string | null
+          override_currency?: string | null
+          override_reason?: string | null
+          override_unit_price?: number | null
+          position?: Json | null
+          project_id?: string
+          quality_tier?: string
+          quantity?: number
+          uniformat_class?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_items_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_invites: {
         Row: {
           accepted_at: string | null
@@ -868,6 +958,137 @@ export type Database = {
           role?: string
         }
         Relationships: []
+      }
+      pricing_quotes: {
+        Row: {
+          agency_id: string | null
+          confidence: string
+          created_at: string
+          currency: string
+          fetched_at: string
+          id: string
+          item_key: string
+          label: string | null
+          manufacturer: string | null
+          metadata: Json
+          model_number: string | null
+          notes: string | null
+          quality_tier: string
+          region: string | null
+          source_id: string
+          source_url: string | null
+          unit: string
+          unit_price: number
+          valid_until: string | null
+        }
+        Insert: {
+          agency_id?: string | null
+          confidence?: string
+          created_at?: string
+          currency?: string
+          fetched_at?: string
+          id?: string
+          item_key: string
+          label?: string | null
+          manufacturer?: string | null
+          metadata?: Json
+          model_number?: string | null
+          notes?: string | null
+          quality_tier?: string
+          region?: string | null
+          source_id: string
+          source_url?: string | null
+          unit: string
+          unit_price: number
+          valid_until?: string | null
+        }
+        Update: {
+          agency_id?: string | null
+          confidence?: string
+          created_at?: string
+          currency?: string
+          fetched_at?: string
+          id?: string
+          item_key?: string
+          label?: string | null
+          manufacturer?: string | null
+          metadata?: Json
+          model_number?: string | null
+          notes?: string | null
+          quality_tier?: string
+          region?: string | null
+          source_id?: string
+          source_url?: string | null
+          unit?: string
+          unit_price?: number
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_quotes_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pricing_quotes_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_sources: {
+        Row: {
+          agency_id: string | null
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          last_refreshed_at: string | null
+          region: string | null
+          source_type: string
+          updated_at: string
+          vendor_name: string | null
+        }
+        Insert: {
+          agency_id?: string | null
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_refreshed_at?: string | null
+          region?: string | null
+          source_type: string
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Update: {
+          agency_id?: string | null
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_refreshed_at?: string | null
+          region?: string | null
+          source_type?: string
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_sources_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1220,6 +1441,39 @@ export type Database = {
           },
         ]
       }
+      regional_factors: {
+        Row: {
+          category: string | null
+          effective_at: string
+          factor: number
+          id: string
+          notes: string | null
+          region: string
+          region_kind: string
+          source: string | null
+        }
+        Insert: {
+          category?: string | null
+          effective_at?: string
+          factor?: number
+          id?: string
+          notes?: string | null
+          region: string
+          region_kind?: string
+          source?: string | null
+        }
+        Update: {
+          category?: string | null
+          effective_at?: string
+          factor?: number
+          id?: string
+          notes?: string | null
+          region?: string
+          region_kind?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       rhino_renders: {
         Row: {
           created_at: string
@@ -1472,7 +1726,121 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _require_super_admin: { Args: never; Returns: undefined }
       accept_pending_invite: { Args: { _invite_id: string }; Returns: boolean }
+      admin_create_industry: {
+        Args: {
+          _description?: string
+          _icon?: string
+          _label: string
+          _slug: string
+          _sort_order?: number
+          _vocabulary?: Json
+        }
+        Returns: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_builtin: boolean
+          label: string
+          slug: string
+          sort_order: number
+          updated_at: string
+          vocabulary: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "industries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_delete_industry: {
+        Args: { _force?: boolean; _slug: string }
+        Returns: boolean
+      }
+      admin_set_activation_type_industries: {
+        Args: { _activation_type_id: string; _industries: string[] }
+        Returns: {
+          category: string
+          created_at: string
+          default_scale: string | null
+          default_sqft: number | null
+          description: string | null
+          element_emphasis: Json | null
+          icon: string | null
+          id: string
+          industries: string[]
+          is_builtin: boolean
+          label: string
+          parent_type_affinity: string[]
+          render_context_override: string | null
+          slug: string
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "activation_types"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_set_agency_industries: {
+        Args: {
+          _agency_id: string
+          _industries: string[]
+          _primary_industry: string
+        }
+        Returns: {
+          brand_colors: Json | null
+          created_at: string
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          slug: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_update_industry: {
+        Args: {
+          _description?: string
+          _icon?: string
+          _label?: string
+          _slug: string
+          _sort_order?: number
+          _vocabulary?: Json
+        }
+        Returns: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_builtin: boolean
+          label: string
+          slug: string
+          sort_order: number
+          updated_at: string
+          vocabulary: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "industries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_all_user_profiles: {
         Args: never
         Returns: {
@@ -1492,6 +1860,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      industry_uuid: { Args: { _slug: string }; Returns: string }
       is_agency_admin: {
         Args: { _agency_id: string; _user_id?: string }
         Returns: boolean
@@ -1501,6 +1870,22 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id?: string }; Returns: boolean }
+      list_activation_types_by_industry: {
+        Args: { _industry_slug: string }
+        Returns: {
+          category: string
+          default_scale: string
+          default_sqft: number
+          description: string
+          icon: string
+          id: string
+          industries: string[]
+          is_builtin: boolean
+          label: string
+          slug: string
+          user_id: string
+        }[]
+      }
       list_agency_members: {
         Args: { _agency_id: string }
         Returns: {
@@ -1510,6 +1895,25 @@ export type Database = {
           joined_at: string
           role: string
           user_id: string
+        }[]
+      }
+      list_industries_for_admin: {
+        Args: never
+        Returns: {
+          agency_count: number
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          is_builtin: boolean
+          knowledge_doc_count: number
+          label: string
+          primary_agency_count: number
+          project_type_count: number
+          slug: string
+          sort_order: number
+          updated_at: string
+          vocabulary: Json
         }[]
       }
       list_super_admins: {
@@ -1557,10 +1961,47 @@ export type Database = {
           role: string
         }[]
       }
+      price_plan: {
+        Args: { _project_id: string; _quality_tier?: string; _region?: string }
+        Returns: {
+          category: string
+          confidence: string
+          csi_division: string
+          currency: string
+          description: string
+          fetched_at: string
+          is_priced: boolean
+          item_id: string
+          item_key: string
+          manufacturer: string
+          quality_tier: string
+          quantity: number
+          region_used: string
+          regional_factor: number
+          source: string
+          source_id: string
+          source_label: string
+          total_price: number
+          unit: string
+          unit_price: number
+        }[]
+      }
+      project_pricing_summary: {
+        Args: { _project_id: string; _quality_tier?: string; _region?: string }
+        Returns: {
+          category: string
+          csi_division: string
+          item_count: number
+          priced_count: number
+          subtotal: number
+          unpriced_count: number
+        }[]
+      }
       revoke_super_admin: {
         Args: { _target_user_id: string }
         Returns: boolean
       }
+      seed_canopy_defaults: { Args: never; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }

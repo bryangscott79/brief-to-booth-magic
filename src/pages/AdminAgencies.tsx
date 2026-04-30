@@ -246,11 +246,6 @@ function AgencyDetailDrawer({
           </TabsContent>
 
 
-            <TabsTrigger value="features">Features</TabsTrigger>
-            <TabsTrigger value="quotas">Quotas</TabsTrigger>
-            <TabsTrigger value="log">Log</TabsTrigger>
-          </TabsList>
-
           {/* ── Status / suspend / trial ─────────────────────────────── */}
           <TabsContent value="status" className="space-y-6 mt-4">
             <div className="grid grid-cols-3 gap-3 text-center">

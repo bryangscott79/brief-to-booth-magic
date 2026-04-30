@@ -232,8 +232,20 @@ function AgencyDetailDrawer({
         </SheetHeader>
 
         <Tabs defaultValue="status">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="status">Status</TabsTrigger>
+            <TabsTrigger value="industries">Industries</TabsTrigger>
+            <TabsTrigger value="features">Features</TabsTrigger>
+            <TabsTrigger value="quotas">Quotas</TabsTrigger>
+            <TabsTrigger value="log">Log</TabsTrigger>
+          </TabsList>
+
+          {/* ── Industries ─────────────────────────────────────────── */}
+          <TabsContent value="industries" className="space-y-4 mt-4">
+            <IndustriesTabContent agencyId={agency.id} agencyName={agency.name} />
+          </TabsContent>
+
+
             <TabsTrigger value="features">Features</TabsTrigger>
             <TabsTrigger value="quotas">Quotas</TabsTrigger>
             <TabsTrigger value="log">Log</TabsTrigger>

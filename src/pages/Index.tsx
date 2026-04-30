@@ -48,6 +48,11 @@ import showcasePremiere from "@/assets/showcase-premiere.png";
 import showcaseEsports from "@/assets/showcase-esports.png";
 import showcaseAirmax from "@/assets/showcase-airmax.png";
 import showcaseRivian from "@/assets/showcase-rivian.png";
+import industryExperientialImg from "@/assets/industry-experiential.jpg";
+import industryArchitectureImg from "@/assets/industry-architecture.jpg";
+import industryLandscapeImg from "@/assets/industry-landscape.jpg";
+import industryEntertainmentImg from "@/assets/industry-entertainment.jpg";
+import industryAudioVisualImg from "@/assets/industry-audio-visual.jpg";
 
 const HERO_ROTATION = [
   showcaseUber,
@@ -138,29 +143,39 @@ const PILLARS = [
 // Verticals Canopy currently serves
 const INDUSTRIES = [
   {
+    slug: "experiential",
     label: "Experiential & Trade Show",
     sub: "Brand activations, booths, pop-ups, event marketing.",
     accent: "#A78BFA",
+    img: industryExperientialImg,
   },
   {
+    slug: "architecture",
     label: "Architecture & Construction",
     sub: "Residential, commercial, hospitality, civic — new builds and renovations.",
     accent: "#6FA8FF",
+    img: industryArchitectureImg,
   },
   {
+    slug: "landscape",
     label: "Landscape & Site Design",
     sub: "Gardens, parks, plazas, streetscapes, restoration.",
     accent: "#8FD3F4",
+    img: industryLandscapeImg,
   },
   {
+    slug: "entertainment",
     label: "Entertainment & Production",
     sub: "Film, TV, theatrical, themed entertainment, concerts.",
     accent: "#F472B6",
+    img: industryEntertainmentImg,
   },
   {
+    slug: "audio_visual",
     label: "A/V Integration & Install",
     sub: "Conference, hospitality, education, worship, residential.",
     accent: "#C084FC",
+    img: industryAudioVisualImg,
   },
 ];
 
@@ -482,31 +497,47 @@ export default function Index() {
             </p>
           </Reveal>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-w-6xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl">
             {INDUSTRIES.map((ind, i) => (
               <Reveal key={ind.label} delay={i * 60} from="up">
-                <div
-                  className="group relative h-full rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 overflow-hidden transition-colors hover:border-white/20"
+                <Link
+                  to={`/industries/${ind.slug}`}
+                  className="group relative h-full block rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden transition-all hover:border-white/25 hover:-translate-y-0.5 min-h-[280px]"
                 >
+                  {/* Image */}
+                  <img
+                    src={ind.img}
+                    alt={ind.label}
+                    loading="lazy"
+                    width={1536}
+                    height={1024}
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.05]"
+                  />
+                  {/* Gradient scrim */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
                   {/* Accent corner glow */}
                   <div
-                    className="absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl opacity-15 group-hover:opacity-30 transition-opacity duration-500"
+                    className="absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500"
                     style={{ background: ind.accent }}
                   />
-                  <div className="relative">
+                  <div className="relative h-full flex flex-col justify-end p-6">
                     <div
-                      className="h-1.5 w-12 rounded-full mb-4"
+                      className="h-1 w-10 rounded-full mb-3"
                       style={{ background: ind.accent }}
                     />
                     <h3 className="text-lg font-semibold mb-1.5">{ind.label}</h3>
-                    <p className="text-sm text-foreground/65 leading-relaxed">{ind.sub}</p>
+                    <p className="text-sm text-foreground/70 leading-relaxed mb-3">{ind.sub}</p>
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-foreground/60 group-hover:text-foreground transition-colors">
+                      Explore
+                      <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                    </span>
                   </div>
-                </div>
+                </Link>
               </Reveal>
             ))}
             {/* Future industries placeholder */}
             <Reveal delay={INDUSTRIES.length * 60} from="up">
-              <div className="h-full rounded-2xl border border-dashed border-white/10 bg-white/[0.01] p-6 flex flex-col justify-center items-start">
+              <div className="h-full rounded-2xl border border-dashed border-white/10 bg-white/[0.01] p-6 flex flex-col justify-center items-start min-h-[280px]">
                 <div className="text-xs uppercase tracking-widest text-foreground/45 mb-2">
                   Beyond the launch verticals
                 </div>

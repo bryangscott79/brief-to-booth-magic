@@ -48,6 +48,7 @@ const OnboardingCreateAgency = lazy(() => import("./pages/OnboardingCreateAgency
 const Pricing = lazy(() => import("./pages/Pricing"));
 const AdminIndustries = lazy(() => import("./pages/AdminIndustries"));
 const AdminIndustryDashboard = lazy(() => import("./pages/AdminIndustryDashboard"));
+const IndustryDetail = lazy(() => import("./pages/IndustryDetail"));
 // const Explore = lazy(() => import("./pages/Explore")); // Hidden — 360° Explorer
 
 const queryClient = new QueryClient();
@@ -286,6 +287,7 @@ const App = () => (
                 </ProtectedRoute>
               } /> */}
               <Route path="/invite/:token" element={<AcceptInvite />} />
+              <Route path="/industries/:slug" element={<IndustryDetail />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -490,6 +490,162 @@ function AgencyDetailDrawer({
   );
 }
 
+
+// ─── Industries Tab ─────────────────────────────────────────────────────────
+
+function IndustriesTabContent({ agencyId, agencyName }: { agencyId: string; agencyName: string }) {
+  const { toast } = useToast();
+  const { data: allIndustries = [], isLoading: indsLoading } = useIndustries();
+  const setIndustries = useAdminSetAgencyIndustries();
+
+  // Read this agency's current industries directly (not in AgencyAdminRow).
+  const { data: current, isLoading: currentLoading } = useQuery({
+    queryKey: ["admin", "agency-industries", agencyId],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("agencies" as any) as any)
+        .select("primary_industry, industries")
+        .eq("id", agencyId)
+        .single();
+      if (error) throw error;
+      return data as { primary_industry: string | null; industries: string[] | null };
+    },
+  });
+
+  const [primary, setPrimary] = useState<string>("");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  // Hydrate when data arrives or agency changes
+  useEffect(() => {
+    if (!current) return;
+    setPrimary(current.primary_industry ?? "");
+    setSelected(current.industries ?? []);
+  }, [current?.primary_industry, current?.industries, agencyId]);
+
+  if (indsLoading || currentLoading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const togglePick = (slug: string) => {
+    setSelected((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
+    );
+  };
+
+  const dirty =
+    primary !== (current?.primary_industry ?? "") ||
+    JSON.stringify([...selected].sort()) !==
+      JSON.stringify([...(current?.industries ?? [])].sort());
+
+  const handleSave = async () => {
+    if (!primary) {
+      toast({ title: "Pick a primary industry", variant: "destructive" });
+      return;
+    }
+    // Ensure primary is in the secondary list too — that's the canonical shape.
+    const finalIndustries = Array.from(new Set([primary, ...selected]));
+    try {
+      await setIndustries.mutateAsync({
+        agencyId,
+        primaryIndustry: primary,
+        industries: finalIndustries,
+      });
+      toast({ title: `${agencyName} industries updated` });
+    } catch (e) {
+      toast({
+        title: "Update failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-foreground/60">
+        Agencies cannot change their own industries once set — use this admin escape hatch when an
+        agency mis-onboarded or pivoted. Changes affect what vocabulary, project types, and
+        industry knowledge they see.
+      </p>
+
+      {/* Primary */}
+      <div className="space-y-1.5">
+        <Label className="text-xs uppercase tracking-widest text-foreground/55">
+          Primary industry
+        </Label>
+        <p className="text-[11px] text-foreground/55">
+          Drives the agency's default vocabulary across the app.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+          {allIndustries.map((ind) => (
+            <button
+              key={ind.slug}
+              type="button"
+              onClick={() => setPrimary(ind.slug)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                primary === ind.slug
+                  ? "border-amber-500/50 bg-amber-500/10"
+                  : "border-white/10 bg-white/[0.02] hover:border-white/20",
+              )}
+            >
+              <div className="font-medium">{ind.label}</div>
+              <div className="text-[11px] font-mono text-foreground/50">{ind.slug}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Secondary */}
+      <div className="space-y-1.5 pt-2">
+        <Label className="text-xs uppercase tracking-widest text-foreground/55">
+          All industries served
+        </Label>
+        <p className="text-[11px] text-foreground/55">
+          Multi-vertical agencies get project types and KB from every industry they serve. Primary
+          is auto-included.
+        </p>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {allIndustries.map((ind) => {
+            const active = selected.includes(ind.slug) || ind.slug === primary;
+            const isPrimary = ind.slug === primary;
+            return (
+              <button
+                key={ind.slug}
+                type="button"
+                disabled={isPrimary}
+                onClick={() => togglePick(ind.slug)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs transition-colors",
+                  active
+                    ? "border-[#A78BFA]/50 bg-[#A78BFA]/15 text-[#E9D5FF]"
+                    : "border-white/10 bg-white/[0.02] hover:border-white/20",
+                  isPrimary && "opacity-60 cursor-not-allowed",
+                )}
+              >
+                {ind.label}
+                {isPrimary && " · primary"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Button onClick={handleSave} disabled={!dirty || setIndustries.isPending}>
+        {setIndustries.isPending ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : (
+          <Save className="h-4 w-4 mr-2" />
+        )}
+        Save industries
+      </Button>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function AdminAgencies() {

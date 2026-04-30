@@ -64,9 +64,13 @@ import {
   useUpdateAgencyFeatureFlags,
   useUpdateAgencyQuotas,
   useUpdateAgencyAdminNotes,
+  useAdminSetAgencyIndustries,
   type AgencyAdminRow,
   type EffectiveAccessStatus,
 } from "@/hooks/useAccessControl";
+import { useIndustries } from "@/hooks/useIndustries";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 // ─── Status pill ────────────────────────────────────────────────────────────

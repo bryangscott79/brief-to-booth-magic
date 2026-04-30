@@ -5,7 +5,7 @@
 // reactivate, disable, set trial end date, edit feature flags, edit
 // quotas, edit admin notes, and view the audit log.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { formatDistanceToNow, format as formatDate } from "date-fns";
 import {

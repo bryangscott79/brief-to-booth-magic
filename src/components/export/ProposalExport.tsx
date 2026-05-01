@@ -10,17 +10,20 @@ import {
 } from "@/components/ui/dialog";
 import {
   FileText, Loader2, Presentation, Settings2, Building2,
-  Image, Sparkles, Check, AlertCircle, ExternalLink,
+  Image, Sparkles, Check, AlertCircle, ExternalLink, Edit3,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
-  generateProposalPDF, generateProposalPPTX,
+  generateProposalPDF, generateProposalPPTX, buildProposalSections,
   type ProposalConfig, type ProposalData, type RhinoRenderEntry, type BrandIntelEntry,
+  type ProposalSection,
 } from "@/lib/proposalGenerator";
 import { getClearbitLogoUrl, extractDomain, checkClearbitLogo } from "@/lib/logoUtils";
 import { SlideEditor } from "./SlideEditor";
+import { DeckEditor } from "./DeckEditor";
+import { loadDeckOverrides, applyDeckOverrides } from "@/lib/deckOverrides";
 
 import type { PresentationTemplate } from "@/lib/presentationTemplates";
 import { getActiveSlides } from "@/lib/presentationTemplates";
@@ -37,11 +40,14 @@ interface ProposalExportProps {
 export function ProposalExport({ brief, elements, images, projectName, rhinoRenders, brandIntelligence }: ProposalExportProps) {
   const { toast } = useToast();
   const { profile } = useCompanyProfile();
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("project");
 
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingPPTX, setIsGeneratingPPTX] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSlideEditor, setShowSlideEditor] = useState(false);
+  const [showDeckEditor, setShowDeckEditor] = useState(false);
   
   // Client logo state
   const [clientLogo, setClientLogo] = useState<string | null>(null);
@@ -126,6 +132,69 @@ export function ProposalExport({ brief, elements, images, projectName, rhinoRend
     };
   };
 
+  // Tiny helper — download a blob with the given filename. Used by every
+  // export path to avoid duplicating the createObjectURL plumbing.
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // DeckEditor: user finished inline editing — generate the file with the
+  // overrides applied. We accept either PPTX or PDF based on the format
+  // selected in the editor (default PPTX). Sections come pre-merged so
+  // overrides land in the export verbatim.
+  const handleDeckEditorExport = async (params: {
+    template: PresentationTemplate;
+    sectionsForRender: ProposalSection[];
+    activeSectionIds: string[];
+    format?: "pptx" | "pdf";
+  }) => {
+    const format = params.format ?? "pptx";
+    setShowDeckEditor(false);
+    if (format === "pptx") setIsGeneratingPPTX(true);
+    else setIsGeneratingPDF(true);
+    try {
+      const proposalData = buildProposalData();
+      if (format === "pptx") {
+        const blob = await generateProposalPPTX(proposalData, {
+          sections: params.sectionsForRender,
+          activeSectionIds: params.activeSectionIds,
+        });
+        downloadBlob(blob, `${brief.brand?.name || projectName}_Proposal.pptx`);
+        toast({
+          title: "PPTX exported",
+          description: `${params.activeSectionIds.length} slides — ${params.template.name} template`,
+        });
+      } else {
+        const blob = await generateProposalPDF(proposalData, {
+          sections: params.sectionsForRender,
+          activeSectionIds: params.activeSectionIds,
+        });
+        downloadBlob(blob, `${brief.brand?.name || projectName}_Proposal.pdf`);
+        toast({
+          title: "PDF exported",
+          description: `${params.activeSectionIds.length} slides — ${params.template.name} template`,
+        });
+      }
+    } catch (err) {
+      console.error("DeckEditor export error:", err);
+      toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPPTX(false);
+      setIsGeneratingPDF(false);
+    }
+  };
+
   // SlideEditor confirm → generate PPTX with template
   const handleSlideEditorConfirm = async (template: PresentationTemplate) => {
     setShowSlideEditor(false);
@@ -160,24 +229,26 @@ export function ProposalExport({ brief, elements, images, projectName, rhinoRend
     }
   };
   
+  // Loads any saved deck overrides for this project and returns
+  // sections-with-overrides ready to feed to the export functions. Used by
+  // Quick PDF/PPTX so the user's saved inline edits are honored even when
+  // they skip the editor.
+  const buildSectionsWithOverrides = async (data: ProposalData): Promise<ProposalSection[]> => {
+    const raw = buildProposalSections(data);
+    if (!projectId) return raw;
+    const overrides = await loadDeckOverrides(projectId);
+    return overrides ? applyDeckOverrides(raw, overrides) : raw;
+  };
+
   const handleGeneratePDF = async () => {
     setIsGeneratingPDF(true);
     try {
       const proposalData = buildProposalData();
-      const pdfBlob = await generateProposalPDF(proposalData);
-      
-      // Download the PDF
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${brief.brand?.name || projectName}_Proposal.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
+      const sections = await buildSectionsWithOverrides(proposalData);
+      const pdfBlob = await generateProposalPDF(proposalData, { sections });
+      downloadBlob(pdfBlob, `${brief.brand?.name || projectName}_Proposal.pdf`);
       toast({
-        title: "Proposal PDF Generated",
+        title: "Proposal PDF generated",
         description: "Your proposal has been downloaded",
       });
     } catch (error) {
@@ -191,25 +262,16 @@ export function ProposalExport({ brief, elements, images, projectName, rhinoRend
       setIsGeneratingPDF(false);
     }
   };
-  
+
   const handleGeneratePPTX = async () => {
     setIsGeneratingPPTX(true);
     try {
       const proposalData = buildProposalData();
-      const pptxBlob = await generateProposalPPTX(proposalData);
-      
-      // Download the PPTX
-      const url = URL.createObjectURL(pptxBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${brief.brand?.name || projectName}_Proposal.pptx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
+      const sections = await buildSectionsWithOverrides(proposalData);
+      const pptxBlob = await generateProposalPPTX(proposalData, { sections });
+      downloadBlob(pptxBlob, `${brief.brand?.name || projectName}_Proposal.pptx`);
       toast({
-        title: "Proposal PPTX Generated",
+        title: "Proposal PPTX generated",
         description: "Your PowerPoint proposal has been downloaded",
       });
     } catch (error) {
@@ -407,13 +469,31 @@ export function ProposalExport({ brief, elements, images, projectName, rhinoRend
         </div>
         
         {/* Export buttons */}
-        {showSlideEditor ? (
+        {showDeckEditor ? (
+          <DeckEditor
+            projectId={projectId}
+            proposalData={buildProposalData()}
+            images={images.filter((img) => img.is_current)}
+            onCancel={() => setShowDeckEditor(false)}
+            onExport={(params) => handleDeckEditorExport({ ...params, format: "pptx" })}
+          />
+        ) : showSlideEditor ? (
           <SlideEditor
             onConfirm={handleSlideEditorConfirm}
             onCancel={() => setShowSlideEditor(false)}
           />
         ) : (
           <div className="space-y-3">
+            {/* Inline editor — primary path */}
+            <Button
+              onClick={() => setShowDeckEditor(true)}
+              disabled={isGeneratingPDF || isGeneratingPPTX}
+              className="w-full btn-glow"
+            >
+              <Edit3 className="h-4 w-4 mr-2" />
+              Edit deck inline & export
+            </Button>
+
             <div className="flex gap-3">
               <Button
                 onClick={handleGeneratePDF}
@@ -456,10 +536,11 @@ export function ProposalExport({ brief, elements, images, projectName, rhinoRend
             <Button
               onClick={() => setShowSlideEditor(true)}
               disabled={isGeneratingPDF || isGeneratingPPTX}
-              className="w-full btn-glow"
+              variant="outline"
+              className="w-full"
             >
               <Presentation className="h-4 w-4 mr-2" />
-              Customize & Export PPTX
+              Pick template & quick export
             </Button>
           </div>
         )}

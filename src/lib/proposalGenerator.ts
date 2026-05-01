@@ -598,9 +598,13 @@ export function buildProposalSections(data: ProposalData): ProposalSection[] {
 
 export async function generateProposalPDF(
   data: ProposalData,
-  options?: { activeSectionIds?: string[] }
+  options?: {
+    activeSectionIds?: string[];
+    /** Pre-built sections (with overrides) — skips buildProposalSections. */
+    sections?: ProposalSection[];
+  }
 ): Promise<Blob> {
-  let sections = buildProposalSections(data);
+  let sections = options?.sections ?? buildProposalSections(data);
 
   if (options?.activeSectionIds) {
     const activeSet = new Set(options.activeSectionIds);
@@ -1542,9 +1546,17 @@ async function renderGridSection(
 
 export async function generateProposalPPTX(
   data: ProposalData,
-  options?: { activeSectionIds?: string[] }
+  options?: {
+    activeSectionIds?: string[];
+    /**
+     * Pre-built sections (already merged with user overrides). When
+     * provided, buildProposalSections is skipped — the inline DeckEditor
+     * uses this to push edits directly into the export.
+     */
+    sections?: ProposalSection[];
+  }
 ): Promise<Blob> {
-  let sections = buildProposalSections(data);
+  let sections = options?.sections ?? buildProposalSections(data);
 
   // Filter to active template sections if provided
   if (options?.activeSectionIds) {
@@ -1816,10 +1828,36 @@ function addPptxMixedContent(slide: any, content: any, brandColor: string) {
 
   // Spatial Design
   if (content.zones?.length) {
-    y = pptxBulletBlock(slide, 'Zone Allocation', content.zones.map((z: any) => `${z.name}: ${z.sqft} sqft (${z.percentage}%)`), rx, y, rw, brandColor, 6);
+    y = pptxBulletBlock(
+      slide,
+      'Zone Allocation',
+      content.zones.map((z: any) => {
+        const name = z?.name ?? 'Zone';
+        const sqft = Number.isFinite(z?.sqft) ? Math.round(z.sqft).toLocaleString() : '—';
+        const pct = Number.isFinite(z?.percentage) ? `${Math.round(z.percentage)}%` : null;
+        return pct ? `${name}: ${sqft} sqft (${pct})` : `${name}: ${sqft} sqft`;
+      }),
+      rx, y, rw, brandColor, 6,
+    );
   }
+  // Materials & Mood — entries can be strings OR objects with shape
+  // { material, feel, use } from the brief. Map to readable strings before
+  // handing to the bullet block (which used to JSON.stringify objects and
+  // produce raw {"material":"X"} bullets in the deck).
   if (content.materialsAndMood?.length) {
-    y = pptxBulletBlock(slide, 'Materials & Mood', content.materialsAndMood, rx, y, rw, brandColor, 4);
+    const lines: string[] = content.materialsAndMood
+      .map((m: any) => {
+        if (!m) return null;
+        if (typeof m === "string") return m;
+        const head = m.material || m.name || m.finish || null;
+        const tail = m.feel || m.use || m.description || null;
+        if (head && tail) return `${head} — ${tail}`;
+        return head || tail || null;
+      })
+      .filter(Boolean) as string[];
+    if (lines.length > 0) {
+      y = pptxBulletBlock(slide, 'Materials & Mood', lines, rx, y, rw, brandColor, 4);
+    }
   }
 
   // Interactive Mechanics
@@ -2007,35 +2045,61 @@ function addPptxTableContent(slide: any, content: any, brandColor: string) {
 }
 
 function addPptxSpatialMetricsContent(slide: any, content: any, brandColor: string) {
-  // KPI row
+  // KPI row — every numeric is finite-checked so a missing field renders
+  // as "—" instead of "undefined/100" or "NaN%".
+  const fmt = (n: unknown, suffix = "", fallback = "—"): string =>
+    typeof n === "number" && Number.isFinite(n) ? `${Math.round(n)}${suffix}` : fallback;
   const kpis = [
-    { label: 'Layout Score', value: `${content.overallScore}/100` },
-    { label: 'Expected Visitors', value: (content.totalExpectedVisitors || 0).toLocaleString() + '/day' },
-    { label: 'Avg Dwell Time', value: `${content.avgBoothTime} min` },
-    { label: 'Flow Efficiency', value: `${content.flowEfficiency}%` },
-    { label: 'Lead Projection', value: `${content.leadProjection}/day` },
+    { label: 'Layout score', value: fmt(content?.overallScore, "/100") },
+    {
+      label: 'Expected visitors',
+      value: Number.isFinite(content?.totalExpectedVisitors)
+        ? `${Math.round(content.totalExpectedVisitors).toLocaleString()}/day`
+        : '—',
+    },
+    { label: 'Avg dwell time', value: fmt(content?.avgBoothTime, " min") },
+    { label: 'Flow efficiency', value: fmt(content?.flowEfficiency, "%") },
+    { label: 'Lead projection', value: fmt(content?.leadProjection, "/day") },
   ];
   kpis.forEach((kpi, i) => {
     const x = 0.5 + i * 1.85;
     slide.addShape('rect', { x, y: 1.2, w: 1.6, h: 0.8, fill: { color: 'F5F5F5' }, line: { color: 'DDDDDD', pt: 0.5 } });
-    slide.addText(kpi.value, { x, y: 1.3, w: 1.6, h: 0.35, fontSize: 16, bold: true, color: brandColor, align: 'center' });
-    slide.addText(kpi.label, { x, y: 1.65, w: 1.6, h: 0.2, fontSize: 8, color: '666666', align: 'center' });
+    slide.addText(kpi.value, {
+      x, y: 1.3, w: 1.6, h: 0.35, fontSize: 16, bold: true, color: brandColor, align: 'center',
+      fontFace: PRESENTATION_FONTS.display,
+    });
+    slide.addText(kpi.label, {
+      x, y: 1.65, w: 1.6, h: 0.2, fontSize: 8, color: '666666', align: 'center',
+      fontFace: PRESENTATION_FONTS.body,
+    });
   });
 
-  // Zone table
-  if (content.zoneMetrics?.length > 0) {
+  // Zone table — same defensive treatment, plus a guard against Math
+  // operations on undefined avgDwellTime that would print "NaN:NaN".
+  if (Array.isArray(content?.zoneMetrics) && content.zoneMetrics.length > 0) {
     const tableData = [
-      [{ text: 'Zone', options: { bold: true } }, { text: 'Traffic', options: { bold: true } }, { text: 'Dwell', options: { bold: true } }, { text: 'Engagement', options: { bold: true } }],
-      ...content.zoneMetrics.slice(0, 8).map((z: any) => [
-        z.zoneName || '',
-        `${z.trafficPercentage}%`,
-        `${Math.round(z.avgDwellTime / 60)}:${String(z.avgDwellTime % 60).padStart(2, '0')}`,
-        `${z.engagementScore}%`,
-      ]),
+      [
+        { text: 'Zone', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'Traffic', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'Dwell', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'Engagement', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+      ],
+      ...content.zoneMetrics.slice(0, 8).map((z: any) => {
+        const dwellSec = Number.isFinite(z?.avgDwellTime) ? z.avgDwellTime : 0;
+        const minutes = Math.floor(dwellSec / 60);
+        const seconds = String(Math.max(0, Math.round(dwellSec % 60))).padStart(2, '0');
+        return [
+          String(z?.zoneName ?? ''),
+          fmt(z?.trafficPercentage, '%'),
+          dwellSec > 0 ? `${minutes}:${seconds}` : '—',
+          fmt(z?.engagementScore, '%'),
+        ];
+      }),
     ];
     slide.addTable(tableData, {
       x: 0.5, y: 2.2, w: 9,
       fontSize: 10, color: '333333',
+      fontFace: PRESENTATION_FONTS.body,
       fill: { color: 'FAFAFA' },
       border: { pt: 0.5, color: 'DDDDDD' },
       rowH: 0.28,
@@ -2043,47 +2107,85 @@ function addPptxSpatialMetricsContent(slide: any, content: any, brandColor: stri
   }
 }
 
+// Defensive number formatter — guarded against undefined/null/NaN/Infinity
+// inputs so a single bad zone row doesn't crash the whole PPTX export.
+function safeMoney(n: unknown): string {
+  const num = typeof n === "number" && Number.isFinite(n) ? n : 0;
+  return `$${Math.round(num).toLocaleString()}`;
+}
+function safeNumber(n: unknown, suffix = ""): string {
+  const num = typeof n === "number" && Number.isFinite(n) ? n : 0;
+  return `${Math.round(num).toLocaleString()}${suffix}`;
+}
+
 function addPptxCostIntelligenceContent(slide: any, content: any, brandColor: string) {
+  const grandTotal = Number.isFinite(content?.grandTotal) ? content.grandTotal : 0;
+  const costPerSqft = Number.isFinite(content?.costPerSqft) ? content.costPerSqft : 0;
+  const budgetMax = Number.isFinite(content?.budgetMax) ? content.budgetMax : 0;
+
   // Budget summary
-  slide.addText(`$${(content.grandTotal || 0).toLocaleString()}`, {
+  slide.addText(safeMoney(grandTotal), {
     x: 0.5, y: 1.1, w: 4.5, h: 0.55, fontSize: 32, bold: true, color: brandColor,
+    fontFace: PRESENTATION_FONTS.display,
   });
-  slide.addText(`Estimated Build Cost  •  $${content.costPerSqft}/sqft`, {
+  slide.addText(`Estimated build cost  •  ${safeMoney(costPerSqft)}/sqft`, {
     x: 0.5, y: 1.65, w: 4.5, h: 0.25, fontSize: 11, color: '666666',
+    fontFace: PRESENTATION_FONTS.body,
   });
-  if (content.budgetMax) {
-    const pct = Math.round((content.grandTotal / content.budgetMax) * 100);
+  if (budgetMax > 0) {
+    const pct = Math.round((grandTotal / budgetMax) * 100);
     const statusColor = pct > 100 ? 'CC0000' : pct > 85 ? 'E6A000' : '1A8A1A';
-    slide.addText(`${pct}% of $${content.budgetMax.toLocaleString()} budget`, {
+    slide.addText(`${pct}% of ${safeMoney(budgetMax)} budget`, {
       x: 0.5, y: 1.9, w: 4.5, h: 0.25, fontSize: 11, color: statusColor,
+      fontFace: PRESENTATION_FONTS.body,
     });
   }
 
-  // Utilities
-  if (content.utilities) {
-    const u = content.utilities;
-    slide.addText('Utility Requirements', { x: 5.2, y: 1.1, w: 4.3, h: 0.28, fontSize: 12, bold: true, color: brandColor });
+  // Utilities — default to zeros if calculateUtilityRequirements returned
+  // partial data. The original code crashed when totalWatts was undefined
+  // (toLocaleString on undefined throws TypeError).
+  if (content?.utilities) {
+    const u = content.utilities ?? {};
+    slide.addText('Utility requirements', {
+      x: 5.2, y: 1.1, w: 4.3, h: 0.28, fontSize: 12, bold: true, color: brandColor,
+      fontFace: PRESENTATION_FONTS.display,
+    });
     [
-      `Total Power: ${u.totalWatts.toLocaleString()}W`,
-      `20A Circuits: ${u.totalAmps20}`,
-      `Data Drops: ${u.dataDrops}`,
-      `Dedicated Circuits: ${u.dedicatedCircuits}`,
+      `Total power: ${safeNumber(u.totalWatts, "W")}`,
+      `20A circuits: ${safeNumber(u.totalAmps20)}`,
+      `Data drops: ${safeNumber(u.dataDrops)}`,
+      `Dedicated circuits: ${safeNumber(u.dedicatedCircuits)}`,
     ].forEach((line, i) => {
-      slide.addText(`• ${line}`, { x: 5.2, y: 1.45 + i * 0.26, w: 4.3, h: 0.24, fontSize: 10, color: '333333' });
+      slide.addText(`•  ${line}`, {
+        x: 5.2, y: 1.45 + i * 0.26, w: 4.3, h: 0.24, fontSize: 10, color: '333333',
+        fontFace: PRESENTATION_FONTS.body,
+      });
     });
   }
 
-  // Per-zone cost table
-  if (content.perZone?.length > 0) {
+  // Per-zone cost table — every numeric cell goes through safeMoney so a
+  // missing field doesn't bring down the whole render.
+  if (Array.isArray(content?.perZone) && content.perZone.length > 0) {
     const tableData = [
-      [{ text: 'Zone', options: { bold: true } }, { text: 'Structure', options: { bold: true } }, { text: 'Tech', options: { bold: true } }, { text: 'FF&E', options: { bold: true } }, { text: 'Total', options: { bold: true } }],
+      [
+        { text: 'Zone', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'Structure', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'Tech', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'FF&E', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+        { text: 'Total', options: { bold: true, fontFace: PRESENTATION_FONTS.display } },
+      ],
       ...content.perZone.slice(0, 7).map((z: any) => [
-        z.name, `$${z.structure.toLocaleString()}`, `$${z.technology.toLocaleString()}`, `$${z.furniture.toLocaleString()}`, `$${z.total.toLocaleString()}`,
+        String(z?.name ?? '—'),
+        safeMoney(z?.structure),
+        safeMoney(z?.technology),
+        safeMoney(z?.furniture),
+        safeMoney(z?.total),
       ]),
     ];
     slide.addTable(tableData, {
       x: 0.5, y: 2.5, w: 9,
       fontSize: 10, color: '333333',
+      fontFace: PRESENTATION_FONTS.body,
       fill: { color: 'FAFAFA' },
       border: { pt: 0.5, color: 'DDDDDD' },
       rowH: 0.28,
@@ -2091,11 +2193,14 @@ function addPptxCostIntelligenceContent(slide: any, content: any, brandColor: st
   }
 
   // Validations
-  if (content.validations?.length > 0) {
+  if (Array.isArray(content?.validations) && content.validations.length > 0) {
     let vy = 4.6;
     content.validations.slice(0, 3).forEach((v: any) => {
-      const col = v.severity === 'error' ? 'CC0000' : 'CC8800';
-      slide.addText(`⚠ ${v.message}`, { x: 0.5, y: vy, w: 9, h: 0.22, fontSize: 9, color: col });
+      const col = v?.severity === 'error' ? 'CC0000' : 'CC8800';
+      slide.addText(`⚠  ${String(v?.message ?? '')}`, {
+        x: 0.5, y: vy, w: 9, h: 0.22, fontSize: 9, color: col,
+        fontFace: PRESENTATION_FONTS.body,
+      });
       vy += 0.24;
     });
   }

@@ -406,17 +406,28 @@ export function estimateZoneCosts(
   grandTotal: number;
   costPerSqft: number;
 } {
+  // Defensive: bad input upstream (no spatial config saved yet, brief
+  // missing footprints, etc.) used to land here as 0/NaN totalSqft and
+  // produce Infinity/NaN cost per sqft, which then broke the PPTX export
+  // when toLocaleString() ran on a non-finite number. Bail out cleanly.
+  const safeZones = (Array.isArray(zones) ? zones : []).filter(
+    (z) => z && typeof z.name === "string" && Number.isFinite(z.sqft) && z.sqft > 0,
+  );
+  if (safeZones.length === 0) {
+    return { perZone: [], grandTotal: 0, costPerSqft: 0 };
+  }
+
   const costs = COST_TIERS[tier];
   const baseCostAvg = (costs.baseCostPerSqft.min + costs.baseCostPerSqft.max) / 2;
   const graphicsAvg = (costs.graphicsPerSqft.min + costs.graphicsPerSqft.max) / 2;
   const techAvg = (costs.techOverlayPerSqft.min + costs.techOverlayPerSqft.max) / 2;
   const furnitureAvg = (costs.furniturePerZone.min + costs.furniturePerZone.max) / 2;
 
-  const perZone = zones.map(zone => {
+  const perZone = safeZones.map((zone) => {
     const fn = classifyZoneFunction(zone.name);
-    const constraints = ZONE_CONSTRAINTS[fn];
+    const constraints = ZONE_CONSTRAINTS[fn] ?? { costMultiplier: 1 };
 
-    const structure = Math.round(zone.sqft * baseCostAvg * constraints.costMultiplier);
+    const structure = Math.round(zone.sqft * baseCostAvg * (constraints.costMultiplier ?? 1));
     const graphics = Math.round(zone.sqft * graphicsAvg * 0.3); // ~30% of wall area
     const needsTech = ["hero", "experience", "storytelling", "demo", "command"].includes(fn);
     const technology = needsTech ? Math.round(zone.sqft * techAvg) : 0;
@@ -433,12 +444,15 @@ export function estimateZoneCosts(
   });
 
   const grandTotal = perZone.reduce((sum, z) => sum + z.total, 0);
+  // Fall back to summed zone sqft if the caller's totalSqft is missing or
+  // zero — better than dividing by zero and producing Infinity.
+  const denominator =
+    Number.isFinite(totalSqft) && totalSqft > 0
+      ? totalSqft
+      : safeZones.reduce((sum, z) => sum + z.sqft, 0);
+  const costPerSqft = denominator > 0 ? Math.round(grandTotal / denominator) : 0;
 
-  return {
-    perZone,
-    grandTotal,
-    costPerSqft: Math.round(grandTotal / totalSqft),
-  };
+  return { perZone, grandTotal, costPerSqft };
 }
 
 /** Validate budget feasibility */

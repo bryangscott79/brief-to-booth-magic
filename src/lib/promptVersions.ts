@@ -23,6 +23,14 @@ export interface PromptVersionMeta {
   updatedAt: string;
   /** Free-form notes — user can annotate why this version exists. */
   notes?: string;
+  /**
+   * When true, this version is bound to renders that have NO version suffix
+   * in project_images (i.e. saved before versioning shipped). Hydration
+   * matches imgVersionId === null when this version is active, and doSave
+   * skips the suffix when persisting under this version. Only one version
+   * per project should ever have this flag.
+   */
+  claimsUnversioned?: boolean;
 }
 
 const LOCAL_STORAGE_PREFIX = "canopy:prompt-versions:";
@@ -146,6 +154,12 @@ export function parseVersionedAngleId(angleId: string): {
 // don't appear in the current versions list. The UI uses this to offer
 // a one-click "recover orphan version" flow.
 
+/** Special id reserved for the synthetic "legacy" orphan — renders saved
+ *  before versioning was added (no __v__ suffix). Hydration treats a
+ *  version with this id (or with claimsUnversioned=true) as matching
+ *  imgVersionId === null. */
+export const LEGACY_VERSION_ID = "legacy";
+
 export interface OrphanedVersionInfo {
   versionId: string;
   imageCount: number;
@@ -153,21 +167,42 @@ export interface OrphanedVersionInfo {
   latestImageAt: string | null;
   /** Sample of base angle ids found, useful for diagnostics. */
   baseAngles: string[];
+  /** True when this is the synthetic legacy bucket (unversioned renders). */
+  isLegacy?: boolean;
 }
 
 export function findOrphanedVersions(params: {
   savedImages: Array<{ angle_id: string; created_at?: string | null }>;
   knownVersionIds: string[];
+  /** When true, ALSO treat unversioned (no suffix) images as a single
+   *  synthetic "legacy" orphan. Caller passes false if it already has a
+   *  version with claimsUnversioned=true so we don't double-offer. */
+  includeLegacy?: boolean;
 }): OrphanedVersionInfo[] {
-  const { savedImages, knownVersionIds } = params;
+  const { savedImages, knownVersionIds, includeLegacy = true } = params;
   const known = new Set(knownVersionIds);
   const byVersion = new Map<string, OrphanedVersionInfo>();
 
+  // Bucket for legacy (no-suffix) renders.
+  let legacyCount = 0;
+  let legacyLatest: string | null = null;
+  const legacyBaseAngles: string[] = [];
+
   for (const img of savedImages) {
     const { baseAngleId, versionId } = parseVersionedAngleId(img.angle_id);
-    if (!versionId || known.has(versionId)) continue;
-    const existing = byVersion.get(versionId);
     const createdAt = img.created_at ?? null;
+
+    if (!versionId) {
+      // Unversioned (legacy) — pre-versioning render.
+      if (!includeLegacy) continue;
+      legacyCount += 1;
+      if (!legacyBaseAngles.includes(baseAngleId)) legacyBaseAngles.push(baseAngleId);
+      if (createdAt && (!legacyLatest || createdAt > legacyLatest)) legacyLatest = createdAt;
+      continue;
+    }
+    if (known.has(versionId)) continue;
+
+    const existing = byVersion.get(versionId);
     if (existing) {
       existing.imageCount += 1;
       if (!existing.baseAngles.includes(baseAngleId)) existing.baseAngles.push(baseAngleId);
@@ -183,8 +218,19 @@ export function findOrphanedVersions(params: {
       });
     }
   }
+
+  const list = Array.from(byVersion.values());
+  if (legacyCount > 0) {
+    list.push({
+      versionId: LEGACY_VERSION_ID,
+      imageCount: legacyCount,
+      latestImageAt: legacyLatest,
+      baseAngles: legacyBaseAngles,
+      isLegacy: true,
+    });
+  }
   // Newest first.
-  return Array.from(byVersion.values()).sort((a, b) => {
+  return list.sort((a, b) => {
     const aT = a.latestImageAt ?? "";
     const bT = b.latestImageAt ?? "";
     return aT > bT ? -1 : aT < bT ? 1 : 0;

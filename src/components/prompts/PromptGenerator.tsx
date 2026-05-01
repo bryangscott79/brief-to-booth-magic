@@ -54,6 +54,7 @@ import {
   makeVersionedAngleId,
   parseVersionedAngleId,
   findOrphanedVersions,
+  LEGACY_VERSION_ID,
   type PromptVersionMeta,
 } from "@/lib/promptVersions";
 
@@ -159,19 +160,23 @@ export function PromptGenerator() {
   // versions (different suffix) are ignored here.
   const versionScopedImages = useMemo(() => {
     const versionId = promptVersions.activeVersionId;
+    const active = promptVersions.activeVersion;
+    // A version flagged claimsUnversioned (or the synthetic LEGACY_VERSION_ID)
+    // matches images saved BEFORE versioning shipped — no __v__ suffix.
+    const matchesLegacy =
+      active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
     return savedImages
       .map((img) => {
         const { baseAngleId, versionId: imgVersionId } = parseVersionedAngleId(img.angle_id);
         return { img, baseAngleId, imgVersionId };
       })
       .filter(({ imgVersionId }) => {
-        // Active version chosen → require exact match.
+        if (matchesLegacy) return imgVersionId === null;
         if (versionId) return imgVersionId === versionId;
-        // No version active → only show legacy untagged images so a fresh
-        // version starts clean.
+        // No version active → fall back to legacy untagged.
         return imgVersionId === null;
       });
-  }, [savedImages, promptVersions.activeVersionId]);
+  }, [savedImages, promptVersions.activeVersionId, promptVersions.activeVersion]);
 
   useEffect(() => {
     if (
@@ -230,16 +235,20 @@ export function PromptGenerator() {
 
   // doSave is what renderStore calls when a render finishes. We rewrite the
   // angle id to include the active version's suffix so storage stays
-  // partitioned per version. The runtime store still operates on base ids.
+  // partitioned per version — UNLESS the active version claims unversioned
+  // (legacy) renders, in which case we save without a suffix so it stays
+  // attached to the same legacy bucket.
   const doSave = useCallback(
     (angleId: string, angleName: string, imageDataUrl: string) => {
       const versionId = ensureActiveVersion();
-      const versionedAngleId = makeVersionedAngleId(angleId, versionId);
+      const active = promptVersions.activeVersion;
+      const isLegacyVersion =
+        active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
+      const finalAngleId = isLegacyVersion ? angleId : makeVersionedAngleId(angleId, versionId);
       saveImage.mutate(
-        { angleId: versionedAngleId, angleName, imageDataUrl },
+        { angleId: finalAngleId, angleName, imageDataUrl },
         {
           onSuccess: () => {
-            // Bump the active version's updatedAt so the chip shows recent activity.
             promptVersions.touchActiveVersion();
           },
           onError: (err) => console.error(`Failed to save ${angleName}:`, err),
@@ -477,23 +486,40 @@ export function PromptGenerator() {
   // Detect orphaned versions — image rows in project_images carry a version
   // suffix in their angle_id; if a suffix doesn't match any current version
   // metadata, those images belong to a "lost" version that can be restored.
+  // Also detects legacy (no-suffix) renders saved before versioning existed,
+  // unless we already have a version flagged claimsUnversioned for them.
+  const alreadyHasLegacyVersion = useMemo(
+    () => promptVersions.versions.some((v) => v.claimsUnversioned === true),
+    [promptVersions.versions],
+  );
   const orphanedVersions = useMemo(() => {
     if (!effectiveProjectId) return [];
     return findOrphanedVersions({
       savedImages,
       knownVersionIds: promptVersions.versions.map((v) => v.id),
+      includeLegacy: !alreadyHasLegacyVersion,
     });
-  }, [effectiveProjectId, savedImages, promptVersions.versions]);
+  }, [effectiveProjectId, savedImages, promptVersions.versions, alreadyHasLegacyVersion]);
 
-  const handleRecoverOrphan = (versionId: string, imageCount: number, latestImageAt: string | null) => {
+  const handleRecoverOrphan = (
+    versionId: string,
+    imageCount: number,
+    latestImageAt: string | null,
+    isLegacy: boolean,
+  ) => {
     const created = latestImageAt ?? new Date().toISOString();
     const recoveredMeta: PromptVersionMeta = {
       id: versionId,
       preset: "balanced",
-      label: `Recovered — ${new Date(created).toLocaleDateString()}`,
+      label: isLegacy
+        ? `Original — ${new Date(created).toLocaleDateString()}`
+        : `Recovered — ${new Date(created).toLocaleDateString()}`,
       createdAt: created,
       updatedAt: new Date().toISOString(),
-      notes: `Restored from ${imageCount} saved render${imageCount === 1 ? "" : "s"}.`,
+      notes: isLegacy
+        ? `Renders from before prompt versions existed (${imageCount} render${imageCount === 1 ? "" : "s"}).`
+        : `Restored from ${imageCount} saved render${imageCount === 1 ? "" : "s"}.`,
+      ...(isLegacy ? { claimsUnversioned: true } : {}),
     };
     promptVersions.insertVersion(recoveredMeta);
     promptVersions.selectVersion(versionId);
@@ -517,21 +543,30 @@ export function PromptGenerator() {
       {orphanedVersions.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2.5 space-y-2">
           <div className="text-[11px] font-medium uppercase tracking-wider text-amber-600">
-            Found {orphanedVersions.length} version{orphanedVersions.length === 1 ? "" : "s"} without metadata
+            Found {orphanedVersions.length} unattached render set{orphanedVersions.length === 1 ? "" : "s"}
           </div>
           <p className="text-xs text-muted-foreground">
-            We found saved renders attached to versions that aren't in your list — likely a previous version
-            you created. Click "Recover" to bring it back as a switchable version chip.
+            Saved renders that aren't tied to any current version chip — most often this is your earlier
+            work from before prompt versions existed. Click to bring them back as a switchable version.
           </p>
           <div className="flex flex-wrap gap-2">
             {orphanedVersions.map((orph) => (
               <button
                 key={orph.versionId}
                 type="button"
-                onClick={() => handleRecoverOrphan(orph.versionId, orph.imageCount, orph.latestImageAt)}
+                onClick={() =>
+                  handleRecoverOrphan(
+                    orph.versionId,
+                    orph.imageCount,
+                    orph.latestImageAt,
+                    orph.isLegacy === true,
+                  )
+                }
                 className="text-xs rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 transition-colors"
               >
-                Recover {orph.imageCount} render{orph.imageCount === 1 ? "" : "s"}
+                {orph.isLegacy ? "Restore original" : "Recover"}
+                {" — "}
+                {orph.imageCount} render{orph.imageCount === 1 ? "" : "s"}
                 {orph.latestImageAt && (
                   <span className="ml-1.5 text-amber-600/70">
                     · {new Date(orph.latestImageAt).toLocaleDateString()}

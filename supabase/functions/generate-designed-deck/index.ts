@@ -338,8 +338,51 @@ const TOOL = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Lightweight deployment check — used by the client's "Test connection"
+  // button to verify the function is reachable without spending tokens.
+  // Triggered by GET ?ping=1 OR a POST body with { ping: true }.
+  const url = new URL(req.url);
+  if (url.searchParams.get("ping") === "1") {
+    const hasAnthropicKey = !!Deno.env.get("ANTHROPIC_API_KEY");
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        function: "generate-designed-deck",
+        anthropicKey: hasAnthropicKey ? "configured" : "missing",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
-    const body: RequestBody = await req.json();
+    const rawBody = await req.text();
+    if (!rawBody) {
+      return new Response(JSON.stringify({ error: "Request body is empty" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    let body: RequestBody;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return new Response(JSON.stringify({ error: "Request body is not valid JSON" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // Quick ping in POST body too.
+    if ((body as any)?.ping === true) {
+      const hasAnthropicKey = !!Deno.env.get("ANTHROPIC_API_KEY");
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          function: "generate-designed-deck",
+          anthropicKey: hasAnthropicKey ? "configured" : "missing",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (!body.parsedBrief || typeof body.parsedBrief !== "object") {
       return new Response(JSON.stringify({ error: "parsedBrief is required" }), {

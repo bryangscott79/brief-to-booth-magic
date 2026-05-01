@@ -94,6 +94,7 @@ export function DesignedDeck({
     removeSlide,
     updateSlideHtml,
     reset,
+    ping,
   } = useDesignedDeck(projectId);
 
   const [stylePreset, setStylePreset] = useState<string>("Pitch");
@@ -101,6 +102,19 @@ export function DesignedDeck({
   const [exporting, setExporting] = useState<"pdf" | "pptx" | null>(null);
   const [editingHtmlSlideId, setEditingHtmlSlideId] = useState<string | null>(null);
   const [draftHtml, setDraftHtml] = useState<string>("");
+  const [pingState, setPingState] = useState<
+    | { status: "idle" }
+    | { status: "running" }
+    | { status: "ok"; anthropicKey?: "configured" | "missing" }
+    | { status: "fail"; message: string }
+  >({ status: "idle" });
+
+  const handlePing = async () => {
+    setPingState({ status: "running" });
+    const res = await ping();
+    if (res.ok) setPingState({ status: "ok", anthropicKey: res.anthropicKey });
+    else setPingState({ status: "fail", message: res.error ?? "Unknown error" });
+  };
 
   const imageUrls = images
     .filter((i) => i.is_current)
@@ -266,10 +280,72 @@ export function DesignedDeck({
           )}
 
           {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-              {error}
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-xs space-y-2">
+              <div className="font-medium text-destructive">{error}</div>
+              {/Failed to send a request|FunctionsFetchError|Function not found|404/i.test(error) && (
+                <div className="text-muted-foreground space-y-1.5">
+                  <p>
+                    The <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">generate-designed-deck</code> edge function isn't responding.
+                    Two things to check:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>
+                      <strong>Lovable hasn't deployed it yet.</strong> New edge functions usually deploy
+                      within a minute of being pushed. Try again shortly.
+                    </li>
+                    <li>
+                      <strong>The Anthropic API key isn't configured.</strong> In Lovable, go to{" "}
+                      Project Settings → Supabase → Edge Function Secrets and confirm{" "}
+                      <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">ANTHROPIC_API_KEY</code>{" "}
+                      is set.
+                    </li>
+                  </ul>
+                </div>
+              )}
+              {/ANTHROPIC_API_KEY/i.test(error) && (
+                <div className="text-muted-foreground">
+                  Set <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">ANTHROPIC_API_KEY</code>{" "}
+                  in Project Settings → Supabase → Edge Function Secrets, then retry.
+                </div>
+              )}
             </div>
           )}
+
+          {/* Diagnostic — costs zero tokens, tells the user exactly what's wrong */}
+          <div className="flex items-center gap-3 text-[11px]">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-[11px]"
+              onClick={handlePing}
+              disabled={pingState.status === "running"}
+            >
+              {pingState.status === "running" ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Wand2 className="h-3 w-3 mr-1" />
+              )}
+              Test connection
+            </Button>
+            {pingState.status === "ok" && (
+              <span className={cn(
+                "inline-flex items-center gap-1",
+                pingState.anthropicKey === "configured" ? "text-green-600" : "text-amber-600",
+              )}>
+                {pingState.anthropicKey === "configured" ? (
+                  <>✓ Function reachable, ANTHROPIC_API_KEY configured.</>
+                ) : (
+                  <>⚠ Function reachable but ANTHROPIC_API_KEY is missing — set it in Supabase → Edge Function Secrets.</>
+                )}
+              </span>
+            )}
+            {pingState.status === "fail" && (
+              <span className="text-destructive">
+                ✗ {pingState.message}
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
     );

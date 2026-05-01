@@ -244,6 +244,33 @@ export function useDesignedDeck(projectId: string | null | undefined) {
     setDeck(null);
   }, [projectId]);
 
+  /**
+   * Cheap deployment + secrets check. Hits the edge function with { ping: true }
+   * which short-circuits before any AI call and reports whether the
+   * ANTHROPIC_API_KEY secret is configured. Used by the UI's "Test connection"
+   * button so the user can distinguish "function not deployed" from "function
+   * deployed but missing API key" without spending tokens.
+   */
+  const ping = useCallback(async (): Promise<{
+    ok: boolean;
+    anthropicKey?: "configured" | "missing";
+    error?: string;
+  }> => {
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke(
+        "generate-designed-deck",
+        { body: { ping: true } },
+      );
+      if (invokeErr) {
+        return { ok: false, error: invokeErr.message ?? "Function unreachable" };
+      }
+      if (data?.error) return { ok: false, error: data.error };
+      return { ok: true, anthropicKey: data?.anthropicKey };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }, []);
+
   return {
     deck,
     isGenerating,
@@ -255,5 +282,6 @@ export function useDesignedDeck(projectId: string | null | undefined) {
     removeSlide,
     updateSlideHtml,
     reset,
+    ping,
   };
 }

@@ -45,6 +45,11 @@ interface UsePromptVersionsResult {
     id: string,
     patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset">>,
   ) => void;
+  /**
+   * Insert a version with a pre-existing id (used by orphan recovery to
+   * reattach images to a "Recovered" version chip without minting a new id).
+   */
+  insertVersion: (meta: PromptVersionMeta) => void;
 }
 
 export function usePromptVersions(projectId: string | null | undefined): UsePromptVersionsResult {
@@ -152,6 +157,16 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
     [persist, versions],
   );
 
+  const insertVersion = useCallback(
+    (meta: PromptVersionMeta) => {
+      // Don't double-insert if the id already exists.
+      if (versions.some((v) => v.id === meta.id)) return;
+      const next = [meta, ...versions];
+      persist(next);
+    },
+    [persist, versions],
+  );
+
   return {
     versions,
     activeVersionId,
@@ -162,5 +177,6 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
     touchActiveVersion,
     deleteVersion,
     updateVersion,
+    insertVersion,
   };
 }

@@ -135,3 +135,58 @@ export function parseVersionedAngleId(angleId: string): {
     versionId: angleId.slice(idx + VERSION_SUFFIX_DELIM.length),
   };
 }
+
+// ─── Orphan recovery ───────────────────────────────────────────────────────
+//
+// When a version's metadata gets lost (deleted accidentally, localStorage
+// wiped on a different device, or DB persistence failed), the renders
+// generated under that version still exist in project_images — they're
+// just orphaned because no version metadata claims them. This helper
+// scans a list of saved images and identifies version suffixes that
+// don't appear in the current versions list. The UI uses this to offer
+// a one-click "recover orphan version" flow.
+
+export interface OrphanedVersionInfo {
+  versionId: string;
+  imageCount: number;
+  /** Newest image timestamp, used to label the recovered version. */
+  latestImageAt: string | null;
+  /** Sample of base angle ids found, useful for diagnostics. */
+  baseAngles: string[];
+}
+
+export function findOrphanedVersions(params: {
+  savedImages: Array<{ angle_id: string; created_at?: string | null }>;
+  knownVersionIds: string[];
+}): OrphanedVersionInfo[] {
+  const { savedImages, knownVersionIds } = params;
+  const known = new Set(knownVersionIds);
+  const byVersion = new Map<string, OrphanedVersionInfo>();
+
+  for (const img of savedImages) {
+    const { baseAngleId, versionId } = parseVersionedAngleId(img.angle_id);
+    if (!versionId || known.has(versionId)) continue;
+    const existing = byVersion.get(versionId);
+    const createdAt = img.created_at ?? null;
+    if (existing) {
+      existing.imageCount += 1;
+      if (!existing.baseAngles.includes(baseAngleId)) existing.baseAngles.push(baseAngleId);
+      if (createdAt && (!existing.latestImageAt || createdAt > existing.latestImageAt)) {
+        existing.latestImageAt = createdAt;
+      }
+    } else {
+      byVersion.set(versionId, {
+        versionId,
+        imageCount: 1,
+        latestImageAt: createdAt,
+        baseAngles: [baseAngleId],
+      });
+    }
+  }
+  // Newest first.
+  return Array.from(byVersion.values()).sort((a, b) => {
+    const aT = a.latestImageAt ?? "";
+    const bT = b.latestImageAt ?? "";
+    return aT > bT ? -1 : aT < bT ? 1 : 0;
+  });
+}

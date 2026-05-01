@@ -50,7 +50,12 @@ import {
   getPresetById,
   PROMPT_STYLE_PRESETS,
 } from "@/lib/promptStylePresets";
-import { makeVersionedAngleId, parseVersionedAngleId } from "@/lib/promptVersions";
+import {
+  makeVersionedAngleId,
+  parseVersionedAngleId,
+  findOrphanedVersions,
+  type PromptVersionMeta,
+} from "@/lib/promptVersions";
 
 
 export function PromptGenerator() {
@@ -469,11 +474,36 @@ export function PromptGenerator() {
   const completedCount = Object.values(generatedImages).filter(img => img.status === "complete").length;
   const totalViews = allAngles.length;
 
+  // Detect orphaned versions — image rows in project_images carry a version
+  // suffix in their angle_id; if a suffix doesn't match any current version
+  // metadata, those images belong to a "lost" version that can be restored.
+  const orphanedVersions = useMemo(() => {
+    if (!effectiveProjectId) return [];
+    return findOrphanedVersions({
+      savedImages,
+      knownVersionIds: promptVersions.versions.map((v) => v.id),
+    });
+  }, [effectiveProjectId, savedImages, promptVersions.versions]);
+
+  const handleRecoverOrphan = (versionId: string, imageCount: number, latestImageAt: string | null) => {
+    const created = latestImageAt ?? new Date().toISOString();
+    const recoveredMeta: PromptVersionMeta = {
+      id: versionId,
+      preset: "balanced",
+      label: `Recovered — ${new Date(created).toLocaleDateString()}`,
+      createdAt: created,
+      updatedAt: new Date().toISOString(),
+      notes: `Restored from ${imageCount} saved render${imageCount === 1 ? "" : "s"}.`,
+    };
+    promptVersions.insertVersion(recoveredMeta);
+    promptVersions.selectVersion(versionId);
+  };
+
   // Versions header — shown above every phase. Lets the user switch between
   // saved versions (each with its own preset + render set) or spin up a new
   // one. Generation handlers auto-create "Balanced" on first use.
   const versionsHeader = effectiveProjectId ? (
-    <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
+    <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
       <PromptVersionTabs
         versions={promptVersions.versions}
         activeVersionId={promptVersions.activeVersionId}
@@ -483,6 +513,35 @@ export function PromptGenerator() {
         onDeleteVersion={promptVersions.deleteVersion}
         disabled={isGeneratingHero || isGenerating}
       />
+
+      {orphanedVersions.length > 0 && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2.5 space-y-2">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-amber-600">
+            Found {orphanedVersions.length} version{orphanedVersions.length === 1 ? "" : "s"} without metadata
+          </div>
+          <p className="text-xs text-muted-foreground">
+            We found saved renders attached to versions that aren't in your list — likely a previous version
+            you created. Click "Recover" to bring it back as a switchable version chip.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {orphanedVersions.map((orph) => (
+              <button
+                key={orph.versionId}
+                type="button"
+                onClick={() => handleRecoverOrphan(orph.versionId, orph.imageCount, orph.latestImageAt)}
+                className="text-xs rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 transition-colors"
+              >
+                Recover {orph.imageCount} render{orph.imageCount === 1 ? "" : "s"}
+                {orph.latestImageAt && (
+                  <span className="ml-1.5 text-amber-600/70">
+                    · {new Date(orph.latestImageAt).toLocaleDateString()}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   ) : null;
 
@@ -901,6 +960,22 @@ export function PromptGenerator() {
                   "aspect-video rounded-lg overflow-hidden border bg-muted flex items-center justify-center",
                   imageData?.status === "generating" && "animate-pulse"
                 )}>
+                  {/* No data at all — view never generated for this version. */}
+                  {!imageData && (
+                    <div className="text-center text-muted-foreground">
+                      <Camera className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs mb-2">Not generated yet</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRegenerateView(angle.id)}
+                        disabled={currentlyGenerating === angle.id || !heroImage}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1.5" />
+                        Generate this view
+                      </Button>
+                    </div>
+                  )}
                   {imageData?.status === "pending" && (
                     <div className="text-center text-muted-foreground">
                       <Camera className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -914,8 +989,8 @@ export function PromptGenerator() {
                     </div>
                   )}
                   {imageData?.status === "complete" && imageData.url && (
-                    <img 
-                      src={imageData.url} 
+                    <img
+                      src={imageData.url}
                       alt={angle.name}
                       className="w-full h-full object-cover"
                     />
@@ -947,16 +1022,23 @@ export function PromptGenerator() {
                       <Download className="h-3 w-3" />
                     </Button>
                   )}
-                  {(imageData?.status === "error" || imageData?.status === "complete") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRegenerateView(angle.id)}
-                      disabled={currentlyGenerating === angle.id}
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                    </Button>
-                  )}
+                  {/* Retry / regen — show whenever we have a known status that
+                   * could've failed silently OR explicitly failed. Includes
+                   * "no data at all" (undefined) so missing views get a path
+                   * back to generation. */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRegenerateView(angle.id)}
+                    disabled={
+                      currentlyGenerating === angle.id ||
+                      imageData?.status === "generating" ||
+                      !heroImage
+                    }
+                    title={!heroImage ? "Generate the hero view first" : "Regenerate this view"}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>

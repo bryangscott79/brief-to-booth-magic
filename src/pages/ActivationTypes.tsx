@@ -61,7 +61,12 @@ export default function ActivationTypes() {
   const createType = useCreateActivationType();
   const { toast } = useToast();
 
-  const agencyIndustries = ((agency as any)?.industries as string[] | undefined) ?? ["experiential"];
+  // ?? only fills in null/undefined — an empty industries[] slips through and
+  // would silently filter out every built-in. Treat empty as "agency hasn't
+  // chosen yet" and default to experiential (matches the canonical seed).
+  const rawAgencyIndustries = (agency as any)?.industries as string[] | undefined;
+  const agencyIndustries =
+    rawAgencyIndustries && rawAgencyIndustries.length > 0 ? rawAgencyIndustries : ["experiential"];
   // 'all' means: show every type the agency's industries cover. Otherwise filter to a single industry.
   const [industryFilter, setIndustryFilter] = useState<string>("all");
 
@@ -81,9 +86,12 @@ export default function ActivationTypes() {
   const visibleTypes = useMemo(() => {
     return (types || []).filter((t) => {
       if (!t.isBuiltin) return true;
-      const typeIndustries = (((t as any).industries as string[] | undefined) ?? ["experiential"]);
+      const rawTypeIndustries = (t as any).industries as string[] | undefined;
+      // Untagged builtins are universal — they show in every industry until a
+      // super admin explicitly narrows them. (Empty arrays don't trigger ??.)
+      if (!rawTypeIndustries || rawTypeIndustries.length === 0) return true;
       const candidates = industryFilter === "all" ? agencyIndustries : [industryFilter];
-      return typeIndustries.some((slug) => candidates.includes(slug));
+      return rawTypeIndustries.some((slug) => candidates.includes(slug));
     });
   }, [types, agencyIndustries, industryFilter]);
 
@@ -143,6 +151,18 @@ export default function ActivationTypes() {
             <p className="text-sm text-muted-foreground mt-1">
               Define what kinds of {vocab.projects.toLowerCase()} your agency works on, and upload
               reference material so the AI understands each format.
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Showing {visibleTypes.length} of {(types ?? []).length}
+              {agencyIndustries.length > 0 && (
+                <>
+                  {" "}for{" "}
+                  <span className="text-foreground/80">
+                    {agencyIndustries.join(", ")}
+                  </span>
+                </>
+              )}
+              . Built-in types are managed by super admins under Industries.
             </p>
           </div>
           <Button onClick={() => setShowCreate(true)}>

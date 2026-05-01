@@ -71,11 +71,19 @@ export function useActivationTypes() {
   // least one of the agency's industries. Custom (user-owned) types always
   // pass through — they're agency-scoped by user_id and isolated at creation
   // by the auto-tagging in useCreateActivationType.
+  //
+  // Important: nullish-coalescing (??) doesn't catch empty arrays, so we
+  // explicitly fall back when industries is missing OR empty. Same for
+  // primary_industry. Without this, an agency row with industries=[] (the
+  // column default) silently filters out every builtin type.
+  const rawAgencyIndustries = (agency as any)?.industries as string[] | undefined;
+  const primaryIndustry = (agency as any)?.primary_industry as string | undefined;
   const agencyIndustries =
-    ((agency as any)?.industries as string[] | undefined) ??
-    (((agency as any)?.primary_industry as string | undefined)
-      ? [(agency as any).primary_industry as string]
-      : ["experiential"]);
+    rawAgencyIndustries && rawAgencyIndustries.length > 0
+      ? rawAgencyIndustries
+      : primaryIndustry
+        ? [primaryIndustry]
+        : ["experiential"];
 
   return useQuery({
     queryKey: ["activation-types", user?.id, agency?.id, agencyIndustries.join(",")],
@@ -94,11 +102,11 @@ export function useActivationTypes() {
       const allRows = ((data ?? []) as unknown as ActivationTypeRow[]).filter((r) => {
         if (!r.is_builtin) return true; // custom types: always show (they're already agency-scoped)
         const rowIndustries = (r as any).industries as string[] | null | undefined;
-        // Untagged built-ins default to experiential (matches the Phase 1A
-        // backfill). Show them only when the agency works in experiential.
-        if (!rowIndustries || rowIndustries.length === 0) {
-          return agencyIndustries.includes("experiential");
-        }
+        // Untagged built-ins are treated as universal — they apply to every
+        // industry until a super admin explicitly tags them. This is the
+        // friendly default when migrations have run but the experiential
+        // backfill hasn't, or when a new builtin lands before tagging.
+        if (!rowIndustries || rowIndustries.length === 0) return true;
         return rowIndustries.some((slug) => agencyIndustries.includes(slug));
       });
       const baseTypes = allRows.map((r) => ({

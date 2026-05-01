@@ -147,7 +147,7 @@ export function DesignedDeck({
       });
       toast({
         title: "Deck designed",
-        description: "Claude finished the first pass. Review each slide and regenerate any you want to refine.",
+        description: "Canopy finished the first pass. Review each slide and regenerate any you want to refine.",
       });
     } catch (e) {
       toast({
@@ -242,7 +242,7 @@ export function DesignedDeck({
             <Badge variant="outline" className="text-[10px] uppercase tracking-wider">Beta</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            Claude designs every slide as HTML — typography, layout, brand color, image placement.
+            Canopy designs every slide as HTML — typography, layout, brand color, image placement.
             Picks up your full project context, brand voice, and render images. No bullet-point template.
           </CardDescription>
         </CardHeader>
@@ -288,7 +288,7 @@ export function DesignedDeck({
 
           {isGenerating && (
             <p className="text-[11px] text-muted-foreground text-center">
-              Claude takes ~30–60 seconds to design a full deck. We'll cache it so you don't pay twice.
+              Canopy takes ~30–60 seconds to design a full deck. We'll cache it so you don't pay twice.
             </p>
           )}
 

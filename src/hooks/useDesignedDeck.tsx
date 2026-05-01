@@ -254,6 +254,8 @@ export function useDesignedDeck(projectId: string | null | undefined) {
   const ping = useCallback(async (): Promise<{
     ok: boolean;
     anthropicKey?: "configured" | "missing";
+    deployToken?: string;
+    alternativeKeysFound?: string[];
     error?: string;
   }> => {
     try {
@@ -265,7 +267,14 @@ export function useDesignedDeck(projectId: string | null | undefined) {
         return { ok: false, error: invokeErr.message ?? "Function unreachable" };
       }
       if (data?.error) return { ok: false, error: data.error };
-      return { ok: true, anthropicKey: data?.anthropicKey };
+      return {
+        ok: true,
+        anthropicKey: data?.anthropicKey,
+        deployToken: data?.deployToken,
+        alternativeKeysFound: Array.isArray(data?.alternativeKeysFound)
+          ? data.alternativeKeysFound
+          : undefined,
+      };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

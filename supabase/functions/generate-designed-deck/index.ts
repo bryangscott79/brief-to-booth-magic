@@ -1,5 +1,9 @@
 // generate-designed-deck — AI-designed presentation slides as HTML.
 //
+// DEPLOY TOKEN: 2026-05-01-r2  (bump this string to force Lovable's
+// deployment pipeline to redeploy the function. Some commits don't
+// trigger redeploy on Lovable when the function file is unchanged.)
+//
 // Why this exists: pptxgenjs produces mechanical layouts (boxes, bullets,
 // tables — flat). For pitch-quality decks the customer actually sends to a
 // brand like Red Bull, we need real design — typography hierarchy,
@@ -341,18 +345,28 @@ serve(async (req) => {
   // Lightweight deployment check — used by the client's "Test connection"
   // button to verify the function is reachable without spending tokens.
   // Triggered by GET ?ping=1 OR a POST body with { ping: true }.
+  const DEPLOY_TOKEN = "2026-05-01-r2";
   const url = new URL(req.url);
-  if (url.searchParams.get("ping") === "1") {
+  const pingHandler = () => {
     const hasAnthropicKey = !!Deno.env.get("ANTHROPIC_API_KEY");
+    // Also check common alternative names so we can hint at typos.
+    const altKeys = ["LOVABLE_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"]
+      .filter((name) => !!Deno.env.get(name));
     return new Response(
       JSON.stringify({
         ok: true,
         function: "generate-designed-deck",
+        deployToken: DEPLOY_TOKEN,
         anthropicKey: hasAnthropicKey ? "configured" : "missing",
+        // If ANTHROPIC_API_KEY is missing but a similarly-named secret exists,
+        // surface that — common cause of "I added the key but it doesn't work"
+        // is the secret being named differently than the function expects.
+        alternativeKeysFound: altKeys,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  }
+  };
+  if (url.searchParams.get("ping") === "1") return pingHandler();
 
   try {
     const rawBody = await req.text();
@@ -372,17 +386,7 @@ serve(async (req) => {
       });
     }
     // Quick ping in POST body too.
-    if ((body as any)?.ping === true) {
-      const hasAnthropicKey = !!Deno.env.get("ANTHROPIC_API_KEY");
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          function: "generate-designed-deck",
-          anthropicKey: hasAnthropicKey ? "configured" : "missing",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    if ((body as any)?.ping === true) return pingHandler();
 
     if (!body.parsedBrief || typeof body.parsedBrief !== "object") {
       return new Response(JSON.stringify({ error: "parsedBrief is required" }), {

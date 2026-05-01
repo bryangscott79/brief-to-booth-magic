@@ -105,15 +105,28 @@ export function DesignedDeck({
   const [pingState, setPingState] = useState<
     | { status: "idle" }
     | { status: "running" }
-    | { status: "ok"; anthropicKey?: "configured" | "missing" }
+    | {
+        status: "ok";
+        anthropicKey?: "configured" | "missing";
+        deployToken?: string;
+        alternativeKeysFound?: string[];
+      }
     | { status: "fail"; message: string }
   >({ status: "idle" });
 
   const handlePing = async () => {
     setPingState({ status: "running" });
     const res = await ping();
-    if (res.ok) setPingState({ status: "ok", anthropicKey: res.anthropicKey });
-    else setPingState({ status: "fail", message: res.error ?? "Unknown error" });
+    if (res.ok) {
+      setPingState({
+        status: "ok",
+        anthropicKey: res.anthropicKey,
+        deployToken: res.deployToken,
+        alternativeKeysFound: res.alternativeKeysFound,
+      });
+    } else {
+      setPingState({ status: "fail", message: res.error ?? "Unknown error" });
+    }
   };
 
   const imageUrls = images
@@ -312,39 +325,78 @@ export function DesignedDeck({
           )}
 
           {/* Diagnostic — costs zero tokens, tells the user exactly what's wrong */}
-          <div className="flex items-center gap-3 text-[11px]">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-[11px]"
-              onClick={handlePing}
-              disabled={pingState.status === "running"}
-            >
-              {pingState.status === "running" ? (
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              ) : (
-                <Wand2 className="h-3 w-3 mr-1" />
-              )}
-              Test connection
-            </Button>
-            {pingState.status === "ok" && (
-              <span className={cn(
-                "inline-flex items-center gap-1",
-                pingState.anthropicKey === "configured" ? "text-green-600" : "text-amber-600",
-              )}>
-                {pingState.anthropicKey === "configured" ? (
-                  <>✓ Function reachable, ANTHROPIC_API_KEY configured.</>
+          <div className="space-y-2 text-[11px]">
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[11px]"
+                onClick={handlePing}
+                disabled={pingState.status === "running"}
+              >
+                {pingState.status === "running" ? (
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                 ) : (
-                  <>⚠ Function reachable but ANTHROPIC_API_KEY is missing — set it in Supabase → Edge Function Secrets.</>
+                  <Wand2 className="h-3 w-3 mr-1" />
                 )}
-              </span>
+                Test connection
+              </Button>
+              {pingState.status === "ok" && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1",
+                    pingState.anthropicKey === "configured"
+                      ? "text-green-600"
+                      : "text-amber-600",
+                  )}
+                >
+                  {pingState.anthropicKey === "configured"
+                    ? "✓ Function reachable, ANTHROPIC_API_KEY configured."
+                    : "⚠ Function reachable but ANTHROPIC_API_KEY is missing."}
+                </span>
+              )}
+              {pingState.status === "fail" && (
+                <span className="text-destructive">✗ {pingState.message}</span>
+              )}
+            </div>
+
+            {pingState.status === "ok" && pingState.deployToken && (
+              <p className="text-muted-foreground/70">
+                Deploy token: <span className="font-mono">{pingState.deployToken}</span>
+              </p>
             )}
-            {pingState.status === "fail" && (
-              <span className="text-destructive">
-                ✗ {pingState.message}
-              </span>
-            )}
+
+            {pingState.status === "ok" &&
+              pingState.anthropicKey === "missing" &&
+              (pingState.alternativeKeysFound?.length ?? 0) > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-2 text-amber-700">
+                  <p className="font-medium">Looks like a naming mismatch.</p>
+                  <p className="mt-1">
+                    The function expects{" "}
+                    <code className="font-mono text-[10px] bg-amber-500/10 px-1 py-0.5 rounded">
+                      ANTHROPIC_API_KEY
+                    </code>{" "}
+                    but found these instead:{" "}
+                    <span className="font-mono">
+                      {pingState.alternativeKeysFound!.join(", ")}
+                    </span>
+                    . Rename your secret to <code className="font-mono">ANTHROPIC_API_KEY</code>{" "}
+                    in Supabase → Edge Function Secrets.
+                  </p>
+                </div>
+              )}
+
+            {pingState.status === "ok" && pingState.anthropicKey === "missing" &&
+              (pingState.alternativeKeysFound?.length ?? 0) === 0 && (
+                <p className="text-amber-600">
+                  Set a secret named exactly{" "}
+                  <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">
+                    ANTHROPIC_API_KEY
+                  </code>{" "}
+                  in Lovable → Project Settings → Supabase → Edge Function Secrets.
+                </p>
+              )}
           </div>
         </CardContent>
       </Card>

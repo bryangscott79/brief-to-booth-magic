@@ -134,7 +134,7 @@ export function DesignedDeck({
       });
       toast({
         title: "Deck designed",
-        description: "Claude finished the first pass. Review each slide and regenerate any you want to refine.",
+        description: "Canopy finished the first pass. Review each slide and regenerate any you want to refine.",
       });
     } catch (e) {
       toast({

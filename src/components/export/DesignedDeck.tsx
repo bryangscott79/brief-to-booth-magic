@@ -295,15 +295,49 @@ export function DesignedDeck({
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-xs space-y-2">
               <div className="font-medium text-destructive">{error}</div>
-              {/Failed to send a request|FunctionsFetchError|Function not found|404/i.test(error) && (
+
+              {/* Anthropic auth failure — most actionable case. The key
+                * exists in Supabase but Anthropic itself is rejecting it. */}
+              {/invalid x-api-key|authentication_error|API error \(401\)/i.test(error) && (
                 <div className="text-muted-foreground space-y-1.5">
+                  <p className="text-amber-600 font-medium">
+                    Your Anthropic API key is invalid.
+                  </p>
                   <p>
-                    The <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">generate-designed-deck</code> edge function isn't responding.
-                    Two things to check:
+                    The function reached Anthropic but the key value was rejected (401 invalid x-api-key).
+                    This usually means:
                   </p>
                   <ul className="list-disc pl-4 space-y-0.5">
+                    <li>The key was copied with trailing/leading whitespace.</li>
+                    <li>The key was revoked or never activated.</li>
+                    <li>The key belongs to a different Anthropic account.</li>
+                  </ul>
+                  <p className="mt-2">
+                    Fix:{" "}
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline hover:no-underline"
+                    >
+                      generate a fresh key
+                    </a>
+                    {" "}(starts with{" "}
+                    <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">sk-ant-</code>),
+                    then update{" "}
+                    <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">ANTHROPIC_API_KEY</code>{" "}
+                    in Lovable → Project Settings → Supabase → Edge Function Secrets.
+                  </p>
+                </div>
+              )}
+
+              {/* Function unreachable — deployment issue. */}
+              {/Failed to send a request|FunctionsFetchError|Function not found|404/i.test(error) && (
+                <div className="text-muted-foreground space-y-1.5">
+                  <p>The edge function isn't responding. Two things to check:</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
                     <li>
-                      <strong>Lovable hasn't deployed it yet.</strong> New edge functions usually deploy
+                      <strong>Lovable hasn't deployed yet.</strong> New edge functions usually deploy
                       within a minute of being pushed. Try again shortly.
                     </li>
                     <li>
@@ -315,9 +349,11 @@ export function DesignedDeck({
                   </ul>
                 </div>
               )}
-              {/ANTHROPIC_API_KEY/i.test(error) && (
+
+              {/ANTHROPIC_API_KEY is not configured/i.test(error) && (
                 <div className="text-muted-foreground">
-                  Set <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">ANTHROPIC_API_KEY</code>{" "}
+                  Set a secret named exactly{" "}
+                  <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">ANTHROPIC_API_KEY</code>{" "}
                   in Project Settings → Supabase → Edge Function Secrets, then retry.
                 </div>
               )}

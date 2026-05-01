@@ -479,6 +479,7 @@ export function PromptGenerator() {
         activeVersionId={promptVersions.activeVersionId}
         onSelectVersion={promptVersions.selectVersion}
         onCreateVersion={promptVersions.createVersion}
+        onUpdateVersion={promptVersions.updateVersion}
         onDeleteVersion={promptVersions.deleteVersion}
         disabled={isGeneratingHero || isGenerating}
       />

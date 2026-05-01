@@ -40,10 +40,10 @@ interface UsePromptVersionsResult {
   touchActiveVersion: () => void;
   /** Delete a version's metadata (saved images stay in storage). */
   deleteVersion: (id: string) => void;
-  /** Update label/notes/customEmphasis on an existing version. */
+  /** Update label/preset/notes/customEmphasis on an existing version. */
   updateVersion: (
     id: string,
-    patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis">>,
+    patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset">>,
   ) => void;
 }
 
@@ -140,7 +140,10 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
   );
 
   const updateVersion = useCallback(
-    (id: string, patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis">>) => {
+    (
+      id: string,
+      patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset">>,
+    ) => {
       const next = versions.map((v) =>
         v.id === id ? { ...v, ...patch, updatedAt: new Date().toISOString() } : v,
       );

@@ -45,13 +45,30 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
     }) => {
       if (!projectId) throw new Error("No project ID");
 
-      const { data, error } = await supabase.functions.invoke("save-render-image", {
-        body: { projectId, angleId, angleName, imageDataUrl },
-      });
-
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      return data;
+      // Retry once on transient failures. The save-render-image edge function
+      // can fail when the image URL fetch times out or storage hiccups; a
+      // single retry catches most of those without doubling user-visible
+      // latency on the happy path.
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { data, error } = await supabase.functions.invoke("save-render-image", {
+            body: { projectId, angleId, angleName, imageDataUrl },
+          });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          return data;
+        } catch (err) {
+          lastError = err;
+          // Brief backoff before retry; skip on last attempt.
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 800));
+          }
+        }
+      }
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Failed to save render after 2 attempts");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project-images", projectId] });

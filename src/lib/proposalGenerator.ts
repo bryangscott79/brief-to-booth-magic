@@ -1,6 +1,6 @@
 /**
  * Proposal Generator Utility
- * 
+ *
  * Compiles all project elements into a formatted proposal document
  * for PDF or PowerPoint export.
  */
@@ -11,6 +11,92 @@ import { imageUrlToBase64 } from './logoUtils';
 import { calculateBoothDimensions, normalizeZones } from './spatialUtils';
 import { estimateZoneCosts, validateFullLayout, calculateUtilityRequirements } from './exhibitConstraints';
 import { generateLayoutMetrics } from '../components/spatial/LayoutMetrics';
+
+// ─── Presentation typography & color safety ────────────────────────────────
+//
+// PowerPoint substitutes fonts when the named family isn't installed. That
+// breaks layout — text frames overflow, line counts shift, kerning drifts.
+// Aptos / Calibri ship with every recent Office install on Windows AND Mac,
+// and Aptos Display is Microsoft's 2024+ default sans for headlines. Setting
+// these explicitly avoids "looks fine on my machine, broken on the client's".
+
+export const PRESENTATION_FONTS = {
+  /** Headline / title font — also covers section titles + cover slide. */
+  display: "Aptos Display",
+  /** Body copy, bullets, captions — anything inside content zones. */
+  body: "Aptos",
+  /** Numeric callouts (currency, percentages, sqft). Slightly tighter. */
+  data: "Aptos Narrow",
+} as const;
+
+/**
+ * Validate a hex color and return a clean 6-char hex string suitable for
+ * pptxgenjs (no leading #). Falls back to a safe default if input is empty
+ * or malformed. Defensive against the brand color editor producing empty
+ * strings or '#' alone.
+ */
+export function safeBrandColor(input: string | null | undefined, fallback = "0047AB"): string {
+  if (!input) return fallback;
+  const cleaned = String(input).replace(/^#/, "").trim();
+  if (/^[0-9a-fA-F]{6}$/.test(cleaned)) return cleaned.toUpperCase();
+  if (/^[0-9a-fA-F]{3}$/.test(cleaned)) {
+    // Expand short hex (e.g. "F0A") to 6-char.
+    return cleaned
+      .split("")
+      .map((c) => c + c)
+      .join("")
+      .toUpperCase();
+  }
+  return fallback;
+}
+
+/**
+ * Truncate a bullet string to a sensible length so it doesn't overflow the
+ * slide text frame. Cuts on word boundary and adds an ellipsis.
+ */
+export function clampBullet(text: string, max = 140): string {
+  if (!text) return "";
+  if (text.length <= max) return text;
+  const trimmed = text.slice(0, max);
+  const lastSpace = trimmed.lastIndexOf(" ");
+  return (lastSpace > 80 ? trimmed.slice(0, lastSpace) : trimmed).trimEnd() + "…";
+}
+
+/**
+ * Calculate fitted dimensions for an image inside a target box, preserving
+ * aspect ratio. PPTX has no contain/cover — we compute the target box
+ * ourselves so renders aren't squished.
+ */
+export function fitImageToBox(opts: {
+  imageWidth: number;
+  imageHeight: number;
+  boxW: number;
+  boxH: number;
+  boxX: number;
+  boxY: number;
+}): { x: number; y: number; w: number; h: number } {
+  const { imageWidth, imageHeight, boxW, boxH, boxX, boxY } = opts;
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return { x: boxX, y: boxY, w: boxW, h: boxH };
+  }
+  const imageRatio = imageWidth / imageHeight;
+  const boxRatio = boxW / boxH;
+  let w: number;
+  let h: number;
+  if (imageRatio > boxRatio) {
+    // Image is wider than box — fit by width
+    w = boxW;
+    h = boxW / imageRatio;
+  } else {
+    // Image is taller than box — fit by height
+    h = boxH;
+    w = boxH * imageRatio;
+  }
+  // Center within the box
+  const x = boxX + (boxW - w) / 2;
+  const y = boxY + (boxH - h) / 2;
+  return { x, y, w, h };
+}
 
 // Types
 export interface ProposalConfig {
@@ -1467,14 +1553,25 @@ export async function generateProposalPPTX(
   }
 
   const pptx = new PptxGenJS();
-  
+
+  // Widescreen 16:9 for modern displays + projectors.
+  pptx.layout = "LAYOUT_WIDE";
+
   // Set presentation properties
   pptx.author = data.config.exhibitHouseName;
   pptx.title = `${data.brief?.brand?.name || 'Client'} Exhibit Proposal`;
   pptx.subject = 'Trade Show Exhibit Concept';
-  
-  const brandColor = data.config.brandColor || '0047AB';
-  const brandColorClean = brandColor.replace('#', '');
+
+  // Document theme — PowerPoint uses these for placeholder text and any
+  // addText that doesn't override fontFace. Setting them explicitly keeps
+  // the deck consistent across Office versions and across Mac/Windows.
+  // (cast: pptxgenjs's TS types lag the runtime here.)
+  (pptx as unknown as { theme?: { headFontFace?: string; bodyFontFace?: string } }).theme = {
+    headFontFace: PRESENTATION_FONTS.display,
+    bodyFontFace: PRESENTATION_FONTS.body,
+  };
+
+  const brandColorClean = safeBrandColor(data.config.brandColor);
   
   for (const section of sections) {
     const slide = pptx.addSlide();
@@ -1506,31 +1603,35 @@ export async function generateProposalPPTX(
       slide.addText(section.content.projectTitle || 'Exhibit Concept', {
         x: 0.5, y: 1.5, w: 9, h: 1,
         fontSize: 44, bold: true, color: 'FFFFFF',
-        align: 'center',
+        align: 'center', fontFace: PRESENTATION_FONTS.display,
       });
-      
+
       // Subtitle
       const subtitle = [section.content.showName, section.content.footprintSize].filter(Boolean).join(' | ');
       slide.addText(subtitle, {
         x: 0.5, y: 2.3, w: 9, h: 0.5,
         fontSize: 20, color: 'FFFFFF', align: 'center',
+        fontFace: PRESENTATION_FONTS.body,
       });
-      
+
       // Prepared for
       slide.addText(`Prepared for ${section.content.clientName}`, {
         x: 0.5, y: 3.2, w: 9, h: 0.4,
         fontSize: 14, color: '333333', align: 'center',
+        fontFace: PRESENTATION_FONTS.body,
       });
-      
+
       // Footer with exhibit house
       slide.addText(data.config.exhibitHouseName, {
         x: 0.5, y: 4.8, w: 4, h: 0.3,
         fontSize: 12, bold: true, color: '333333',
+        fontFace: PRESENTATION_FONTS.body,
       });
-      
+
       slide.addText(section.content.date, {
         x: 5.5, y: 4.8, w: 4, h: 0.3,
         fontSize: 12, color: '666666', align: 'right',
+        fontFace: PRESENTATION_FONTS.body,
       });
       
     } else {
@@ -1538,6 +1639,7 @@ export async function generateProposalPPTX(
       slide.addText(section.title, {
         x: 0.5, y: 0.3, w: 9, h: 0.6,
         fontSize: 32, bold: true, color: brandColorClean,
+        fontFace: PRESENTATION_FONTS.display,
       });
       
       // Underline
@@ -1581,6 +1683,7 @@ export async function generateProposalPPTX(
       slide.addText(`${data.config.exhibitHouseName}`, {
         x: 0.5, y: 5.2, w: 4, h: 0.2,
         fontSize: 8, color: '999999',
+        fontFace: PRESENTATION_FONTS.body,
       });
     }
   }
@@ -1600,12 +1703,21 @@ function pptxBulletBlock(
   maxItems = 6
 ): number {
   if (!items?.length) return y;
-  slide.addText(label, { x, y, w, h: 0.28, fontSize: 12, bold: true, color: brandColor });
+  slide.addText(label, {
+    x, y, w, h: 0.28,
+    fontSize: 12, bold: true, color: brandColor,
+    fontFace: PRESENTATION_FONTS.display,
+  });
   y += 0.3;
   items.slice(0, maxItems).forEach((item: string) => {
-    const text = typeof item === 'string' ? item : JSON.stringify(item);
-    slide.addText(`• ${text.substring(0, 120)}`, { x, y, w, h: 0.24, fontSize: 10, color: '333333' });
-    y += 0.26;
+    const raw = typeof item === 'string' ? item : JSON.stringify(item);
+    slide.addText(`•  ${clampBullet(raw, 130)}`, {
+      x, y, w, h: 0.28,
+      fontSize: 10, color: '333333',
+      fontFace: PRESENTATION_FONTS.body,
+      valign: 'top',
+    });
+    y += 0.28;
   });
   return y + 0.15;
 }
@@ -1615,15 +1727,15 @@ function addPptxTextContent(slide: any, content: any, brandColor = '333333') {
   let y = 1.2;
 
   if (content.headline) {
-    slide.addText(content.headline, { x: 0.5, y, w: 9, h: 0.55, fontSize: 22, bold: true, color: '1a1a1a' });
+    slide.addText(content.headline, { x: 0.5, y, w: 9, h: 0.55, fontSize: 22, bold: true, color: '1a1a1a', fontFace: PRESENTATION_FONTS.display });
     y += 0.65;
   }
   if (content.subheadline) {
-    slide.addText(content.subheadline, { x: 0.5, y, w: 9, h: 0.35, fontSize: 15, italic: true, color: '666666' });
+    slide.addText(content.subheadline, { x: 0.5, y, w: 9, h: 0.35, fontSize: 15, italic: true, color: '666666', fontFace: PRESENTATION_FONTS.body });
     y += 0.45;
   }
   if (content.narrative) {
-    slide.addText(safeStr(content.narrative, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top' });
+    slide.addText(safeStr(content.narrative, 900), { x: 0.5, y, w: 9, h: 2.0, fontSize: 11, color: '333333', valign: 'top', fontFace: PRESENTATION_FONTS.body });
     y += 2.1;
   }
   // Team credits

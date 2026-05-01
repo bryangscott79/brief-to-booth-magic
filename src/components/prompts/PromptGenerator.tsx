@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { useRenderStore } from "@/store/renderStore";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,16 @@ import {
   type GeneratePromptParams,
 } from "@/lib/promptBuilder";
 
+// Versioning + style presets
+import { usePromptVersions } from "@/hooks/usePromptVersions";
+import { PromptVersionTabs } from "@/components/prompts/PromptVersionTabs";
+import {
+  applyStylePresetToPrompt,
+  getPresetById,
+  PROMPT_STYLE_PRESETS,
+} from "@/lib/promptStylePresets";
+import { makeVersionedAngleId, parseVersionedAngleId } from "@/lib/promptVersions";
+
 
 export function PromptGenerator() {
   const { currentProject, setActiveStep } = useProjectStore();
@@ -64,9 +74,33 @@ export function PromptGenerator() {
   const { data: savedImages = [] } = useProjectImages(effectiveProjectId);
   const saveImage = useSaveRenderImage(effectiveProjectId);
 
+  // ── Prompt versions + active style preset ─────────────────────────────────
+  // Each version is an independent "take" on the renders — different style
+  // emphasis, different generated images. The active version determines:
+  //   1. Which preset's emphasis block gets injected into the prompt body
+  //   2. Which suffix gets appended to the angle_id when an image is saved,
+  //      so versions don't clobber each other in project_images.
+  const promptVersions = usePromptVersions(effectiveProjectId);
+  const activeVersion = promptVersions.activeVersion;
+  const activePreset = activeVersion ? getPresetById(activeVersion.preset) : PROMPT_STYLE_PRESETS[0]!;
+  const activeCustomEmphasis = activeVersion?.customEmphasis;
+
   useEffect(() => {
     renderStore.setProjectId(projectId);
   }, [projectId]);
+
+  // Reset render state when the active version flips so the UI re-hydrates
+  // from the project_images rows that belong to the new version.
+  useEffect(() => {
+    if (!effectiveProjectId) return;
+    renderStore.setHydratedFromDb(false);
+    renderStore.setHeroImage(null);
+    renderStore.setGeneratedImages({});
+    renderStore.setHeroPrompt("");
+    renderStore.setPhase("prompt");
+    // We intentionally don't depend on renderStore — it's a stable reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promptVersions.activeVersionId, effectiveProjectId]);
 
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
@@ -112,37 +146,103 @@ export function PromptGenerator() {
 
   const allAngles = useMemo(() => [...ANGLE_CONFIG, ...zoneInteriorAngles], [zoneInteriorAngles]);
 
-  // Hydrate from saved images
+  // Hydrate from saved images (filtered to the active version).
+  //
+  // project_images keys by angle_id. When a version is active we save under
+  // a suffixed id like "hero_34__v__abc"; the parser strips the suffix so
+  // the runtime store still operates on base ids. Images belonging to other
+  // versions (different suffix) are ignored here.
+  const versionScopedImages = useMemo(() => {
+    const versionId = promptVersions.activeVersionId;
+    return savedImages
+      .map((img) => {
+        const { baseAngleId, versionId: imgVersionId } = parseVersionedAngleId(img.angle_id);
+        return { img, baseAngleId, imgVersionId };
+      })
+      .filter(({ imgVersionId }) => {
+        // Active version chosen → require exact match.
+        if (versionId) return imgVersionId === versionId;
+        // No version active → only show legacy untagged images so a fresh
+        // version starts clean.
+        return imgVersionId === null;
+      });
+  }, [savedImages, promptVersions.activeVersionId]);
+
   useEffect(() => {
-    if (savedImages.length > 0 && !heroImage && phase === "prompt" && !hydratedFromDb && !isGeneratingHero && !isGenerating) {
-      const savedHero = savedImages.find(img => img.angle_id === "hero_34" && img.is_current);
+    if (
+      versionScopedImages.length > 0 &&
+      !heroImage &&
+      phase === "prompt" &&
+      !hydratedFromDb &&
+      !isGeneratingHero &&
+      !isGenerating
+    ) {
+      const savedHero = versionScopedImages.find(
+        (x) => x.baseAngleId === "hero_34" && x.img.is_current,
+      );
       if (savedHero) {
-        renderStore.setHeroImage(savedHero.public_url);
-        savedImages
-          .filter(img => img.angle_id === "hero_34")
-          .forEach(img => renderStore.addHeroIteration(img.public_url));
+        renderStore.setHeroImage(savedHero.img.public_url);
+        versionScopedImages
+          .filter((x) => x.baseAngleId === "hero_34")
+          .forEach((x) => renderStore.addHeroIteration(x.img.public_url));
 
         const restoredImages: Record<string, { url: string; status: "complete" }> = {};
-        savedImages
-          .filter(img => img.is_current)
-          .forEach(img => {
-            restoredImages[img.angle_id] = { url: img.public_url, status: "complete" };
+        versionScopedImages
+          .filter((x) => x.img.is_current)
+          .forEach((x) => {
+            restoredImages[x.baseAngleId] = { url: x.img.public_url, status: "complete" };
           });
         renderStore.setGeneratedImages(restoredImages);
 
-        const hasOtherViews = savedImages.some(img => img.angle_id !== "hero_34" && img.is_current);
+        const hasOtherViews = versionScopedImages.some(
+          (x) => x.baseAngleId !== "hero_34" && x.img.is_current,
+        );
         renderStore.setPhase(hasOtherViews ? "all-views" : "hero-review");
         renderStore.setHydratedFromDb(true);
       }
     }
-  }, [savedImages, heroImage, phase, hydratedFromDb, isGeneratingHero, isGenerating]);
+  }, [versionScopedImages, heroImage, phase, hydratedFromDb, isGeneratingHero, isGenerating]);
 
-  const doSave = useCallback((angleId: string, angleName: string, imageDataUrl: string) => {
-    saveImage.mutate(
-      { angleId, angleName, imageDataUrl },
-      { onError: (err) => console.error(`Failed to save ${angleName}:`, err) }
-    );
-  }, [saveImage]);
+  // Track the active version id in a ref so doSave (which is called from
+  // inside renderStore generators) always reads the current value, even when
+  // a version is created mid-generation.
+  const activeVersionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeVersionIdRef.current = promptVersions.activeVersionId;
+  }, [promptVersions.activeVersionId]);
+
+  // Auto-create a default "Balanced" version the first time the user
+  // generates anything if no version exists yet. Returns the version id.
+  const ensureActiveVersion = useCallback((): string => {
+    if (activeVersionIdRef.current) return activeVersionIdRef.current;
+    const meta = promptVersions.createVersion({
+      preset: "balanced",
+      label: `Balanced — ${new Date().toLocaleDateString()}`,
+    });
+    activeVersionIdRef.current = meta.id;
+    return meta.id;
+  }, [promptVersions]);
+
+  // doSave is what renderStore calls when a render finishes. We rewrite the
+  // angle id to include the active version's suffix so storage stays
+  // partitioned per version. The runtime store still operates on base ids.
+  const doSave = useCallback(
+    (angleId: string, angleName: string, imageDataUrl: string) => {
+      const versionId = ensureActiveVersion();
+      const versionedAngleId = makeVersionedAngleId(angleId, versionId);
+      saveImage.mutate(
+        { angleId: versionedAngleId, angleName, imageDataUrl },
+        {
+          onSuccess: () => {
+            // Bump the active version's updatedAt so the chip shows recent activity.
+            promptVersions.touchActiveVersion();
+          },
+          onError: (err) => console.error(`Failed to save ${angleName}:`, err),
+        },
+      );
+    },
+    [saveImage, promptVersions, ensureActiveVersion],
+  );
 
   if (!brief || !spatialData || !bigIdea) {
     return (
@@ -168,8 +268,11 @@ export function PromptGenerator() {
     brandIntelligence: approvedBrandIntel,
   };
 
-  /** Local wrapper that closes over current project data */
-  const buildPrompt = (angleId: string): string => generatePrompt(angleId, promptParams);
+  /** Local wrapper that closes over current project data + active style preset */
+  const buildPrompt = (angleId: string): string => {
+    const base = generatePrompt(angleId, promptParams);
+    return applyStylePresetToPrompt(base, activePreset, activeCustomEmphasis);
+  };
 
   const handleGenerateHeroImage = async () => {
     const prompt = heroPrompt || buildPrompt("hero_34");
@@ -366,10 +469,28 @@ export function PromptGenerator() {
   const completedCount = Object.values(generatedImages).filter(img => img.status === "complete").length;
   const totalViews = allAngles.length;
 
+  // Versions header — shown above every phase. Lets the user switch between
+  // saved versions (each with its own preset + render set) or spin up a new
+  // one. Generation handlers auto-create "Balanced" on first use.
+  const versionsHeader = effectiveProjectId ? (
+    <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
+      <PromptVersionTabs
+        versions={promptVersions.versions}
+        activeVersionId={promptVersions.activeVersionId}
+        onSelectVersion={promptVersions.selectVersion}
+        onCreateVersion={promptVersions.createVersion}
+        onDeleteVersion={promptVersions.deleteVersion}
+        disabled={isGeneratingHero || isGenerating}
+      />
+    </div>
+  ) : null;
+
   // Phase 1: Generate Hero Image
   if (phase === "prompt" || phase === "hero-generation") {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
+        {versionsHeader}
+
         {/* Header */}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Generate Booth Renders</h2>
@@ -472,6 +593,7 @@ export function PromptGenerator() {
   if (phase === "hero-review") {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
+        {versionsHeader}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Review Hero Image</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
@@ -588,6 +710,7 @@ export function PromptGenerator() {
   // Phase 3: All Views Generated / Generating
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {versionsHeader}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Generated Renders</h2>

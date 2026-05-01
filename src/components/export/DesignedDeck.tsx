@@ -275,7 +275,7 @@ export function DesignedDeck({
 
           {isGenerating && (
             <p className="text-[11px] text-muted-foreground text-center">
-              Claude takes ~30–60 seconds to design a full deck. We'll cache it so you don't pay twice.
+              Canopy takes ~30–60 seconds to design a full deck. We'll cache it so you don't pay twice.
             </p>
           )}
 

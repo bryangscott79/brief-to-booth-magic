@@ -229,7 +229,7 @@ export function DesignedDeck({
             <Badge variant="outline" className="text-[10px] uppercase tracking-wider">Beta</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            Claude designs every slide as HTML — typography, layout, brand color, image placement.
+            Canopy designs every slide as HTML — typography, layout, brand color, image placement.
             Picks up your full project context, brand voice, and render images. No bullet-point template.
           </CardDescription>
         </CardHeader>

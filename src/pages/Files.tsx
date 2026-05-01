@@ -90,7 +90,7 @@ export default function FilesPage() {
   const selectedImageObjects = filtered.filter((img) => selectedImages.has(img.id));
 
   return (
-    <AppLayout>
+    <AppLayout surface="light">
       <div className="container py-10 max-w-7xl">
         {isLoading ? (
           <div className="flex items-center justify-center py-24">

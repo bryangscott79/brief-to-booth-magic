@@ -188,7 +188,7 @@ export default function PricingPage() {
 
   if (!projectId) {
     return (
-      <AppLayout>
+      <AppLayout surface="light">
         <div className="container py-12">
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
@@ -201,7 +201,7 @@ export default function PricingPage() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout surface="light">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">

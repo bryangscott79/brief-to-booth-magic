@@ -18,10 +18,13 @@
     --background: 212 60% 11%;              /* #0B1B2B navy */
     --foreground: 220 15% 98%;
 
-    --card: 217 33% 13%;                    /* #1F2937 charcoal lightened */
+    /* Lifted card surface — stands out clearly against the navy background.
+     * Was 217 33% 13% which sat right on top of the background and felt
+     * muddy on dense working pages (Spatial, Prompts, Files, Pricing). */
+    --card: 217 24% 18%;                    /* lifted charcoal */
     --card-foreground: 220 15% 98%;
 
-    --popover: 217 33% 13%;
+    --popover: 217 24% 18%;
     --popover-foreground: 220 15% 98%;
 
     /* Primary = Canopy gradient purple anchor */
@@ -92,12 +95,20 @@
     /* Surface shadows */
     --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -16px rgba(0, 0, 0, 0.5);
 
-    /* Glass surface layers */
-    --surface-glass: rgba(255, 255, 255, 0.04);
-    --surface-glass-hover: rgba(255, 255, 255, 0.07);
-    --surface-glass-active: rgba(255, 255, 255, 0.1);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-subtle-strong: rgba(255, 255, 255, 0.14);
+    /* Glass surface layers — bumped slightly so working pages don't feel
+     * muddy. Sidebar + hero panels still read dark; interactive cards lift. */
+    --surface-glass: rgba(255, 255, 255, 0.06);
+    --surface-glass-hover: rgba(255, 255, 255, 0.10);
+    --surface-glass-active: rgba(255, 255, 255, 0.13);
+    --border-subtle: rgba(255, 255, 255, 0.10);
+    --border-subtle-strong: rgba(255, 255, 255, 0.16);
+
+    /* Bright working surface — used by .canopy-panel-light for forms,
+     * editors, and dense lists where dark-on-dark felt heavy. Off-white
+     * with a hint of warmth so it sits cleanly on the navy. */
+    --surface-bright: 220 25% 98%;          /* near-white */
+    --surface-bright-foreground: 217 33% 13%;
+    --surface-bright-muted: 220 13% 50%;
 
     /* Legacy compatibility (kept for components that still reference these) */
     --surface-elevated: 217 33% 13%;
@@ -200,6 +211,68 @@
     background: var(--surface-glass-hover);
     border-color: var(--border-subtle-strong);
     box-shadow: var(--shadow-panel), var(--shadow-glow-violet);
+  }
+
+  /* ── Light working surface ─────────────────────────────────────────────
+   * Opt-in companion to .canopy-panel for pages that feel heavy on the
+   * dark glass: forms, dense editors, file lists, table-style views.
+   * Sidebar + landing keep the dark glass aesthetic; pages mark their
+   * inner content area with .canopy-surface-light so cards inside
+   * automatically lift to a near-white treatment with dark text.
+   */
+  .canopy-panel-light {
+    background: hsl(var(--surface-bright));
+    color: hsl(var(--surface-bright-foreground));
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 14px 32px -18px rgba(0, 0, 0, 0.45);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .canopy-panel-light .text-muted-foreground {
+    color: hsl(var(--surface-bright-muted));
+  }
+
+  .canopy-panel-light hr,
+  .canopy-panel-light [data-canopy-divider] {
+    border-color: rgba(15, 23, 42, 0.08);
+  }
+
+  /* Container token override: any shadcn component inside .canopy-surface-light
+   * automatically picks up the light treatment because we re-bind the design
+   * tokens it reads. Cards (bg-card), buttons (border), inputs, popovers —
+   * all flip in one place. Sidebar tokens are intentionally untouched so
+   * the chrome stays dark. */
+  .canopy-surface-light {
+    --background: var(--surface-bright);
+    --foreground: var(--surface-bright-foreground);
+    --card: var(--surface-bright);
+    --card-foreground: var(--surface-bright-foreground);
+    --popover: var(--surface-bright);
+    --popover-foreground: var(--surface-bright-foreground);
+    --muted: 220 16% 95%;
+    --muted-foreground: var(--surface-bright-muted);
+    --secondary: 220 16% 95%;
+    --secondary-foreground: var(--surface-bright-foreground);
+    --accent: 220 16% 95%;
+    --accent-foreground: var(--surface-bright-foreground);
+    --border: 217 16% 88%;
+    --input: 217 16% 90%;
+    /* Glass + panel utilities switch to the light treatment too. */
+    --surface-glass: rgba(15, 23, 42, 0.04);
+    --surface-glass-hover: rgba(15, 23, 42, 0.07);
+    --surface-glass-active: rgba(15, 23, 42, 0.10);
+    --border-subtle: rgba(15, 23, 42, 0.10);
+    --border-subtle-strong: rgba(15, 23, 42, 0.16);
+    --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 14px 32px -18px rgba(15, 23, 42, 0.2);
+  }
+
+  /* Inside a light surface the canopy-panel utility should not blur the
+   * background — there's no glass to see through. */
+  .canopy-surface-light .canopy-panel {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   /* Canopy gradient text */

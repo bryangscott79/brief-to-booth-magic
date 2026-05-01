@@ -70,6 +70,23 @@ export default function ActivationTypes() {
   const [newCategory, setNewCategory] = useState<string>("engagement");
   const [newDescription, setNewDescription] = useState("");
 
+  // Filter types by the agency's industries. A type matches if any of its
+  // industries[] tags overlaps the agency's industries list.
+  // Custom (non-builtin) types always show — they're agency-owned.
+  //
+  // IMPORTANT: this useMemo MUST run on every render — it cannot live
+  // below the `isLoading` early return below, or React will throw
+  // "Rendered more hooks than during the previous render" once the
+  // query resolves and the loading branch is no longer taken.
+  const visibleTypes = useMemo(() => {
+    return (types || []).filter((t) => {
+      if (!t.isBuiltin) return true;
+      const typeIndustries = (((t as any).industries as string[] | undefined) ?? ["experiential"]);
+      const candidates = industryFilter === "all" ? agencyIndustries : [industryFilter];
+      return typeIndustries.some((slug) => candidates.includes(slug));
+    });
+  }, [types, agencyIndustries, industryFilter]);
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -79,18 +96,6 @@ export default function ActivationTypes() {
       </AppLayout>
     );
   }
-
-  // Filter types by the agency's industries. A type matches if any of its
-  // industries[] tags overlaps the agency's industries list.
-  // Custom (non-builtin) types always show — they're agency-owned.
-  const visibleTypes = useMemo(() => {
-    return (types || []).filter((t) => {
-      if (!t.isBuiltin) return true;
-      const typeIndustries = (((t as any).industries as string[] | undefined) ?? ["experiential"]);
-      const candidates = industryFilter === "all" ? agencyIndustries : [industryFilter];
-      return typeIndustries.some((slug) => candidates.includes(slug));
-    });
-  }, [types, agencyIndustries, industryFilter]);
 
   const grouped = visibleTypes.reduce<Record<string, typeof visibleTypes>>((acc, t) => {
     const cat = t.category || "other";

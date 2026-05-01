@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BriefUpload } from "@/components/brief/BriefUpload";
 import { GuidedBriefBuilder } from "@/components/brief/GuidedBriefBuilder";
+import { InspirationIntake } from "@/components/brief/InspirationIntake";
 import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { useSearchParams } from "react-router-dom";
@@ -23,7 +24,7 @@ export default function UploadPage() {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <AppLayout surface="light">
         <div className="container py-12 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -32,7 +33,7 @@ export default function UploadPage() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout surface="light">
       <div className="container py-12 space-y-12">
         <div>
           <div className="text-center mb-8">
@@ -94,16 +95,26 @@ export default function UploadPage() {
         </div>
 
         {projectId && mode === "upload" && (
-          <div className="max-w-5xl mx-auto">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold tracking-tight">Project Knowledge Base</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Add supporting docs — RFPs, inspiration, pricing, brand assets — so the AI can
-                reference them when generating strategy, prompts, and exports.
-              </p>
+          <>
+            {/* Inspiration intake — collected first so it grounds every
+             * downstream generation step. Documents land in the project
+             * KB tagged 'inspiration' and are retrieved by project-scope
+             * RAG during strategy + prompt generation. */}
+            <div className="max-w-3xl mx-auto">
+              <InspirationIntake projectId={projectId} />
             </div>
-            <ProjectKnowledgeBase projectId={projectId} />
-          </div>
+
+            <div className="max-w-5xl mx-auto">
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold tracking-tight">Project Knowledge Base</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add supporting docs — RFPs, inspiration, pricing, brand assets — so the AI can
+                  reference them when generating strategy, prompts, and exports.
+                </p>
+              </div>
+              <ProjectKnowledgeBase projectId={projectId} />
+            </div>
+          </>
         )}
       </div>
     </AppLayout>

@@ -46,6 +46,7 @@ const AdminAgencies = lazy(() => import("./pages/AdminAgencies"));
 const AccessSuspended = lazy(() => import("./pages/AccessSuspended"));
 const OnboardingCreateAgency = lazy(() => import("./pages/OnboardingCreateAgency"));
 const Pricing = lazy(() => import("./pages/Pricing"));
+const AgencyPricing = lazy(() => import("./pages/AgencyPricing"));
 const AdminIndustries = lazy(() => import("./pages/AdminIndustries"));
 const AdminIndustryDashboard = lazy(() => import("./pages/AdminIndustryDashboard"));
 const IndustryDetail = lazy(() => import("./pages/IndustryDetail"));
@@ -55,53 +56,125 @@ const queryClient = new QueryClient();
 const STALE_CHUNK_RELOAD_KEY = "canopy:stale-chunk-reload-attempted";
 const STALE_CHUNK_RELOAD_COOLDOWN_MS = 10_000;
 
-class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
+interface AppErrorBoundaryState {
+  hasError: boolean;
+  isChunkError: boolean;
+  errorMessage: string;
+}
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+function isChunkLoadError(error: unknown) {
+  const message = String(
+    error instanceof Error ? error.message : (error as { message?: unknown })?.message ?? error,
+  );
+  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+    message,
+  );
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = { hasError: false, isChunkError: false, errorMessage: "" };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return {
+      hasError: true,
+      isChunkError: isChunkLoadError(error),
+      errorMessage: String(error?.message ?? error),
+    };
   }
 
   private recoverFromStaleChunk(error: Error) {
-    const message = String(error?.message ?? error);
-    const isChunkFailure = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message);
+    if (!isChunkLoadError(error)) return false;
     const lastReload = Number(sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) ?? 0);
     const canRetry = Date.now() - lastReload >= STALE_CHUNK_RELOAD_COOLDOWN_MS;
-
-    if (isChunkFailure && canRetry) {
-      sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, String(Date.now()));
-      window.location.reload();
-      return true;
-    }
-
-    return false;
+    if (!canRetry) return false;
+    sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, String(Date.now()));
+    window.location.reload();
+    return true;
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("App render failed", error, errorInfo);
+    // Only auto-reload for chunk failures — render errors won't fix themselves
+    // by reloading, so don't trap the user in a loop.
     this.recoverFromStaleChunk(error);
   }
 
+  // Soft reset: clear boundary state without reloading. Lets a render-time
+  // bug be retried after the user navigates away.
+  handleTryAgain = () => {
+    this.setState({ hasError: false, isChunkError: false, errorMessage: "" });
+  };
+
+  // Hard reset: clear the chunk-reload cooldown then reload. Used by the
+  // chunk-error UI so manual refresh is never blocked by the cooldown.
   handleReload = () => {
-    window.location.reload();
+    try { sessionStorage.removeItem(STALE_CHUNK_RELOAD_KEY); } catch { /* ignore */ }
+    // Cache-bust so the browser/CDN doesn't hand back the same stale bundle.
+    const url = new URL(window.location.href);
+    url.searchParams.set("_canopy_reload", String(Date.now()));
+    window.location.replace(url.toString());
+  };
+
+  handleGoHome = () => {
+    this.setState({ hasError: false, isChunkError: false, errorMessage: "" });
+    window.location.assign("/");
   };
 
   render() {
     if (this.state.hasError) {
+      // Stale-bundle path — likely fixed by a refresh.
+      if (this.state.isChunkError) {
+        return (
+          <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+            <div className="max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-lg">
+              <h1 className="text-xl font-semibold mb-2">Canopy needs a refresh</h1>
+              <p className="text-sm text-muted-foreground mb-5">
+                A previous app bundle failed to load. Refresh to get the latest version.
+              </p>
+              <button
+                type="button"
+                onClick={this.handleReload}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Refresh app
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // Render-time error — refreshing won't help. Offer to retry the
+      // current view (clears boundary state) or go back to the dashboard.
       return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
           <div className="max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-lg">
-            <h1 className="text-xl font-semibold mb-2">Canopy needs a refresh</h1>
-            <p className="text-sm text-muted-foreground mb-5">
-              A previous app bundle failed to load. Refresh to get the latest version.
+            <h1 className="text-xl font-semibold mb-2">Something went wrong on this page</h1>
+            <p className="text-sm text-muted-foreground mb-3">
+              The view you tried to open hit an error. Going back to your dashboard usually clears it.
             </p>
-            <button
-              type="button"
-              onClick={this.handleReload}
-              className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Refresh app
-            </button>
+            {this.state.errorMessage ? (
+              <p className="text-[11px] text-muted-foreground/70 mb-5 break-words font-mono">
+                {this.state.errorMessage}
+              </p>
+            ) : (
+              <div className="mb-5" />
+            )}
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={this.handleTryAgain}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-border px-4 text-sm font-medium hover:bg-accent"
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                onClick={this.handleGoHome}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Go to dashboard
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -166,6 +239,11 @@ const App = () => (
               <Route path="/pricing" element={
                 <ProtectedRoute>
                   <Pricing />
+                </ProtectedRoute>
+              } />
+              <Route path="/agency/pricing" element={
+                <ProtectedRoute>
+                  <AgencyPricing />
                 </ProtectedRoute>
               } />
               <Route path="/prompts" element={

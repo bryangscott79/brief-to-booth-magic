@@ -15,6 +15,7 @@ import {
   EyeOff,
   BookOpen,
   Sparkles,
+  Calculator,
 } from "lucide-react";
 import { CanopyLogo } from "@/components/canopy";
 import {
@@ -42,6 +43,7 @@ const agencyNavItems = [
   { path: "/clients",                  label: "Clients",           icon: Users },
   { path: "/agency/activation-types",  label: "Activation Types",  icon: Sparkles },
   { path: "/agency/knowledge",         label: "Agency Knowledge",  icon: BookOpen },
+  { path: "/agency/pricing",           label: "Pricing",           icon: Calculator },
   { path: "/company",                  label: "Company Profile",   icon: Building2 },
   { path: "/agency/team",              label: "Team",              icon: Users },
 ];
@@ -70,6 +72,8 @@ export function AppSidebar() {
     if (path === "/clients" && location.pathname.startsWith("/clients/")) return true;
     // "/agency/activation-types" should stay active on its detail routes
     if (path === "/agency/activation-types" && location.pathname.startsWith("/agency/activation-types/")) return true;
+    // "/agency/pricing" should stay active when the user clicks into a per-project BOM editor
+    if (path === "/agency/pricing" && location.pathname === "/pricing") return true;
     // "/admin/industries" should stay active on its detail routes
     if (path === "/admin/industries" && location.pathname.startsWith("/admin/industries/")) return true;
     return false;

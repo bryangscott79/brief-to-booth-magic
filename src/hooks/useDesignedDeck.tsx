@@ -92,9 +92,13 @@ export function useDesignedDeck(projectId: string | null | undefined) {
       setError(null);
       try {
         const { data, error: invokeErr } = await supabase.functions.invoke(
-          "generate-designed-deck",
+          "generate-presentation",
           {
             body: {
+              // mode flag — generate-presentation routes to the HTML-deck
+              // designer when set. Without it, the function returns the
+              // legacy slide-structure shape used by pptxgenjs.
+              mode: "designed-deck",
               parsedBrief: input.parsedBrief,
               elements: input.elements,
               projectName: input.projectName,
@@ -141,9 +145,10 @@ export function useDesignedDeck(projectId: string | null | undefined) {
       setError(null);
       try {
         const { data, error: invokeErr } = await supabase.functions.invoke(
-          "generate-designed-deck",
+          "generate-presentation",
           {
             body: {
+              mode: "designed-deck",
               parsedBrief: input.parsedBrief,
               elements: input.elements,
               projectName: input.projectName,
@@ -260,7 +265,7 @@ export function useDesignedDeck(projectId: string | null | undefined) {
   }> => {
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke(
-        "generate-designed-deck",
+        "generate-presentation",
         { body: { ping: true } },
       );
       if (invokeErr) {

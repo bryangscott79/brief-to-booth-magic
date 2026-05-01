@@ -23,10 +23,11 @@ verify_jwt = false
 
 [functions.generate-presentation]
 verify_jwt = false
-
-# AI-designed HTML slide decks (Claude Sonnet writes the design directly)
-[functions.generate-designed-deck]
-verify_jwt = false
+# generate-presentation is now a multi-mode router. Body.mode === "designed-deck"
+# triggers the AI-designed HTML deck flow; default is the legacy slide-structure
+# response. We tried a separate generate-designed-deck function first but
+# Lovable's deployment pipeline did not pick it up — folding both modes into
+# one already-deployed function avoids that issue.
 
 [functions.generate-video]
 verify_jwt = false

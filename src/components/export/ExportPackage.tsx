@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ProposalExport } from "./ProposalExport";
+import { DesignedDeck } from "./DesignedDeck";
 import { FigmaExportPanel } from "./FigmaExportPanel";
 import { SaveLearningsButton } from "./SaveLearningsButton";
 import { useRhinoRenders } from "@/hooks/useRhinoRenders";
@@ -375,7 +376,21 @@ export function ExportPackage() {
         </p>
       </div>
 
-      {/* Proposal Export with Template System */}
+      {/* AI-designed deck — primary path. Claude designs every slide as
+       * HTML+CSS using the full project + agency context. */}
+      <DesignedDeck
+        projectId={projectId ?? null}
+        parsedBrief={brief}
+        elements={elements}
+        projectName={currentProject?.name || brief.brand?.name || 'Project'}
+        images={images || []}
+        brandColor={profile?.brand_color ?? undefined}
+        secondaryColor={profile?.secondary_color ?? undefined}
+        agencyName={profile?.company_name || (agency as any)?.name || undefined}
+      />
+
+      {/* Classic export — pptxgenjs path with inline DeckEditor. Kept as a
+       * secondary option for users who want a fast, structured export. */}
       <ProposalExport
         brief={brief}
         elements={elements}

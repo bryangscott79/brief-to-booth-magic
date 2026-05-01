@@ -24,6 +24,10 @@ verify_jwt = false
 [functions.generate-presentation]
 verify_jwt = false
 
+# AI-designed HTML slide decks (Claude Sonnet writes the design directly)
+[functions.generate-designed-deck]
+verify_jwt = false
+
 [functions.generate-video]
 verify_jwt = false
 

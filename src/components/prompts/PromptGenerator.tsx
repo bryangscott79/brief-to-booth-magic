@@ -53,6 +53,16 @@ import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { useRenderReferences } from "@/hooks/useRenderReferences";
 import { AttachReference } from "@/components/prompts/AttachReference";
 
+// Project-wide visual references — inspiration, brand images, etc.
+// Routed into every render call so the model treats them as standing
+// brand context (not just per-view attachments).
+import { useProjectVisualReferences } from "@/hooks/useProjectVisualReferences";
+
+// Pre-flight verification panel — shows the user every input the model
+// is about to receive (brand identity, brief, spatial, references) so
+// they can confirm or fix anything before kicking off generation.
+import { PreflightChecklist } from "@/components/prompts/PreflightChecklist";
+
 // Versioning + style presets
 import { usePromptVersions } from "@/hooks/usePromptVersions";
 import { PromptVersionTabs } from "@/components/prompts/PromptVersionTabs";
@@ -157,6 +167,12 @@ export function PromptGenerator() {
   // reference" on each view card. URLs flow into the next regeneration of
   // that angle as extraReferenceUrls; cleared on success.
   const renderRefs = useRenderReferences(effectiveProjectId);
+
+  // Project-wide visual references — inspiration images, brand assets, etc.
+  // These are sent on EVERY generation call so the model has the user's
+  // visual brand context as standing input, not just per-view attachments.
+  const projectVisualRefs = useProjectVisualReferences(effectiveProjectId);
+  const projectVisualRefUrls = projectVisualRefs.inspirationUrls;
 
   // Calculate booth dimensions
   const boothDimensions = useMemo(() => {
@@ -323,6 +339,15 @@ export function PromptGenerator() {
     const prompt = heroPrompt || buildPrompt("hero_34");
     if (!heroPrompt) renderStore.setHeroPrompt(prompt);
 
+    // Pull both per-hero file attachments and project-wide visual
+    // references (inspiration images + brand assets) so the model has
+    // every visual context it can use on the very first generation.
+    const heroExtraRefs = renderRefs.urlsForAngle("hero_34");
+    const visualRefUrls = projectVisualRefUrls;
+    const combinedRefs = [...heroExtraRefs, ...visualRefUrls].filter(
+      (url, idx, arr) => url && arr.indexOf(url) === idx,
+    );
+
     try {
       await renderStore.generateHeroImage({
         prompt,
@@ -335,12 +360,19 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        extraReferenceUrls: combinedRefs.length > 0 ? combinedRefs : undefined,
         onSave: doSave,
       });
 
+      // Clear the hero's per-attachment list on success; keep the project
+      // visual references — those are passive context, not consumables.
+      renderRefs.clear("hero_34");
+
       toast({
         title: "Hero image generated",
-        description: "Review the image and provide feedback or proceed to generate all views",
+        description: heroExtraRefs.length > 0
+          ? `Used ${heroExtraRefs.length} attached reference${heroExtraRefs.length === 1 ? "" : "s"} + ${visualRefUrls.length} project visual${visualRefUrls.length === 1 ? "" : "s"}.`
+          : "Review the image and provide feedback or proceed to generate all views",
       });
     } catch (error) {
       console.error("Error generating hero:", error);
@@ -393,11 +425,16 @@ export function PromptGenerator() {
       brandContext: ragBrandContext || undefined,
       suiteContext: ragSuiteContext || undefined,
       brandLogoUrl,
+      // Project-wide visual references — applied on every view so the
+      // model has consistent brand/material/mood context across angles.
+      extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
       onSave: doSave,
     }).then(() => {
       toast({
         title: "All views generated!",
-        description: "Your coordinated booth renders are ready",
+        description: projectVisualRefUrls.length > 0
+          ? `Used ${projectVisualRefUrls.length} project visual reference${projectVisualRefUrls.length === 1 ? "" : "s"} on every view.`
+          : "Your coordinated booth renders are ready",
       });
     });
   };
@@ -408,7 +445,12 @@ export function PromptGenerator() {
 
     // Collect any user-attached references for this specific angle so the
     // model has them on this regeneration. Cleared after success.
-    const extraReferenceUrls = renderRefs.urlsForAngle(angleId);
+    // Combine with project-wide visual references (deduped) so brand
+    // context is always present even on a single-view regen.
+    const angleAttachments = renderRefs.urlsForAngle(angleId);
+    const extraReferenceUrls = [...angleAttachments, ...projectVisualRefUrls].filter(
+      (url, idx, arr) => url && arr.indexOf(url) === idx,
+    );
 
     try {
       await renderStore.regenerateView({
@@ -466,6 +508,7 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
         onSave: doSave,
       });
 
@@ -495,6 +538,7 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
         onSave: doSave,
       });
 
@@ -662,6 +706,19 @@ export function PromptGenerator() {
           </CardContent>
         </Card>
 
+        {/* Pre-flight check — collapsible "what's the AI about to see"
+          * panel. Surfaces brand, brief, spatial, dimensions, logo, and
+          * visual references with one-click edit links so the user can
+          * fix anything before kicking off the hero generation. */}
+        <PreflightChecklist
+          projectId={effectiveProjectId}
+          brief={brief}
+          elements={elements}
+          boothDimensions={boothDimensions}
+          brandLogo={brandLogo ?? null}
+          visualReferences={projectVisualRefs.selected.filter((r) => r.role !== "brand-logo")}
+        />
+
         {/* Step 1: Generate Hero */}
         <Card className="element-card">
           <CardHeader>
@@ -703,8 +760,20 @@ export function PromptGenerator() {
               </div>
             )}
             
-            <Button 
-              onClick={handleGenerateHeroImage} 
+            {/* Reference attachments for the hero generation. Same per-angle
+             * scratchpad as the standard views — uploads land in project KB
+             * tagged "render-reference" and pass through as
+             * extraReferenceUrls on the next hero gen. */}
+            <AttachReference
+              angleId="hero_34"
+              refs={renderRefs.byAngle["hero_34"] ?? []}
+              onAttach={renderRefs.attach}
+              onRemove={renderRefs.remove}
+              disabled={isGeneratingHero}
+            />
+
+            <Button
+              onClick={handleGenerateHeroImage}
               className="w-full btn-glow"
               disabled={isGeneratingHero}
             >

@@ -8,8 +8,8 @@
 // regen but kept on failure so the user can retry without re-uploading.
 
 import { useCallback, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useKnowledgeDocuments } from "@/hooks/useKnowledgeDocuments";
+import { signOne } from "@/hooks/useSignedUrls";
 
 export interface PendingReference {
   id: string;
@@ -47,14 +47,17 @@ export function useRenderReferences(projectId: string | null | undefined) {
           title: `Render reference — ${file.name}`,
           userTags: ["render-reference", "image"],
         });
-        // Resolve a public URL from the storage path.
-        const { data } = supabase.storage
-          .from(result.storage_bucket)
-          .getPublicUrl(result.storage_path);
+        // Resolve a SIGNED URL — the bucket is private so getPublicUrl
+        // would return a 403 link. 1-hour TTL is plenty for both the
+        // chip preview and the edge function's image fetch.
+        const url = await signOne(result.storage_bucket, result.storage_path);
+        if (!url) {
+          throw new Error("Could not generate signed URL for upload");
+        }
         setByAngle((prev) => ({
           ...prev,
           [angleId]: (prev[angleId] ?? []).map((r) =>
-            r.id === tempId ? { ...r, status: "ready", url: data.publicUrl } : r,
+            r.id === tempId ? { ...r, status: "ready", url } : r,
           ),
         }));
       } catch (e) {

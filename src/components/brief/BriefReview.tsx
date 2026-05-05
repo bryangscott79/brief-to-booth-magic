@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Check, Edit2, ChevronRight, X, Save, Plus, Trash2 } from "lucide-react";
@@ -187,7 +187,23 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
   const { currentProject, setActiveStep, setParsedBrief } = useProjectStore();
   const { navigate } = useProjectNavigate();
   const { data: dbProject } = useProject(projectId ?? undefined);
-  const brief = currentProject?.parsedBrief;
+
+  // Defensive fallback: read parsedBrief from EITHER the store OR the DB row.
+  // The store is the source of truth during editing, but on a fresh navigation
+  // (e.g. Continue to Review just fired) the store may be a tick behind the
+  // DB. Falling back to dbProject.parsed_brief keeps us from rendering the
+  // "No brief data to review" empty state when the data clearly exists.
+  const dbBrief = (dbProject as any)?.parsed_brief as ParsedBrief | null | undefined;
+  const brief = currentProject?.parsedBrief ?? dbBrief ?? null;
+
+  // If the store is empty but the DB has a brief, hydrate the store so
+  // subsequent reads from anywhere in the app see consistent state.
+  useEffect(() => {
+    if (!currentProject?.parsedBrief && dbBrief) {
+      setParsedBrief(dbBrief);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbBrief, currentProject?.parsedBrief]);
 
   // local draft state — only mutated while editing a section
   const [draft, setDraft] = useState<ParsedBrief | null>(null);

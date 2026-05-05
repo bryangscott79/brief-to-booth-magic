@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload, FileText, Copy, Loader2, AlertCircle, ArrowRight, ArrowLeft,
   Building2, Plus, CheckCircle2, Sparkles, ChevronDown, ChevronUp, Tag,
@@ -27,6 +28,28 @@ import { useCustomProjectTypes, useUpsertCustomProjectType } from "@/hooks/useCu
 
 interface BriefUploadProps {
   projectId: string | null;
+  /**
+   * When true, BriefUpload renders the confirm panel WITHOUT its own
+   * "Continue to Review" CTA. The parent receives state updates via
+   * onContinueStateChange and renders the button itself, typically below
+   * the brand-logo / inspiration / KB widgets so users finish capturing
+   * project context before advancing.
+   */
+  hideContinueCTA?: boolean;
+  /**
+   * Called whenever the confirm-step state changes. The parent uses this
+   * to render its own Continue button: `confirm` is the action,
+   * `canContinue` says whether to enable it, `isSaving` shows progress.
+   * Only invoked while the component is on the "confirm" step; clearing
+   * (passing null) signals the parent to hide its CTA.
+   */
+  onContinueStateChange?: (
+    state: {
+      confirm: () => Promise<void>;
+      canContinue: boolean;
+      isSaving: boolean;
+    } | null,
+  ) => void;
 }
 
 type UploadStep = "upload" | "parsing" | "confirm";
@@ -78,7 +101,8 @@ function fuzzyMatchClient(brandName: string, clients: { id: string; name: string
   return null;
 }
 
-export function BriefUpload({ projectId }: BriefUploadProps) {
+export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange }: BriefUploadProps) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<UploadStep>("upload");
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");
@@ -296,6 +320,27 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
         } as any)
         .eq("id", dbProjectId);
 
+      // Critical: prime the React Query cache for ["project", id] with the
+      // freshly-saved fields. Without this, the Review page mounts and
+      // hydrates the project store from a STALE cache entry (where
+      // parsed_brief is still null because the project was first created
+      // empty). That stale hydration overwrites the parsedBrief we just
+      // set on the store via loadFromDb below — Review then renders
+      // "No brief data to review." Setting the cache now means the next
+      // useProject(id) read returns the correct row, and the invalidation
+      // ensures any concurrent reads refresh from the server.
+      queryClient.setQueryData(["project", dbProjectId], (old: any) => ({
+        ...(old ?? { id: dbProjectId }),
+        brief_text: parseResult.briefText,
+        brief_file_name: parseResult.sourceName,
+        brief_file_url: parseResult.briefFileUrl ?? null,
+        parsed_brief: parseResult.parsed,
+        status: "reviewed",
+        project_type: type,
+        client_id: effectiveClientId,
+      }));
+      void queryClient.invalidateQueries({ queryKey: ["project", dbProjectId] });
+
       // Capture brand intelligence if client selected and knowledge capture is on
       const shouldCapture = effectiveClientId && parseResult.parsed &&
         (captureKnowledge || effectiveClientId !== pendingNewClientId);
@@ -337,6 +382,26 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
       setIsSaving(false);
     }
   };
+
+  // Publish confirm-step state to the parent so it can render its own
+  // Continue button (positioned below brand-logo / inspiration / KB on
+  // the Upload page). Sends null while we're not on the confirm step
+  // so the parent hides any external CTA.
+  useEffect(() => {
+    if (!onContinueStateChange) return;
+    if (step !== "confirm" || !parseResult) {
+      onContinueStateChange(null);
+      return;
+    }
+    onContinueStateChange({
+      confirm: handleConfirmAndContinue,
+      canContinue: !!selectedType,
+      isSaving,
+    });
+    // handleConfirmAndContinue is recreated each render but the
+    // identity-stable state we care about is selectedType + isSaving.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, parseResult, selectedType, isSaving, onContinueStateChange]);
 
   const handleAddCustomType = async (newType: NewCustomType) => {
     try {
@@ -962,18 +1027,23 @@ export function BriefUpload({ projectId }: BriefUploadProps) {
           Upload different brief
         </button>
 
-        <Button
-          size="lg"
-          className="btn-glow px-8 h-12 rounded-xl"
-          disabled={!selectedType || isSaving}
-          onClick={handleConfirmAndContinue}
-        >
-          {isSaving ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
-          ) : (
-            <>Continue to Review<ArrowRight className="ml-2 h-4 w-4" /></>
-          )}
-        </Button>
+        {/* Internal CTA — hidden when the parent renders one externally
+          * (e.g. UploadPage shows the Continue button below the brand
+          * logo + inspiration + KB widgets). */}
+        {!hideContinueCTA && (
+          <Button
+            size="lg"
+            className="btn-glow px-8 h-12 rounded-xl"
+            disabled={!selectedType || isSaving}
+            onClick={handleConfirmAndContinue}
+          >
+            {isSaving ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
+            ) : (
+              <>Continue to Review<ArrowRight className="ml-2 h-4 w-4" /></>
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );

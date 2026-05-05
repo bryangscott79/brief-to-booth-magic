@@ -13,13 +13,16 @@
 //
 // We cap the total at MAX_REFS to avoid flooding the model. The brand
 // logo always takes a slot if present; the rest are filled newest-first.
+//
+// URLs are SIGNED (1-hour TTL) because the knowledge-documents bucket
+// is private — getPublicUrl returns links that 403.
 
 import { useMemo } from "react";
 import {
   useKnowledgeDocuments,
   type KnowledgeDocument,
 } from "@/hooks/useKnowledgeDocuments";
-import { supabase } from "@/integrations/supabase/client";
+import { useSignedUrls } from "@/hooks/useSignedUrls";
 
 /**
  * Hard cap on the number of reference images we send. Gemini will accept
@@ -36,13 +39,6 @@ export interface VisualReference {
    *  the reference for the model. */
   role: "brand-logo" | "inspiration" | "brand-image" | "other";
   uploadedAt: string;
-}
-
-function publicUrlFor(doc: KnowledgeDocument): string {
-  const { data } = supabase.storage
-    .from(doc.storage_bucket)
-    .getPublicUrl(doc.storage_path);
-  return data.publicUrl;
 }
 
 function isImageDoc(doc: KnowledgeDocument): boolean {
@@ -72,7 +68,8 @@ export function useProjectVisualReferences(projectId: string | null | undefined)
     scopeId: projectId ?? undefined,
   });
 
-  const all = useMemo<VisualReference[]>(() => {
+  // Filter + sort relevant image docs.
+  const relevantDocs = useMemo(() => {
     if (!documents) return [];
     return documents
       .filter(isImageDoc)
@@ -82,25 +79,18 @@ export function useProjectVisualReferences(projectId: string | null | undefined)
         if (tags.includes("render-reference")) return false;
         return true;
       })
-      .map<VisualReference>((d) => ({
-        documentId: d.id,
-        url: publicUrlFor(d),
-        filename: d.filename,
-        role: classifyRole(d),
-        uploadedAt: d.created_at,
-      }))
-      .sort((a, b) => (a.uploadedAt < b.uploadedAt ? 1 : -1));
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   }, [documents]);
 
   // Pick a capped set with the brand logo always first if present.
-  const selected = useMemo<VisualReference[]>(() => {
-    if (all.length === 0) return [];
-    const logo = all.find((r) => r.role === "brand-logo") ?? null;
-    const inspiration = all.filter((r) => r.role === "inspiration");
-    const brandImages = all.filter((r) => r.role === "brand-image");
-    const other = all.filter((r) => r.role === "other");
+  const selectedDocs = useMemo(() => {
+    if (relevantDocs.length === 0) return [];
+    const logo = relevantDocs.find((d) => classifyRole(d) === "brand-logo") ?? null;
+    const inspiration = relevantDocs.filter((d) => classifyRole(d) === "inspiration");
+    const brandImages = relevantDocs.filter((d) => classifyRole(d) === "brand-image");
+    const other = relevantDocs.filter((d) => classifyRole(d) === "other");
 
-    const chosen: VisualReference[] = [];
+    const chosen: KnowledgeDocument[] = [];
     if (logo) chosen.push(logo);
     for (const r of inspiration) {
       if (chosen.length >= MAX_REFS) break;
@@ -115,7 +105,26 @@ export function useProjectVisualReferences(projectId: string | null | undefined)
       chosen.push(r);
     }
     return chosen;
-  }, [all]);
+  }, [relevantDocs]);
+
+  const signedUrls = useSignedUrls(selectedDocs);
+
+  // Materialize VisualReference[] only when URLs have arrived.
+  const selected = useMemo<VisualReference[]>(() => {
+    return selectedDocs
+      .map<VisualReference | null>((doc) => {
+        const url = signedUrls[doc.id];
+        if (!url) return null;
+        return {
+          documentId: doc.id,
+          url,
+          filename: doc.filename,
+          role: classifyRole(doc),
+          uploadedAt: doc.created_at,
+        };
+      })
+      .filter((r): r is VisualReference => r !== null);
+  }, [selectedDocs, signedUrls]);
 
   // URLs only — convenient for passing into the edge function. Excludes
   // the brand logo because it goes in its own dedicated slot
@@ -126,7 +135,6 @@ export function useProjectVisualReferences(projectId: string | null | undefined)
   );
 
   return {
-    all,
     selected,
     inspirationUrls,
     isLoading,

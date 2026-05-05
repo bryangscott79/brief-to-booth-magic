@@ -7,7 +7,8 @@ import { BrandLogoUpload } from "@/components/brief/BrandLogoUpload";
 import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, FileText, Sparkles, ArrowLeft } from "lucide-react";
+import { Loader2, FileText, Sparkles, ArrowLeft, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Mode = "choose" | "upload" | "guided";
@@ -22,6 +23,17 @@ export default function UploadPage() {
     dbProject?.brief_text || dbProject?.brief_file_url || dbProject?.parsed_brief,
   );
   const [mode, setMode] = useState<Mode>(hasBriefContent ? "upload" : "choose");
+
+  // Confirm-step state lifted out of BriefUpload so the Continue CTA can
+  // live BELOW the brand logo / inspiration / KB context cards. Users see
+  // every supporting widget before the final action — they're more likely
+  // to upload their brand assets when the button isn't already shouting
+  // "you're done."
+  const [continueState, setContinueState] = useState<{
+    confirm: () => Promise<void>;
+    canContinue: boolean;
+    isSaving: boolean;
+  } | null>(null);
 
   if (isLoading) {
     return (
@@ -72,7 +84,11 @@ export default function UploadPage() {
                   </button>
                 </div>
               )}
-              <BriefUpload projectId={projectId} />
+              <BriefUpload
+                projectId={projectId}
+                hideContinueCTA
+                onContinueStateChange={setContinueState}
+              />
             </div>
           )}
 
@@ -123,6 +139,44 @@ export default function UploadPage() {
               </div>
               <ProjectKnowledgeBase projectId={projectId} />
             </div>
+
+            {/* Continue to Review — placed below all the supporting widgets
+              * so users finish capturing project context (logo, inspiration,
+              * KB) before advancing. Only renders once the BriefUpload
+              * component reaches its confirm step. */}
+            {continueState && (
+              <div className="max-w-3xl mx-auto pt-2">
+                <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/5 to-transparent px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Ready when you are</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      You can keep adding context above any time — it'll all flow into strategy
+                      and renders.
+                    </p>
+                  </div>
+                  <Button
+                    size="lg"
+                    className="btn-glow px-8 h-12 rounded-xl shrink-0"
+                    disabled={!continueState.canContinue || continueState.isSaving}
+                    onClick={() => {
+                      void continueState.confirm();
+                    }}
+                  >
+                    {continueState.isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        Continue to Review
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

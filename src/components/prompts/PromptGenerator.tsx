@@ -45,6 +45,14 @@ import {
 // Project units (imperial/metric) — preserved through render generation.
 import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
 
+// Project brand logo — passed to image gen as a reference image so the
+// real mark renders on signage instead of a hallucinated approximation.
+import { useBrandLogo } from "@/hooks/useBrandLogo";
+
+// Per-view supplemental references that the user attaches at regen time.
+import { useRenderReferences } from "@/hooks/useRenderReferences";
+import { AttachReference } from "@/components/prompts/AttachReference";
+
 // Versioning + style presets
 import { usePromptVersions } from "@/hooks/usePromptVersions";
 import { PromptVersionTabs } from "@/components/prompts/PromptVersionTabs";
@@ -138,6 +146,17 @@ export function PromptGenerator() {
   // imperial fallback. Reused below to format dimensions and units inside
   // generated prompts so renders match what's shown on screen.
   const { system: measurementSystem } = useMeasurementSystem(projectId, brief);
+
+  // Project brand logo — uploaded on the Upload page. When present we pass
+  // its public URL into every generation call so the model treats it as a
+  // brand-mark reference rather than relying on training data.
+  const { activeLogo: brandLogo } = useBrandLogo(effectiveProjectId);
+  const brandLogoUrl = brandLogo?.publicUrl;
+
+  // Per-view supplemental references — user attaches images via "Attach
+  // reference" on each view card. URLs flow into the next regeneration of
+  // that angle as extraReferenceUrls; cleared on success.
+  const renderRefs = useRenderReferences(effectiveProjectId);
 
   // Calculate booth dimensions
   const boothDimensions = useMemo(() => {
@@ -315,6 +334,7 @@ export function PromptGenerator() {
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
+        brandLogoUrl,
         onSave: doSave,
       });
 
@@ -372,6 +392,7 @@ export function PromptGenerator() {
       brandIntelligence: approvedBrandIntel,
       brandContext: ragBrandContext || undefined,
       suiteContext: ragSuiteContext || undefined,
+      brandLogoUrl,
       onSave: doSave,
     }).then(() => {
       toast({
@@ -385,6 +406,10 @@ export function PromptGenerator() {
     const angle = allAngles.find(a => a.id === angleId);
     if (!angle || !heroImage) return;
 
+    // Collect any user-attached references for this specific angle so the
+    // model has them on this regeneration. Cleared after success.
+    const extraReferenceUrls = renderRefs.urlsForAngle(angleId);
+
     try {
       await renderStore.regenerateView({
         angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio, isZoneInterior: !!(angle as any).isZoneInterior },
@@ -395,12 +420,19 @@ export function PromptGenerator() {
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
+        brandLogoUrl,
+        extraReferenceUrls: extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
         onSave: doSave,
       });
 
+      // Clear pending refs for this angle on success.
+      renderRefs.clear(angleId);
+
       toast({
         title: `${angle.name} regenerated`,
-        description: "New view generated successfully",
+        description: extraReferenceUrls.length > 0
+          ? `New view with ${extraReferenceUrls.length} attached reference${extraReferenceUrls.length === 1 ? "" : "s"}.`
+          : "New view generated successfully",
       });
     } catch (error) {
       toast({
@@ -433,6 +465,7 @@ export function PromptGenerator() {
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
+        brandLogoUrl,
         onSave: doSave,
       });
 
@@ -461,6 +494,7 @@ export function PromptGenerator() {
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
+        brandLogoUrl,
         onSave: doSave,
       });
 
@@ -1089,6 +1123,17 @@ export function PromptGenerator() {
                     <RefreshCw className="h-3 w-3" />
                   </Button>
                 </div>
+
+                {/* Attach a reference image for the next regeneration of
+                  * this view. Useful when the model needs help with a
+                  * specific material, finish, or signage detail. */}
+                <AttachReference
+                  angleId={angle.id}
+                  refs={renderRefs.byAngle[angle.id] ?? []}
+                  onAttach={renderRefs.attach}
+                  onRemove={renderRefs.remove}
+                  disabled={currentlyGenerating === angle.id}
+                />
               </CardContent>
             </Card>
           );
@@ -1169,6 +1214,13 @@ export function PromptGenerator() {
                         </Button>
                       )}
                     </div>
+                    <AttachReference
+                      angleId={angle.id}
+                      refs={renderRefs.byAngle[angle.id] ?? []}
+                      onAttach={renderRefs.attach}
+                      onRemove={renderRefs.remove}
+                      disabled={currentlyGenerating === angle.id}
+                    />
                   </CardContent>
                 </Card>
               );

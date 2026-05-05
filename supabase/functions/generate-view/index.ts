@@ -29,6 +29,10 @@ interface GenerateViewRequest {
   client_id?: string;
   activation_type_id?: string;
   project_id?: string;
+  /** Brand logo URL — sent as an additional reference image. */
+  brandLogoUrl?: string;
+  /** Optional one-off references attached at regen time. */
+  extraReferenceUrls?: string[];
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
     brandColors?: string[];
@@ -145,7 +149,7 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id }: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls }: GenerateViewRequest = await req.json();
 
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -255,6 +259,26 @@ OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinct
 ${consistencyBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`;
 
+    // Reference attachments — brand logo + any user extras layered after
+    // the primary referenceImageUrl so the model treats the latter as the
+    // visual anchor for the camera while the logo and extras inform
+    // branding and material choices.
+    const extraImages: Array<{ type: "image_url"; image_url: { url: string } }> = [];
+    const extraLabels: string[] = [];
+    if (brandLogoUrl) {
+      extraImages.push({ type: "image_url", image_url: { url: brandLogoUrl } });
+      extraLabels.push("BRAND LOGO — render this exact mark on signage, fascia, or any branded surfaces visible in this view.");
+    }
+    if (extraReferenceUrls?.length) {
+      for (const url of extraReferenceUrls) {
+        extraImages.push({ type: "image_url", image_url: { url } });
+      }
+      extraLabels.push(`USER REFERENCES (${extraReferenceUrls.length}) — additional images attached for this regeneration. Use them as inspiration only.`);
+    }
+    const extraLabelBlock = extraLabels.length
+      ? `\n\nADDITIONAL VISUAL REFERENCES:\n${extraLabels.join("\n")}`
+      : "";
+
     const result = await callGemini({
       model: "google/gemini-3-pro-image-preview",
       messages: [
@@ -263,7 +287,7 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
           content: [
             {
               type: "text",
-              text: editPrompt,
+              text: editPrompt + extraLabelBlock,
             },
             ...(referenceImageUrl ? [{
               type: "image_url",
@@ -271,6 +295,7 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
                 url: referenceImageUrl,
               },
             }] : []),
+            ...extraImages,
           ],
         },
       ],

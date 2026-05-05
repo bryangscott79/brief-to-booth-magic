@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { BriefUpload } from "@/components/brief/BriefUpload";
 import { GuidedBriefBuilder } from "@/components/brief/GuidedBriefBuilder";
 import { InspirationIntake } from "@/components/brief/InspirationIntake";
+import { BrandLogoUpload } from "@/components/brief/BrandLogoUpload";
 import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { useSearchParams } from "react-router-dom";
@@ -96,6 +97,14 @@ export default function UploadPage() {
 
         {projectId && mode === "upload" && (
           <>
+            {/* Brand logo upload — captured early so every downstream
+             * render references it. Image generation includes the logo
+             * URL as a reference image so signage and fascia render with
+             * the actual mark, not a hallucinated approximation. */}
+            <div className="max-w-3xl mx-auto">
+              <BrandLogoUpload projectId={projectId} />
+            </div>
+
             {/* Inspiration intake — collected first so it grounds every
              * downstream generation step. Documents land in the project
              * KB tagged 'inspiration' and are retrieved by project-scope

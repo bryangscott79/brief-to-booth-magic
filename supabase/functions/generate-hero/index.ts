@@ -28,6 +28,17 @@ interface GenerateHeroRequest {
   client_id?: string;
   activation_type_id?: string;
   project_id?: string;
+  /**
+   * Public URL of the brand logo. When provided, it's added to the model's
+   * input as a reference image so signage and fascia render with the
+   * actual mark instead of a hallucinated approximation.
+   */
+  brandLogoUrl?: string;
+  /**
+   * Additional public URLs (typically temporary user uploads attached at
+   * regeneration time) to include as reference images alongside the logo.
+   */
+  extraReferenceUrls?: string[];
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
@@ -140,7 +151,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls }: GenerateHeroRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -197,7 +208,28 @@ serve(async (req) => {
     }
     const ragBlock = ragContext.formatted ? `\n\n${ragContext.formatted}` : "";
 
-    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType, brandIntelEntries: brandIntelligence?.length ?? 0 });
+    console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType, brandIntelEntries: brandIntelligence?.length ?? 0, hasBrandLogo: !!brandLogoUrl, extraRefs: extraReferenceUrls?.length ?? 0 });
+
+    // Reference image attachments — brand logo + any user-supplied extras
+    // (typically a one-off file attached at regen time). The model receives
+    // these in the same message array; the text below explains what each
+    // image is so the model uses them as visual references rather than
+    // trying to render them as content.
+    const referenceImages: Array<{ type: "image_url"; image_url: { url: string } }> = [];
+    const referenceLabels: string[] = [];
+    if (brandLogoUrl) {
+      referenceImages.push({ type: "image_url", image_url: { url: brandLogoUrl } });
+      referenceLabels.push("BRAND LOGO — use this exact mark on signage, fascia, and any branded surfaces. Do not invent or modify the logo design.");
+    }
+    if (extraReferenceUrls?.length) {
+      for (const url of extraReferenceUrls) {
+        referenceImages.push({ type: "image_url", image_url: { url } });
+      }
+      referenceLabels.push(`USER REFERENCES (${extraReferenceUrls.length}) — additional visual references the user attached. Use them as inspiration for materials, mood, and composition where appropriate.`);
+    }
+    const referenceLabelBlock = referenceLabels.length
+      ? `\n\nVISUAL REFERENCES PROVIDED:\n${referenceLabels.join("\n")}\n`
+      : "";
 
     let messages;
 
@@ -211,7 +243,7 @@ ORIGINAL DESIGN REQUIREMENTS:
 ${prompt}
 ${scaleBlock}
 ${designBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
 
 Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
 
@@ -221,6 +253,7 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
           content: [
             { type: "text", text: refinedPrompt },
             { type: "image_url", image_url: { url: previousImageUrl } },
+            ...referenceImages,
           ],
         },
       ];
@@ -228,7 +261,20 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
       messages = [
         {
           role: "user",
-          content: `${prompt}
+          content: referenceImages.length > 0
+            ? [
+                {
+                  type: "text",
+                  text: `${prompt}
+${scaleBlock}
+${designBlock}
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
+
+${genSuffix}`,
+                },
+                ...referenceImages,
+              ]
+            : `${prompt}
 ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}

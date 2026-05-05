@@ -42,6 +42,9 @@ import {
   type GeneratePromptParams,
 } from "@/lib/promptBuilder";
 
+// Project units (imperial/metric) — preserved through render generation.
+import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
+
 // Versioning + style presets
 import { usePromptVersions } from "@/hooks/usePromptVersions";
 import { PromptVersionTabs } from "@/components/prompts/PromptVersionTabs";
@@ -131,13 +134,22 @@ export function PromptGenerator() {
     showName,
   });
 
+  // Project measurement system — resolves user override > brief detection >
+  // imperial fallback. Reused below to format dimensions and units inside
+  // generated prompts so renders match what's shown on screen.
+  const { system: measurementSystem } = useMeasurementSystem(projectId, brief);
+
   // Calculate booth dimensions
   const boothDimensions = useMemo(() => {
-    const footprintStr = spatialData?.configs?.[0]?.footprintSize || 
-      brief?.spatial?.footprints?.[0]?.size || 
+    const footprintStr = spatialData?.configs?.[0]?.footprintSize ||
+      brief?.spatial?.footprints?.[0]?.size ||
       "30x30";
-    return calculateBoothDimensions(footprintStr);
-  }, [spatialData, brief]);
+    // Override the unit detected from the string with the project's
+    // resolved measurement system. This handles the case where the brief
+    // string didn't carry a unit marker (e.g. "30x30") but the user has
+    // chosen metric — interpret as 30m × 30m.
+    return calculateBoothDimensions(footprintStr, measurementSystem);
+  }, [spatialData, brief, measurementSystem]);
 
   // Normalize zones
   const normalizedZones = useMemo(() => {
@@ -590,7 +602,7 @@ export function PromptGenerator() {
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Generate Booth Renders</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Generating renders for {boothDimensions.footprintLabel} ({boothDimensions.totalSqft} sqft) booth with {normalizedZones.length} zones
+            Generating renders for {boothDimensions.footprintLabel} ({boothDimensions.totalAreaNative} {boothDimensions.measurementSystem === "metric" ? "sqm" : "sqft"}) booth with {normalizedZones.length} zones
           </p>
         </div>
 
@@ -603,8 +615,10 @@ export function PromptGenerator() {
                 <div className="text-xs text-muted-foreground">Dimensions</div>
               </div>
               <div>
-                <div className="text-2xl font-bold">{boothDimensions.totalSqft}</div>
-                <div className="text-xs text-muted-foreground">Square Feet</div>
+                <div className="text-2xl font-bold">{boothDimensions.totalAreaNative}</div>
+                <div className="text-xs text-muted-foreground">
+                  {boothDimensions.measurementSystem === "metric" ? "Square Meters" : "Square Feet"}
+                </div>
               </div>
               <div>
                 <div className="text-2xl font-bold">{normalizedZones.length}</div>
@@ -932,7 +946,7 @@ export function PromptGenerator() {
                     <span className="text-muted-foreground">Size:</span> {boothDimensions.footprintLabel}
                   </div>
                   <div className="p-2 bg-muted/50 rounded">
-                    <span className="text-muted-foreground">Area:</span> {boothDimensions.totalSqft} sqft
+                    <span className="text-muted-foreground">Area:</span> {boothDimensions.totalAreaNative} {boothDimensions.measurementSystem === "metric" ? "sqm" : "sqft"}
                   </div>
                   <div className="p-2 bg-muted/50 rounded">
                     <span className="text-muted-foreground">Type:</span> {boothDimensions.scaleDescription}

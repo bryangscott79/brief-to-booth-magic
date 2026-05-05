@@ -109,7 +109,12 @@ The booth features a central "${heroInstallation.name}" installation:
 - Lighting: ${heroPhysicalForm?.lighting || "dramatic accent lighting in brand colors"}
 - Scale: ${heroPhysicalForm?.dimensions || "prominent central feature"}` : "";
 
-  parts.push(`Generate a photorealistic INTERIOR perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${boothDimensions.totalSqft} sq ft) ${rules.structureNoun} for ${brief.brand.name}.
+  // Native-unit area string — "42 sqm" for metric projects, "900 sq ft" otherwise.
+  const areaLabel =
+    boothDimensions.measurementSystem === "metric"
+      ? `${boothDimensions.totalAreaNative} sqm`
+      : `${boothDimensions.totalSqft} sq ft`;
+  parts.push(`Generate a photorealistic INTERIOR perspective from INSIDE the "${zone.name}" zone of a ${boothDimensions.footprintLabel} (${areaLabel}) ${rules.structureNoun} for ${brief.brand.name}.
 
 THIS IS CRITICAL: This zone is part of the SAME booth as the hero image reference. You must maintain EXACT visual consistency.`);
 
@@ -482,8 +487,23 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
     brief.brand?.category || "brand"
   );
 
-  return `${promptOpener}
+  // When the project is in metric, the rule-based scale block will still
+  // talk about feet (it's hard-coded to imperial language). We prepend an
+  // EXPLICIT METRIC OVERRIDE block so the model trusts these dimensions
+  // over any imperial references it sees later in the prompt.
+  const isMetric = boothDimensions.measurementSystem === "metric";
+  const unitOverride = isMetric
+    ? `\nUNIT SYSTEM — METRIC (override any imperial references below):
+- This ${rules.structureNoun} is exactly ${width}m × ${depth}m (${boothDimensions.totalAreaNative} sqm).
+- All linear dimensions are METERS, not feet.
+- All area numbers are SQUARE METERS, not square feet.
+- If subsequent text mentions "${width} feet" or "${depth}'", read those as ${width}m and ${depth}m.
+- Human scale: average visitor is 1.7m (5'7"); standing conversation circle is 1.2m diameter.
+\n`
+    : "";
 
+  return `${promptOpener}
+${unitOverride}
 ${cameraInstruction}
 ${cameraScaleHint}
 

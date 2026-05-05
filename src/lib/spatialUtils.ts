@@ -31,14 +31,33 @@ export interface NormalizedZone {
 }
 
 export interface BoothDimensions {
-  width: number;           // feet
-  depth: number;           // feet
-  totalSqft: number;       // width × depth
-  displayWidth: number;    // pixels for UI
-  displayHeight: number;   // pixels for UI
-  aspectRatio: number;     // width / depth
-  footprintLabel: string;  // "30' × 30'"
-  scaleDescription: string; // "mid-size peninsula booth"
+  /** Linear width in the project's native unit (ft or m). */
+  width: number;
+  /** Linear depth in the project's native unit (ft or m). */
+  depth: number;
+  /**
+   * Area in sqft. Always in sqft for backward compatibility — the cost
+   * engine, validation, and percentage math all assume this. Metric
+   * projects compute this by converting from sqm.
+   */
+  totalSqft: number;
+  /**
+   * Native-unit area for display ("42 sqm" or "900 sqft"). Use this for
+   * UI labels; use totalSqft for math and downstream APIs.
+   */
+  totalAreaNative: number;
+  /** "metric" | "imperial" — preserved from the parsed footprint string. */
+  measurementSystem: "imperial" | "metric";
+  /** Pixel width for UI rendering. */
+  displayWidth: number;
+  /** Pixel height for UI rendering. */
+  displayHeight: number;
+  /** Ratio width / depth. */
+  aspectRatio: number;
+  /** Native-unit display string: "30' × 30'" or "6m × 6m". */
+  footprintLabel: string;
+  /** Booth-class description (size category). */
+  scaleDescription: string;
 }
 
 export interface ValidationResult {
@@ -78,37 +97,75 @@ const MAX_DISPLAY_SIZE = 400; // pixels - increased for better visibility
 // ============================================
 
 /**
- * Parse a footprint string like "30x30" or "20 x 40" into dimensions
+ * Parse a footprint string like "30x30", "20 x 40", or "6m x 6m" into
+ * dimensions plus a detected unit. Falls back to imperial when no unit
+ * marker is present (matches the legacy app default).
  */
-export function parseFootprint(footprintStr: string): { width: number; depth: number } {
-  if (!footprintStr) return { width: 30, depth: 30 };
-  
-  const match = footprintStr.match(/(\d+)\s*[x×X]\s*(\d+)/);
+export function parseFootprint(footprintStr: string): {
+  width: number;
+  depth: number;
+  unit: "imperial" | "metric";
+} {
+  if (!footprintStr) return { width: 30, depth: 30, unit: "imperial" };
+
+  const s = String(footprintStr).toLowerCase();
+  // Metric markers — most common patterns: "6m", "6 m", "6 meters", "6 sqm",
+  // "100 sqm". Single-letter "m" must be bounded so "modular" doesn't trip.
+  const isMetric =
+    /\b(?:m|meter|metre|metres|meters|sqm|sq\s*m|m²|m2)\b/.test(s) ||
+    /\d\s*m\b/.test(s);
+  // Imperial markers — "ft", "sqft", or the prime mark "'".
+  const isImperial =
+    /\b(?:ft|feet|foot|sqft|sq\s*ft|ft²|ft2)\b/.test(s) || /['′]/.test(s);
+  const unit: "imperial" | "metric" = isMetric && !isImperial ? "metric" : "imperial";
+
+  const match = footprintStr.match(/(\d+(?:\.\d+)?)\s*[x×X]\s*(\d+(?:\.\d+)?)/);
   if (match) {
     return {
-      width: parseInt(match[1], 10),
-      depth: parseInt(match[2], 10),
+      width: parseFloat(match[1]),
+      depth: parseFloat(match[2]),
+      unit,
     };
   }
-  
+
   // Try single number (assume square)
-  const singleMatch = footprintStr.match(/(\d+)/);
+  const singleMatch = footprintStr.match(/(\d+(?:\.\d+)?)/);
   if (singleMatch) {
-    const size = parseInt(singleMatch[1], 10);
-    return { width: size, depth: size };
+    const size = parseFloat(singleMatch[1]);
+    return { width: size, depth: size, unit };
   }
-  
-  return { width: 30, depth: 30 };
+
+  return { width: 30, depth: 30, unit };
 }
 
 /**
- * Calculate booth dimensions and display sizing with proper aspect ratio
+ * Calculate booth dimensions and display sizing with proper aspect ratio.
+ *
+ * The optional `systemOverride` lets a caller force a specific unit when
+ * the project has an explicit user preference that should win over what
+ * the footprint string suggests (e.g. user typed "30x30" but switched the
+ * project to metric — interpret as 30m × 30m).
  */
-export function calculateBoothDimensions(footprintStr: string): BoothDimensions {
-  const { width, depth } = parseFootprint(footprintStr);
-  const totalSqft = width * depth;
+export function calculateBoothDimensions(
+  footprintStr: string,
+  systemOverride?: "imperial" | "metric",
+): BoothDimensions {
+  const parsed = parseFootprint(footprintStr);
+  const measurementSystem: "imperial" | "metric" = systemOverride ?? parsed.unit;
+  const width = parsed.width;
+  const depth = parsed.depth;
   const aspectRatio = width / depth;
-  
+
+  // Native-unit area always reflects the project's chosen system.
+  const totalAreaNative = Math.round(width * depth);
+  // Total in sqft — imperial passes through, metric converts (1 m² ≈ 10.7639 sqft).
+  // Downstream cost validation and percentage math assumes sqft.
+  const SQM_TO_SQFT = 10.76391041671;
+  const totalSqft =
+    measurementSystem === "metric"
+      ? Math.round(totalAreaNative * SQM_TO_SQFT)
+      : totalAreaNative;
+
   // Calculate display dimensions maintaining aspect ratio
   let displayWidth: number, displayHeight: number;
   if (aspectRatio >= 1) {
@@ -118,29 +175,31 @@ export function calculateBoothDimensions(footprintStr: string): BoothDimensions 
     displayHeight = MAX_DISPLAY_SIZE;
     displayWidth = Math.round(MAX_DISPLAY_SIZE * aspectRatio);
   }
-  
-  // Generate scale description
+
+  // Generate scale description — keyed on sqft so the buckets stay stable.
   let scaleDescription: string;
-  if (totalSqft >= 2400) {
-    scaleDescription = "large island booth";
-  } else if (totalSqft >= 1200) {
-    scaleDescription = "mid-size island booth";
-  } else if (totalSqft >= 600) {
-    scaleDescription = "peninsula booth";
-  } else if (totalSqft >= 200) {
-    scaleDescription = "inline booth";
-  } else {
-    scaleDescription = "tabletop display";
-  }
-  
+  if (totalSqft >= 2400) scaleDescription = "large island booth";
+  else if (totalSqft >= 1200) scaleDescription = "mid-size island booth";
+  else if (totalSqft >= 600) scaleDescription = "peninsula booth";
+  else if (totalSqft >= 200) scaleDescription = "inline booth";
+  else scaleDescription = "tabletop display";
+
+  // Native-unit label: "30' × 30'" or "6m × 6m".
+  const footprintLabel =
+    measurementSystem === "metric"
+      ? `${width}m × ${depth}m`
+      : `${width}' × ${depth}'`;
+
   return {
     width,
     depth,
     totalSqft,
+    totalAreaNative,
+    measurementSystem,
     displayWidth,
     displayHeight,
     aspectRatio,
-    footprintLabel: `${width}' × ${depth}'`,
+    footprintLabel,
     scaleDescription,
   };
 }

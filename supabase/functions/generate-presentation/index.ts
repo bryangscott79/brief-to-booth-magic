@@ -32,17 +32,65 @@ const corsHeaders = {
 
 // ─── PING handler ──────────────────────────────────────────────────────────
 
-function pingResponse() {
-  const hasAnthropicKey = !!Deno.env.get("ANTHROPIC_API_KEY");
+/**
+ * Deep ping — when `validateKey` is true, hits the Anthropic API with a
+ * 1-token request to verify the key value actually authenticates. Without
+ * this, "configured" only meant "the secret exists" — the value could
+ * still be revoked, mistyped, or for the wrong account.
+ */
+async function pingResponse(opts: { validateKey?: boolean } = {}) {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   const altKeys = ["LOVABLE_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"]
     .filter((name) => !!Deno.env.get(name));
+
+  let keyStatus: "missing" | "configured" | "valid" | "invalid" = apiKey
+    ? "configured"
+    : "missing";
+  let keyError: string | null = null;
+
+  if (opts.validateKey && apiKey) {
+    try {
+      // Cheapest possible Anthropic call: 1 token, throwaway model. Returns
+      // 200 if the key is good, 401 if invalid, 4xx for other auth issues.
+      const probe = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-haiku-20241022",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      });
+      if (probe.ok) {
+        keyStatus = "valid";
+      } else {
+        keyStatus = "invalid";
+        try {
+          const body = await probe.json();
+          keyError =
+            body?.error?.message ?? `Anthropic returned ${probe.status}`;
+        } catch {
+          keyError = `Anthropic returned ${probe.status}`;
+        }
+      }
+    } catch (e) {
+      keyStatus = "invalid";
+      keyError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   return new Response(
     JSON.stringify({
       ok: true,
       function: "generate-presentation",
       deployToken: DEPLOY_TOKEN,
       modes: ["slides", "designed-deck", "ping"],
-      anthropicKey: hasAnthropicKey ? "configured" : "missing",
+      anthropicKey: keyStatus,
+      anthropicKeyError: keyError,
       alternativeKeysFound: altKeys,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -562,8 +610,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // GET ?ping=1 — short-circuit before reading body.
+  // Add ?validate=1 for a deep check that calls Anthropic with the key.
   const url = new URL(req.url);
-  if (url.searchParams.get("ping") === "1") return pingResponse();
+  if (url.searchParams.get("ping") === "1") {
+    return await pingResponse({ validateKey: url.searchParams.get("validate") === "1" });
+  }
 
   try {
     const rawBody = await req.text();
@@ -584,7 +635,9 @@ serve(async (req) => {
       });
     }
 
-    if (body?.ping === true) return pingResponse();
+    if (body?.ping === true) {
+      return await pingResponse({ validateKey: body?.validateKey === true });
+    }
 
     const mode = body?.mode ?? "slides";
     if (mode === "designed-deck") return await handleDesignedDeck(body);

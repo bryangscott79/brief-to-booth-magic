@@ -107,7 +107,8 @@ export function DesignedDeck({
     | { status: "running" }
     | {
         status: "ok";
-        anthropicKey?: "configured" | "missing";
+        anthropicKey?: "valid" | "invalid" | "configured" | "missing";
+        anthropicKeyError?: string | null;
         deployToken?: string;
         alternativeKeysFound?: string[];
       }
@@ -121,6 +122,7 @@ export function DesignedDeck({
       setPingState({
         status: "ok",
         anthropicKey: res.anthropicKey,
+        anthropicKeyError: res.anthropicKeyError,
         deployToken: res.deployToken,
         alternativeKeysFound: res.alternativeKeysFound,
       });
@@ -382,14 +384,23 @@ export function DesignedDeck({
                 <span
                   className={cn(
                     "inline-flex items-center gap-1",
-                    pingState.anthropicKey === "configured"
+                    pingState.anthropicKey === "valid"
                       ? "text-green-600"
-                      : "text-amber-600",
+                      : pingState.anthropicKey === "invalid"
+                        ? "text-destructive"
+                        : pingState.anthropicKey === "configured"
+                          ? "text-green-600"
+                          : "text-amber-600",
                   )}
                 >
-                  {pingState.anthropicKey === "configured"
-                    ? "✓ Function reachable, ANTHROPIC_API_KEY configured."
-                    : "⚠ Function reachable but ANTHROPIC_API_KEY is missing."}
+                  {pingState.anthropicKey === "valid" &&
+                    "✓ Key validated against Anthropic — ready to generate."}
+                  {pingState.anthropicKey === "invalid" &&
+                    "✗ Anthropic rejected the key — see fix below."}
+                  {pingState.anthropicKey === "configured" &&
+                    "✓ Function reachable, key set (not deep-validated)."}
+                  {pingState.anthropicKey === "missing" &&
+                    "⚠ Function reachable but ANTHROPIC_API_KEY is missing."}
                 </span>
               )}
               {pingState.status === "fail" && (
@@ -401,6 +412,43 @@ export function DesignedDeck({
               <p className="text-muted-foreground/70">
                 Deploy token: <span className="font-mono">{pingState.deployToken}</span>
               </p>
+            )}
+
+            {/* Key VALUE is wrong — Anthropic rejected it. Most actionable
+              * case: the secret exists but the value is bad. */}
+            {pingState.status === "ok" && pingState.anthropicKey === "invalid" && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-2 text-destructive space-y-1.5">
+                <p className="font-medium">Anthropic rejected your API key.</p>
+                {pingState.anthropicKeyError && (
+                  <p className="text-[11px] font-mono opacity-80">
+                    {pingState.anthropicKeyError}
+                  </p>
+                )}
+                <p className="text-foreground/80">
+                  The secret named <code className="font-mono">ANTHROPIC_API_KEY</code>{" "}
+                  exists in Supabase, but the value isn't valid. Common causes:
+                </p>
+                <ul className="list-disc pl-4 text-foreground/80 space-y-0.5">
+                  <li>Trailing whitespace pasted with the key</li>
+                  <li>Key was revoked (e.g. you rotated it but Lovable kept the old value)</li>
+                  <li>Key belongs to a different Anthropic workspace / account</li>
+                </ul>
+                <p className="text-foreground/80">
+                  Fix:{" "}
+                  <a
+                    href="https://console.anthropic.com/settings/keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline hover:no-underline"
+                  >
+                    create a fresh key
+                  </a>
+                  , copy the entire string (no trailing space), then update{" "}
+                  <code className="font-mono">ANTHROPIC_API_KEY</code> in Lovable →
+                  Project Settings → Supabase → Edge Function Secrets. Run Test
+                  connection again — you should see "Key validated."
+                </p>
+              </div>
             )}
 
             {pingState.status === "ok" &&

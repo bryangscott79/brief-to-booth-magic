@@ -9,6 +9,38 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgency } from "@/hooks/useAgency";
 
+/**
+ * Pull the real error message out of a Supabase FunctionsHttpError.
+ *
+ * supabase.functions.invoke wraps any non-2xx response with the generic
+ * message "Edge Function returned a non-2xx status code" — opaque to the
+ * user. The actual JSON body lives on `err.context` (a Response object).
+ * This helper unwraps it and returns the underlying error string when
+ * present, so users see e.g. "invalid x-api-key" instead of the wrapper.
+ */
+async function unwrapInvokeError(err: unknown): Promise<string> {
+  if (!err) return "Unknown error";
+  const fallback = err instanceof Error ? err.message : String(err);
+  const ctx = (err as { context?: unknown })?.context;
+  if (ctx && typeof (ctx as Response).clone === "function") {
+    try {
+      const text = await (ctx as Response).clone().text();
+      if (!text) return fallback;
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed.error === "string") return parsed.error;
+        if (parsed && typeof parsed.message === "string") return parsed.message;
+      } catch {
+        // Not JSON — return the text body directly (often plain error msg).
+      }
+      return text.length > 400 ? text.slice(0, 400) + "…" : text;
+    } catch {
+      /* fall through */
+    }
+  }
+  return fallback;
+}
+
 export interface DesignedSlide {
   id: string;
   title: string;
@@ -113,7 +145,14 @@ export function useDesignedDeck(projectId: string | null | undefined) {
             },
           },
         );
-        if (invokeErr) throw invokeErr;
+        if (invokeErr) {
+          // Supabase wraps non-2xx as "Edge Function returned a non-2xx
+          // status code". Unwrap to surface the actual cause (e.g.
+          // "invalid x-api-key" from Anthropic) so the UI can render
+          // the right diagnostic.
+          const realMessage = await unwrapInvokeError(invokeErr);
+          throw new Error(realMessage);
+        }
         if (data?.error) throw new Error(data.error);
         if (!Array.isArray(data?.slides)) throw new Error("No slides returned");
 
@@ -165,7 +204,10 @@ export function useDesignedDeck(projectId: string | null | undefined) {
             },
           },
         );
-        if (invokeErr) throw invokeErr;
+        if (invokeErr) {
+          const realMessage = await unwrapInvokeError(invokeErr);
+          throw new Error(realMessage);
+        }
         if (data?.error) throw new Error(data.error);
         if (!Array.isArray(data?.slides)) throw new Error("No slides returned");
 
@@ -258,7 +300,15 @@ export function useDesignedDeck(projectId: string | null | undefined) {
    */
   const ping = useCallback(async (): Promise<{
     ok: boolean;
-    anthropicKey?: "configured" | "missing";
+    /**
+     * "valid" means we successfully called Anthropic with the key.
+     * "invalid" means Anthropic rejected it (most common: 401
+     * invalid x-api-key — the secret value is wrong).
+     * "configured" means the secret exists but we didn't probe.
+     * "missing" means no secret named ANTHROPIC_API_KEY at all.
+     */
+    anthropicKey?: "valid" | "invalid" | "configured" | "missing";
+    anthropicKeyError?: string | null;
     deployToken?: string;
     alternativeKeysFound?: string[];
     error?: string;
@@ -266,15 +316,19 @@ export function useDesignedDeck(projectId: string | null | undefined) {
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke(
         "generate-presentation",
-        { body: { ping: true } },
+        // validateKey: do a 1-token Anthropic probe so we don't just
+        // confirm the secret exists — we confirm the value works.
+        { body: { ping: true, validateKey: true } },
       );
       if (invokeErr) {
-        return { ok: false, error: invokeErr.message ?? "Function unreachable" };
+        const realMessage = await unwrapInvokeError(invokeErr);
+        return { ok: false, error: realMessage };
       }
       if (data?.error) return { ok: false, error: data.error };
       return {
         ok: true,
         anthropicKey: data?.anthropicKey,
+        anthropicKeyError: data?.anthropicKeyError ?? null,
         deployToken: data?.deployToken,
         alternativeKeysFound: Array.isArray(data?.alternativeKeysFound)
           ? data.alternativeKeysFound

@@ -109,6 +109,7 @@ export function DesignedDeck({
         status: "ok";
         anthropicKey?: "valid" | "invalid" | "configured" | "missing";
         anthropicKeyError?: string | null;
+        validKeySource?: string | null;
         deployToken?: string;
         alternativeKeysFound?: string[];
       }
@@ -123,6 +124,7 @@ export function DesignedDeck({
         status: "ok",
         anthropicKey: res.anthropicKey,
         anthropicKeyError: res.anthropicKeyError,
+        validKeySource: res.validKeySource,
         deployToken: res.deployToken,
         alternativeKeysFound: res.alternativeKeysFound,
       });
@@ -394,7 +396,9 @@ export function DesignedDeck({
                   )}
                 >
                   {pingState.anthropicKey === "valid" &&
-                    "✓ Key validated against Anthropic — ready to generate."}
+                    (pingState.validKeySource && pingState.validKeySource !== "ANTHROPIC_API_KEY"
+                      ? `✓ Key validated against Anthropic (using ${pingState.validKeySource} — fallback worked).`
+                      : "✓ Key validated against Anthropic — ready to generate.")}
                   {pingState.anthropicKey === "invalid" &&
                     "✗ Anthropic rejected the key — see fix below."}
                   {pingState.anthropicKey === "configured" &&

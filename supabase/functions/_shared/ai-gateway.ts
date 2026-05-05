@@ -650,10 +650,39 @@ async function callGeminiViaLovable(
  * // result.toolCalls[0].arguments.slides contains the slides
  * ```
  */
+/**
+ * Resolve which Anthropic API key to use. Tries the canonical name first
+ * (ANTHROPIC_API_KEY), then falls back to common alternates that Lovable
+ * users have historically set under different names (LOVABLE_API_KEY from
+ * the old Lovable gateway era, ANTHROPIC_KEY, CLAUDE_API_KEY).
+ *
+ * This is defensive: when a user rotates a key but updates the wrong
+ * secret name, we still find a working key as long as ONE of these is
+ * valid. Without this fallback, a stale ANTHROPIC_API_KEY blocks the
+ * function even if a fresh key sits two slots over.
+ */
+function resolveAnthropicKey(): { key: string; sourceName: string } | null {
+  const candidates = [
+    "ANTHROPIC_API_KEY",
+    "LOVABLE_API_KEY",
+    "ANTHROPIC_KEY",
+    "CLAUDE_API_KEY",
+  ];
+  for (const name of candidates) {
+    const value = Deno.env.get(name);
+    if (value && value.trim().length > 0) {
+      return { key: value.trim(), sourceName: name };
+    }
+  }
+  return null;
+}
+
 export async function callAnthropic(options: AnthropicOptions): Promise<AIResponse> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) {
-    throw new Error("[ai-gateway] ANTHROPIC_API_KEY is not configured");
+  const resolved = resolveAnthropicKey();
+  if (!resolved) {
+    throw new Error(
+      "[ai-gateway] No Anthropic API key configured. Set ANTHROPIC_API_KEY in Supabase Edge Function Secrets.",
+    );
   }
 
   const body: Record<string, any> = {
@@ -678,21 +707,51 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
     body.tool_choice = options.toolChoice;
   }
 
-  console.log(`[ai-gateway] Anthropic call: model=${body.model}, messages=${options.messages.length}, tools=${options.tools?.length ?? 0}`);
-
-  const response = await fetchWithRateLimitRetry(
-    "https://api.anthropic.com/v1/messages",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
-    },
-    `Anthropic/${body.model}`,
+  console.log(
+    `[ai-gateway] Anthropic call: model=${body.model}, messages=${options.messages.length}, tools=${options.tools?.length ?? 0}, key_source=${resolved.sourceName}`,
   );
+
+  const callWith = async (apiKey: string) =>
+    fetchWithRateLimitRetry(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(body),
+      },
+      `Anthropic/${body.model}`,
+    );
+
+  let response: Response;
+  try {
+    response = await callWith(resolved.key);
+  } catch (e) {
+    // If the primary key 401'd and there's a fallback candidate with a
+    // different value, try that before giving up. This is the rotation
+    // safety net — user updated LOVABLE_API_KEY but ANTHROPIC_API_KEY is
+    // stale, or vice versa.
+    const isAuthError =
+      e instanceof Error && /\b401\b|invalid x-api-key|authentication_error/i.test(e.message);
+    if (!isAuthError) throw e;
+
+    const fallbackName = ["ANTHROPIC_API_KEY", "LOVABLE_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"]
+      .filter((n) => n !== resolved.sourceName)
+      .find((n) => {
+        const v = Deno.env.get(n);
+        return v && v.trim() !== resolved.key;
+      });
+    if (!fallbackName) throw e;
+
+    const fallbackValue = Deno.env.get(fallbackName)!.trim();
+    console.warn(
+      `[ai-gateway] Primary key (${resolved.sourceName}) auth failed; retrying with ${fallbackName}`,
+    );
+    response = await callWith(fallbackValue);
+  }
 
   const data = await parseJsonResponse(response, `Anthropic/${body.model}`);
   return parseAnthropicResponse(data);

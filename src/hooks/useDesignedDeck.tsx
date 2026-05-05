@@ -309,6 +309,10 @@ export function useDesignedDeck(projectId: string | null | undefined) {
      */
     anthropicKey?: "valid" | "invalid" | "configured" | "missing";
     anthropicKeyError?: string | null;
+    /** Which secret name actually authenticated (e.g. ANTHROPIC_API_KEY,
+     *  LOVABLE_API_KEY). Surfaces when the user rotated into a different
+     *  slot than the canonical name. */
+    validKeySource?: string | null;
     deployToken?: string;
     alternativeKeysFound?: string[];
     error?: string;
@@ -329,6 +333,7 @@ export function useDesignedDeck(projectId: string | null | undefined) {
         ok: true,
         anthropicKey: data?.anthropicKey,
         anthropicKeyError: data?.anthropicKeyError ?? null,
+        validKeySource: data?.validKeySource ?? null,
         deployToken: data?.deployToken,
         alternativeKeysFound: Array.isArray(data?.alternativeKeysFound)
           ? data.alternativeKeysFound

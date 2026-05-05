@@ -22,7 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
-const DEPLOY_TOKEN = "2026-05-01-r3-multimode";
+const DEPLOY_TOKEN = "2026-05-05-r4-key-fallback";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,38 +48,57 @@ async function pingResponse(opts: { validateKey?: boolean } = {}) {
     : "missing";
   let keyError: string | null = null;
 
-  if (opts.validateKey && apiKey) {
-    try {
-      // Cheapest possible Anthropic call: 1 token, throwaway model. Returns
-      // 200 if the key is good, 401 if invalid, 4xx for other auth issues.
-      const probe = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-haiku-20241022",
-          max_tokens: 1,
-          messages: [{ role: "user", content: "hi" }],
-        }),
-      });
-      if (probe.ok) {
-        keyStatus = "valid";
-      } else {
-        keyStatus = "invalid";
+  // Walk all candidate secrets and probe each. The first one that
+  // authenticates with Anthropic wins — surface which key actually works
+  // so the user knows whether their rotation landed on the right secret
+  // name. Without this, a stale ANTHROPIC_API_KEY would mask a working
+  // LOVABLE_API_KEY (or vice versa) and the user would think they were
+  // truly broken.
+  let validKeySource: string | null = null;
+  if (opts.validateKey) {
+    const candidates: Array<{ name: string; value: string }> = [];
+    for (const name of ["ANTHROPIC_API_KEY", "LOVABLE_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"]) {
+      const v = Deno.env.get(name);
+      if (v && v.trim().length > 0) candidates.push({ name, value: v.trim() });
+    }
+    if (candidates.length === 0) {
+      keyStatus = "missing";
+    } else {
+      let lastError: string | null = null;
+      for (const cand of candidates) {
         try {
-          const body = await probe.json();
-          keyError =
-            body?.error?.message ?? `Anthropic returned ${probe.status}`;
-        } catch {
-          keyError = `Anthropic returned ${probe.status}`;
+          const probe = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": cand.value,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "claude-3-5-haiku-20241022",
+              max_tokens: 1,
+              messages: [{ role: "user", content: "hi" }],
+            }),
+          });
+          if (probe.ok) {
+            keyStatus = "valid";
+            validKeySource = cand.name;
+            break;
+          }
+          try {
+            const body = await probe.json();
+            lastError = body?.error?.message ?? `Anthropic returned ${probe.status}`;
+          } catch {
+            lastError = `Anthropic returned ${probe.status}`;
+          }
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
         }
       }
-    } catch (e) {
-      keyStatus = "invalid";
-      keyError = e instanceof Error ? e.message : String(e);
+      if (keyStatus !== "valid") {
+        keyStatus = "invalid";
+        keyError = lastError;
+      }
     }
   }
 
@@ -91,6 +110,7 @@ async function pingResponse(opts: { validateKey?: boolean } = {}) {
       modes: ["slides", "designed-deck", "ping"],
       anthropicKey: keyStatus,
       anthropicKeyError: keyError,
+      validKeySource,
       alternativeKeysFound: altKeys,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },

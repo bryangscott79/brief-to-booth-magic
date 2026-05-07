@@ -209,6 +209,17 @@ export default function AgencyAccountPage() {
               <p className="text-sm text-muted-foreground mt-0.5">
                 {profile.email} · Joined {format(new Date(profile.created_at), "MMMM yyyy")}
               </p>
+              {ownedAgency && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <span>
+                    {isAgencyOwner ? "Account owner" : "Member"} for {ownedAgency.name}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {ownedAgency.slug}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
 
@@ -234,9 +245,9 @@ export default function AgencyAccountPage() {
           />
           <StatCard
             label="Team Members"
-            value={teamMembers.length}
+            value={agencyMembers.length}
             icon={Users}
-            sub={`${teamMembers.filter((m: any) => m.accepted_at).length} active`}
+            sub={ownedAgency ? `${ownedAgency.name} roster` : "No agency"}
           />
           <StatCard
             label="Last Active"

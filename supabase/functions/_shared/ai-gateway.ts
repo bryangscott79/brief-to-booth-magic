@@ -8,6 +8,9 @@
  * Deno-compatible: uses only fetch and Deno.env, no npm imports.
  */
 
+import { logUsageEvent } from "./usage-logger.ts";
+import type { UsageContext } from "./usage-context.ts";
+
 // ─── MODEL MAPPING ──────────────────────────────────────────────────────────
 
 /** Maps Lovable gateway model names to Google AI direct model names. */
@@ -36,6 +39,8 @@ export interface GeminiOptions {
   maxTokens?: number;
   /** Response modalities, e.g. ["image", "text"]. Adds responseModalities to generationConfig. */
   modalities?: string[];
+  /** Optional usage logging context. When set, the call is recorded in ai_usage_events. */
+  usage?: UsageContext;
 }
 
 export interface AnthropicOptions {
@@ -53,6 +58,8 @@ export interface AnthropicOptions {
   maxTokens?: number;
   /** Sampling temperature (0-1). */
   temperature?: number;
+  /** Optional usage logging context. */
+  usage?: UsageContext;
 }
 
 export interface AIResponse {

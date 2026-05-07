@@ -1728,6 +1728,28 @@ export type Database = {
     Functions: {
       _require_super_admin: { Args: never; Returns: undefined }
       accept_pending_invite: { Args: { _invite_id: string }; Returns: boolean }
+      accept_project_invite: {
+        Args: { _token: string }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          expires_at: string
+          id: string
+          label: string | null
+          project_id: string
+          scope: string
+          token: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_invites"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_create_industry: {
         Args: {
           _description?: string

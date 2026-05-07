@@ -300,18 +300,18 @@ export default function AgencyAccountPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
               Team Roster
               <Badge variant="outline" className="ml-auto text-xs font-normal">
-                {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""}
+                {agencyMembers.length} member{agencyMembers.length !== 1 ? "s" : ""}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!teamMembers.length ? (
+            {!agencyMembers.length ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No team members yet
               </p>
             ) : (
               <div className="space-y-2">
-                {teamMembers.map((member: any) => (
+                {agencyMembers.map((member: any) => (
                   <div
                     key={member.id}
                     className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0"

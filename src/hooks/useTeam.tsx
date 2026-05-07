@@ -258,35 +258,14 @@ export function useAcceptInvite() {
     mutationFn: async (token: string) => {
       if (!user) throw new Error("Not authenticated");
 
-      // Find the invite by token
-      const { data: invite, error: fetchError } = await supabase
-        .from("project_invites" as any)
-        .select("*")
-        .eq("token", token)
-        .is("accepted_at", null)
-        .single();
+      // Securely accept via RPC (token lookup happens server-side)
+      const { data, error } = await supabase.rpc("accept_project_invite" as any, {
+        _token: token,
+      });
 
-      if (fetchError || !invite) throw new Error("Invalid or expired invite link");
+      if (error || !data) throw new Error(error?.message || "Invalid or expired invite link");
 
-      const inviteData = invite as unknown as ProjectInvite;
-
-      // Check expiry
-      if (new Date(inviteData.expires_at) < new Date()) {
-        throw new Error("This invite link has expired");
-      }
-
-      // Accept the invite
-      const { error: updateError } = await supabase
-        .from("project_invites" as any)
-        .update({
-          accepted_at: new Date().toISOString(),
-          accepted_by: user.id,
-        } as any)
-        .eq("id", inviteData.id);
-
-      if (updateError) throw updateError;
-
-      return inviteData;
+      return data as unknown as ProjectInvite;
     },
     onSuccess: (invite) => {
       toast({

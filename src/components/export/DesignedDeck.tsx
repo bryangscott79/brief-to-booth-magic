@@ -50,6 +50,10 @@ import {
   exportDesignedDeckToPPTX,
   type ExportProgress,
 } from "@/lib/exportDesignedDeck";
+import { useBrandLogo } from "@/hooks/useBrandLogo";
+import { useProjectVisualReferences } from "@/hooks/useProjectVisualReferences";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { DeckPreflightChecklist } from "@/components/export/DeckPreflightChecklist";
 
 interface DesignedDeckProps {
   projectId: string | null | undefined;
@@ -96,6 +100,18 @@ export function DesignedDeck({
     reset,
     ping,
   } = useDesignedDeck(projectId);
+
+  // Pre-flight inputs — surfaced in the checklist so the user can confirm
+  // every visual identity element flowing into the design before Claude
+  // spends tokens. Same hooks the rest of the app uses; reading them here
+  // keeps DesignedDeck self-contained vs. requiring the parent to thread
+  // every field as a prop.
+  const { activeLogo: brandLogo } = useBrandLogo(projectId);
+  const { selected: visualRefsSelected } = useProjectVisualReferences(projectId);
+  const visualReferencesNonLogo = visualRefsSelected.filter((r) => r.role !== "brand-logo");
+  const { profile: companyProfile } = useCompanyProfile();
+  const agencyLogoUrl = companyProfile?.logo_url ?? null;
+  const resolvedAgencyName = agencyName ?? companyProfile?.company_name ?? undefined;
 
   const [stylePreset, setStylePreset] = useState<string>("Pitch");
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
@@ -271,6 +287,22 @@ export function DesignedDeck({
               </button>
             ))}
           </div>
+
+          {/* Pre-flight — verifies every visual identity input the deck
+            * designer is about to consume: agency lockup, brand logo,
+            * brand colors, typography, project context, render images.
+            * Each row links to the page that owns that data. */}
+          <DeckPreflightChecklist
+            projectId={projectId}
+            brief={parsedBrief}
+            brandLogo={brandLogo}
+            agencyName={resolvedAgencyName}
+            agencyLogoUrl={agencyLogoUrl}
+            brandColor={brandColor}
+            secondaryColor={secondaryColor}
+            visualReferences={visualReferencesNonLogo}
+            stylePreset={stylePreset}
+          />
 
           <Button
             onClick={handleGenerate}

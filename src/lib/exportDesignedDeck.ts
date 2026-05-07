@@ -45,7 +45,42 @@ async function renderSlideToCanvas(html: string): Promise<HTMLCanvasElement> {
   iframe.style.border = "0";
   // No sandbox here — we trust Claude's output (we asked for inline-only),
   // and we need same-origin so html2canvas can read the rendered DOM.
-  iframe.srcdoc = html;
+  // Inject a defensive CSS reset BEFORE the slide's own <style>. This is
+  // the fix for the "EstablishRedBullas" kerning bug — when html2canvas
+  // re-renders the iframe DOM, web fonts loaded via @import sometimes
+  // fall back to system fonts with different metrics. If the slide HTML
+  // also used negative letter-spacing on display text, words run together.
+  // Forcing a minimum word-spacing keeps space characters from collapsing
+  // to zero width regardless of which font ends up rendering.
+  const HARDEN_CSS = `
+    <style id="canopy-export-hardening">
+      /* Keep words separated even when fonts fall back during canvas
+         capture. The slide's own letter-spacing is preserved; we only
+         enforce a non-negative floor on word-spacing so spaces never
+         collapse below visible width. */
+      * { word-spacing: max(0.05em, var(--ws, 0.05em)); }
+      /* Prevent display headlines from rendering below their natural
+         line-height — html2canvas occasionally clips when line-height
+         is set in unitless values that depend on font metrics. */
+      h1, h2, h3, h4, .display, .headline { line-height: 1.05; }
+      /* Critical for kerning: even if the slide overrode font-feature-settings,
+         disable discretionary ligatures that can fuse 'a c' into 'æ' etc. */
+      * { font-feature-settings: "kern" 1, "liga" 0, "dlig" 0, "calt" 0; }
+    </style>
+  `;
+  // Inject our reset into the <head> — slide's own styles still win except
+  // where we use !important-equivalent (max() floor on word-spacing).
+  const hardenedHtml = html.replace(
+    /<head([^>]*)>/i,
+    (_match, attrs) => `<head${attrs}>${HARDEN_CSS}`,
+  );
+  iframe.srcdoc = hardenedHtml.includes("canopy-export-hardening")
+    ? hardenedHtml
+    // No <head> tag in the slide HTML — wrap with a synthetic one.
+    : html.replace(
+        /<html([^>]*)>/i,
+        (_m, attrs) => `<html${attrs}><head>${HARDEN_CSS}</head>`,
+      );
   host.appendChild(iframe);
 
   // Wait for iframe load and embedded fonts.
@@ -88,8 +123,10 @@ async function renderSlideToCanvas(html: string): Promise<HTMLCanvasElement> {
     );
   }
 
-  // Small extra tick for layout settle.
-  await new Promise((r) => setTimeout(r, 150));
+  // Bigger settle delay — Google Fonts via @import can take 500-1000ms
+  // to actually paint. The 150ms we used to wait was sometimes capturing
+  // mid-swap where the fallback font was on screen.
+  await new Promise((r) => setTimeout(r, 600));
 
   // Run html2canvas against the iframe's body. Scale 1 — body is already
   // 1920x1080 so we get full resolution. useCORS lets remote images render

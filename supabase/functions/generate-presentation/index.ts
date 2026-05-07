@@ -350,7 +350,7 @@ ${nonTargetContext || "(none)"}
 Generate fresh HTML for the requested slides only. Use a meaningfully different visual approach — different layout, different typographic emphasis, different use of brand color. Make it better.`;
 }
 
-async function handleDesignedDeck(body: any): Promise<Response> {
+async function handleDesignedDeck(body: any, req: Request): Promise<Response> {
   const isRegenerate = (body.regenerateSlideIds?.length ?? 0) > 0;
 
   let ragFormatted = "";
@@ -440,7 +440,7 @@ async function handleDesignedDeck(body: any): Promise<Response> {
 
 // ─── Slides (legacy) handler ───────────────────────────────────────────────
 
-async function handleSlides(body: any): Promise<Response> {
+async function handleSlides(body: any, req: Request): Promise<Response> {
   const {
     parsedBrief,
     elements,
@@ -674,8 +674,8 @@ serve(async (req) => {
     }
 
     const mode = body?.mode ?? "slides";
-    if (mode === "designed-deck") return await handleDesignedDeck(body);
-    return await handleSlides(body);
+    if (mode === "designed-deck") return await handleDesignedDeck(body, req);
+    return await handleSlides(body, req);
   } catch (e) {
     console.error("[generate-presentation] error:", e);
     return new Response(

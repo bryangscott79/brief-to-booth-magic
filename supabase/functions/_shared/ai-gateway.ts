@@ -451,6 +451,36 @@ async function parseJsonResponse(response: Response, label: string): Promise<any
  * ```
  */
 export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
+  const started = Date.now();
+  try {
+    const result = await _callGeminiInner(options);
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model,
+        inputTokens: result.usage?.inputTokens,
+        outputTokens: result.usage?.outputTokens,
+        imageCount: result.images?.length ?? 0,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return result;
+  } catch (e) {
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model,
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+    }
+    throw e;
+  }
+}
+
+async function _callGeminiInner(options: GeminiOptions): Promise<AIResponse> {
   // Prefer the Lovable AI gateway when available — it pools quota across
   // workspaces and avoids the per-key Google free-tier rate limits.
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");

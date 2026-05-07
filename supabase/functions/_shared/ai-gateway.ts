@@ -889,6 +889,8 @@ export interface OpenAIImageOptions {
    * Number of images to generate. Defaults to 1. >1 increases cost linearly.
    */
   n?: number;
+  /** Optional usage logging context. */
+  usage?: UsageContext;
 }
 
 export interface OpenAIImageResult {
@@ -941,6 +943,36 @@ function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1
  * references; we cap at 4.)
  */
 export async function callOpenAIImage(
+  options: OpenAIImageOptions,
+): Promise<OpenAIImageResult[]> {
+  const started = Date.now();
+  try {
+    const result = await _callOpenAIImageInner(options);
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: "openai/gpt-image-2",
+        imageCount: result.length,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return result;
+  } catch (e) {
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: "openai/gpt-image-2",
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+    }
+    throw e;
+  }
+}
+
+async function _callOpenAIImageInner(
   options: OpenAIImageOptions,
 ): Promise<OpenAIImageResult[]> {
   const resolved = resolveOpenAIKey();

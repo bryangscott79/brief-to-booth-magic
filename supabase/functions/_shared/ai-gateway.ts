@@ -738,6 +738,35 @@ function resolveAnthropicKey(): { key: string; sourceName: string } | null {
 }
 
 export async function callAnthropic(options: AnthropicOptions): Promise<AIResponse> {
+  const started = Date.now();
+  try {
+    const result = await _callAnthropicInner(options);
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model ?? "claude-sonnet-4-20250514",
+        inputTokens: result.usage?.inputTokens,
+        outputTokens: result.usage?.outputTokens,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return result;
+  } catch (e) {
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model ?? "claude-sonnet-4-20250514",
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+    }
+    throw e;
+  }
+}
+
+async function _callAnthropicInner(options: AnthropicOptions): Promise<AIResponse> {
   const resolved = resolveAnthropicKey();
   if (!resolved) {
     throw new Error(

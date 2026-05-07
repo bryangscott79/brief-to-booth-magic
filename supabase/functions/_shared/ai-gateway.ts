@@ -680,6 +680,13 @@ async function callGeminiViaLovable(
     });
   }
 
+  if (data.usage) {
+    result.usage = {
+      inputTokens: data.usage.prompt_tokens ?? data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.completion_tokens ?? data.usage.output_tokens ?? 0,
+    };
+  }
+
   return result;
 }
 

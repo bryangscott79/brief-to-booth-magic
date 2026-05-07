@@ -161,6 +161,8 @@ export default function AgencyAccountPage() {
 
   const roleTier = profile.is_super_admin
     ? { label: "Platform Owner", icon: Crown, color: "text-amber-600 bg-amber-500/10" }
+    : isAgencyOwner
+    ? { label: "Agency Owner", icon: Crown, color: "text-primary bg-primary/10" }
     : profile.is_admin
     ? { label: "Agency Admin", icon: Shield, color: "text-primary bg-primary/10" }
     : { label: "Member", icon: User, color: "text-muted-foreground bg-muted" };
@@ -318,26 +320,22 @@ export default function AgencyAccountPage() {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground shrink-0">
-                        {(member.display_name || member.invited_email || "?").slice(0, 2).toUpperCase()}
+                        {(member.email || "?").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {member.display_name || member.invited_email || "Pending"}
+                          {member.email || `User …${member.user_id?.slice(-6) ?? ""}`}
                         </p>
-                        {member.invited_email && member.display_name && (
-                          <p className="text-xs text-muted-foreground truncate">{member.invited_email}</p>
+                        {member.is_primary_owner && (
+                          <p className="text-xs text-muted-foreground truncate">Account owner for {ownedAgency?.name}</p>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                        {member.role}
+                        {member.is_primary_owner ? "owner" : member.role}
                       </Badge>
-                      {member.accepted_at ? (
-                        <span className="text-[10px] text-primary font-medium">Active</span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground">Pending</span>
-                      )}
+                      <span className="text-[10px] text-primary font-medium">Active</span>
                     </div>
                   </div>
                 ))}

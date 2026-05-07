@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callGemini } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -281,6 +282,7 @@ ${lines.join("\n\n")}
 Produce the structured brief AND a polished narrative briefText.`;
 
     const result = await callGemini({
+      usage: await buildUsageContext(req, "synthesize-brief").catch(() => undefined),
       model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

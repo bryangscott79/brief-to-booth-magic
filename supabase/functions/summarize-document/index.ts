@@ -10,6 +10,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -72,6 +73,7 @@ serve(async (req) => {
     if (text.length < 50) throw new Error("Not enough extracted text to summarize");
 
     const result = await callAnthropic({
+      usage: await buildUsageContext(req, "summarize-document").catch(() => undefined),
       system: "You extract structured intelligence from trade-show / experiential marketing documents. Be precise. Only assert facts the document clearly supports.",
       messages: [
         {

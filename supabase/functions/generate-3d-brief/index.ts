@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -83,6 +84,7 @@ BOOTH SIZE: ${boothSize || "30x30"}
 AVAILABLE VIEW IMAGES: ${JSON.stringify(imageUrls || [])}${ragBlock}`;
 
     const result = await callGemini({
+      usage: await buildUsageContext(req, "generate-3d-brief").catch(() => undefined),
       model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: "You are a 3D modeling and fabrication consultant. Return structured JSON only. When the prompt contains RETRIEVED KNOWLEDGE BASE CONTEXT, give material/finish/layer guidance grounded in those references." },

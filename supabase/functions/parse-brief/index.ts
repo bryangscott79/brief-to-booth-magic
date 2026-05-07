@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -354,6 +355,7 @@ async function callAIWithRetry(
   brandContext = "",
   suiteContext = "",
   ragFormatted = "",
+  req?: Request,
 ): Promise<Record<string, unknown>> {
   let userMessage = `You are parsing a brief document. Extract ALL data — scan every line including tables (formatted as tab-separated text).
 
@@ -370,6 +372,7 @@ ${briefText}
   }
 
   const result = await callGemini({
+      usage: req ? await buildUsageContext(req, "parse-brief").catch(() => undefined) : undefined,
     model: "google/gemini-2.5-flash",
     messages: [
       { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragFormatted ? `\n\n${ragFormatted}` : ""}` },
@@ -409,7 +412,7 @@ ${briefText}
   if (attempt < 3) {
     console.warn(`No tool call or parseable content (attempt ${attempt}), retrying...`);
     await new Promise((r) => setTimeout(r, 1500));
-    return callAIWithRetry(briefText, brandIntelligence, attempt + 1, brandContext, suiteContext, ragFormatted);
+    return callAIWithRetry(briefText, brandIntelligence, attempt + 1, brandContext, suiteContext, ragFormatted, req);
   }
 
   throw new Error("AI returned empty or unparseable response after 3 attempts");
@@ -527,6 +530,7 @@ serve(async (req) => {
 
       try {
         const pdfResult = await callGemini({
+      usage: await buildUsageContext(req, "parse-brief").catch(() => undefined),
           model: "google/gemini-2.5-pro",
           messages: [
             { role: "system", content: systemMsg },
@@ -596,7 +600,7 @@ serve(async (req) => {
       }
     }
 
-    const parsed = await callAIWithRetry(briefText, brandIntelligence, 1, brandContext, suiteContext, ragContext.formatted);
+    const parsed = await callAIWithRetry(briefText, brandIntelligence, 1, brandContext, suiteContext, ragContext.formatted, req);
 
     console.log("Final parsed brand:", (parsed.brand as any)?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
 

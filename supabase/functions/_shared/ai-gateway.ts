@@ -8,6 +8,9 @@
  * Deno-compatible: uses only fetch and Deno.env, no npm imports.
  */
 
+import { logUsageEvent } from "./usage-logger.ts";
+import type { UsageContext } from "./usage-context.ts";
+
 // ─── MODEL MAPPING ──────────────────────────────────────────────────────────
 
 /** Maps Lovable gateway model names to Google AI direct model names. */
@@ -36,6 +39,8 @@ export interface GeminiOptions {
   maxTokens?: number;
   /** Response modalities, e.g. ["image", "text"]. Adds responseModalities to generationConfig. */
   modalities?: string[];
+  /** Optional usage logging context. When set, the call is recorded in ai_usage_events. */
+  usage?: UsageContext;
 }
 
 export interface AnthropicOptions {
@@ -53,6 +58,8 @@ export interface AnthropicOptions {
   maxTokens?: number;
   /** Sampling temperature (0-1). */
   temperature?: number;
+  /** Optional usage logging context. */
+  usage?: UsageContext;
 }
 
 export interface AIResponse {
@@ -62,6 +69,8 @@ export interface AIResponse {
   toolCalls?: Array<{ name: string; arguments: any }>;
   /** Images returned by the model (Gemini image generation). */
   images?: Array<{ mimeType: string; base64Data: string }>;
+  /** Token usage extracted from the upstream response (best effort). */
+  usage?: { inputTokens?: number; outputTokens?: number };
 }
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
@@ -293,6 +302,13 @@ function parseGeminiResponse(data: any): AIResponse {
     result.images = images;
   }
 
+  if (data.usageMetadata) {
+    result.usage = {
+      inputTokens: data.usageMetadata.promptTokenCount ?? 0,
+      outputTokens: data.usageMetadata.candidatesTokenCount ?? 0,
+    };
+  }
+
   return result;
 }
 
@@ -330,6 +346,13 @@ function parseAnthropicResponse(data: any): AIResponse {
 
   if (toolCalls.length > 0) {
     result.toolCalls = toolCalls;
+  }
+
+  if (data.usage) {
+    result.usage = {
+      inputTokens: data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.output_tokens ?? 0,
+    };
   }
 
   return result;
@@ -442,6 +465,36 @@ async function parseJsonResponse(response: Response, label: string): Promise<any
  * ```
  */
 export async function callGemini(options: GeminiOptions): Promise<AIResponse> {
+  const started = Date.now();
+  try {
+    const result = await _callGeminiInner(options);
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model,
+        inputTokens: result.usage?.inputTokens,
+        outputTokens: result.usage?.outputTokens,
+        imageCount: result.images?.length ?? 0,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return result;
+  } catch (e) {
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model,
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+    }
+    throw e;
+  }
+}
+
+async function _callGeminiInner(options: GeminiOptions): Promise<AIResponse> {
   // Prefer the Lovable AI gateway when available — it pools quota across
   // workspaces and avoids the per-key Google free-tier rate limits.
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
@@ -627,6 +680,13 @@ async function callGeminiViaLovable(
     });
   }
 
+  if (data.usage) {
+    result.usage = {
+      inputTokens: data.usage.prompt_tokens ?? data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.completion_tokens ?? data.usage.output_tokens ?? 0,
+    };
+  }
+
   return result;
 }
 
@@ -678,6 +738,35 @@ function resolveAnthropicKey(): { key: string; sourceName: string } | null {
 }
 
 export async function callAnthropic(options: AnthropicOptions): Promise<AIResponse> {
+  const started = Date.now();
+  try {
+    const result = await _callAnthropicInner(options);
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model ?? "claude-sonnet-4-20250514",
+        inputTokens: result.usage?.inputTokens,
+        outputTokens: result.usage?.outputTokens,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return result;
+  } catch (e) {
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: options.model ?? "claude-sonnet-4-20250514",
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+    }
+    throw e;
+  }
+}
+
+async function _callAnthropicInner(options: AnthropicOptions): Promise<AIResponse> {
   const resolved = resolveAnthropicKey();
   if (!resolved) {
     throw new Error(
@@ -800,6 +889,8 @@ export interface OpenAIImageOptions {
    * Number of images to generate. Defaults to 1. >1 increases cost linearly.
    */
   n?: number;
+  /** Optional usage logging context. */
+  usage?: UsageContext;
 }
 
 export interface OpenAIImageResult {
@@ -852,6 +943,36 @@ function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1
  * references; we cap at 4.)
  */
 export async function callOpenAIImage(
+  options: OpenAIImageOptions,
+): Promise<OpenAIImageResult[]> {
+  const started = Date.now();
+  try {
+    const result = await _callOpenAIImageInner(options);
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: "openai/gpt-image-2",
+        imageCount: result.length,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return result;
+  } catch (e) {
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: "openai/gpt-image-2",
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+    }
+    throw e;
+  }
+}
+
+async function _callOpenAIImageInner(
   options: OpenAIImageOptions,
 ): Promise<OpenAIImageResult[]> {
   const resolved = resolveOpenAIKey();

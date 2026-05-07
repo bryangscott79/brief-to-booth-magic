@@ -19,6 +19,7 @@ import {
   Loader2,
   User,
   Clock,
+  Building2,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -96,17 +97,31 @@ export default function AgencyAccountPage() {
         .order("updated_at", { ascending: false });
       if (projectsError) console.error("[AgencyAccount] projects load error", projectsError);
 
-      // Team members (where this user is the team owner)
-      const { data: teamMembers } = await (supabase as any)
-        .from("team_members")
-        .select("id, display_name, role, created_at, accepted_at, invited_email")
-        .eq("team_owner_id", userId)
-        .order("created_at", { ascending: false });
+      // Agency owned by this account, plus its canonical agency roster.
+      const { data: ownedAgencies, error: agencyError } = await (supabase as any)
+        .from("agencies")
+        .select("id, name, slug, owner_user_id, created_at, updated_at")
+        .eq("owner_user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (agencyError) console.error("[AgencyAccount] agency load error", agencyError);
+
+      const ownedAgency = ((ownedAgencies as any[]) ?? [])[0] ?? null;
+      let agencyMembers: any[] = [];
+
+      if (ownedAgency?.id) {
+        const { data: members, error: membersError } = await (supabase.rpc as any)("list_agency_members", {
+          _agency_id: ownedAgency.id,
+        });
+        if (membersError) console.error("[AgencyAccount] agency members load error", membersError);
+        agencyMembers = (members as any[]) ?? [];
+      }
 
       return {
         profile,
         projects: projects ?? [],
-        teamMembers: (teamMembers as any[]) ?? [],
+        ownedAgency,
+        agencyMembers,
       };
     },
   });
@@ -140,8 +155,9 @@ export default function AgencyAccountPage() {
     );
   }
 
-  const { profile, projects, teamMembers } = account;
+  const { profile, projects, ownedAgency, agencyMembers } = account;
   const displayName = profile.display_name || profile.email || `User …${profile.user_id.slice(-6)}`;
+  const isAgencyOwner = !!ownedAgency && ownedAgency.owner_user_id === profile.user_id;
 
   const roleTier = profile.is_super_admin
     ? { label: "Platform Owner", icon: Crown, color: "text-amber-600 bg-amber-500/10" }

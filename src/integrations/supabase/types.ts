@@ -321,6 +321,63 @@ export type Database = {
           },
         ]
       }
+      ai_usage_events: {
+        Row: {
+          agency_id: string | null
+          cost_usd: number
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          feature: string
+          id: string
+          input_tokens: number
+          metadata: Json
+          model: string
+          output_tokens: number
+          project_id: string | null
+          provider: string | null
+          status: string
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          agency_id?: string | null
+          cost_usd?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          feature: string
+          id?: string
+          input_tokens?: number
+          metadata?: Json
+          model: string
+          output_tokens?: number
+          project_id?: string | null
+          provider?: string | null
+          status?: string
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          agency_id?: string | null
+          cost_usd?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          feature?: string
+          id?: string
+          input_tokens?: number
+          metadata?: Json
+          model?: string
+          output_tokens?: number
+          project_id?: string | null
+          provider?: string | null
+          status?: string
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       brand_intelligence: {
         Row: {
           approved_at: string | null
@@ -1945,6 +2002,47 @@ export type Database = {
       }
       agency_effective_status: { Args: { _agency_id: string }; Returns: string }
       agency_has_access: { Args: { _agency_id: string }; Returns: boolean }
+      ai_usage_by_agency: {
+        Args: { _from?: string; _to?: string }
+        Returns: {
+          agency_id: string
+          agency_name: string
+          calls: number
+          cost_usd: number
+          total_tokens: number
+        }[]
+      }
+      ai_usage_by_feature: {
+        Args: { _from?: string; _to?: string }
+        Returns: {
+          calls: number
+          cost_usd: number
+          feature: string
+          model: string
+          total_tokens: number
+        }[]
+      }
+      ai_usage_by_user: {
+        Args: { _from?: string; _to?: string }
+        Returns: {
+          calls: number
+          cost_usd: number
+          total_tokens: number
+          user_email: string
+          user_id: string
+        }[]
+      }
+      ai_usage_fleet_totals: {
+        Args: { _from?: string; _to?: string }
+        Returns: {
+          total_calls: number
+          total_cost_usd: number
+          total_input_tokens: number
+          total_output_tokens: number
+          unique_agencies: number
+          unique_users: number
+        }[]
+      }
       disable_agency: {
         Args: { _agency_id: string; _reason?: string }
         Returns: {

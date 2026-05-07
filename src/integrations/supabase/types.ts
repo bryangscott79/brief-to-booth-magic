@@ -1908,6 +1908,29 @@ export type Database = {
           user_id: string
         }[]
       }
+      list_agencies_for_admin: {
+        Args: never
+        Returns: {
+          access_status: string
+          admin_notes: string
+          client_count: number
+          created_at: string
+          effective_status: string
+          feature_flags: Json
+          id: string
+          last_activity_at: string
+          member_count: number
+          name: string
+          owner_email: string
+          owner_user_id: string
+          project_count: number
+          quotas: Json
+          slug: string
+          suspended_at: string
+          suspension_reason: string
+          trial_ends_at: string
+        }[]
+      }
       list_agency_members: {
         Args: { _agency_id: string }
         Returns: {

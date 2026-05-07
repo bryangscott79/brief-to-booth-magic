@@ -1,4 +1,4 @@
-// generate-hero — DEPLOY TOKEN: 2026-05-07-r5-image2
+// generate-hero — DEPLOY TOKEN: 2026-05-07-r6-image2-spec
 // (Lovable's pipeline keys deployment off file content hash — bump this
 //  comment to force a redeploy when the function code changes need to
 //  propagate. The ai-gateway changes that matter for this version:

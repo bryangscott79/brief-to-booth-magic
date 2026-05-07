@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-05-07-r5-image2
+// generate-view — DEPLOY TOKEN: 2026-05-07-r6-image2-spec
 // Bump this comment to force Lovable to redeploy. Changes that need this
 // version of the function to be live: gpt-image-2 model id, modelUsed in
 // response, multi-secret fallback in shared ai-gateway.

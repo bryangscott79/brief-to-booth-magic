@@ -888,6 +888,9 @@ export async function callOpenAIImage(
           size,
           quality,
           n,
+          // PNG explicitly — keeps the data: URL pattern working downstream
+          // (save-render-image expects "data:image/png;base64,...").
+          output_format: "png",
           ...(options.background && options.background !== "auto"
             ? { background: options.background }
             : {}),
@@ -903,10 +906,17 @@ export async function callOpenAIImage(
     form.append("size", size);
     form.append("quality", quality);
     form.append("n", String(n));
+    form.append("output_format", "png");
     if (options.background && options.background !== "auto") {
       form.append("background", options.background);
     }
-    // Fetch each reference, attach as a Blob.
+    // Fetch each reference, attach as a Blob. OpenAI's /v1/images/edits
+    // expects:
+    //   - single image: field name "image"
+    //   - multiple images: field name "image[]" for EACH file (array form)
+    // Sending "image" + "image[]" mixed makes the API only see the first.
+    // So decide field name once based on count, then attach all.
+    const fieldName = refs.length === 1 ? "image" : "image[]";
     for (let i = 0; i < refs.length; i++) {
       const url = refs[i]!;
       try {
@@ -916,10 +926,7 @@ export async function callOpenAIImage(
           continue;
         }
         const blob = await fetched.blob();
-        // OpenAI accepts up to a small number of images in image[] for edits;
-        // first one goes to "image", subsequent to "image[]".
-        if (i === 0) form.append("image", blob, `ref-${i}.png`);
-        else form.append("image[]", blob, `ref-${i}.png`);
+        form.append(fieldName, blob, `ref-${i}.png`);
       } catch (e) {
         console.warn(`[ai-gateway] Reference fetch threw at ${i}:`, e);
       }

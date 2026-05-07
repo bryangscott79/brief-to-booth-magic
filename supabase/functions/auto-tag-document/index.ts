@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -87,6 +88,7 @@ serve(async (req) => {
     }
 
     const result = await callGemini({
+      usage: await buildUsageContext(req, "auto-tag-document").catch(() => undefined),
       model: TAGGING_MODEL,
       messages: [
         {

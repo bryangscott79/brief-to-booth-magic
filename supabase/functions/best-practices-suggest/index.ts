@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -107,6 +108,7 @@ serve(async (req) => {
       : "";
 
     const result = await callAnthropic({
+      usage: await buildUsageContext(req, "best-practices-suggest").catch(() => undefined),
       system: "You are a senior experiential marketing strategist. Synthesize actionable best practices and pitfalls from past agency work. Be specific. Cite which past projects support each point.",
       messages: [
         {

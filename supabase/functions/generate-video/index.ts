@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callGemini } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -182,6 +183,7 @@ serve(async (req) => {
 
     // Fallback: Use Gemini / Veo via ai-gateway
     const result = await callGemini({
+      usage: await buildUsageContext(req, "generate-video").catch(() => undefined),
       model: "google/veo-2",
       messages: [
         {

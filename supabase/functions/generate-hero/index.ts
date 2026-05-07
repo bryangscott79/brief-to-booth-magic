@@ -8,6 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini, callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -324,6 +325,7 @@ ${genSuffix}`,
       console.log(`[generate-hero] Using OpenAI gpt-image-1`);
       try {
         const out = await callOpenAIImage({
+      usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
           prompt: flattenedPrompt,
           referenceImageUrls: refUrlsForOpenAI,
           size: "1536x1024", // 16:9 closest
@@ -342,6 +344,7 @@ ${genSuffix}`,
     if (!generatedImageUrl) {
       // Default Gemini path (also the fallback if OpenAI fails).
       let result = await callGemini({
+      usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
         model: "google/gemini-3-pro-image-preview",
         messages,
         modalities: ["image", "text"],
@@ -355,6 +358,7 @@ ${genSuffix}`,
         console.warn("[generate-hero] Pro Image returned no image, retrying with gemini-3.1-flash-image-preview");
         try {
           result = await callGemini({
+      usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
             model: "google/gemini-3.1-flash-image-preview",
             messages,
             modalities: ["image", "text"],

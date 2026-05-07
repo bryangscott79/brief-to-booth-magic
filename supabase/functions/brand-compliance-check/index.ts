@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -124,6 +125,7 @@ serve(async (req) => {
     }
 
     const result = await callAnthropic({
+      usage: await buildUsageContext(req, "brand-compliance-check").catch(() => undefined),
       system: "You are a brand compliance auditor for trade show / experiential marketing activations. You review proposed designs against brand guidelines and activation-type requirements. Be strict but fair, and quote specific evidence from the proposed design.",
       messages: [
         {

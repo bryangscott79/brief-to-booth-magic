@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -370,6 +371,7 @@ ${briefText}
   }
 
   const result = await callGemini({
+      usage: await buildUsageContext(req, "parse-brief").catch(() => undefined),
     model: "google/gemini-2.5-flash",
     messages: [
       { role: "system", content: PARSE_SYSTEM_PROMPT + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragFormatted ? `\n\n${ragFormatted}` : ""}` },
@@ -527,6 +529,7 @@ serve(async (req) => {
 
       try {
         const pdfResult = await callGemini({
+      usage: await buildUsageContext(req, "parse-brief").catch(() => undefined),
           model: "google/gemini-2.5-pro",
           messages: [
             { role: "system", content: systemMsg },

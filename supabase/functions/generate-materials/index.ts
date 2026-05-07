@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -90,6 +91,7 @@ Categories should include:
 Be realistic with trade show industry pricing. When the prompt includes RETRIEVED KNOWLEDGE BASE CONTEXT with vendor quotes, historical bids, or cost benchmarks, prefer those numbers over generic estimates.${ragBlock}`;
 
     const result = await callGemini({
+      usage: await buildUsageContext(req, "generate-materials").catch(() => undefined),
       model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: "You are a trade show booth construction cost estimator. Return structured JSON only. Ground unit costs in any retrieved vendor / historical pricing context when available." },

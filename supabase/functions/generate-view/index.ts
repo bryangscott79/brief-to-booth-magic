@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini, callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -296,6 +297,7 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
       console.log(`[generate-view] Using OpenAI gpt-image-2 for ${viewName}`);
       try {
         const out = await callOpenAIImage({
+      usage: await buildUsageContext(req, "generate-view").catch(() => undefined),
           prompt: editPrompt + extraLabelBlock,
           referenceImageUrls: [
             ...(referenceImageUrl ? [referenceImageUrl] : []),
@@ -316,6 +318,7 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
 
     if (!generatedImageUrl) {
       const result = await callGemini({
+      usage: await buildUsageContext(req, "generate-view").catch(() => undefined),
         model: "google/gemini-3-pro-image-preview",
         messages: [
           {

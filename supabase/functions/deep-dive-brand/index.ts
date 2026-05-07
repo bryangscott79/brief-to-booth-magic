@@ -14,6 +14,7 @@
 
 import { callGemini } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -211,6 +212,7 @@ Extract the brand profile using the build_brand_profile tool.`;
     };
 
     const ai = await callGemini({
+      usage: await buildUsageContext(req, "deep-dive-brand").catch(() => undefined),
       model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: systemPrompt },

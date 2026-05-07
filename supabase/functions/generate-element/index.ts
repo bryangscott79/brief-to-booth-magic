@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
+import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -394,6 +395,7 @@ END UPSTREAM CONTEXT
     console.log("Calling AI for element:", elementType);
 
     const result = await callGemini({
+      usage: await buildUsageContext(req, "generate-element").catch(() => undefined),
       model: "google/gemini-2.5-pro",
       temperature: existingData || feedback ? 1.2 : 0.9,
       messages: [

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callGemini } from "../_shared/ai-gateway.ts";
 
+import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -96,6 +97,7 @@ Extract reusable brand intelligence entries from this completed project. Return 
     });
 
     const result = await callGemini({
+      usage: await buildUsageContext(req, "extract-learnings").catch(() => undefined),
       model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: systemPrompt },

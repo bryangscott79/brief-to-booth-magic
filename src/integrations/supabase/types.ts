@@ -186,8 +186,11 @@ export type Database = {
       }
       agencies: {
         Row: {
+          access_status: string
+          admin_notes: string | null
           brand_colors: Json | null
           created_at: string
+          feature_flags: Json
           id: string
           image_model: string
           industries: string[]
@@ -195,12 +198,20 @@ export type Database = {
           name: string
           owner_user_id: string
           primary_industry: string | null
+          quotas: Json
           slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
           updated_at: string
         }
         Insert: {
+          access_status?: string
+          admin_notes?: string | null
           brand_colors?: Json | null
           created_at?: string
+          feature_flags?: Json
           id?: string
           image_model?: string
           industries?: string[]
@@ -208,12 +219,20 @@ export type Database = {
           name: string
           owner_user_id: string
           primary_industry?: string | null
+          quotas?: Json
           slug: string
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
         }
         Update: {
+          access_status?: string
+          admin_notes?: string | null
           brand_colors?: Json | null
           created_at?: string
+          feature_flags?: Json
           id?: string
           image_model?: string
           industries?: string[]
@@ -221,8 +240,49 @@ export type Database = {
           name?: string
           owner_user_id?: string
           primary_industry?: string | null
+          quotas?: Json
           slug?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      agency_access_log: {
+        Row: {
+          action: string
+          after_state: Json | null
+          agency_id: string
+          before_state: Json | null
+          created_at: string
+          id: string
+          metadata: Json
+          performed_by: string | null
+          reason: string | null
+        }
+        Insert: {
+          action: string
+          after_state?: Json | null
+          agency_id: string
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          performed_by?: string | null
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          after_state?: Json | null
+          agency_id?: string
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          performed_by?: string | null
+          reason?: string | null
         }
         Relationships: []
       }
@@ -1726,6 +1786,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _agency_snapshot: { Args: { _agency_id: string }; Returns: Json }
+      _log_agency_access: {
+        Args: {
+          _action: string
+          _after: Json
+          _agency_id: string
+          _before: Json
+          _metadata?: Json
+          _reason: string
+        }
+        Returns: string
+      }
       _require_super_admin: { Args: never; Returns: undefined }
       accept_pending_invite: { Args: { _invite_id: string }; Returns: boolean }
       accept_project_invite: {
@@ -1816,8 +1888,11 @@ export type Database = {
           _primary_industry: string
         }
         Returns: {
+          access_status: string
+          admin_notes: string | null
           brand_colors: Json | null
           created_at: string
+          feature_flags: Json
           id: string
           image_model: string
           industries: string[]
@@ -1825,7 +1900,12 @@ export type Database = {
           name: string
           owner_user_id: string
           primary_industry: string | null
+          quotas: Json
           slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
           updated_at: string
         }
         SetofOptions: {
@@ -1863,6 +1943,52 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      agency_effective_status: { Args: { _agency_id: string }; Returns: string }
+      agency_has_access: { Args: { _agency_id: string }; Returns: boolean }
+      disable_agency: {
+        Args: { _agency_id: string; _reason?: string }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_agency_access_log: {
+        Args: { _agency_id: string; _limit?: number }
+        Returns: {
+          action: string
+          after_state: Json
+          before_state: Json
+          created_at: string
+          id: string
+          metadata: Json
+          performed_by: string
+          performer_email: string
+          reason: string
+        }[]
+      }
       get_all_user_profiles: {
         Args: never
         Returns: {
@@ -1883,15 +2009,15 @@ export type Database = {
         Returns: boolean
       }
       industry_uuid: { Args: { _slug: string }; Returns: string }
-      is_agency_admin: {
-        Args: { _agency_id: string; _user_id?: string }
-        Returns: boolean
-      }
-      is_agency_member: {
-        Args: { _agency_id: string; _user_id?: string }
-        Returns: boolean
-      }
-      is_super_admin: { Args: { _user_id?: string }; Returns: boolean }
+      is_agency_admin:
+        | { Args: { _agency_id: string }; Returns: boolean }
+        | { Args: { _agency_id: string; _user_id?: string }; Returns: boolean }
+      is_agency_member:
+        | { Args: { _agency_id: string }; Returns: boolean }
+        | { Args: { _agency_id: string; _user_id?: string }; Returns: boolean }
+      is_super_admin:
+        | { Args: never; Returns: boolean }
+        | { Args: { _user_id?: string }; Returns: boolean }
       list_activation_types_by_industry: {
         Args: { _industry_slug: string }
         Returns: {
@@ -2042,13 +2168,193 @@ export type Database = {
           unpriced_count: number
         }[]
       }
+      reactivate_agency: {
+        Args: { _agency_id: string; _reason?: string }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       revoke_super_admin: {
         Args: { _target_user_id: string }
         Returns: boolean
       }
       seed_canopy_defaults: { Args: never; Returns: Json }
+      set_agency_trial: {
+        Args: { _agency_id: string; _ends_at: string }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      suspend_agency: {
+        Args: { _agency_id: string; _reason?: string }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_agency_admin_notes: {
+        Args: { _agency_id: string; _notes: string }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_agency_feature_flags: {
+        Args: { _agency_id: string; _flags: Json }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_agency_quotas: {
+        Args: { _agency_id: string; _quotas: Json }
+        Returns: {
+          access_status: string
+          admin_notes: string | null
+          brand_colors: Json | null
+          created_at: string
+          feature_flags: Json
+          id: string
+          image_model: string
+          industries: string[]
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          primary_industry: string | null
+          quotas: Json
+          slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agencies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       app_role: "admin" | "member" | "super_admin"

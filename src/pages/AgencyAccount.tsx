@@ -19,6 +19,7 @@ import {
   Loader2,
   User,
   Clock,
+  Building2,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -96,17 +97,31 @@ export default function AgencyAccountPage() {
         .order("updated_at", { ascending: false });
       if (projectsError) console.error("[AgencyAccount] projects load error", projectsError);
 
-      // Team members (where this user is the team owner)
-      const { data: teamMembers } = await (supabase as any)
-        .from("team_members")
-        .select("id, display_name, role, created_at, accepted_at, invited_email")
-        .eq("team_owner_id", userId)
-        .order("created_at", { ascending: false });
+      // Agency owned by this account, plus its canonical agency roster.
+      const { data: ownedAgencies, error: agencyError } = await (supabase as any)
+        .from("agencies")
+        .select("id, name, slug, owner_user_id, created_at, updated_at")
+        .eq("owner_user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (agencyError) console.error("[AgencyAccount] agency load error", agencyError);
+
+      const ownedAgency = ((ownedAgencies as any[]) ?? [])[0] ?? null;
+      let agencyMembers: any[] = [];
+
+      if (ownedAgency?.id) {
+        const { data: members, error: membersError } = await (supabase.rpc as any)("list_agency_members", {
+          _agency_id: ownedAgency.id,
+        });
+        if (membersError) console.error("[AgencyAccount] agency members load error", membersError);
+        agencyMembers = (members as any[]) ?? [];
+      }
 
       return {
         profile,
         projects: projects ?? [],
-        teamMembers: (teamMembers as any[]) ?? [],
+        ownedAgency,
+        agencyMembers,
       };
     },
   });
@@ -140,11 +155,14 @@ export default function AgencyAccountPage() {
     );
   }
 
-  const { profile, projects, teamMembers } = account;
+  const { profile, projects, ownedAgency, agencyMembers } = account;
   const displayName = profile.display_name || profile.email || `User …${profile.user_id.slice(-6)}`;
+  const isAgencyOwner = !!ownedAgency && ownedAgency.owner_user_id === profile.user_id;
 
   const roleTier = profile.is_super_admin
     ? { label: "Platform Owner", icon: Crown, color: "text-amber-600 bg-amber-500/10" }
+    : isAgencyOwner
+    ? { label: "Agency Owner", icon: Crown, color: "text-primary bg-primary/10" }
     : profile.is_admin
     ? { label: "Agency Admin", icon: Shield, color: "text-primary bg-primary/10" }
     : { label: "Member", icon: User, color: "text-muted-foreground bg-muted" };
@@ -193,6 +211,17 @@ export default function AgencyAccountPage() {
               <p className="text-sm text-muted-foreground mt-0.5">
                 {profile.email} · Joined {format(new Date(profile.created_at), "MMMM yyyy")}
               </p>
+              {ownedAgency && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <span>
+                    {isAgencyOwner ? "Account owner" : "Member"} for {ownedAgency.name}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {ownedAgency.slug}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
 
@@ -218,9 +247,9 @@ export default function AgencyAccountPage() {
           />
           <StatCard
             label="Team Members"
-            value={teamMembers.length}
+            value={agencyMembers.length}
             icon={Users}
-            sub={`${teamMembers.filter((m: any) => m.accepted_at).length} active`}
+            sub={ownedAgency ? `${ownedAgency.name} roster` : "No agency"}
           />
           <StatCard
             label="Last Active"
@@ -273,44 +302,40 @@ export default function AgencyAccountPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
               Team Roster
               <Badge variant="outline" className="ml-auto text-xs font-normal">
-                {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""}
+                {agencyMembers.length} member{agencyMembers.length !== 1 ? "s" : ""}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!teamMembers.length ? (
+            {!agencyMembers.length ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No team members yet
               </p>
             ) : (
               <div className="space-y-2">
-                {teamMembers.map((member: any) => (
+                {agencyMembers.map((member: any) => (
                   <div
                     key={member.id}
                     className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground shrink-0">
-                        {(member.display_name || member.invited_email || "?").slice(0, 2).toUpperCase()}
+                        {(member.email || "?").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {member.display_name || member.invited_email || "Pending"}
+                          {member.email || `User …${member.user_id?.slice(-6) ?? ""}`}
                         </p>
-                        {member.invited_email && member.display_name && (
-                          <p className="text-xs text-muted-foreground truncate">{member.invited_email}</p>
+                        {member.is_primary_owner && (
+                          <p className="text-xs text-muted-foreground truncate">Account owner for {ownedAgency?.name}</p>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                        {member.role}
+                        {member.is_primary_owner ? "owner" : member.role}
                       </Badge>
-                      {member.accepted_at ? (
-                        <span className="text-[10px] text-primary font-medium">Active</span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground">Pending</span>
-                      )}
+                      <span className="text-[10px] text-primary font-medium">Active</span>
                     </div>
                   </div>
                 ))}

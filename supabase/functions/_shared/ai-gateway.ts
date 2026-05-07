@@ -302,6 +302,13 @@ function parseGeminiResponse(data: any): AIResponse {
     result.images = images;
   }
 
+  if (data.usageMetadata) {
+    result.usage = {
+      inputTokens: data.usageMetadata.promptTokenCount ?? 0,
+      outputTokens: data.usageMetadata.candidatesTokenCount ?? 0,
+    };
+  }
+
   return result;
 }
 
@@ -339,6 +346,13 @@ function parseAnthropicResponse(data: any): AIResponse {
 
   if (toolCalls.length > 0) {
     result.toolCalls = toolCalls;
+  }
+
+  if (data.usage) {
+    result.usage = {
+      inputTokens: data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.output_tokens ?? 0,
+    };
   }
 
   return result;

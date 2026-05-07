@@ -164,7 +164,7 @@ export function PromptGenerator() {
   const brandLogoUrl = brandLogo?.publicUrl;
 
   // Active version's chosen image model — "gemini" (default) or "openai"
-  // (gpt-image-1). gpt-image-1 needs OPENAI_API_KEY in Supabase secrets;
+  // (gpt-image-2). gpt-image-2 needs OPENAI_API_KEY in Supabase secrets;
   // when missing the edge function falls back to Gemini automatically.
   const activeImageModel: "gemini" | "openai" =
     promptVersions.activeVersion?.imageModel ?? "gemini";

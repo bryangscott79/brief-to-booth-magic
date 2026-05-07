@@ -33,7 +33,7 @@ export interface PromptVersionMeta {
   claimsUnversioned?: boolean;
   /**
    * Image model to use for renders inside this version. "gemini" is the
-   * default Nano Banana / Gemini 3 Pro Image. "openai" routes to gpt-image-1
+   * default Nano Banana / Gemini 3 Pro Image. "openai" routes to gpt-image-2
    * which is stronger on logo fidelity and organic structures but requires
    * OPENAI_API_KEY in Supabase secrets. Per-version choice so users can
    * compare models on the same project without losing prior renders.

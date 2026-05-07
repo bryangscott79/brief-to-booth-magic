@@ -79,8 +79,8 @@ const IMAGE_MODEL_OPTIONS: Array<{
   },
   {
     id: "openai",
-    label: "OpenAI gpt-image-1",
-    pillLabel: "GPT-Image-1",
+    label: "OpenAI gpt-image-2",
+    pillLabel: "GPT-Image-2",
     description: "Stronger logo fidelity and organic / fluid structures. Slower and costlier. Requires OPENAI_API_KEY in Supabase secrets.",
   },
 ];
@@ -228,7 +228,7 @@ export function PromptVersionTabs({
                 <StylePresetPill preset={getPresetById(activeVersion.preset)} />
                 <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">
                   {(activeVersion.imageModel ?? "gemini") === "openai"
-                    ? "GPT-Image-1"
+                    ? "GPT-Image-2"
                     : "Gemini"}
                 </span>
               </div>
@@ -320,7 +320,7 @@ export function PromptVersionTabs({
             </div>
 
             {/* Image model selector — Gemini Nano (default, bundled) vs
-              * OpenAI gpt-image-1 (better logo + organic structures, needs
+              * OpenAI gpt-image-2 (better logo + organic structures, needs
               * OPENAI_API_KEY in Supabase secrets). Per-version so users
               * can A/B compare on the same project. */}
             <div className="space-y-2">

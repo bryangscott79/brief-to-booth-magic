@@ -64,7 +64,7 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
-    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-1. */
+    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
@@ -82,7 +82,7 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
-    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-1. */
+    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
@@ -100,7 +100,7 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
-    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-1. */
+    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;

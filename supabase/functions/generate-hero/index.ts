@@ -325,7 +325,7 @@ ${genSuffix}`,
         const img = out[0];
         if (!img) throw new Error("OpenAI returned no image");
         generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-        modelUsed = "openai/gpt-image-1";
+        modelUsed = "openai/gpt-image-2";
       } catch (e) {
         console.error("[generate-hero] OpenAI failed, falling back to Gemini:", e);
         // Fall through to Gemini.

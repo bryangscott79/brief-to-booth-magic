@@ -33,7 +33,7 @@ interface GenerateViewRequest {
   brandLogoUrl?: string;
   /** Optional one-off references attached at regen time. */
   extraReferenceUrls?: string[];
-  /** "gemini" (default) or "openai" gpt-image-1. */
+  /** "gemini" (default) or "openai" gpt-image-2. */
   imageModel?: "gemini" | "openai";
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
@@ -286,10 +286,10 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
     let modelUsed = "";
 
     if (imageModel === "openai") {
-      // gpt-image-1 path. Logo + organic-structure rendering is much
+      // gpt-image-2 path. Logo + organic-structure rendering is much
       // stronger than Gemini for our use case. Pass the hero / view
       // reference + brand logo + extras as the image inputs to /edits.
-      console.log(`[generate-view] Using OpenAI gpt-image-1 for ${viewName}`);
+      console.log(`[generate-view] Using OpenAI gpt-image-2 for ${viewName}`);
       try {
         const out = await callOpenAIImage({
           prompt: editPrompt + extraLabelBlock,
@@ -304,7 +304,7 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
         const img = out[0];
         if (!img) throw new Error("OpenAI returned no image");
         generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-        modelUsed = "openai/gpt-image-1";
+        modelUsed = "openai/gpt-image-2";
       } catch (e) {
         console.error("[generate-view] OpenAI failed, falling back to Gemini:", e);
       }

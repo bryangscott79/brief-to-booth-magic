@@ -757,7 +757,7 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
   return parseAnthropicResponse(data);
 }
 
-// ─── OPENAI IMAGE (gpt-image-1) ─────────────────────────────────────────────
+// ─── OPENAI IMAGE (gpt-image-2) ─────────────────────────────────────────────
 //
 // Gemini's image model ("nano banana" / gemini-3-pro-image-preview) is fast
 // and cheap but struggles with two things our users hit constantly:
@@ -766,7 +766,7 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
 //   2. Prompt adherence on complex / organic structures — it tends toward
 //      generic geometric shapes when asked for fluid, asymmetric forms.
 //
-// gpt-image-1 (OpenAI) is meaningfully better at both. We expose it as an
+// gpt-image-2 (OpenAI) is meaningfully better at both. We expose it as an
 // alternate model the user can pick per render. Direct OpenAI API path is
 // simpler than Replicate (no polling) and uses the same secret pattern as
 // ANTHROPIC_API_KEY.
@@ -782,7 +782,7 @@ export interface OpenAIImageOptions {
    */
   referenceImageUrls?: string[];
   /**
-   * Aspect ratio. gpt-image-1 supports "1024x1024" (1:1), "1536x1024" (3:2),
+   * Aspect ratio. gpt-image-2 supports "1024x1024" (1:1), "1536x1024" (3:2),
    * "1024x1536" (2:3). We map common label strings to these.
    */
   size?: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
@@ -805,7 +805,7 @@ export interface OpenAIImageOptions {
 export interface OpenAIImageResult {
   /** Base64-encoded image bytes (no data: prefix). */
   base64Data: string;
-  /** MIME type, always image/png from gpt-image-1. */
+  /** MIME type, always image/png from gpt-image-2. */
   mimeType: string;
   /** Index in the response array — useful when n > 1. */
   index: number;
@@ -828,7 +828,7 @@ function resolveOpenAIKey(): { key: string; sourceName: string } | null {
 
 /**
  * Map an aspect-ratio label ("16:9", "1:1", "9:16") to the closest
- * gpt-image-1 supported size. The model only offers three landscape/
+ * gpt-image-2 supported size. The model only offers three landscape/
  * portrait/square options, so 16:9 lands on the closest 3:2 frame.
  */
 function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1536" {
@@ -841,14 +841,14 @@ function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1
 }
 
 /**
- * Generate an image with OpenAI gpt-image-1. Returns base64 PNG bytes ready
+ * Generate an image with OpenAI gpt-image-2. Returns base64 PNG bytes ready
  * for save-render-image (the existing storage pipeline accepts both
  * "data:image/png;base64,..." and raw HTTP URLs).
  *
  * When referenceImageUrls is non-empty, hits /v1/images/edits with the
  * references attached so the model treats them as visual context. The first
  * reference is the primary "image" parameter; additional references are
- * sent as image[] entries. (gpt-image-1 supports a small number of
+ * sent as image[] entries. (gpt-image-2 supports a small number of
  * references; we cap at 4.)
  */
 export async function callOpenAIImage(
@@ -857,7 +857,7 @@ export async function callOpenAIImage(
   const resolved = resolveOpenAIKey();
   if (!resolved) {
     throw new Error(
-      "[ai-gateway] No OpenAI API key configured. Set OPENAI_API_KEY in Supabase Edge Function Secrets to use gpt-image-1.",
+      "[ai-gateway] No OpenAI API key configured. Set OPENAI_API_KEY in Supabase Edge Function Secrets to use gpt-image-2.",
     );
   }
 
@@ -867,7 +867,7 @@ export async function callOpenAIImage(
   const refs = (options.referenceImageUrls ?? []).slice(0, 4);
 
   console.log(
-    `[ai-gateway] OpenAI gpt-image-1 call: size=${size}, quality=${quality}, refs=${refs.length}, key_source=${resolved.sourceName}`,
+    `[ai-gateway] OpenAI gpt-image-2 call: size=${size}, quality=${quality}, refs=${refs.length}, key_source=${resolved.sourceName}`,
   );
 
   let response: Response;
@@ -883,7 +883,7 @@ export async function callOpenAIImage(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-image-1",
+          model: "gpt-image-2",
           prompt: options.prompt,
           size,
           quality,
@@ -893,12 +893,12 @@ export async function callOpenAIImage(
             : {}),
         }),
       },
-      "OpenAI/gpt-image-1",
+      "OpenAI/gpt-image-2",
     );
   } else {
     // With references → /v1/images/edits (multipart form data).
     const form = new FormData();
-    form.append("model", "gpt-image-1");
+    form.append("model", "gpt-image-2");
     form.append("prompt", options.prompt);
     form.append("size", size);
     form.append("quality", quality);
@@ -931,17 +931,17 @@ export async function callOpenAIImage(
         headers: { Authorization: `Bearer ${resolved.key}` },
         body: form,
       },
-      "OpenAI/gpt-image-1",
+      "OpenAI/gpt-image-2",
     );
   }
 
-  const data = await parseJsonResponse(response, "OpenAI/gpt-image-1");
+  const data = await parseJsonResponse(response, "OpenAI/gpt-image-2");
   const items: any[] = Array.isArray(data?.data) ? data.data : [];
   if (items.length === 0) {
     throw new Error("[ai-gateway] OpenAI returned no images");
   }
   return items.map((item, idx) => {
-    // gpt-image-1 returns base64 in the b64_json field.
+    // gpt-image-2 returns base64 in the b64_json field.
     const base64 = item?.b64_json;
     if (!base64) {
       throw new Error(`[ai-gateway] OpenAI image ${idx} missing b64_json`);

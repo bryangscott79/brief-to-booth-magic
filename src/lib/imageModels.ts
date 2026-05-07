@@ -15,7 +15,7 @@ export type ImageModelId =
   | "google/gemini-3-pro-image-preview"
   | "google/gemini-3.1-flash-image-preview"
   | "google/gemini-2.5-flash-image"
-  | "openai/gpt-image-1";
+  | "openai/gpt-image-2";
 
 export interface ImageModel {
   id: ImageModelId;
@@ -52,12 +52,12 @@ export const IMAGE_MODELS: ImageModel[] = [
     available: true,
   },
   {
-    id: "openai/gpt-image-1",
+    id: "openai/gpt-image-2",
     label: "Typographic",
     shortLabel: "Typographic",
-    description: "Tuned for legible on-render text and graphic-led compositions.",
-    badge: "Coming soon",
-    available: false,
+    description: "Tuned for legible on-render text, brand marks, and graphic-led compositions. Stronger logo fidelity and organic structures than the Gemini tiers; slower and costlier.",
+    badge: "New",
+    available: true,
   },
 ];
 

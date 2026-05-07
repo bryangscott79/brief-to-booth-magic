@@ -163,6 +163,12 @@ export function PromptGenerator() {
   const { activeLogo: brandLogo } = useBrandLogo(effectiveProjectId);
   const brandLogoUrl = brandLogo?.publicUrl;
 
+  // Active version's chosen image model — "gemini" (default) or "openai"
+  // (gpt-image-1). gpt-image-1 needs OPENAI_API_KEY in Supabase secrets;
+  // when missing the edge function falls back to Gemini automatically.
+  const activeImageModel: "gemini" | "openai" =
+    promptVersions.activeVersion?.imageModel ?? "gemini";
+
   // Per-view supplemental references — user attaches images via "Attach
   // reference" on each view card. URLs flow into the next regeneration of
   // that angle as extraReferenceUrls; cleared on success.
@@ -360,6 +366,7 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        imageModel: activeImageModel,
         extraReferenceUrls: combinedRefs.length > 0 ? combinedRefs : undefined,
         onSave: doSave,
       });
@@ -425,6 +432,7 @@ export function PromptGenerator() {
       brandContext: ragBrandContext || undefined,
       suiteContext: ragSuiteContext || undefined,
       brandLogoUrl,
+      imageModel: activeImageModel,
       // Project-wide visual references — applied on every view so the
       // model has consistent brand/material/mood context across angles.
       extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
@@ -463,6 +471,7 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        imageModel: activeImageModel,
         extraReferenceUrls: extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
         onSave: doSave,
       });
@@ -508,6 +517,7 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        imageModel: activeImageModel,
         extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
         onSave: doSave,
       });
@@ -538,6 +548,7 @@ export function PromptGenerator() {
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
         brandLogoUrl,
+        imageModel: activeImageModel,
         extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
         onSave: doSave,
       });

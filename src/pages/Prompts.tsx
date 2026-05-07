@@ -8,7 +8,7 @@ export default function PromptsPage() {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <AppLayout surface="light">
         <div className="container py-12 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -17,7 +17,7 @@ export default function PromptsPage() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout surface="light">
       <div className="container py-12">
         <PromptGenerator />
       </div>

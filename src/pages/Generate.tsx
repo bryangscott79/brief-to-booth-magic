@@ -8,7 +8,7 @@ export default function GeneratePage() {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <AppLayout surface="light">
         <div className="container py-12 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -17,7 +17,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout surface="light">
       <div className="container py-12">
         <ElementDashboard projectId={projectId} />
       </div>

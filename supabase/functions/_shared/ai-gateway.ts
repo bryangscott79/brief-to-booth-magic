@@ -756,3 +756,200 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
   const data = await parseJsonResponse(response, `Anthropic/${body.model}`);
   return parseAnthropicResponse(data);
 }
+
+// ─── OPENAI IMAGE (gpt-image-1) ─────────────────────────────────────────────
+//
+// Gemini's image model ("nano banana" / gemini-3-pro-image-preview) is fast
+// and cheap but struggles with two things our users hit constantly:
+//   1. Logo fidelity — supplied brand marks come out as approximations, not
+//      the actual logo, even when included as reference images.
+//   2. Prompt adherence on complex / organic structures — it tends toward
+//      generic geometric shapes when asked for fluid, asymmetric forms.
+//
+// gpt-image-1 (OpenAI) is meaningfully better at both. We expose it as an
+// alternate model the user can pick per render. Direct OpenAI API path is
+// simpler than Replicate (no polling) and uses the same secret pattern as
+// ANTHROPIC_API_KEY.
+
+export interface OpenAIImageOptions {
+  /** Text prompt. Required. */
+  prompt: string;
+  /**
+   * Reference images for image-edit mode. When provided, the call goes to
+   * /v1/images/edits which uses the references as visual context (logo,
+   * style, composition). Each reference is a public URL — we fetch it and
+   * forward as multipart/form-data.
+   */
+  referenceImageUrls?: string[];
+  /**
+   * Aspect ratio. gpt-image-1 supports "1024x1024" (1:1), "1536x1024" (3:2),
+   * "1024x1536" (2:3). We map common label strings to these.
+   */
+  size?: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
+  /**
+   * Output quality. "high" is the visibly-best option but slowest + costliest.
+   * "medium" is a reasonable default. "low" only for previews.
+   */
+  quality?: "low" | "medium" | "high" | "auto";
+  /**
+   * Background — "transparent" is great for logo-on-transparent reference
+   * style. Default "auto" picks based on the model's discretion.
+   */
+  background?: "transparent" | "opaque" | "auto";
+  /**
+   * Number of images to generate. Defaults to 1. >1 increases cost linearly.
+   */
+  n?: number;
+}
+
+export interface OpenAIImageResult {
+  /** Base64-encoded image bytes (no data: prefix). */
+  base64Data: string;
+  /** MIME type, always image/png from gpt-image-1. */
+  mimeType: string;
+  /** Index in the response array — useful when n > 1. */
+  index: number;
+}
+
+/**
+ * Resolve OpenAI API key. Same multi-secret fallback pattern as Anthropic
+ * so a key rotation that lands in any common slot still works.
+ */
+function resolveOpenAIKey(): { key: string; sourceName: string } | null {
+  const candidates = ["OPENAI_API_KEY", "OPENAI_KEY", "GPT_IMAGE_API_KEY"];
+  for (const name of candidates) {
+    const value = Deno.env.get(name);
+    if (value && value.trim().length > 0) {
+      return { key: value.trim(), sourceName: name };
+    }
+  }
+  return null;
+}
+
+/**
+ * Map an aspect-ratio label ("16:9", "1:1", "9:16") to the closest
+ * gpt-image-1 supported size. The model only offers three landscape/
+ * portrait/square options, so 16:9 lands on the closest 3:2 frame.
+ */
+function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1536" {
+  if (!aspect) return "1024x1024";
+  const a = String(aspect).toLowerCase().replace(/\s+/g, "");
+  if (a === "1:1" || a === "1024x1024") return "1024x1024";
+  if (/^9:16$|^2:3$|^3:4$|^1024x1536$/.test(a)) return "1024x1536";
+  // Anything wider than square → landscape.
+  return "1536x1024";
+}
+
+/**
+ * Generate an image with OpenAI gpt-image-1. Returns base64 PNG bytes ready
+ * for save-render-image (the existing storage pipeline accepts both
+ * "data:image/png;base64,..." and raw HTTP URLs).
+ *
+ * When referenceImageUrls is non-empty, hits /v1/images/edits with the
+ * references attached so the model treats them as visual context. The first
+ * reference is the primary "image" parameter; additional references are
+ * sent as image[] entries. (gpt-image-1 supports a small number of
+ * references; we cap at 4.)
+ */
+export async function callOpenAIImage(
+  options: OpenAIImageOptions,
+): Promise<OpenAIImageResult[]> {
+  const resolved = resolveOpenAIKey();
+  if (!resolved) {
+    throw new Error(
+      "[ai-gateway] No OpenAI API key configured. Set OPENAI_API_KEY in Supabase Edge Function Secrets to use gpt-image-1.",
+    );
+  }
+
+  const size = options.size ?? aspectRatioToSize();
+  const quality = options.quality ?? "medium";
+  const n = Math.min(Math.max(options.n ?? 1, 1), 4);
+  const refs = (options.referenceImageUrls ?? []).slice(0, 4);
+
+  console.log(
+    `[ai-gateway] OpenAI gpt-image-1 call: size=${size}, quality=${quality}, refs=${refs.length}, key_source=${resolved.sourceName}`,
+  );
+
+  let response: Response;
+
+  if (refs.length === 0) {
+    // No references → /v1/images/generations (JSON body).
+    response = await fetchWithRateLimitRetry(
+      "https://api.openai.com/v1/images/generations",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resolved.key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-image-1",
+          prompt: options.prompt,
+          size,
+          quality,
+          n,
+          ...(options.background && options.background !== "auto"
+            ? { background: options.background }
+            : {}),
+        }),
+      },
+      "OpenAI/gpt-image-1",
+    );
+  } else {
+    // With references → /v1/images/edits (multipart form data).
+    const form = new FormData();
+    form.append("model", "gpt-image-1");
+    form.append("prompt", options.prompt);
+    form.append("size", size);
+    form.append("quality", quality);
+    form.append("n", String(n));
+    if (options.background && options.background !== "auto") {
+      form.append("background", options.background);
+    }
+    // Fetch each reference, attach as a Blob.
+    for (let i = 0; i < refs.length; i++) {
+      const url = refs[i]!;
+      try {
+        const fetched = await fetch(url);
+        if (!fetched.ok) {
+          console.warn(`[ai-gateway] Could not fetch reference ${i}: ${fetched.status}`);
+          continue;
+        }
+        const blob = await fetched.blob();
+        // OpenAI accepts up to a small number of images in image[] for edits;
+        // first one goes to "image", subsequent to "image[]".
+        if (i === 0) form.append("image", blob, `ref-${i}.png`);
+        else form.append("image[]", blob, `ref-${i}.png`);
+      } catch (e) {
+        console.warn(`[ai-gateway] Reference fetch threw at ${i}:`, e);
+      }
+    }
+    response = await fetchWithRateLimitRetry(
+      "https://api.openai.com/v1/images/edits",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resolved.key}` },
+        body: form,
+      },
+      "OpenAI/gpt-image-1",
+    );
+  }
+
+  const data = await parseJsonResponse(response, "OpenAI/gpt-image-1");
+  const items: any[] = Array.isArray(data?.data) ? data.data : [];
+  if (items.length === 0) {
+    throw new Error("[ai-gateway] OpenAI returned no images");
+  }
+  return items.map((item, idx) => {
+    // gpt-image-1 returns base64 in the b64_json field.
+    const base64 = item?.b64_json;
+    if (!base64) {
+      throw new Error(`[ai-gateway] OpenAI image ${idx} missing b64_json`);
+    }
+    return {
+      base64Data: String(base64),
+      mimeType: "image/png",
+      index: idx,
+    };
+  });
+}

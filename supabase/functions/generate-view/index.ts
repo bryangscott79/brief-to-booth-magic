@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callGemini } from "../_shared/ai-gateway.ts";
+import { callGemini, callOpenAIImage } from "../_shared/ai-gateway.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -33,6 +33,8 @@ interface GenerateViewRequest {
   brandLogoUrl?: string;
   /** Optional one-off references attached at regen time. */
   extraReferenceUrls?: string[];
+  /** "gemini" (default) or "openai" gpt-image-1. */
+  imageModel?: "gemini" | "openai";
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
     brandColors?: string[];
@@ -149,7 +151,7 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls }: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" }: GenerateViewRequest = await req.json();
 
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -279,39 +281,71 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
       ? `\n\nADDITIONAL VISUAL REFERENCES:\n${extraLabels.join("\n")}`
       : "";
 
-    const result = await callGemini({
-      model: "google/gemini-3-pro-image-preview",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: editPrompt + extraLabelBlock,
-            },
-            ...(referenceImageUrl ? [{
-              type: "image_url",
-              image_url: {
-                url: referenceImageUrl,
-              },
-            }] : []),
-            ...extraImages,
-          ],
-        },
-      ],
-      modalities: ["image", "text"],
-    });
+    let generatedImageUrl: string | null = null;
+    let responseText = "";
+    let modelUsed = "";
 
-    const image = result.images?.[0];
-    if (!image) {
-      console.error("No image in response:", JSON.stringify(result));
-      throw new Error("No image generated");
+    if (imageModel === "openai") {
+      // gpt-image-1 path. Logo + organic-structure rendering is much
+      // stronger than Gemini for our use case. Pass the hero / view
+      // reference + brand logo + extras as the image inputs to /edits.
+      console.log(`[generate-view] Using OpenAI gpt-image-1 for ${viewName}`);
+      try {
+        const out = await callOpenAIImage({
+          prompt: editPrompt + extraLabelBlock,
+          referenceImageUrls: [
+            ...(referenceImageUrl ? [referenceImageUrl] : []),
+            ...(brandLogoUrl ? [brandLogoUrl] : []),
+            ...(extraReferenceUrls ?? []),
+          ],
+          size: "1536x1024",
+          quality: "high",
+        });
+        const img = out[0];
+        if (!img) throw new Error("OpenAI returned no image");
+        generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+        modelUsed = "openai/gpt-image-1";
+      } catch (e) {
+        console.error("[generate-view] OpenAI failed, falling back to Gemini:", e);
+      }
     }
 
-    const generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
-    const responseText = result.text || "";
+    if (!generatedImageUrl) {
+      const result = await callGemini({
+        model: "google/gemini-3-pro-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: editPrompt + extraLabelBlock,
+              },
+              ...(referenceImageUrl ? [{
+                type: "image_url",
+                image_url: {
+                  url: referenceImageUrl,
+                },
+              }] : []),
+              ...extraImages,
+            ],
+          },
+        ],
+        modalities: ["image", "text"],
+      });
 
-    console.log(`Successfully generated ${viewName} view`);
+      const image = result.images?.[0];
+      if (!image) {
+        console.error("No image in response:", JSON.stringify(result));
+        throw new Error("No image generated");
+      }
+
+      generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
+      responseText = result.text || "";
+      modelUsed = "google/gemini-3-pro-image-preview";
+    }
+
+    console.log(`Successfully generated ${viewName} view via ${modelUsed}`);
 
     return new Response(
       JSON.stringify({
@@ -319,6 +353,7 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
         viewName,
         imageUrl: generatedImageUrl,
         message: responseText,
+        modelUsed,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callGemini } from "../_shared/ai-gateway.ts";
+import { callGemini, callOpenAIImage } from "../_shared/ai-gateway.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
@@ -39,6 +39,12 @@ interface GenerateHeroRequest {
    * regeneration time) to include as reference images alongside the logo.
    */
   extraReferenceUrls?: string[];
+  /**
+   * Image model. Defaults to "gemini" (gemini-3-pro-image-preview). Set to
+   * "openai" to use gpt-image-1, which is better at logo fidelity and
+   * organic / non-geometric structures but requires OPENAI_API_KEY.
+   */
+  imageModel?: "gemini" | "openai";
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
@@ -151,7 +157,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls }: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" }: GenerateHeroRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -284,39 +290,85 @@ ${genSuffix}`,
       ];
     }
 
-    let result = await callGemini({
-      model: "google/gemini-3-pro-image-preview",
-      messages,
-      modalities: ["image", "text"],
-    });
+    // Build the final prompt as a flat text string (used by OpenAI which
+    // doesn't accept image_url content in chat-completions image gen).
+    // For Gemini we pass the structured messages directly; for OpenAI we
+    // collapse to one text prompt + reference URLs.
+    const flattenedPrompt =
+      typeof messages[0]?.content === "string"
+        ? messages[0].content as string
+        : ((messages[0]?.content as Array<{ type: string; text?: string }>) ?? [])
+            .filter((c) => c?.type === "text")
+            .map((c) => c?.text ?? "")
+            .join("\n");
+    const refUrlsForOpenAI = [
+      ...(previousImageUrl ? [previousImageUrl] : []),
+      ...(brandLogoUrl ? [brandLogoUrl] : []),
+      ...(extraReferenceUrls ?? []),
+    ];
 
-    let image = result.images?.[0];
+    let generatedImageUrl: string | null = null;
+    let responseText = "";
+    let modelUsed = "";
 
-    // Fallback: Pro Image can return empty {} under load or safety filtering.
-    // Retry once with the faster Nano Banana 2 model before failing.
-    if (!image) {
-      console.warn("[generate-hero] Pro Image returned no image, retrying with gemini-3.1-flash-image-preview");
+    if (imageModel === "openai") {
+      // gpt-image-1 path. Better logo fidelity, better adherence on
+      // organic / asymmetric structures.
+      console.log(`[generate-hero] Using OpenAI gpt-image-1`);
       try {
-        result = await callGemini({
-          model: "google/gemini-3.1-flash-image-preview",
-          messages,
-          modalities: ["image", "text"],
+        const out = await callOpenAIImage({
+          prompt: flattenedPrompt,
+          referenceImageUrls: refUrlsForOpenAI,
+          size: "1536x1024", // 16:9 closest
+          quality: "high",
         });
-        image = result.images?.[0];
-      } catch (fallbackErr) {
-        console.error("[generate-hero] Fallback model also failed:", fallbackErr);
+        const img = out[0];
+        if (!img) throw new Error("OpenAI returned no image");
+        generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+        modelUsed = "openai/gpt-image-1";
+      } catch (e) {
+        console.error("[generate-hero] OpenAI failed, falling back to Gemini:", e);
+        // Fall through to Gemini.
       }
     }
 
-    if (!image) {
-      console.error("No image in response (both models):", JSON.stringify(result).slice(0, 500));
-      throw new Error(
-        "Image model returned no image. This usually means the prompt was filtered or the model is overloaded. Please try regenerating, or simplify the prompt/booth size."
-      );
-    }
+    if (!generatedImageUrl) {
+      // Default Gemini path (also the fallback if OpenAI fails).
+      let result = await callGemini({
+        model: "google/gemini-3-pro-image-preview",
+        messages,
+        modalities: ["image", "text"],
+      });
 
-    const generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
-    const responseText = result.text || "";
+      let image = result.images?.[0];
+
+      // Fallback: Pro Image can return empty {} under load or safety filtering.
+      // Retry once with the faster Nano Banana 2 model before failing.
+      if (!image) {
+        console.warn("[generate-hero] Pro Image returned no image, retrying with gemini-3.1-flash-image-preview");
+        try {
+          result = await callGemini({
+            model: "google/gemini-3.1-flash-image-preview",
+            messages,
+            modalities: ["image", "text"],
+          });
+          image = result.images?.[0];
+        } catch (fallbackErr) {
+          console.error("[generate-hero] Fallback model also failed:", fallbackErr);
+        }
+      }
+
+      if (!image) {
+        console.error("No image in response (both models):", JSON.stringify(result).slice(0, 500));
+        throw new Error(
+          "Image model returned no image. This usually means the prompt was filtered or the model is overloaded. Please try regenerating, or simplify the prompt/booth size.",
+        );
+      }
+
+      generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
+      responseText = result.text || "";
+      modelUsed = "google/gemini-3-pro-image-preview";
+    }
 
     console.log("Successfully generated hero image");
 
@@ -325,6 +377,7 @@ ${genSuffix}`,
         success: true,
         imageUrl: generatedImageUrl,
         message: responseText,
+        modelUsed,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -64,6 +64,8 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
+    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-1. */
+    imageModel?: "gemini" | "openai";
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -80,6 +82,8 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
+    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-1. */
+    imageModel?: "gemini" | "openai";
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -96,6 +100,8 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
+    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-1. */
+    imageModel?: "gemini" | "openai";
     onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
   }) => Promise<void>;
 
@@ -165,7 +171,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
-  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, onSave }) => {
+  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
@@ -181,6 +187,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         suiteContext: suiteContext || undefined,
         brandLogoUrl: brandLogoUrl || undefined,
         extraReferenceUrls: extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
+        imageModel: imageModel ?? undefined,
       };
       if (designContext) {
         body.designContext = designContext;
@@ -212,7 +219,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, onSave }) => {
+  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     // Split into exterior views first, then interiors — so interiors can reference exterior images
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
@@ -267,6 +274,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           brandLogoUrl: brandLogoUrl || undefined,
           extraReferenceUrls:
             extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
+          imageModel: imageModel ?? undefined,
         };
         if (consistencyTokens) {
           viewBody.consistencyTokens = consistencyTokens;
@@ -313,7 +321,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, onSave }) => {
+  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -346,6 +354,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         brandLogoUrl: brandLogoUrl || undefined,
         extraReferenceUrls:
           extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
+        imageModel: imageModel ?? undefined,
       };
       if (consistencyTokens) {
         viewBody.consistencyTokens = consistencyTokens;

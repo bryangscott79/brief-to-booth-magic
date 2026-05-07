@@ -35,15 +35,16 @@ interface UsePromptVersionsResult {
     label: string;
     customEmphasis?: string;
     notes?: string;
+    imageModel?: "gemini" | "openai";
   }) => PromptVersionMeta;
   /** Tick the updatedAt of the active version. Cheap, debounced-ish. */
   touchActiveVersion: () => void;
   /** Delete a version's metadata (saved images stay in storage). */
   deleteVersion: (id: string) => void;
-  /** Update label/preset/notes/customEmphasis on an existing version. */
+  /** Update label/preset/notes/customEmphasis/imageModel on an existing version. */
   updateVersion: (
     id: string,
-    patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset">>,
+    patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset" | "imageModel">>,
   ) => void;
   /**
    * Insert a version with a pre-existing id (used by orphan recovery to
@@ -104,6 +105,7 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
       label: string;
       customEmphasis?: string;
       notes?: string;
+      imageModel?: "gemini" | "openai";
     }): PromptVersionMeta => {
       const preset = getPresetById(params.preset);
       const id = newVersionId();
@@ -116,6 +118,7 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
         createdAt: now,
         updatedAt: now,
         notes: params.notes,
+        imageModel: params.imageModel,
       };
       // Newest first
       const next = [meta, ...versions];
@@ -147,7 +150,7 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
   const updateVersion = useCallback(
     (
       id: string,
-      patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset">>,
+      patch: Partial<Pick<PromptVersionMeta, "label" | "notes" | "customEmphasis" | "preset" | "imageModel">>,
     ) => {
       const next = versions.map((v) =>
         v.id === id ? { ...v, ...patch, updatedAt: new Date().toISOString() } : v,

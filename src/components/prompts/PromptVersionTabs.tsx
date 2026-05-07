@@ -46,11 +46,17 @@ interface PromptVersionTabsProps {
     preset: PromptStylePresetId;
     label: string;
     customEmphasis?: string;
+    imageModel?: "gemini" | "openai";
   }) => void;
-  /** Update label/preset/customEmphasis on an existing version. */
+  /** Update label/preset/customEmphasis/imageModel on an existing version. */
   onUpdateVersion?: (
     id: string,
-    patch: { label?: string; preset?: PromptStylePresetId; customEmphasis?: string },
+    patch: {
+      label?: string;
+      preset?: PromptStylePresetId;
+      customEmphasis?: string;
+      imageModel?: "gemini" | "openai";
+    },
   ) => void;
   onDeleteVersion?: (id: string) => void;
   /** Disable creating new versions (e.g. mid-generation). */
@@ -58,6 +64,26 @@ interface PromptVersionTabsProps {
 }
 
 type DialogMode = { type: "closed" } | { type: "create" } | { type: "edit"; versionId: string };
+
+const IMAGE_MODEL_OPTIONS: Array<{
+  id: "gemini" | "openai";
+  label: string;
+  pillLabel: string;
+  description: string;
+}> = [
+  {
+    id: "gemini",
+    label: "Gemini Nano (default)",
+    pillLabel: "Gemini",
+    description: "Fast and consistent. Best for hard geometric architecture and traditional booth shapes. Bundled — no extra setup.",
+  },
+  {
+    id: "openai",
+    label: "OpenAI gpt-image-1",
+    pillLabel: "GPT-Image-1",
+    description: "Stronger logo fidelity and organic / fluid structures. Slower and costlier. Requires OPENAI_API_KEY in Supabase secrets.",
+  },
+];
 
 export function PromptVersionTabs({
   versions,
@@ -72,6 +98,7 @@ export function PromptVersionTabs({
   const [draftPreset, setDraftPreset] = useState<PromptStylePresetId>("traffic-optimized");
   const [draftCustomEmphasis, setDraftCustomEmphasis] = useState("");
   const [draftLabel, setDraftLabel] = useState("");
+  const [draftImageModel, setDraftImageModel] = useState<"gemini" | "openai">("gemini");
 
   // When the dialog opens for "edit", prefill from the version. When it
   // opens for "create", reset to defaults.
@@ -82,11 +109,13 @@ export function PromptVersionTabs({
         setDraftLabel(v.label);
         setDraftPreset(v.preset);
         setDraftCustomEmphasis(v.customEmphasis ?? "");
+        setDraftImageModel(v.imageModel ?? "gemini");
       }
     } else if (dialog.type === "create") {
       setDraftLabel("");
       setDraftPreset("traffic-optimized");
       setDraftCustomEmphasis("");
+      setDraftImageModel("gemini");
     }
   }, [dialog, versions]);
 
@@ -99,6 +128,7 @@ export function PromptVersionTabs({
       preset: draftPreset,
       label,
       customEmphasis: draftPreset === "custom" ? draftCustomEmphasis.trim() : undefined,
+      imageModel: draftImageModel,
     });
     closeDialog();
   };
@@ -111,6 +141,7 @@ export function PromptVersionTabs({
       label,
       preset: draftPreset,
       customEmphasis: draftPreset === "custom" ? draftCustomEmphasis.trim() : undefined,
+      imageModel: draftImageModel,
     });
     closeDialog();
   };
@@ -191,10 +222,15 @@ export function PromptVersionTabs({
         <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 mt-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
                 <span className="uppercase tracking-wider">Active version</span>
                 <span className="text-foreground font-medium truncate">{activeVersion.label}</span>
                 <StylePresetPill preset={getPresetById(activeVersion.preset)} />
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  {(activeVersion.imageModel ?? "gemini") === "openai"
+                    ? "GPT-Image-1"
+                    : "Gemini"}
+                </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                 {activeVersion.preset === "custom" && activeVersion.customEmphasis
@@ -281,6 +317,44 @@ export function PromptVersionTabs({
                 onCustomEmphasisChange={setDraftCustomEmphasis}
                 compact
               />
+            </div>
+
+            {/* Image model selector — Gemini Nano (default, bundled) vs
+              * OpenAI gpt-image-1 (better logo + organic structures, needs
+              * OPENAI_API_KEY in Supabase secrets). Per-version so users
+              * can A/B compare on the same project. */}
+            <div className="space-y-2">
+              <Label className="text-xs">Image model</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {IMAGE_MODEL_OPTIONS.map((opt) => {
+                  const isActive = opt.id === draftImageModel;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setDraftImageModel(opt.id)}
+                      className={cn(
+                        "rounded-lg border text-left transition-colors px-3 py-2.5",
+                        isActive
+                          ? "border-primary/60 bg-primary/10"
+                          : "border-border bg-card hover:border-primary/30",
+                      )}
+                    >
+                      <div className="text-sm font-medium mb-0.5">{opt.label}</div>
+                      <div className="text-[11px] text-muted-foreground leading-snug">
+                        {opt.description}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {draftImageModel === "openai" && (
+                <p className="text-[11px] text-amber-700 leading-snug">
+                  Needs <code className="font-mono text-[10px] bg-amber-500/10 px-1 py-0.5 rounded">OPENAI_API_KEY</code>
+                  {" "}in Supabase → Edge Function Secrets. If it's missing, the function will
+                  fall back to Gemini automatically.
+                </p>
+              )}
             </div>
 
             {dialog.type === "create" && (

@@ -1,3 +1,7 @@
+// generate-view — DEPLOY TOKEN: 2026-05-07-r5-image2
+// Bump this comment to force Lovable to redeploy. Changes that need this
+// version of the function to be live: gpt-image-2 model id, modelUsed in
+// response, multi-secret fallback in shared ai-gateway.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";

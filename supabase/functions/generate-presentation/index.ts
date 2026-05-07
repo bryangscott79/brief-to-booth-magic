@@ -22,7 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
-const DEPLOY_TOKEN = "2026-05-05-r4-key-fallback";
+const DEPLOY_TOKEN = "2026-05-07-r5-image2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

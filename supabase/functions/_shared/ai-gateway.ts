@@ -69,6 +69,8 @@ export interface AIResponse {
   toolCalls?: Array<{ name: string; arguments: any }>;
   /** Images returned by the model (Gemini image generation). */
   images?: Array<{ mimeType: string; base64Data: string }>;
+  /** Token usage extracted from the upstream response (best effort). */
+  usage?: { inputTokens?: number; outputTokens?: number };
 }
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────

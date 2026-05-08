@@ -15,7 +15,7 @@
 // and emits updates. State persistence lives in the parent (which can
 // throttle, undo/redo, or persist to the project).
 
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Stage, Layer, Rect, Text, Line, Group } from "react-konva";
 import type Konva from "konva";
 import { Transformer } from "react-konva";
@@ -30,8 +30,9 @@ import {
   zonesOverlap,
 } from "@/lib/geometryModel";
 
-const CANVAS_PADDING = 40; // px on each side, leaves room for dimension rulers
-const MAX_CANVAS_SIZE = 640; // px — keep the canvas reasonable on laptops
+const CANVAS_PADDING = 32; // px on each side, leaves room for dimension rulers
+const MAX_CANVAS_SIZE = 460; // px — fits inside a half-width grid cell on
+                             // mid-size laptops without overflowing the parent
 
 export interface SpatialCanvasTopDownProps {
   geometry: BoothGeometry;
@@ -46,6 +47,17 @@ export interface SpatialCanvasTopDownProps {
    * exports. Defaults to false (editable).
    */
   readonly?: boolean;
+}
+
+export interface SpatialCanvasTopDownHandle {
+  /**
+   * Capture the entire stage as a PNG data URL. Must use Konva's
+   * Stage.toDataURL() rather than a DOM query — Konva renders one
+   * <canvas> per Layer, so querySelector("canvas") would only return
+   * the background layer and miss every zone. Stage.toDataURL composites
+   * all layers into a single image.
+   */
+  capturePng: () => string | null;
 }
 
 /**
@@ -68,13 +80,19 @@ function computeScale(geometry: BoothGeometry): {
   };
 }
 
-export function SpatialCanvasTopDown({
-  geometry,
-  selectedZoneId,
-  onSelectZone,
-  onZonesChange,
-  readonly = false,
-}: SpatialCanvasTopDownProps) {
+export const SpatialCanvasTopDown = forwardRef<
+  SpatialCanvasTopDownHandle,
+  SpatialCanvasTopDownProps
+>(function SpatialCanvasTopDown(
+  {
+    geometry,
+    selectedZoneId,
+    onSelectZone,
+    onZonesChange,
+    readonly = false,
+  },
+  ref,
+) {
   const { pxPerUnit, canvasW, canvasH } = useMemo(
     () => computeScale(geometry),
     [geometry.width, geometry.depth],
@@ -82,6 +100,35 @@ export function SpatialCanvasTopDown({
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const zoneNodesRef = useRef<Map<string, Konva.Group>>(new Map());
+
+  // Expose Stage.toDataURL() so the parent can capture the floor plan
+  // PNG without DOM-querying canvases (which only returns the first
+  // layer and would miss every zone).
+  useImperativeHandle(
+    ref,
+    () => ({
+      capturePng() {
+        if (!stageRef.current) return null;
+        // Briefly hide the transformer handles so they don't appear in
+        // the captured image. Konva nodes have a `visible()` setter that
+        // takes effect on next draw.
+        const tf = transformerRef.current;
+        const wasVisible = tf?.visible();
+        if (tf && wasVisible) tf.visible(false);
+        stageRef.current.batchDraw();
+        const url = stageRef.current.toDataURL({
+          pixelRatio: 2,
+          mimeType: "image/png",
+        });
+        if (tf && wasVisible) {
+          tf.visible(true);
+          stageRef.current.batchDraw();
+        }
+        return url;
+      },
+    }),
+    [],
+  );
 
   // ─── Coordinate helpers (real units ↔ canvas pixels) ────────────────
   const toPxX = (units: number) => CANVAS_PADDING + units * pxPerUnit;
@@ -239,6 +286,11 @@ export function SpatialCanvasTopDown({
                 }}
                 x={toPxX(zone.x)}
                 y={toPxY(zone.y)}
+                // CRITICAL: explicit width/height. Konva groups default
+                // to 0×0 unless set, which made onTransformEnd read
+                // newW = 0 × scaleX = 0 — collapsing every resize to 1×1.
+                width={zone.width * pxPerUnit}
+                height={zone.depth * pxPerUnit}
                 draggable={!readonly}
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
@@ -344,4 +396,4 @@ export function SpatialCanvasTopDown({
       </Stage>
     </div>
   );
-}
+});

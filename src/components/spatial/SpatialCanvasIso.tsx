@@ -176,7 +176,7 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
 
     return (
       <div
-        className="rounded-lg border border-border overflow-hidden"
+        className="rounded-lg border border-border overflow-hidden w-full min-w-0"
         style={{ height, background }}
       >
         <Canvas

@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Wand2, Maximize2, Eye, EyeOff } from "lucide-react";
-import { SpatialCanvasTopDown } from "./SpatialCanvasTopDown";
+import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
 import {
   type BoothGeometry,
@@ -57,29 +57,18 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
     const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
     const [showIso, setShowIso] = useState(true);
     const isoRef = useRef<SpatialCanvasIsoHandle>(null);
-    // The top-down canvas's underlying Stage is tracked by Konva via
-    // refs on its inner component; we wrap by giving the top-down a
-    // ref-forwarded prop. For v1 we capture by querying the rendered
-    // <canvas> element directly via the wrapping div.
+    const topDownRef = useRef<SpatialCanvasTopDownHandle>(null);
     const topDownContainerRef = useRef<HTMLDivElement>(null);
 
     // Imperative capture for the parent (used by the geometry-references hook).
+    // Capture via Stage.toDataURL() — Konva renders one <canvas> per Layer,
+    // so a DOM querySelector on the container would only return the first
+    // layer (background + grid) and miss every zone.
     useImperativeHandle(
       ref,
       () => ({
         async captureRefs() {
-          // Find the Konva canvas inside the top-down container. Konva
-          // mounts a real <canvas> with class "konvajs-content" wrapping
-          // the actual canvas elements. The first canvas inside is what
-          // we want — the bg + zones layers are merged at draw time.
-          const container = topDownContainerRef.current;
-          let floorplan: string | null = null;
-          if (container) {
-            // The Konva Stage is the first .konvajs-content > canvas.
-            // toDataURL on the canvas element gives us the composited PNG.
-            const canvasEl = container.querySelector("canvas") as HTMLCanvasElement | null;
-            floorplan = canvasEl?.toDataURL("image/png") ?? null;
-          }
+          const floorplan = topDownRef.current ? topDownRef.current.capturePng() : null;
           const isometric = isoRef.current ? await isoRef.current.capturePng() : null;
           return { floorplan, isometric };
         },
@@ -182,15 +171,22 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Grid: stack on small, side-by-side on md+. min-w-0 on
+              children prevents the Konva Stage from forcing the parent
+              wider than its grid cell (which caused the overlap). */}
           <div
             className={
               showIso
-                ? "grid grid-cols-1 lg:grid-cols-2 gap-3"
+                ? "grid grid-cols-1 md:grid-cols-2 gap-3 items-start"
                 : "grid grid-cols-1 gap-3"
             }
           >
-            <div ref={topDownContainerRef} className="flex items-center justify-center">
+            <div
+              ref={topDownContainerRef}
+              className="flex items-center justify-center min-w-0 overflow-auto"
+            >
               <SpatialCanvasTopDown
+                ref={topDownRef}
                 geometry={geometry}
                 selectedZoneId={selectedZoneId}
                 onSelectZone={setSelectedZoneId}
@@ -199,12 +195,14 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
               />
             </div>
             {showIso && (
-              <SpatialCanvasIso
-                ref={isoRef}
-                geometry={geometry}
-                highlightedZoneId={selectedZoneId}
-                height={420}
-              />
+              <div className="min-w-0">
+                <SpatialCanvasIso
+                  ref={isoRef}
+                  geometry={geometry}
+                  highlightedZoneId={selectedZoneId}
+                  height={460}
+                />
+              </div>
             )}
           </div>
 

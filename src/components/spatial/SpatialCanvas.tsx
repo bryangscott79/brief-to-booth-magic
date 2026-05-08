@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw } from "lucide-react";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
+import { renderFloorPlanForExport } from "@/lib/renderFloorPlanForExport";
 import {
   type BoothGeometry,
   type AbsoluteZone,
@@ -88,19 +89,27 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
     const topDownContainerRef = useRef<HTMLDivElement>(null);
 
     // Imperative capture for the parent (used by the geometry-references hook).
-    // Capture via Stage.toDataURL() — Konva renders one <canvas> per Layer,
-    // so a DOM querySelector on the container would only return the first
-    // layer (background + grid) and miss every zone.
+    //
+    // Floor plan: rendered via renderFloorPlanForExport — a purpose-built
+    // offscreen canvas with WHITE background, BOLD perimeter dimension
+    // labels ("30 FT WIDE"), per-zone name + footprint + height labels,
+    // a 1' grid, and a scale bar in the corner. ~1400px on the long side
+    // (vs ~920px from on-screen capture). Image models read dimension
+    // text on the reference much more reliably at this scale + contrast.
+    //
+    // Isometric: still captured from the live R3F canvas — preserves the
+    // accurate 3D extrusion + 5'8" silhouette + axis gizmo for 3D
+    // calibration.
     useImperativeHandle(
       ref,
       () => ({
         async captureRefs() {
-          const floorplan = topDownRef.current ? topDownRef.current.capturePng() : null;
+          const floorplan = renderFloorPlanForExport(geometry);
           const isometric = isoRef.current ? await isoRef.current.capturePng() : null;
           return { floorplan, isometric };
         },
       }),
-      [],
+      [geometry],
     );
 
     const handleZonesChange = useCallback(

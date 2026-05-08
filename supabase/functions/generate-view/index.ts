@@ -200,6 +200,35 @@ function buildGeometryReferenceBlock(req: GenerateViewRequest): string {
   return parts.join("\n");
 }
 
+/**
+ * Closing reinforcement so the geometry constraint isn't drowned out by
+ * the descriptive middle of the prompt. Image models attend strongly to
+ * the LAST tokens; restating the constraint here keeps it dominant.
+ */
+function buildGeometryClosingReinforcement(req: GenerateViewRequest): string {
+  const refs = req.geometryReferences;
+  const dims = req.boothDimensions;
+  if (!refs || (!refs.floorplan && !refs.isometric)) {
+    if (!dims) return "";
+    const w = dims.system === "metric" ? `${dims.width}m` : `${dims.width} ft`;
+    const d = dims.system === "metric" ? `${dims.depth}m` : `${dims.depth} ft`;
+    return `\nFINAL CONSTRAINT: this view shows a structure that is exactly ${w} wide × ${d} deep (${dims.sqft} sq ft). Match the proportions exactly.`;
+  }
+  return [
+    "",
+    "─────────────────────────────────────────────────",
+    "FINAL CONSTRAINT (re-emphasized):",
+    "─────────────────────────────────────────────────",
+    "The geometry reference images at the start of this prompt are",
+    "NON-NEGOTIABLE. The booth in this view MUST occupy exactly the",
+    "volume shown — same proportions, same zone positions, same maximum",
+    "height. If the descriptive text appears to disagree with the",
+    "references, the REFERENCES WIN. Render what the floor plan and",
+    "isometric show, dressed with the materials, lighting, and brand",
+    "identity described above.",
+  ].join("\n");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -234,6 +263,7 @@ serve(async (req) => {
 
     const scaleBlock = buildScaleBlock(body);
     const geometryBlock = buildGeometryReferenceBlock(body);
+    const geometryClosingReinforcement = buildGeometryClosingReinforcement(body);
     const consistencyBlock = buildConsistencyBlock(consistencyTokens);
     const brandBlock = buildBrandIntelBlock(brandIntelligence);
 
@@ -315,7 +345,8 @@ COMPOSITION:
 OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING INSIDE this zone, surrounded by its features. NOT an exterior shot.
 ${scaleBlock}
 ${consistencyBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
+${geometryClosingReinforcement}`
       : `${geometryBlock}\nUsing this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 ${scaleBlock}
 
@@ -334,7 +365,8 @@ CONSISTENCY RULES (maintain from reference):
 
 OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.
 ${consistencyBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`);
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
+${geometryClosingReinforcement}`);
 
     // Reference attachments — geometry refs (floor plan + iso) come FIRST
     // so the model treats them as ground truth, then the camera anchor

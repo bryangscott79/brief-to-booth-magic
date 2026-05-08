@@ -203,6 +203,37 @@ function buildGeometryReferenceBlock(req: GenerateHeroRequest): string {
   return parts.join("\n");
 }
 
+/**
+ * Closing reinforcement — image models heavily weight the LAST tokens
+ * of a prompt (in addition to the first). Re-stating the geometry
+ * constraint right before the "generate" verb keeps it dominant over
+ * the stylistic descriptions that fill the middle of the prompt.
+ */
+function buildGeometryClosingReinforcement(req: GenerateHeroRequest): string {
+  const refs = req.geometryReferences;
+  const dims = req.boothDimensions;
+  if (!refs || (!refs.floorplan && !refs.isometric)) {
+    // Even without ref images, restate dimensions if structured.
+    if (!dims) return "";
+    const w = dims.system === "metric" ? `${dims.width}m` : `${dims.width} ft`;
+    const d = dims.system === "metric" ? `${dims.depth}m` : `${dims.depth} ft`;
+    return `\n\nFINAL CONSTRAINT: render this structure at exactly ${w} wide × ${d} deep (${dims.sqft} sq ft). Do not exceed these dimensions.`;
+  }
+  return [
+    "",
+    "─────────────────────────────────────────────────",
+    "FINAL CONSTRAINT (re-emphasized — last instruction):",
+    "─────────────────────────────────────────────────",
+    "The geometry reference images at the start of this prompt are",
+    "NON-NEGOTIABLE. The booth in the rendered image MUST occupy exactly",
+    "the volume shown — same footprint proportions, same zone positions,",
+    "same maximum height. If anything in the descriptive text above",
+    "appears to disagree with the references, the REFERENCES WIN. Render",
+    "what the floor plan and isometric show, dressed with the materials,",
+    "lighting, and brand identity described in the body of this prompt.",
+  ].join("\n");
+}
+
 /** Phase 4: Build a design context block from structured brief/element data */
 function buildDesignContextBlock(ctx: GenerateHeroRequest["designContext"]): string {
   if (!ctx) return "";
@@ -304,6 +335,7 @@ serve(async (req) => {
 
     const scaleBlock = buildScaleBlock(body);
     const geometryBlock = buildGeometryReferenceBlock(body);
+    const geometryClosingReinforcement = buildGeometryClosingReinforcement(body);
     const designBlock = buildDesignContextBlock(designContext);
     const brandBlock = buildBrandIntelBlock(brandIntelligence);
 
@@ -382,7 +414,8 @@ ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
 
-Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity. The geometry references at the top of this prompt remain ground truth — do not change the booth's proportions or zone layout.`;
+Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity. The geometry references at the top of this prompt remain ground truth — do not change the booth's proportions or zone layout.
+${geometryClosingReinforcement}`;
 
       messages = [
         {
@@ -408,7 +441,8 @@ ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
 
-${genSuffix}`,
+${genSuffix}
+${geometryClosingReinforcement}`,
                 },
                 ...referenceImages,
               ]
@@ -418,7 +452,8 @@ ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
 
-${genSuffix}`,
+${genSuffix}
+${geometryClosingReinforcement}`,
         },
       ];
     }

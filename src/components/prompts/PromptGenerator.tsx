@@ -754,6 +754,20 @@ export function PromptGenerator() {
     promptVersions.selectVersion(versionId);
   };
 
+  // Spatial canvas — shown above every phase so the user can refine
+  // the floor plan, zone heights, or per-zone prompt overrides at any
+  // time, including after the hero is generated. Edits flow through
+  // captureGeometryRefs() on the next render call so the image model
+  // gets the updated geometry as a visual reference.
+  const spatialPanel = (
+    <SpatialCanvas
+      ref={spatialCanvasRef}
+      geometry={geometry}
+      onGeometryChange={setGeometry}
+      getZoneDefaultPrompt={getZoneDefaultPrompt}
+    />
+  );
+
   // Versions header — shown above every phase. Lets the user switch between
   // saved versions (each with its own preset + render set) or spin up a new
   // one. Generation handlers auto-create "Balanced" on first use.
@@ -845,22 +859,9 @@ export function PromptGenerator() {
           </CardContent>
         </Card>
 
-        {/* Spatial canvas — interactive top-down + isometric 3D preview.
-          * Edits booth geometry in absolute units; captures floor plan +
-          * iso reference PNGs at render time so the image model has
-          * VISUAL ground truth (not just text dimensions, which it
-          * historically ignores). Drag zones to reposition, drag corner
-          * handles to resize, click "Auto-arrange" for heuristic placement. */}
-        <SpatialCanvas
-          ref={spatialCanvasRef}
-          geometry={geometry}
-          onGeometryChange={setGeometry}
-          // Per-zone prompt edit: clicking "Edit prompt" on a selected
-          // zone shows this default and lets the user override it. The
-          // override flows back through `geometry.zones[].customPromptOverride`
-          // and is honored at buildPrompt time above.
-          getZoneDefaultPrompt={getZoneDefaultPrompt}
-        />
+        {/* Spatial canvas — rendered via shared {spatialPanel} above
+            so it persists into hero-review and all-views phases too. */}
+        {spatialPanel}
 
         {/* Pre-flight check — collapsible "what's the AI about to see"
           * panel. Surfaces brand, brief, spatial, dimensions, logo, and
@@ -962,6 +963,10 @@ export function PromptGenerator() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         {versionsHeader}
+        {/* Spatial canvas stays editable — drag zones, change heights,
+            override per-zone prompts. Edits feed the next regeneration
+            via captureGeometryRefs() at handleRegenerateWithFeedback. */}
+        {spatialPanel}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Review Hero Image</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
@@ -1079,6 +1084,9 @@ export function PromptGenerator() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {versionsHeader}
+      {/* Spatial canvas — still editable here. Re-render any view (or
+          the whole set) and the latest geometry is what gets used. */}
+      {spatialPanel}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Generated Renders</h2>

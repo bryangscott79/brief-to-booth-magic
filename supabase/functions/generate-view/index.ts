@@ -27,6 +27,19 @@ interface GenerateViewRequest {
   viewName: string;
   aspectRatio: string;
   boothSize?: string;
+  /** Structured booth dimensions — preferred over the legacy label string. */
+  boothDimensions?: {
+    width: number;
+    depth: number;
+    sqft: number;
+    system: "imperial" | "metric";
+    ceilingHeightFt?: number;
+  };
+  /** Geometry reference URLs from the SpatialCanvas (floor plan + iso). */
+  geometryReferences?: {
+    floorplan?: string;
+    isometric?: string;
+  };
   brandIntelligence?: BrandIntelEntry[];
   brandContext?: string;
   suiteContext?: string;
@@ -124,14 +137,67 @@ function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
   return parts.join("\n");
 }
 
-function buildScaleBlock(sizeStr?: string): string {
-  if (!sizeStr) return "";
-  const m = sizeStr.match(/(\d+)\s*[x×X]\s*(\d+)/);
-  if (!m) return "";
-  const w = parseInt(m[1], 10), d = parseInt(m[2], 10), sqft = w * d;
-  const ht = sqft > 1200 ? "16-20" : sqft > 600 ? "12-16" : "8-12";
-  const scale = sqft > 1200 ? "large island" : sqft > 600 ? "mid-size peninsula" : "small inline";
-  return `\nPHYSICAL SCALE (CRITICAL):\n- Booth footprint: ${w}' wide × ${d}' deep (${sqft} sq ft) — ${scale} booth\n- Ceiling/fascia height: ${ht} feet\n- An average person is 5'8". The booth is ${w}' wide — roughly ${Math.round(w / 2)} people shoulder-to-shoulder\n- Do NOT make it look like a mega-exhibit. Keep it ${w}'×${d}' proportional.\n`;
+/**
+ * Structured-dimensions scale block (same shape as generate-hero).
+ * Prefers `boothDimensions`; falls back to a unit-aware regex on the
+ * legacy `boothSize` label so the previous silent-fail bug is fixed.
+ */
+function buildScaleBlock(req: GenerateViewRequest): string {
+  const dims = req.boothDimensions;
+  let w: number, d: number, sqft: number, system: "imperial" | "metric", ceilingFt: number;
+
+  if (dims) {
+    w = dims.width;
+    d = dims.depth;
+    sqft = dims.sqft;
+    system = dims.system;
+    ceilingFt = dims.ceilingHeightFt ?? (sqft > 1200 ? 18 : sqft > 600 ? 14 : 10);
+  } else if (req.boothSize) {
+    const m = req.boothSize.match(
+      /(\d+(?:\.\d+)?)\s*(?:m|ft|')?\s*[x×X]\s*(\d+(?:\.\d+)?)\s*(?:m|ft|')?/i,
+    );
+    if (!m) return "";
+    w = parseFloat(m[1]);
+    d = parseFloat(m[2]);
+    system = /m\b/i.test(req.boothSize) && !/ft|'/.test(req.boothSize) ? "metric" : "imperial";
+    sqft = system === "metric" ? Math.round(w * d * 10.7639) : Math.round(w * d);
+    ceilingFt = sqft > 1200 ? 18 : sqft > 600 ? 14 : 10;
+  } else {
+    return "";
+  }
+
+  const widthLabel = system === "metric" ? `${w}m` : `${w} ft`;
+  const depthLabel = system === "metric" ? `${d}m` : `${d} ft`;
+  const peopleAcross = system === "metric" ? Math.round(w / 0.6) : Math.round(w / 2);
+
+  return `\nPHYSICAL SCALE (CRITICAL — exact dimensions):
+- Footprint: ${widthLabel} wide × ${depthLabel} deep (${sqft} sq ft)
+- Maximum structure / fascia height: ${ceilingFt} ft
+- Human scale: 5'8" visitor — about ${peopleAcross} adults shoulder-to-shoulder across the width
+- Match these proportions exactly. Do NOT inflate to mega-exhibit scale.\n`;
+}
+
+/**
+ * Geometry reference instruction block (same wording as generate-hero
+ * for consistency across angles). Only emitted when at least one ref
+ * is present.
+ */
+function buildGeometryReferenceBlock(req: GenerateViewRequest): string {
+  const refs = req.geometryReferences;
+  if (!refs || (!refs.floorplan && !refs.isometric)) return "";
+  const has = (k: "floorplan" | "isometric") => !!refs[k];
+  const parts: string[] = ["\n╔══════════════════════════════════════════════════╗"];
+  parts.push("║   GEOMETRY REFERENCE — STRICT SCALE CONSTRAINT   ║");
+  parts.push("╚══════════════════════════════════════════════════╝");
+  parts.push("");
+  if (has("floorplan")) parts.push("  • FLOOR PLAN: exact booth footprint + zone layout (top-down).");
+  if (has("isometric")) parts.push("  • ISOMETRIC: exact 3D volume the structure must occupy.");
+  parts.push("");
+  parts.push("THIS VIEW must match the same booth shown in the floor plan and");
+  parts.push("isometric references — same proportions, same zone positions, same");
+  parts.push("maximum height. The hero reference image shows finishes/style; the");
+  parts.push("geometry references show physical size and layout. Both apply.\n");
+  return parts.join("\n");
 }
 
 serve(async (req) => {
@@ -156,7 +222,8 @@ serve(async (req) => {
   }
 
   try {
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" }: GenerateViewRequest = await req.json();
+    const body: GenerateViewRequest = await req.json();
+    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, boothSize, boothDimensions, geometryReferences, consistencyTokens, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
 
     if (!viewPrompt || typeof viewPrompt !== "string") {
       return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -165,7 +232,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const scaleBlock = buildScaleBlock(boothSize);
+    const scaleBlock = buildScaleBlock(body);
+    const geometryBlock = buildGeometryReferenceBlock(body);
     const consistencyBlock = buildConsistencyBlock(consistencyTokens);
     const brandBlock = buildBrandIntelBlock(brandIntelligence);
 
@@ -217,9 +285,11 @@ serve(async (req) => {
       ? `Camera is DEEP INSIDE the booth, positioned at eye level (5.5 feet) within the "${zoneName}" zone. The camera is surrounded by the zone's walls, ceiling, and furnishings. The booth exterior, convention hall, and outside aisles should NOT be prominently visible. The viewer feels enclosed within this specific zone.`
       : `Camera showing the ${viewName} perspective of the booth.`);
 
-    // Build the prompt for image editing/transformation
-    const editPrompt = isInterior
-      ? `Generate a photorealistic INTERIOR image showing what it looks like to be STANDING INSIDE the "${zoneName}" zone of this trade show booth.
+    // Build the prompt for image editing/transformation. Geometry block
+    // goes FIRST so the strict scale constraint dominates over stylistic
+    // text further down.
+    const editPrompt = (isInterior
+      ? `${geometryBlock}\nGenerate a photorealistic INTERIOR image showing what it looks like to be STANDING INSIDE the "${zoneName}" zone of this trade show booth.
 
 CRITICAL CAMERA RULES:
 ${cameraDir}
@@ -246,7 +316,7 @@ OUTPUT: A photorealistic ${aspectRatio} image that feels like you are STANDING I
 ${scaleBlock}
 ${consistencyBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`
-      : `Using this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
+      : `${geometryBlock}\nUsing this reference image of a trade show booth, generate a NEW image showing the SAME booth from a completely DIFFERENT camera angle.
 ${scaleBlock}
 
 CAMERA POSITION (CRITICAL — follow exactly):
@@ -264,14 +334,21 @@ CONSISTENCY RULES (maintain from reference):
 
 OUTPUT: A photorealistic ${aspectRatio} image. The camera angle MUST be distinctly different from the reference image.
 ${consistencyBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`;
+${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}`);
 
-    // Reference attachments — brand logo + any user extras layered after
-    // the primary referenceImageUrl so the model treats the latter as the
-    // visual anchor for the camera while the logo and extras inform
-    // branding and material choices.
+    // Reference attachments — geometry refs (floor plan + iso) come FIRST
+    // so the model treats them as ground truth, then the camera anchor
+    // (referenceImageUrl), then logo and user extras for finishes.
     const extraImages: Array<{ type: "image_url"; image_url: { url: string } }> = [];
     const extraLabels: string[] = [];
+    if (geometryReferences?.floorplan) {
+      extraImages.push({ type: "image_url", image_url: { url: geometryReferences.floorplan } });
+      extraLabels.push("GEOMETRY — FLOOR PLAN (top-down): the exact booth footprint and zone layout. The render MUST match these proportions and zone positions.");
+    }
+    if (geometryReferences?.isometric) {
+      extraImages.push({ type: "image_url", image_url: { url: geometryReferences.isometric } });
+      extraLabels.push("GEOMETRY — ISOMETRIC VOLUME: the exact 3D space the structure occupies. Match the volumetric proportions and maximum height shown.");
+    }
     if (brandLogoUrl) {
       extraImages.push({ type: "image_url", image_url: { url: brandLogoUrl } });
       extraLabels.push("BRAND LOGO — render this exact mark on signage, fascia, or any branded surfaces visible in this view.");
@@ -299,11 +376,15 @@ ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${sui
         const out = await callOpenAIImage({
       usage: await buildUsageContext(req, "generate-view").catch(() => undefined),
           prompt: editPrompt + extraLabelBlock,
+          // Order: geometry refs first (ground truth), then hero ref
+          // (camera anchor), logo, extras. gpt-image-2 caps at 4 refs.
           referenceImageUrls: [
+            ...(geometryReferences?.floorplan ? [geometryReferences.floorplan] : []),
+            ...(geometryReferences?.isometric ? [geometryReferences.isometric] : []),
             ...(referenceImageUrl ? [referenceImageUrl] : []),
             ...(brandLogoUrl ? [brandLogoUrl] : []),
             ...(extraReferenceUrls ?? []),
-          ],
+          ].slice(0, 4),
           size: "1536x1024",
           quality: "high",
         });

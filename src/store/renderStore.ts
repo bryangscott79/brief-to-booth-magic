@@ -56,6 +56,16 @@ interface RenderActions {
     previousImageUrl?: string;
     projectId: string;
     boothSize?: string;
+    /** Structured booth dimensions — preferred over boothSize. */
+    boothDimensions?: {
+      width: number;
+      depth: number;
+      sqft: number;
+      system: "imperial" | "metric";
+      ceilingHeightFt?: number;
+    };
+    /** Geometry reference image URLs (floor plan + iso) — visual ground truth. */
+    geometryReferences?: { floorplan?: string; isometric?: string };
     projectType?: string | null;
     brandIntelligence?: Array<{ category: string; title: string; content: string; tags?: string[] | null }>;
     brandContext?: string;
@@ -75,6 +85,16 @@ interface RenderActions {
     heroImageUrl: string;
     projectId: string;
     boothSize?: string;
+    /** Structured booth dimensions — preferred over boothSize. */
+    boothDimensions?: {
+      width: number;
+      depth: number;
+      sqft: number;
+      system: "imperial" | "metric";
+      ceilingHeightFt?: number;
+    };
+    /** Geometry reference image URLs (floor plan + iso) — visual ground truth. */
+    geometryReferences?: { floorplan?: string; isometric?: string };
     brandIntelligence?: Array<{ category: string; title: string; content: string; tags?: string[] | null }>;
     brandContext?: string;
     suiteContext?: string;
@@ -93,6 +113,16 @@ interface RenderActions {
     heroImageUrl: string;
     projectId: string;
     boothSize?: string;
+    /** Structured booth dimensions — preferred over boothSize. */
+    boothDimensions?: {
+      width: number;
+      depth: number;
+      sqft: number;
+      system: "imperial" | "metric";
+      ceilingHeightFt?: number;
+    };
+    /** Geometry reference image URLs (floor plan + iso) — visual ground truth. */
+    geometryReferences?: { floorplan?: string; isometric?: string };
     brandIntelligence?: Array<{ category: string; title: string; content: string; tags?: string[] | null }>;
     brandContext?: string;
     suiteContext?: string;
@@ -171,7 +201,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
-  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
@@ -181,6 +211,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         feedback: feedback || undefined,
         previousImageUrl: previousImageUrl || undefined,
         boothSize: boothSize || undefined,
+        boothDimensions: boothDimensions || undefined,
+        geometryReferences: geometryReferences && (geometryReferences.floorplan || geometryReferences.isometric)
+          ? geometryReferences
+          : undefined,
         projectType: projectType || undefined,
         brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
         brandContext: brandContext || undefined,
@@ -219,7 +253,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     // Split into exterior views first, then interiors — so interiors can reference exterior images
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
@@ -268,6 +302,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           viewName: angle.name,
           aspectRatio: angle.aspectRatio,
           boothSize: boothSize || undefined,
+          boothDimensions: boothDimensions || undefined,
+          geometryReferences:
+            geometryReferences && (geometryReferences.floorplan || geometryReferences.isometric)
+              ? geometryReferences
+              : undefined,
           brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
           brandContext: brandContext || undefined,
           suiteContext: suiteContext || undefined,
@@ -321,7 +360,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -348,6 +387,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         viewName: angle.name,
         aspectRatio: angle.aspectRatio,
         boothSize: boothSize || undefined,
+        boothDimensions: boothDimensions || undefined,
+        geometryReferences:
+          geometryReferences && (geometryReferences.floorplan || geometryReferences.isometric)
+            ? geometryReferences
+            : undefined,
         brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
         brandContext: brandContext || undefined,
         suiteContext: suiteContext || undefined,

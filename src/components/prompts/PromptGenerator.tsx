@@ -69,6 +69,17 @@ import { useProjectVisualReferences } from "@/hooks/useProjectVisualReferences";
 // they can confirm or fix anything before kicking off generation.
 import { PreflightChecklist } from "@/components/prompts/PreflightChecklist";
 
+// Spatial canvas — interactive top-down + iso 3D preview. Edits the
+// booth geometry in absolute units; captures floor plan + iso PNGs at
+// render time so the image model has visual ground truth, not just
+// text dimensions.
+import { SpatialCanvas, type SpatialCanvasHandle } from "@/components/spatial/SpatialCanvas";
+import {
+  type BoothGeometry,
+  boothGeometryFromLegacy,
+} from "@/lib/geometryModel";
+import { useGeometryReferences } from "@/hooks/useGeometryReferences";
+
 // Versioning + style presets
 import { usePromptVersions } from "@/hooks/usePromptVersions";
 import { PromptVersionTabs } from "@/components/prompts/PromptVersionTabs";
@@ -211,6 +222,61 @@ export function PromptGenerator() {
   }, [normalizedZones]);
 
   const allAngles = useMemo(() => [...ANGLE_CONFIG, ...zoneInteriorAngles], [zoneInteriorAngles]);
+
+  // ── Spatial canvas geometry ─────────────────────────────────────────
+  // The interactive canvas edits a BoothGeometry (absolute units, real
+  // heights). On first render we derive it from the legacy spatialData
+  // (percentage-based zones); user edits flow into local state. We
+  // capture floor-plan + iso PNGs from this geometry at generation time
+  // and pass them to the image model as visual ground truth.
+  const initialGeometry = useMemo<BoothGeometry>(
+    () => boothGeometryFromLegacy(boothDimensions, normalizedZones),
+    // Re-derive only when the legacy source changes — user edits to
+    // the canvas live in `geometry` below and aren't overwritten.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [boothDimensions.width, boothDimensions.depth, normalizedZones.length],
+  );
+  const [geometry, setGeometry] = useState<BoothGeometry>(initialGeometry);
+
+  // When the legacy source genuinely changes (e.g., user edits zones
+  // upstream in SpatialPlanner or switches projects), reset our local
+  // geometry. The dependency on a stable hash avoids loops from our own
+  // `setGeometry` calls.
+  useEffect(() => {
+    setGeometry(initialGeometry);
+  }, [initialGeometry]);
+
+  const spatialCanvasRef = useRef<SpatialCanvasHandle>(null);
+  const geometryRefs = useGeometryReferences(effectiveProjectId);
+
+  /**
+   * Capture the canvas PNGs and upload them to render-references storage.
+   * Returns the URL pair for inclusion in the next render call. Falls
+   * back to {} on failure (image still renders, just without geometry
+   * anchors). Cached by geometry hash so consecutive calls are free.
+   */
+  const captureGeometryRefs = useCallback(async () => {
+    if (!spatialCanvasRef.current || !effectiveProjectId) return {};
+    const captured = await spatialCanvasRef.current.captureRefs();
+    return geometryRefs.captureAndUpload(geometry, {
+      captureFloorplan: async () => captured.floorplan,
+      captureIsometric: async () => captured.isometric,
+    });
+  }, [geometry, effectiveProjectId, geometryRefs]);
+
+  // Structured booth dimensions for the edge function — preferred over
+  // the legacy footprint label (which the old regex parser silently
+  // failed to match for metric and prime-mark inputs).
+  const structuredBoothDims = useMemo(
+    () => ({
+      width: boothDimensions.width,
+      depth: boothDimensions.depth,
+      sqft: boothDimensions.totalSqft,
+      system: boothDimensions.measurementSystem,
+      ceilingHeightFt: geometry.ceilingHeightFt,
+    }),
+    [boothDimensions, geometry.ceilingHeightFt],
+  );
 
   // Hydrate from saved images (filtered to the active version).
   //
@@ -361,6 +427,13 @@ export function PromptGenerator() {
       (url, idx, arr) => url && arr.indexOf(url) === idx,
     );
 
+    // Capture + upload the floor plan and isometric reference PNGs
+    // BEFORE kicking off generation. These are the visual scale anchors
+    // the image model uses; without them the model regresses to its
+    // training-data mean for "trade show booth" regardless of stated
+    // dimensions.
+    const geomRefs = await captureGeometryRefs();
+
     try {
       await renderStore.generateHeroImage({
         prompt,
@@ -368,6 +441,8 @@ export function PromptGenerator() {
         previousImageUrl: heroImage || undefined,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        boothDimensions: structuredBoothDims,
+        geometryReferences: geomRefs,
         projectType: currentProject?.projectType ?? null,
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
@@ -429,12 +504,19 @@ export function PromptGenerator() {
       }
     });
 
+    // Capture geometry refs once and reuse across every view. The cache
+    // in useGeometryReferences makes this effectively free if geometry
+    // hasn't changed since the hero render.
+    const geomRefs = await captureGeometryRefs();
+
     renderStore.generateAllViews({
       angles: allAngles,
       prompts,
       heroImageUrl: heroImage!,
       projectId: projectId!,
       boothSize: boothDimensions.footprintLabel,
+      boothDimensions: structuredBoothDims,
+      geometryReferences: geomRefs,
       brandIntelligence: approvedBrandIntel,
       brandContext: ragBrandContext || undefined,
       suiteContext: ragSuiteContext || undefined,
@@ -467,6 +549,8 @@ export function PromptGenerator() {
       (url, idx, arr) => url && arr.indexOf(url) === idx,
     );
 
+    const geomRefs = await captureGeometryRefs();
+
     try {
       await renderStore.regenerateView({
         angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio, isZoneInterior: !!(angle as any).isZoneInterior },
@@ -474,6 +558,8 @@ export function PromptGenerator() {
         heroImageUrl: heroImage,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        boothDimensions: structuredBoothDims,
+        geometryReferences: geomRefs,
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
@@ -513,6 +599,9 @@ export function PromptGenerator() {
         description: "Starting with hero image, then all views...",
       });
 
+      // Capture geometry refs once for the whole regen-all sweep.
+      const geomRefs = await captureGeometryRefs();
+
       // Generate new hero
       await renderStore.generateHeroImage({
         prompt: heroPromptText,
@@ -520,6 +609,8 @@ export function PromptGenerator() {
         previousImageUrl: undefined, // Don't use previous as reference
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        boothDimensions: structuredBoothDims,
+        geometryReferences: geomRefs,
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
@@ -551,6 +642,8 @@ export function PromptGenerator() {
         heroImageUrl: newHeroImage,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
+        boothDimensions: structuredBoothDims,
+        geometryReferences: geomRefs,
         brandIntelligence: approvedBrandIntel,
         brandContext: ragBrandContext || undefined,
         suiteContext: ragSuiteContext || undefined,
@@ -723,6 +816,18 @@ export function PromptGenerator() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Spatial canvas — interactive top-down + isometric 3D preview.
+          * Edits booth geometry in absolute units; captures floor plan +
+          * iso reference PNGs at render time so the image model has
+          * VISUAL ground truth (not just text dimensions, which it
+          * historically ignores). Drag zones to reposition, drag corner
+          * handles to resize, click "Auto-arrange" for heuristic placement. */}
+        <SpatialCanvas
+          ref={spatialCanvasRef}
+          geometry={geometry}
+          onGeometryChange={setGeometry}
+        />
 
         {/* Pre-flight check — collapsible "what's the AI about to see"
           * panel. Surfaces brand, brief, spatial, dimensions, logo, and

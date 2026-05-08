@@ -28,6 +28,34 @@ interface GenerateHeroRequest {
   feedback?: string;
   previousImageUrl?: string;
   boothSize?: string;
+  /**
+   * Structured booth dimensions — preferred over `boothSize` (the legacy
+   * label string). When present, the scale block is built from these
+   * exact values instead of regex-parsing the label. Old clients may
+   * still send only `boothSize` and the function falls back gracefully.
+   */
+  boothDimensions?: {
+    width: number;
+    depth: number;
+    sqft: number;
+    system: "imperial" | "metric";
+    ceilingHeightFt?: number;
+  };
+  /**
+   * Geometry reference image URLs from the SpatialCanvas. The image
+   * model treats these as visual ground truth — the rendered booth
+   * MUST match the proportions, footprint aspect ratio, and zone
+   * layout shown. Stronger than any text constraint.
+   *
+   *   floorplan — top-down: booth outline at correct aspect, zones
+   *     as labeled rectangles, 1' or 0.5m grid, scale bar.
+   *   isometric — 3D wireframe: same booth as extruded volume with
+   *     5'8" silhouette for human-scale calibration.
+   */
+  geometryReferences?: {
+    floorplan?: string;
+    isometric?: string;
+  };
   projectType?: string;
   brandIntelligence?: BrandIntelEntry[];
   brandContext?: string;
@@ -84,14 +112,95 @@ function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
   return parts.join("\n");
 }
 
-function buildScaleBlock(sizeStr?: string): string {
-  if (!sizeStr) return "";
-  const m = sizeStr.match(/(\d+)\s*[x×X]\s*(\d+)/);
-  if (!m) return "";
-  const w = parseInt(m[1], 10), d = parseInt(m[2], 10), sqft = w * d;
-  const ht = sqft > 1200 ? "16-20" : sqft > 600 ? "12-16" : "8-12";
+/**
+ * Build a structured-dimensions scale block. Prefers `boothDimensions`
+ * (structured) when present; falls back to parsing the legacy
+ * `boothSize` label for backward compatibility.
+ *
+ * Why this matters: the previous regex-based parser silently failed on
+ * formatted labels like "30' × 30'" or "6m × 6m" — the prime mark + the
+ * "m" unit blocked the match, so the scale block was empty for every
+ * project. Structured input eliminates the parsing layer entirely.
+ */
+function buildScaleBlock(req: GenerateHeroRequest): string {
+  const dims = req.boothDimensions;
+  let w: number, d: number, sqft: number, system: "imperial" | "metric", ceilingFt: number;
+
+  if (dims) {
+    w = dims.width;
+    d = dims.depth;
+    sqft = dims.sqft;
+    system = dims.system;
+    ceilingFt = dims.ceilingHeightFt ?? (sqft > 1200 ? 18 : sqft > 600 ? 14 : 10);
+  } else if (req.boothSize) {
+    // Legacy path: parse a label that may include unit markers.
+    // Allow "30x30", "30' × 30'", "6m × 6m", "20 ft x 30 ft", etc.
+    const m = req.boothSize.match(
+      /(\d+(?:\.\d+)?)\s*(?:m|ft|')?\s*[x×X]\s*(\d+(?:\.\d+)?)\s*(?:m|ft|')?/i,
+    );
+    if (!m) return "";
+    w = parseFloat(m[1]);
+    d = parseFloat(m[2]);
+    system = /m\b/i.test(req.boothSize) && !/ft|'/.test(req.boothSize) ? "metric" : "imperial";
+    sqft = system === "metric" ? Math.round(w * d * 10.7639) : Math.round(w * d);
+    ceilingFt = sqft > 1200 ? 18 : sqft > 600 ? 14 : 10;
+  } else {
+    return "";
+  }
+
+  const widthLabel = system === "metric" ? `${w}m` : `${w} ft`;
+  const depthLabel = system === "metric" ? `${d}m` : `${d} ft`;
+  const sqftLabel = `${sqft} sq ft`;
+  const peopleAcross = system === "metric" ? Math.round(w / 0.6) : Math.round(w / 2);
   const scale = sqft > 1200 ? "large island" : sqft > 600 ? "mid-size peninsula" : "small inline";
-  return `\n\nPHYSICAL SCALE (CRITICAL):\n- Booth footprint: ${w}' wide × ${d}' deep (${sqft} sq ft) — ${scale} booth\n- Ceiling/fascia height: ${ht} feet\n- An average person is 5'8". The booth is ${w}' wide — roughly ${Math.round(w / 2)} people shoulder-to-shoulder\n- Standard 10' convention aisles on open sides\n- Do NOT make the booth look like a mega-exhibit. It is ${w}'×${d}' — keep it proportional.`;
+
+  return `\n\nPHYSICAL SCALE (CRITICAL — exact dimensions, do not exceed):
+- Footprint: ${widthLabel} wide × ${depthLabel} deep (${sqftLabel}) — ${scale} booth
+- Maximum structure / fascia height: ${ceilingFt} ft
+- Human scale: average visitor is 5'8" (1.7m). The booth is ${widthLabel} wide — about ${peopleAcross} adults shoulder-to-shoulder
+- Standard 10 ft convention aisles on open sides
+- Render the booth at this exact proportion. Do NOT inflate to mega-exhibit scale.`;
+}
+
+/**
+ * Build a "GEOMETRY REFERENCE" instruction block that tells the model
+ * the attached floor plan + iso PNGs are visual ground truth, not
+ * suggestions. Only included when at least one reference is present.
+ */
+function buildGeometryReferenceBlock(req: GenerateHeroRequest): string {
+  const refs = req.geometryReferences;
+  if (!refs || (!refs.floorplan && !refs.isometric)) return "";
+
+  const has = (kind: "floorplan" | "isometric") => !!refs[kind];
+  const parts: string[] = ["\n\n╔══════════════════════════════════════════════════╗"];
+  parts.push("║   GEOMETRY REFERENCE — STRICT SCALE CONSTRAINT   ║");
+  parts.push("╚══════════════════════════════════════════════════╝");
+  parts.push("");
+  parts.push("You have been provided geometry reference images that define the");
+  parts.push("EXACT space the rendered structure must occupy:");
+  parts.push("");
+  if (has("floorplan")) {
+    parts.push("  • FLOOR PLAN (top-down): booth outline at the correct aspect ratio,");
+    parts.push("    zones as labeled rectangles, dimension labels, grid for scale.");
+  }
+  if (has("isometric")) {
+    parts.push("  • ISOMETRIC VOLUME (3D): same booth as an extruded wireframe with");
+    parts.push("    each zone at its actual height, plus a 5'8\" silhouette for");
+    parts.push("    human-scale calibration.");
+  }
+  parts.push("");
+  parts.push("THE FINAL IMAGE MUST:");
+  parts.push("  • Match the booth's footprint aspect ratio shown in the floor plan");
+  parts.push("  • Match the volumetric proportions shown in the isometric view");
+  parts.push("  • Place each zone at the position and size shown in the floor plan");
+  parts.push("  • Respect the maximum structure height shown — do not exceed");
+  parts.push("  • Keep the rendered booth at the correct fraction of the frame");
+  parts.push("");
+  parts.push("These references are GROUND TRUTH. Do not invent different proportions,");
+  parts.push("zone positions, or volumetric scale. The text below describes design");
+  parts.push("intent (materials, mood, brand). The geometry IS the geometry shown.");
+
+  return parts.join("\n");
 }
 
 /** Phase 4: Build a design context block from structured brief/element data */
@@ -165,7 +274,8 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, feedback, previousImageUrl, boothSize, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" }: GenerateHeroRequest = await req.json();
+    const body: GenerateHeroRequest = await req.json();
+    const { prompt, feedback, previousImageUrl, boothSize, boothDimensions, geometryReferences, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
       return new Response(JSON.stringify({ error: "prompt is required and must be at least 10 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -192,7 +302,8 @@ serve(async (req) => {
     const genSuffix = TYPE_SUFFIX[projectType || "trade_show_booth"] ?? TYPE_SUFFIX.trade_show_booth;
     const feedbackPrefix = TYPE_FEEDBACK_PREFIX[projectType || "trade_show_booth"] ?? TYPE_FEEDBACK_PREFIX.trade_show_booth;
 
-    const scaleBlock = buildScaleBlock(boothSize);
+    const scaleBlock = buildScaleBlock(body);
+    const geometryBlock = buildGeometryReferenceBlock(body);
     const designBlock = buildDesignContextBlock(designContext);
     const brandBlock = buildBrandIntelBlock(brandIntelligence);
 
@@ -224,13 +335,20 @@ serve(async (req) => {
 
     console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType, brandIntelEntries: brandIntelligence?.length ?? 0, hasBrandLogo: !!brandLogoUrl, extraRefs: extraReferenceUrls?.length ?? 0 });
 
-    // Reference image attachments — brand logo + any user-supplied extras
-    // (typically a one-off file attached at regen time). The model receives
-    // these in the same message array; the text below explains what each
-    // image is so the model uses them as visual references rather than
-    // trying to render them as content.
+    // Reference image attachments. ORDER MATTERS — the image model
+    // attends most strongly to the FIRST images in the array.
+    // Geometry refs (floor plan + iso) come first so the model treats
+    // them as ground truth before considering brand or user extras.
     const referenceImages: Array<{ type: "image_url"; image_url: { url: string } }> = [];
     const referenceLabels: string[] = [];
+    if (geometryReferences?.floorplan) {
+      referenceImages.push({ type: "image_url", image_url: { url: geometryReferences.floorplan } });
+      referenceLabels.push("GEOMETRY — FLOOR PLAN (top-down): the exact booth footprint and zone layout. Match these proportions and zone positions precisely.");
+    }
+    if (geometryReferences?.isometric) {
+      referenceImages.push({ type: "image_url", image_url: { url: geometryReferences.isometric } });
+      referenceLabels.push("GEOMETRY — ISOMETRIC VOLUME (3D): the exact 3D space the structure must occupy. Match the volumetric proportions and maximum height shown.");
+    }
     if (brandLogoUrl) {
       referenceImages.push({ type: "image_url", image_url: { url: brandLogoUrl } });
       referenceLabels.push("BRAND LOGO — use this exact mark on signage, fascia, and any branded surfaces. Do not invent or modify the logo design.");
@@ -247,8 +365,13 @@ serve(async (req) => {
 
     let messages;
 
+    // Geometry block goes FIRST in the text. Image models heavily weight
+    // opening tokens; putting the strict scale constraint at the top
+    // (before stylistic/material guidance) makes the geometry constraint
+    // dominant rather than a footnote.
     if (previousImageUrl && feedback) {
-      const refinedPrompt = `${feedbackPrefix}
+      const refinedPrompt = `${geometryBlock}
+${feedbackPrefix}
 
 FEEDBACK TO APPLY:
 ${feedback}
@@ -259,7 +382,7 @@ ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
 
-Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity.`;
+Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity. The geometry references at the top of this prompt remain ground truth — do not change the booth's proportions or zone layout.`;
 
       messages = [
         {
@@ -279,7 +402,8 @@ Generate a photorealistic 16:9 image that incorporates the feedback while mainta
             ? [
                 {
                   type: "text",
-                  text: `${prompt}
+                  text: `${geometryBlock}
+${prompt}
 ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
@@ -288,7 +412,8 @@ ${genSuffix}`,
                 },
                 ...referenceImages,
               ]
-            : `${prompt}
+            : `${geometryBlock}
+${prompt}
 ${scaleBlock}
 ${designBlock}
 ${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
@@ -309,11 +434,17 @@ ${genSuffix}`,
             .filter((c) => c?.type === "text")
             .map((c) => c?.text ?? "")
             .join("\n");
+    // For OpenAI /v1/images/edits, refs go in `image[]` form fields.
+    // ORDER MATTERS — geometry refs first so they outweigh logo/extras.
+    // OpenAI caps at 4 reference images; we'll include geometry first
+    // and trim aggressively if needed.
     const refUrlsForOpenAI = [
+      ...(geometryReferences?.floorplan ? [geometryReferences.floorplan] : []),
+      ...(geometryReferences?.isometric ? [geometryReferences.isometric] : []),
       ...(previousImageUrl ? [previousImageUrl] : []),
       ...(brandLogoUrl ? [brandLogoUrl] : []),
       ...(extraReferenceUrls ?? []),
-    ];
+    ].slice(0, 4); // gpt-image-2 hard limit
 
     let generatedImageUrl: string | null = null;
     let responseText = "";

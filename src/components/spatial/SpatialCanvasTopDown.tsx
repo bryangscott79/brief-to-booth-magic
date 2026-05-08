@@ -31,8 +31,10 @@ import {
 } from "@/lib/geometryModel";
 
 const CANVAS_PADDING = 32; // px on each side, leaves room for dimension rulers
-const MAX_CANVAS_SIZE = 460; // px — fits inside a half-width grid cell on
-                             // mid-size laptops without overflowing the parent
+const DEFAULT_MAX_CANVAS_SIZE = 460; // px — fits inside a half-width grid cell on
+                                     // mid-size laptops without overflowing.
+                                     // Override via the `maxCanvasSize` prop for
+                                     // the fullscreen expanded view.
 
 export interface SpatialCanvasTopDownProps {
   geometry: BoothGeometry;
@@ -47,6 +49,12 @@ export interface SpatialCanvasTopDownProps {
    * exports. Defaults to false (editable).
    */
   readonly?: boolean;
+  /**
+   * Max pixels for the longest side of the canvas. Default 460 (fits in
+   * a half-width grid cell on a typical laptop). Pass ~900–1100 in the
+   * fullscreen expanded view.
+   */
+  maxCanvasSize?: number;
 }
 
 export interface SpatialCanvasTopDownHandle {
@@ -62,16 +70,19 @@ export interface SpatialCanvasTopDownHandle {
 
 /**
  * Compute pixels-per-unit so the booth fits inside the available canvas
- * size. The longest side of the booth maps to (MAX_CANVAS_SIZE - padding)
+ * size. The longest side of the booth maps to (maxCanvasSize - padding)
  * pixels; the shorter side scales to preserve aspect ratio.
  */
-function computeScale(geometry: BoothGeometry): {
+function computeScale(
+  geometry: BoothGeometry,
+  maxCanvasSize: number,
+): {
   pxPerUnit: number;
   canvasW: number;
   canvasH: number;
 } {
   const longest = Math.max(geometry.width, geometry.depth);
-  const usable = MAX_CANVAS_SIZE - CANVAS_PADDING * 2;
+  const usable = maxCanvasSize - CANVAS_PADDING * 2;
   const pxPerUnit = usable / longest;
   return {
     pxPerUnit,
@@ -90,12 +101,13 @@ export const SpatialCanvasTopDown = forwardRef<
     onSelectZone,
     onZonesChange,
     readonly = false,
+    maxCanvasSize = DEFAULT_MAX_CANVAS_SIZE,
   },
   ref,
 ) {
   const { pxPerUnit, canvasW, canvasH } = useMemo(
-    () => computeScale(geometry),
-    [geometry.width, geometry.depth],
+    () => computeScale(geometry, maxCanvasSize),
+    [geometry.width, geometry.depth, maxCanvasSize],
   );
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);

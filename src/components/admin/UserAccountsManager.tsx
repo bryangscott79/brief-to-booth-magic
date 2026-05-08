@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAdminProfiles, useInviteUser, usePlatformInvites, useManageAdminRole, useIsSuperAdmin, UserProfile } from "@/hooks/useAdminRole";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  useAiUsageByUser,
+  rangeFromPreset,
+  indexUsageByUserId,
+  type UserUsageRow,
+} from "@/hooks/useAiUsage";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -177,14 +183,25 @@ function RoleBadge({ profile }: { profile: UserProfile }) {
 }
 
 // ─── User Row ─────────────────────────────────────────────────────────────────
+
+function formatUsd(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "$0.00";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
 function UserRow({
   profile,
   currentUserId,
   currentUserIsSuperAdmin,
+  usage,
 }: {
   profile: UserProfile;
   currentUserId: string | undefined;
   currentUserIsSuperAdmin: boolean;
+  /** AI spend for this user over the last 30d, if any. */
+  usage?: UserUsageRow;
 }) {
   const navigate = useNavigate();
   const manageRole = useManageAdminRole();
@@ -238,7 +255,7 @@ function UserRow({
                 </p>
                 <RoleBadge profile={profile} />
               </div>
-              <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1">
                   <FolderOpen className="h-3 w-3" />
                   {profile.projects?.length ?? 0} project{(profile.projects?.length ?? 0) !== 1 ? "s" : ""}
@@ -247,6 +264,19 @@ function UserRow({
                   <Calendar className="h-3 w-3" />
                   Joined {format(new Date(profile.created_at), "MMM yyyy")}
                 </span>
+                {/* 30-day AI spend, hidden when zero so quiet accounts
+                    stay visually quiet. */}
+                {usage && usage.cost_usd > 0 && (
+                  <span
+                    className="flex items-center gap-1 font-medium"
+                    title={`${usage.calls.toLocaleString()} calls · ${usage.total_tokens.toLocaleString()} tokens (last 30d)`}
+                  >
+                    <span className="text-emerald-600">{formatUsd(usage.cost_usd)}</span>
+                    <span className="text-muted-foreground/70">
+                      {usage.calls} call{usage.calls === 1 ? "" : "s"} · 30d
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -380,6 +410,16 @@ export function UserAccountsManager() {
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  // 30-day AI spend per user, joined inline so super admins can spot
+  // heavy users at a glance. Errors silently — list still renders if
+  // the RPC fails.
+  const usageRange = useMemo(() => rangeFromPreset("30d"), []);
+  const { data: globalUsage } = useAiUsageByUser(usageRange);
+  const usageByUser = useMemo(
+    () => indexUsageByUserId(globalUsage ?? []),
+    [globalUsage],
+  );
+
   const filtered = (profiles ?? []).filter((p) => {
     const q = search.toLowerCase();
     if (!q) return true;
@@ -503,6 +543,7 @@ export function UserAccountsManager() {
                 <UserRow
                   key={profile.user_id}
                   profile={profile}
+                  usage={usageByUser.get(profile.user_id)}
                   currentUserId={user?.id}
                   currentUserIsSuperAdmin={!!isSuperAdmin}
                 />

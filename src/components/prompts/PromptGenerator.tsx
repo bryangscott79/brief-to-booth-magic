@@ -49,6 +49,12 @@ import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
 // real mark renders on signage instead of a hallucinated approximation.
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 
+// Agency-wide image-model preference — controls which provider every
+// render call goes to. End users don't see the model selection; the
+// platform leads with GPT-image-2 by default and super admins can
+// override per agency from settings.
+import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
+
 // Per-view supplemental references that the user attaches at regen time.
 import { useRenderReferences } from "@/hooks/useRenderReferences";
 import { AttachReference } from "@/components/prompts/AttachReference";
@@ -163,11 +169,12 @@ export function PromptGenerator() {
   const { activeLogo: brandLogo } = useBrandLogo(effectiveProjectId);
   const brandLogoUrl = brandLogo?.publicUrl;
 
-  // Active version's chosen image model — "gemini" (default) or "openai"
-  // (gpt-image-2). gpt-image-2 needs OPENAI_API_KEY in Supabase secrets;
-  // when missing the edge function falls back to Gemini automatically.
-  const activeImageModel: "gemini" | "openai" =
-    promptVersions.activeVersion?.imageModel ?? "gemini";
+  // Image model is determined by the agency, not the version. The
+  // platform-level default is GPT-image-2 ("openai"); super admins can
+  // override the agency to a Gemini tier from platform settings. Users
+  // never see model selection. If OPENAI_API_KEY is missing in Supabase
+  // secrets, the edge function falls back to Gemini automatically.
+  const { provider: activeImageModel } = useAgencyImageModel();
 
   // Per-view supplemental references — user attaches images via "Attach
   // reference" on each view card. URLs flow into the next regeneration of

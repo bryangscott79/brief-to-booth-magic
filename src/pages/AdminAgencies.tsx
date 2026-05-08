@@ -72,6 +72,11 @@ import { useIndustries } from "@/hooks/useIndustries";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import {
+  useAiUsageByAgency,
+  rangeFromPreset,
+  indexUsageByAgencyId,
+} from "@/hooks/useAiUsage";
 
 // ─── Status pill ────────────────────────────────────────────────────────────
 
@@ -650,9 +655,18 @@ function IndustriesTabContent({ agencyId, agencyName }: { agencyId: string; agen
 
 export default function AdminAgencies() {
   const { data: isSuper, isLoading: roleLoading } = useIsSuperAdmin();
-  const { data: agencies, isLoading } = useAdminAgencies();
+  const { data: agencies, isLoading, error: agenciesError, refetch } = useAdminAgencies();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<AgencyAdminRow | null>(null);
+
+  // 30-day AI spend per agency, joined inline. Errors silently — list
+  // still renders if the RPC fails (migration not applied, etc.).
+  const usageRange = useMemo(() => rangeFromPreset("30d"), []);
+  const { data: agencyUsage } = useAiUsageByAgency(usageRange);
+  const usageByAgency = useMemo(
+    () => indexUsageByAgencyId(agencyUsage ?? []),
+    [agencyUsage],
+  );
 
   if (roleLoading) {
     return (
@@ -743,41 +757,88 @@ export default function AdminAgencies() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
+            ) : agenciesError ? (
+              // Surface the actual RPC error so a misconfigured DB or
+              // unapplied migration is visible instead of a silent empty
+              // state.
+              <div className="px-5 py-8 space-y-3">
+                <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="text-sm font-medium text-destructive">
+                      Couldn't load agencies
+                    </div>
+                    <div className="text-xs text-muted-foreground break-words">
+                      {(agenciesError as Error).message}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground/80">
+                      Most likely cause: <code className="font-mono">list_agencies_for_admin</code> RPC
+                      isn't deployed to this Supabase project. Apply the migrations under
+                      {" "}<code className="font-mono">supabase/migrations/</code> and refresh.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="text-xs underline text-muted-foreground hover:text-foreground"
+                >
+                  Retry
+                </button>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-12 text-sm text-muted-foreground">
                 {search ? "No agencies match your search." : "No agencies yet."}
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {filtered.map((a) => (
-                  <button
-                    key={a.id}
-                    onClick={() => setSelected(a)}
-                    className="w-full text-left px-5 py-3 hover:bg-white/[0.02] transition-colors flex items-center gap-4"
-                  >
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 border border-white/10 flex items-center justify-center shrink-0">
-                      <Building2 className="h-4 w-4 text-primary" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium truncate">{a.name}</span>
-                        <StatusPill status={a.effective_status} />
+                {filtered.map((a) => {
+                  const u = usageByAgency.get(a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => setSelected(a)}
+                      className="w-full text-left px-5 py-3 hover:bg-white/[0.02] transition-colors flex items-center gap-4"
+                    >
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 border border-white/10 flex items-center justify-center shrink-0">
+                        <Building2 className="h-4 w-4 text-primary" />
                       </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-3 mt-0.5">
-                        <span className="font-mono">{a.slug}</span>
-                        {a.owner_email && <span>· {a.owner_email}</span>}
-                        <span>· {a.member_count} members · {a.project_count} projects</span>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium truncate">{a.name}</span>
+                          <StatusPill status={a.effective_status} />
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-3 mt-0.5 flex-wrap">
+                          <span className="font-mono">{a.slug}</span>
+                          {a.owner_email && <span>· {a.owner_email}</span>}
+                          <span>· {a.member_count} members · {a.project_count} projects</span>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="text-xs text-muted-foreground shrink-0 hidden md:block">
-                      Active {formatDistanceToNow(new Date(a.last_activity_at), { addSuffix: true })}
-                    </div>
+                      {/* Inline 30-day AI spend, hidden when zero. */}
+                      {u && u.cost_usd > 0 && (
+                        <div
+                          className="text-right shrink-0 hidden lg:block"
+                          title={`${u.calls.toLocaleString()} calls · ${u.total_tokens.toLocaleString()} tokens (last 30d)`}
+                        >
+                          <div className="text-sm font-semibold text-emerald-600">
+                            {formatAgencyUsd(u.cost_usd)}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            30d AI spend
+                          </div>
+                        </div>
+                      )}
 
-                    <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </button>
-                ))}
+                      <div className="text-xs text-muted-foreground shrink-0 hidden md:block">
+                        Active {formatDistanceToNow(new Date(a.last_activity_at), { addSuffix: true })}
+                      </div>
+
+                      <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -794,6 +855,13 @@ export default function AdminAgencies() {
 }
 
 // ─── SummaryCard ────────────────────────────────────────────────────────────
+
+function formatAgencyUsd(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "$0.00";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
 
 function SummaryCard({
   label,

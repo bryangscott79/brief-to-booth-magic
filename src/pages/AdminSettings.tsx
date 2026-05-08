@@ -9,9 +9,11 @@ import { AgencyKnowledgeBase } from "@/components/admin/AgencyKnowledgeBase";
 import { ActivationTypeManager } from "@/components/admin/ActivationTypeManager";
 import { VenueIntelligenceManager } from "@/components/admin/VenueIntelligenceManager";
 import { KnowledgeHealthDashboard } from "@/components/admin/KnowledgeHealthDashboard";
+import { PlatformImageModelManager } from "@/components/admin/PlatformImageModelManager";
+import { AiUsageManager } from "@/components/admin/AiUsageManager";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
-import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid, Activity } from "lucide-react";
+import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid, Activity, Sparkles, TrendingUp } from "lucide-react";
 
 export default function AdminSettings() {
   const { data: isSuperAdmin } = useIsSuperAdmin();
@@ -70,6 +72,14 @@ export default function AdminSettings() {
                 <MapPin className="h-4 w-4" />
                 Venues &amp; Shows
               </TabsTrigger>
+              <TabsTrigger value="image-models" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Image Models
+              </TabsTrigger>
+              <TabsTrigger value="ai-usage" className="gap-2">
+                <TrendingUp className="h-4 w-4" />
+                AI Usage
+              </TabsTrigger>
               <TabsTrigger value="invites" className="gap-2">
                 <Shield className="h-4 w-4" />
                 Invites &amp; Team
@@ -84,6 +94,12 @@ export default function AdminSettings() {
             </TabsContent>
             <TabsContent value="venues">
               <VenueIntelligenceManager />
+            </TabsContent>
+            <TabsContent value="image-models">
+              <PlatformImageModelManager />
+            </TabsContent>
+            <TabsContent value="ai-usage">
+              <AiUsageManager />
             </TabsContent>
             <TabsContent value="invites">
               <TeamManager />

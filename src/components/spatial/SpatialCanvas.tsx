@@ -22,7 +22,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Wand2, Maximize2, Eye, EyeOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw } from "lucide-react";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
 import {
@@ -50,12 +59,30 @@ export interface SpatialCanvasProps {
   onGeometryChange: (next: BoothGeometry) => void;
   /** Hide controls (auto-layout, ceiling height, etc.) when used as a viewer. */
   readonly?: boolean;
+  /**
+   * Optional callback that returns the system-generated zone-interior
+   * prompt for a given zone id. When provided, the canvas surfaces an
+   * "Edit prompt" affordance per zone — users can view the default
+   * prompt + override it. The override is stored on the zone via
+   * `customPromptOverride` and rendered at generation time.
+   *
+   * Pass undefined to hide the prompt-edit feature (e.g. read-only
+   * preview contexts where prompt editing doesn't apply).
+   */
+  getZoneDefaultPrompt?: (zoneId: string) => string;
 }
 
 export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>(
-  function SpatialCanvas({ geometry, onGeometryChange, readonly = false }, ref) {
+  function SpatialCanvas(
+    { geometry, onGeometryChange, readonly = false, getZoneDefaultPrompt },
+    ref,
+  ) {
     const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
     const [showIso, setShowIso] = useState(true);
+    // Zone whose prompt is currently being edited. Null = dialog closed.
+    const [promptEditZoneId, setPromptEditZoneId] = useState<string | null>(null);
+    // Local draft of the prompt while the dialog is open. Committed on Save.
+    const [promptDraft, setPromptDraft] = useState("");
     const isoRef = useRef<SpatialCanvasIsoHandle>(null);
     const topDownRef = useRef<SpatialCanvasTopDownHandle>(null);
     const topDownContainerRef = useRef<HTMLDivElement>(null);
@@ -219,11 +246,14 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                 Height:
                 <input
                   type="number"
-                  className="w-14 h-6 px-1.5 rounded border border-border bg-background text-xs text-foreground"
+                  className="w-16 h-6 px-1.5 rounded border border-border bg-background text-xs text-foreground"
                   value={selectedZone.heightFt}
-                  min={6}
+                  // Allow low elements: floor decals, counters (3'),
+                  // bar tops (3.5'), display plinths, etc. Min is 0.5
+                  // so a flat zone is still legal (decal-only).
+                  min={0.5}
                   max={geometry.ceilingHeightFt}
-                  step={1}
+                  step={0.5}
                   onChange={(e) => {
                     const next = parseFloat(e.target.value);
                     if (!Number.isFinite(next)) return;
@@ -231,7 +261,7 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                       ...geometry,
                       zones: geometry.zones.map((z) =>
                         z.id === selectedZone.id
-                          ? { ...z, heightFt: Math.max(6, Math.min(geometry.ceilingHeightFt, next)) }
+                          ? { ...z, heightFt: Math.max(0.5, Math.min(geometry.ceilingHeightFt, next)) }
                           : z,
                       ),
                     });
@@ -242,6 +272,30 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
               <span className="text-muted-foreground">·</span>
               <Maximize2 className="h-3 w-3 text-muted-foreground" />
               <span className="text-muted-foreground">drag to move, corner handles to resize</span>
+              {/* Per-zone prompt edit. Hidden when no callback was
+                  provided (e.g. read-only preview contexts). */}
+              {getZoneDefaultPrompt && (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] gap-1 px-2"
+                    onClick={() => {
+                      const draft =
+                        selectedZone.customPromptOverride ??
+                        getZoneDefaultPrompt(selectedZone.id);
+                      setPromptDraft(draft);
+                      setPromptEditZoneId(selectedZone.id);
+                    }}
+                    title="View / edit the prompt used to render this zone's interior"
+                  >
+                    <FileText className="h-3 w-3" />
+                    {selectedZone.customPromptOverride ? "Edit prompt (custom)" : "Edit prompt"}
+                  </Button>
+                </>
+              )}
             </div>
           )}
 
@@ -251,6 +305,120 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
             </div>
           )}
         </CardContent>
+
+        {/* Per-zone prompt edit dialog. Shows the system-generated
+            default + lets the user override verbatim. The override is
+            stored on the zone (`customPromptOverride`) and replaces the
+            auto-generated zone-interior prompt at render time. */}
+        <Dialog
+          open={promptEditZoneId !== null}
+          onOpenChange={(open) => !open && setPromptEditZoneId(null)}
+        >
+          <DialogContent className="max-w-3xl">
+            {(() => {
+              const zone = promptEditZoneId
+                ? geometry.zones.find((z) => z.id === promptEditZoneId)
+                : null;
+              if (!zone) return null;
+              const defaultPrompt = getZoneDefaultPrompt
+                ? getZoneDefaultPrompt(zone.id)
+                : "";
+              const isOverride = zone.customPromptOverride !== undefined;
+              const isDirty = promptDraft !== (zone.customPromptOverride ?? defaultPrompt);
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      {zone.name} — render prompt
+                    </DialogTitle>
+                    <DialogDescription>
+                      This is the prompt sent to the image model when rendering this zone's
+                      interior view. Edit to customize the rendering for this zone only —
+                      hero and exterior views are unaffected. Use{" "}
+                      <span className="text-foreground font-medium">Reset</span> to return to
+                      the system-generated default.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2 py-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      {isOverride ? (
+                        <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30">
+                          Custom override active
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">
+                          Default (system-generated)
+                        </Badge>
+                      )}
+                      <span className="text-muted-foreground">
+                        {promptDraft.length.toLocaleString()} chars
+                      </span>
+                    </div>
+                    <Textarea
+                      value={promptDraft}
+                      onChange={(e) => setPromptDraft(e.target.value)}
+                      rows={20}
+                      className="font-mono text-xs leading-relaxed"
+                    />
+                  </div>
+                  <DialogFooter className="gap-2 sm:gap-2">
+                    {isOverride && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => {
+                          // Strip the override; future renders use the default.
+                          onGeometryChange({
+                            ...geometry,
+                            zones: geometry.zones.map((z) =>
+                              z.id === zone.id
+                                ? { ...z, customPromptOverride: undefined }
+                                : z,
+                            ),
+                          });
+                          setPromptEditZoneId(null);
+                        }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset to default
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setPromptEditZoneId(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={!isDirty}
+                      onClick={() => {
+                        const trimmed = promptDraft.trim();
+                        // If the user blanked the textarea, treat it
+                        // as a reset rather than saving an empty override.
+                        const override = trimmed.length > 0 ? promptDraft : undefined;
+                        onGeometryChange({
+                          ...geometry,
+                          zones: geometry.zones.map((z) =>
+                            z.id === zone.id
+                              ? { ...z, customPromptOverride: override }
+                              : z,
+                          ),
+                        });
+                        setPromptEditZoneId(null);
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </Card>
     );
   },

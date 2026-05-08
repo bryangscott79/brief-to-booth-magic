@@ -36,12 +36,24 @@ export interface AbsoluteZone {
    * Image generation contexts always think in feet for height — most
    * trade-show booths cite ceiling clearances in feet even on metric
    * floor plans. Default 9' (open zone) to 12' (enclosed feature).
+   * Minimum 0.5' to allow floor-only elements (decals, low platforms).
    */
   heightFt: number;
   /** Hex color for the zone in both top-down + iso. */
   colorHex: string;
   /** Optional notes / requirements that may be surfaced in prompts. */
   notes?: string;
+  /**
+   * User-edited prompt override for the zone-interior render of this
+   * zone. When set, replaces the auto-generated zone interior prompt
+   * verbatim. Surfaced via "Edit prompt" in the SpatialCanvas; cleared
+   * with "Reset to default" returns to system-generated prompt.
+   *
+   * Scope: zone-interior renders only. Hero/exterior renders are not
+   * affected (they describe zones via SPATIAL LAYOUT, not by full
+   * prompts per zone).
+   */
+  customPromptOverride?: string;
 }
 
 /**

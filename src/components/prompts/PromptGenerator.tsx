@@ -408,8 +408,36 @@ export function PromptGenerator() {
     brandIntelligence: approvedBrandIntel,
   };
 
-  /** Local wrapper that closes over current project data + active style preset */
+  /**
+   * Build the SYSTEM-generated prompt for an angle, ignoring any
+   * zone-interior override. Used by the SpatialCanvas to show the
+   * "default" prompt in the per-zone edit dialog.
+   */
+  const getZoneDefaultPrompt = useCallback(
+    (zoneId: string): string => {
+      const angleId = `zone_interior_${zoneId}`;
+      const base = generatePrompt(angleId, promptParams);
+      return applyStylePresetToPrompt(base, activePreset, activeCustomEmphasis);
+    },
+    [promptParams, activePreset, activeCustomEmphasis],
+  );
+
+  /**
+   * Local wrapper that closes over current project data + active style
+   * preset. For zone-interior angles, checks if the zone has a
+   * `customPromptOverride` set via the SpatialCanvas — if so, returns
+   * the override verbatim (no style preset wrap; user wrote it as-is).
+   */
   const buildPrompt = (angleId: string): string => {
+    // Per-zone override path — user-edited prompts take precedence over
+    // system-generated content. Scope: zone-interior renders only.
+    if (angleId.startsWith("zone_interior_")) {
+      const zoneId = angleId.slice("zone_interior_".length);
+      const zone = geometry.zones.find((z) => z.id === zoneId);
+      if (zone?.customPromptOverride) {
+        return zone.customPromptOverride;
+      }
+    }
     const base = generatePrompt(angleId, promptParams);
     return applyStylePresetToPrompt(base, activePreset, activeCustomEmphasis);
   };
@@ -827,6 +855,11 @@ export function PromptGenerator() {
           ref={spatialCanvasRef}
           geometry={geometry}
           onGeometryChange={setGeometry}
+          // Per-zone prompt edit: clicking "Edit prompt" on a selected
+          // zone shows this default and lets the user override it. The
+          // override flows back through `geometry.zones[].customPromptOverride`
+          // and is honored at buildPrompt time above.
+          getZoneDefaultPrompt={getZoneDefaultPrompt}
         />
 
         {/* Pre-flight check — collapsible "what's the AI about to see"

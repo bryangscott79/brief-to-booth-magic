@@ -53,6 +53,12 @@ import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { saveProjectField } from "@/hooks/useProjectSync";
+import { useBrandIntelligence } from "@/hooks/useClients";
+import {
+  generatePrompt,
+  getZoneInteriorAngles,
+  type GeneratePromptParams,
+} from "@/lib/promptBuilder";
 
 // Generation progress steps
 const GENERATION_STEPS = [
@@ -488,29 +494,158 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     handleGenerateFloorPlan(ingredients, feedback);
   }, [handleGenerateFloorPlan]);
 
+  // Apply a layout variation's zones into the canonical config so the
+  // top spatial canvas + bottom floor plan stay in sync. Without this
+  // the user could pick "Hero-Centric" and the bottom panel would
+  // reflow while the top spatial canvas kept its old positions —
+  // exactly the divergence the user reported. The "balanced" variation
+  // IS the current zones so applying it is a no-op (skip the write).
+  const applyVariationZonesToConfig = useCallback(
+    (variationId: string) => {
+      const v = variations.find((x) => x.id === variationId);
+      if (!v || !currentConfig || !spatialData) return;
+      // Skip the balanced/identity case — same zones, would just
+      // generate a redundant DB write.
+      if (variationId === "balanced") return;
+      // Merge: keep each zone's metadata (height, shape, override,
+      // requirements, adjacencies, etc.) and only swap in the new
+      // position from the variation's zone with the same id.
+      const byId = new Map<string, NormalizedZone>(
+        v.zones.map((z) => [z.id, z]),
+      );
+      const mergedLegacy = (currentConfig.zones ?? []).map((z: any) => {
+        const variant = byId.get(z.id);
+        if (!variant) return z;
+        return {
+          ...z,
+          position: { ...variant.position },
+          percentage: variant.percentage,
+          sqft: variant.sqft,
+        };
+      });
+      const updatedConfigs = [...(spatialData.configs ?? [])];
+      updatedConfigs[activeFootprint] = {
+        ...currentConfig,
+        zones: mergedLegacy,
+      };
+      const updatedSpatial = { ...spatialData, configs: updatedConfigs };
+      if (currentProject) {
+        useProjectStore
+          .getState()
+          .setElementData("spatialStrategy", updatedSpatial);
+      }
+      if (projectId) {
+        saveProjectField(projectId, "spatial_strategy", updatedSpatial);
+      }
+      toast({
+        title: `Applied "${v.name}"`,
+        description: "Spatial canvas updated. Drag any zone to refine.",
+      });
+    },
+    [
+      variations,
+      currentConfig,
+      spatialData,
+      activeFootprint,
+      currentProject,
+      projectId,
+      toast,
+    ],
+  );
+
   // Intercept layout variation change when in render mode
   const handleVariationSelect = useCallback((variationId: string) => {
     if (floorPlanView === "render" && floorPlanImage) {
       setPendingVariation(variationId);
-    } else {
-      setActiveVariation(variationId);
+      return;
     }
-  }, [floorPlanView, floorPlanImage]);
+    // Reflow the canvas to match the picked layout. After applying we
+    // snap activeVariation back to "balanced" so the bottom floor plan
+    // mirrors the canvas (now the new baseline) instead of running the
+    // strategy a SECOND time on top of itself — which would otherwise
+    // compound each time the user clicked a variation.
+    if (variationId === "balanced") {
+      setActiveVariation("balanced");
+      return;
+    }
+    applyVariationZonesToConfig(variationId);
+    setActiveVariation("balanced");
+  }, [floorPlanView, floorPlanImage, applyVariationZonesToConfig]);
 
   const handleLayoutChangeRender = useCallback(() => {
     if (!pendingVariation) return;
     setActiveVariation(pendingVariation);
+    applyVariationZonesToConfig(pendingVariation);
     setPendingVariation(null);
     // open ingredients editor to generate with new layout
     setTimeout(() => handleOpenEditor(), 50);
-  }, [pendingVariation, handleOpenEditor]);
+  }, [pendingVariation, handleOpenEditor, applyVariationZonesToConfig]);
 
   const handleLayoutChangeZones = useCallback(() => {
     if (!pendingVariation) return;
     setActiveVariation(pendingVariation);
+    applyVariationZonesToConfig(pendingVariation);
     setPendingVariation(null);
     setFloorPlanView("blocks");
-  }, [pendingVariation]);
+  }, [pendingVariation, applyVariationZonesToConfig]);
+
+  // ── Per-zone prompt builder ─────────────────────────────────────
+  // Mirrors PromptGenerator.getZoneDefaultPrompt so the SpatialCanvas
+  // "Edit prompt" button works in the Spatial step too. The Prompts
+  // step layers an active style preset on top; here we show the base
+  // prompt the model would receive, which is enough for the user to
+  // see what's being said about a zone and override it. Edits save as
+  // customPromptOverride and BOTH steps respect them.
+  const clientId = currentProject?.clientId ?? null;
+  const { data: brandIntelEntries } = useBrandIntelligence(clientId);
+  const approvedBrandIntel = useMemo(
+    () =>
+      brandIntelEntries
+        ?.filter((e) => e.is_approved)
+        .map((e) => ({
+          category: e.category,
+          title: e.title,
+          content: e.content,
+          tags: e.tags,
+        })),
+    [brandIntelEntries],
+  );
+  const zoneInteriorAngles = useMemo(
+    () => getZoneInteriorAngles(normalizedZones),
+    [normalizedZones],
+  );
+  const elements = currentProject?.elements;
+  const promptParams: GeneratePromptParams = useMemo(
+    () => ({
+      brief,
+      bigIdea,
+      elements,
+      spatialData,
+      boothDimensions,
+      normalizedZones,
+      zoneInteriorAngles,
+      projectType: currentProject?.projectType ?? null,
+      brandIntelligence: approvedBrandIntel,
+    }),
+    [
+      brief,
+      bigIdea,
+      elements,
+      spatialData,
+      boothDimensions,
+      normalizedZones,
+      zoneInteriorAngles,
+      currentProject?.projectType,
+      approvedBrandIntel,
+    ],
+  );
+  const getZoneDefaultPrompt = useCallback(
+    (zoneId: string): string => {
+      const angleId = `zone_interior_${zoneId}`;
+      return generatePrompt(angleId, promptParams);
+    },
+    [promptParams],
+  );
 
   // ── Spatial canvas integration ──────────────────────────────────
   // The interactive canvas operates on absolute-unit zones (ft / m).
@@ -724,6 +859,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       <SpatialCanvas
         geometry={canvasGeometry}
         onGeometryChange={handleCanvasGeometryChange}
+        getZoneDefaultPrompt={getZoneDefaultPrompt}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -876,12 +1012,25 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                       transition: "all 0.3s ease"
                     }}
                   >
-                    {/* Flow overlay */}
+                    {/* Flow overlay — y-flipped to match the zone blocks
+                        (front-at-bottom). We pre-transform zones + paths
+                        rather than CSS-flipping the SVG so arrowheads
+                        keep their natural direction. */}
                     {showFlow && (
-                      <FlowOverlay 
-                        paths={flowPaths} 
+                      <FlowOverlay
+                        paths={flowPaths.map((p) => ({
+                          ...p,
+                          from: { x: p.from.x, y: 100 - p.from.y },
+                          to: { x: p.to.x, y: 100 - p.to.y },
+                        }))}
                         showHeatmap={showHeatmap}
-                        zones={activeLayout.zones}
+                        zones={activeLayout.zones.map((z: NormalizedZone) => ({
+                          ...z,
+                          position: {
+                            ...z.position,
+                            y: Math.max(0, 100 - z.position.y - z.position.height),
+                          },
+                        }))}
                       />
                     )}
                     
@@ -889,10 +1038,17 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                     {activeLayout.zones.map((zone: NormalizedZone, index: number) => {
                       const colors = getZoneColors(zone, index);
                       const zoneMetric = metrics.zoneMetrics.find(m => m.zoneId === zone.id);
-                      
-                      // Use already-normalized positions (0-100 scale)
+
+                      // Use already-normalized positions (0-100 scale).
+                      // Flip y to match the SpatialCanvas convention:
+                      // data y=0 means FRONT of booth (primary aisle) →
+                      // visually anchored at the BOTTOM of the container.
+                      // Without this flip, the floor plan view rendered
+                      // welcome zones at the top while the canvas drew
+                      // them at the bottom — same data, opposite reads.
                       const { x, y, width, height } = zone.position;
-                      
+                      const displayY = Math.max(0, Math.min(100 - height, 100 - y - height));
+
                       return (
                         <div
                           key={zone.id}
@@ -900,7 +1056,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                           onClick={() => setSelectedZone({ zone, colors })}
                           style={{
                             left: `${x}%`,
-                            top: `${y}%`,
+                            top: `${displayY}%`,
                             width: `${width}%`,
                             height: `${height}%`,
                             backgroundColor: colors.bg,

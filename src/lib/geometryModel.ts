@@ -25,14 +25,17 @@ import type { NormalizedZone, BoothDimensions } from "./spatialUtils";
  * clamp logic; the shape only changes how the footprint is drawn
  * inside that box.
  *
- *   • rect   — solid rectangle (default)
- *   • L      — L-shape: rectangle minus a notch in one corner. Useful
- *              for corner counters that wrap around a column or
- *              demarcate two zone halves.
- *   • circle — filled ellipse (a perfect circle when width === depth).
- *              Used for round bars, pedestals, central display rounds.
+ *   • rect    — solid rectangle (default)
+ *   • diamond — rhombus inscribed in the bounding box (a 45°-rotated
+ *               square when width === depth). Reads as a diagonal-
+ *               feature: angled bars, gem-shaped islands, pivot demos.
+ *   • L       — L-shape: rectangle minus a notch in one corner. Useful
+ *               for corner counters that wrap around a column or
+ *               demarcate two zone halves.
+ *   • circle  — filled ellipse (a perfect circle when width === depth).
+ *               Used for round bars, pedestals, central display rounds.
  */
-export type ZoneShape = "rect" | "L" | "circle";
+export type ZoneShape = "rect" | "L" | "circle" | "diamond";
 
 export type LCorner = "NE" | "NW" | "SE" | "SW";
 

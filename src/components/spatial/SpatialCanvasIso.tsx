@@ -78,6 +78,17 @@ function buildZoneShape(zone: AbsoluteZone, w: number, d: number): THREE.Shape {
     return shape;
   }
 
+  if (kind === "diamond") {
+    // 4-point rhombus inscribed in the bounding box. Same coord
+    // convention as the rect branch (origin at center).
+    shape.moveTo(0, halfD);
+    shape.lineTo(halfW, 0);
+    shape.lineTo(0, -halfD);
+    shape.lineTo(-halfW, 0);
+    shape.closePath();
+    return shape;
+  }
+
   if (kind === "L") {
     const { corner, notchWidth, notchDepth } = resolveLNotch(zone);
     // Walk the bounding box clockwise, cutting in/out at the notched

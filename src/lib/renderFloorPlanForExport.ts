@@ -276,6 +276,17 @@ function traceZonePath(
     return;
   }
 
+  if (shape === "diamond") {
+    // Rhombus inscribed in the bounding box: top-mid, right-mid,
+    // bottom-mid, left-mid. Same coord frame as the rect branch.
+    ctx.moveTo(px + pw / 2, py);
+    ctx.lineTo(px + pw, py + pd / 2);
+    ctx.lineTo(px + pw / 2, py + pd);
+    ctx.lineTo(px, py + pd / 2);
+    ctx.closePath();
+    return;
+  }
+
   if (shape === "L") {
     // The corner field uses the SCREEN orientation of the zone:
     //   NE = top-right, NW = top-left, SE = bottom-right, SW = bottom-left.

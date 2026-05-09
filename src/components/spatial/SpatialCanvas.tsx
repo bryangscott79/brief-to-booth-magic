@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon } from "lucide-react";
+import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon } from "lucide-react";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
 import { renderFloorPlanForExport } from "@/lib/renderFloorPlanForExport";
@@ -336,6 +336,7 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                   {(
                     [
                       { id: "rect", icon: Square, title: "Rectangle" },
+                      { id: "diamond", icon: DiamondIcon, title: "Diamond / rotated square" },
                       { id: "L", icon: BoxIcon, title: "L-shape (corner counter)" },
                       { id: "circle", icon: CircleIcon, title: "Circle / ellipse" },
                     ] as Array<{ id: ZoneShape; icon: typeof Square; title: string }>

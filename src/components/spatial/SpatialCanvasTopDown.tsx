@@ -456,6 +456,27 @@ export const SpatialCanvasTopDown = forwardRef<
                     );
                   }
 
+                  if (shape === "diamond") {
+                    // Rotated rectangle inscribed in the bounding box —
+                    // four points at the midpoints of each edge. Looks
+                    // square only when width === depth; otherwise it
+                    // gracefully becomes a rhombus that fills the box.
+                    return (
+                      <Line
+                        points={[
+                          pw / 2, 0,
+                          pw, pd / 2,
+                          pw / 2, pd,
+                          0, pd / 2,
+                        ]}
+                        closed
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                      />
+                    );
+                  }
+
                   if (shape === "L") {
                     // Build the L-shape polygon points by walking the
                     // bounding box and cutting in/out at the notched

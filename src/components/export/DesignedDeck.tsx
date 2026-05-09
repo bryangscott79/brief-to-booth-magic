@@ -10,7 +10,7 @@
 // Empty-state CTA is the primary entry. After generation, the deck stays
 // in localStorage so refreshes don't re-spend tokens.
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Sparkles,
   RefreshCw,
@@ -21,6 +21,7 @@ import {
   FileText,
   Code2,
   Wand2,
+  Pencil,
   Presentation as PresentationIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useDesignedDeck, type DesignedSlide } from "@/hooks/useDesignedDeck";
+import { DeckSlideEditor, type ProjectImageOption } from "./DeckSlideEditor";
+import { useProjectImages } from "@/hooks/useProjectImages";
 import {
   exportDesignedDeckToPDF,
   exportDesignedDeckToPPTX,
@@ -117,6 +120,25 @@ export function DesignedDeck({
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exporting, setExporting] = useState<"pdf" | "pptx" | null>(null);
   const [editingHtmlSlideId, setEditingHtmlSlideId] = useState<string | null>(null);
+  // Phase 1 deck canvas: visual side-panel slide editor (text + image swap).
+  // Distinct from the raw HTML editor (kept for power users) so the two
+  // affordances don't fight each other in the UI.
+  const [editingSlideForEditor, setEditingSlideForEditor] = useState<DesignedSlide | null>(null);
+
+  // Saved render images for the swap picker. The deck and the renders
+  // share the same projectId, so we can fetch directly.
+  const { data: projectImages = [] } = useProjectImages(projectId);
+  const editorImageOptions: ProjectImageOption[] = useMemo(
+    () =>
+      projectImages
+        .filter((img) => img.is_current && img.public_url)
+        .map((img) => ({
+          angle_id: img.angle_id,
+          angle_name: img.angle_name,
+          public_url: img.public_url,
+        })),
+    [projectImages],
+  );
   const [draftHtml, setDraftHtml] = useState<string>("");
   const [pingState, setPingState] = useState<
     | { status: "idle" }
@@ -629,6 +651,7 @@ export function DesignedDeck({
               if (confirm(`Remove "${slide.title}" from the deck?`)) removeSlide(slide.id);
             }}
             onEditHtml={() => openHtmlEditor(slide)}
+            onEditSlide={() => setEditingSlideForEditor(slide)}
           />
         ))}
       </div>
@@ -675,6 +698,21 @@ export function DesignedDeck({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Visual slide editor — Phase 1 of the Canva-style deck canvas.
+          Side panel of every editable text element + image, live preview
+          on the left. Saves new HTML through useDesignedDeck.updateSlideHtml. */}
+      {editingSlideForEditor && (
+        <DeckSlideEditor
+          open={editingSlideForEditor !== null}
+          onClose={() => setEditingSlideForEditor(null)}
+          slide={editingSlideForEditor}
+          projectImages={editorImageOptions}
+          onSave={(newHtml) => {
+            updateSlideHtml(editingSlideForEditor.id, newHtml);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -690,6 +728,8 @@ interface SlideCardProps {
   onMove: (direction: "up" | "down") => void;
   onRemove: () => void;
   onEditHtml: () => void;
+  /** Open the visual slide editor (text + image swap). */
+  onEditSlide: () => void;
 }
 
 function SlideCard({
@@ -701,6 +741,7 @@ function SlideCard({
   onMove,
   onRemove,
   onEditHtml,
+  onEditSlide,
 }: SlideCardProps) {
   return (
     <Card className="overflow-hidden">
@@ -733,11 +774,21 @@ function SlideCard({
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
           <Button
+            variant="default"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onEditSlide}
+            title="Edit text and swap images on this slide"
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1" />
+            Edit
+          </Button>
+          <Button
             variant="ghost"
             size="sm"
             className="h-7 text-xs"
             onClick={onEditHtml}
-            title="Edit HTML"
+            title="Edit raw HTML (power users)"
           >
             <Code2 className="h-3.5 w-3.5 mr-1" />
             HTML

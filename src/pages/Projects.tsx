@@ -2,10 +2,10 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -36,19 +36,18 @@ import {
   Trash2,
   Calendar,
   Loader2,
-  CheckCircle2,
-  Circle,
   Search,
   Shield,
   User,
   Users,
-  ChevronDown,
-  ChevronRight,
   Layers,
   LayoutGrid,
   List as ListIcon,
   Building2,
   X,
+  MoreHorizontal,
+  Archive,
+  Share2,
 } from "lucide-react";
 import { useProjects, DBProject } from "@/hooks/useProjects";
 import { useProjectStore } from "@/store/projectStore";
@@ -57,9 +56,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClients, type Client } from "@/hooks/useClients";
 import { useProjectThumbnails } from "@/hooks/useProjectThumbnails";
 import { ProjectVisualThumb } from "@/components/projects/ProjectVisualThumb";
+import { ProjectCard } from "@/components/projects/ProjectCard";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   statusPalette,
-  resolveClientDisplayName,
   resolveActivationDisplayName,
 } from "@/lib/projectDisplay";
 import { formatDistanceToNow } from "date-fns";
@@ -124,43 +130,9 @@ const PIPELINE_STEPS: { key: string; label: string; tooltip: string; check: (p: 
   },
 ];
 
-function ProjectProgressBar({ project }: { project: DBProject }) {
-  const completedCount = PIPELINE_STEPS.filter(s => s.check(project)).length;
-  const pct = Math.round((completedCount / PIPELINE_STEPS.length) * 100);
-  return (
-    <div className="mt-3 space-y-2">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{completedCount} of {PIPELINE_STEPS.length} steps complete</span>
-        <span className="font-medium">{pct}%</span>
-      </div>
-      <div className="flex gap-1">
-        {PIPELINE_STEPS.map((step) => {
-          const done = step.check(project);
-          return (
-            <Tooltip key={step.key}>
-              <TooltipTrigger asChild>
-                <div
-                  className={`h-2 flex-1 rounded-full transition-colors cursor-default ${
-                    done ? "bg-primary" : "bg-muted-foreground/20"
-                  }`}
-                />
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="flex items-center gap-1.5 text-xs max-w-[200px]">
-                {done
-                  ? <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
-                  : <Circle className="h-3 w-3 text-muted-foreground shrink-0" />}
-                <span>
-                  <span className="font-semibold">{step.label}</span>
-                  {" — "}{done ? "Complete" : step.tooltip}
-                </span>
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// ProjectProgressBar moved into the new ProjectCard component
+// (src/components/projects/ProjectCard.tsx) so the white-card aesthetic
+// renders progress bars in matching tones.
 
 /**
  * Renders a project's status as a color-coded pill — distinct hues for
@@ -184,6 +156,7 @@ type OwnerFilter = "mine" | "all";
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { user } = useAuth();
   const { data: isAdmin } = useIsAdmin();
 
@@ -610,7 +583,7 @@ export default function ProjectsPage() {
                       const hasChildren = !!children && children.length > 0;
                       const completedCount = PIPELINE_STEPS.filter((s) => s.check(project)).length;
                       const pct = Math.round((completedCount / PIPELINE_STEPS.length) * 100);
-                      const heroUrl = thumbnailsByProject?.get(project.id) ?? null;
+                      const heroUrl = thumbnailsByProject?.get(project.id)?.[0] ?? null;
                       const client = resolveClient(project);
                       return (
                         <button
@@ -657,37 +630,90 @@ export default function ProjectsPage() {
                             </div>
                           </div>
                           <StatusPill status={project.status} className="shrink-0" />
-                          {isOwnProject && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0"
-                                  onClick={(e) => e.stopPropagation()}
+                          {/* 3-dot actions menu — same shape as the
+                              card's banner menu. Stops click propagation
+                              so the row's onClick (open project) doesn't
+                              fire when interacting with the menu. */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Project actions"
+                              >
+                                <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              {hasChildren && (
+                                <DropdownMenuItem
+                                  onSelect={(e) => { e.preventDefault(); navigate(`/suite?project=${project.id}`); }}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Permanently delete "{project.name}" and all its data. Cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
-                                    className="bg-destructive hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
+                                  <Layers className="h-3.5 w-3.5 mr-2" />
+                                  Open suite overview
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  toast({
+                                    title: "Sharing — coming soon",
+                                    description: "Per-project sharing controls are planned.",
+                                  });
+                                }}
+                              >
+                                <Share2 className="h-3.5 w-3.5 mr-2" />
+                                Share…
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  toast({
+                                    title: "Archive — coming soon",
+                                    description: "We'll add an archived state in a follow-up.",
+                                  });
+                                }}
+                              >
+                                <Archive className="h-3.5 w-3.5 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
+                              {isOwnProject && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <DropdownMenuItem
+                                        onSelect={(e) => e.preventDefault()}
+                                        className="text-destructive focus:text-destructive"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete project?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Permanently delete "{project.name}" and all its data. Cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
+                                          className="bg-destructive hover:bg-destructive/90"
+                                        >
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </button>
                       );
                     })}
@@ -703,163 +729,53 @@ export default function ProjectsPage() {
               const children = childrenByParent.get(project.id);
               const hasChildren = !!children && children.length > 0;
               const isExpanded = expandedSuites.has(project.id);
-              const heroUrl = thumbnailsByProject?.get(project.id) ?? null;
+              // useProjectThumbnails now returns string[] (hero-first
+              // ordered) so the banner can scrub. Empty array = use
+              // placeholder.
+              const thumbs = thumbnailsByProject?.get(project.id) ?? [];
               const client = resolveClient(project);
-              const clientName = resolveClientDisplayName(project, clientById);
-              const activationName = resolveActivationDisplayName(project, clientName);
-              // Title hierarchy:
-              //   • clientName as the big top line when we have one
-              //   • activationName as the muted subtitle
-              //   • If no client info exists yet, the messy project.name
-              //     becomes the top line so the card still has SOME title.
-              const titleLine = clientName ?? project.name;
-              const subtitleLine = clientName ? activationName : null;
 
               return (
                 <div key={project.id} className={hasChildren ? "col-span-full" : ""}>
-                  <Card
-                    className={`element-card cursor-pointer transition-colors ${
-                      isOwnProject
-                        ? "hover:border-primary/30"
-                        : "hover:border-muted-foreground/30 border-dashed"
-                    }`}
-                    onClick={() => handleOpenProject(project)}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start gap-3">
-                        {hasChildren && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleSuiteExpand(project.id); }}
-                            className="shrink-0 p-0.5 rounded hover:bg-muted transition-colors"
-                          >
-                            {isExpanded
-                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                          </button>
-                        )}
-                        {/* Visual reference: hero render → client logo →
-                            brand-color swatch → folder icon. */}
-                        <ProjectVisualThumb
-                          heroUrl={heroUrl}
-                          client={client}
-                          projectName={project.name}
-                          size={56}
-                        />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          {/* Top row: status pill + suite badge.
-                              Pulled to its own row so the title gets the
-                              full width below it. */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <StatusPill status={project.status} />
-                            {hasChildren && (
-                              <Badge variant="secondary" className="text-[10px] h-5">
-                                <Layers className="h-2.5 w-2.5 mr-0.5" />
-                                Suite · {children.length}
-                              </Badge>
-                            )}
-                          </div>
-                          {/* Title hierarchy: CLIENT NAME first, activation
-                              subtitle second. Falls back to project.name
-                              when no client/brand info is available yet. */}
-                          <CardTitle className="text-base leading-tight break-words">
-                            {titleLine}
-                          </CardTitle>
-                          {subtitleLine && (
-                            <p className="text-xs text-muted-foreground leading-snug line-clamp-2">
-                              {subtitleLine}
-                            </p>
-                          )}
-                          {/* Meta line: updated time + ownership chip,
-                              compact and out of the way. */}
-                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}
-                            </span>
-                            {isOwnProject ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-flex items-center gap-1 text-primary/80">
-                                    <User className="h-2.5 w-2.5" />
-                                    Mine
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">Your project</TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-flex items-center gap-1">
-                                    <Shield className="h-2.5 w-2.5" />
-                                    Shared
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Owner: {project.user_id.slice(0, 8)}…
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <ProjectProgressBar project={project} />
-                      <div className="flex items-center justify-end mt-3">
-                        <div className="flex items-center gap-1">
-                          {/* Suite overview shortcut */}
-                          {hasChildren && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => { e.stopPropagation(); navigate(`/suite?project=${project.id}`); }}
-                                >
-                                  <LayoutGrid className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">Suite Overview</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {/* Only allow delete on own projects */}
-                          {isOwnProject && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This will permanently delete "{project.name}" and all its data. This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
-                                    className="bg-destructive hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <ProjectCard
+                    project={project}
+                    thumbnails={thumbs}
+                    client={client}
+                    clientById={clientById}
+                    pipelineSteps={PIPELINE_STEPS}
+                    suiteChildren={children}
+                    isSuiteExpanded={isExpanded}
+                    onToggleSuite={
+                      hasChildren ? () => toggleSuiteExpand(project.id) : undefined
+                    }
+                    isOwn={isOwnProject}
+                    onOpen={() => handleOpenProject(project)}
+                    onOpenSuite={
+                      hasChildren ? () => navigate(`/suite?project=${project.id}`) : undefined
+                    }
+                    onDelete={
+                      isOwnProject ? () => deleteProject.mutate(project.id) : undefined
+                    }
+                    // Stub menu items so the actions are surfaced now and
+                    // can be wired to real implementations later.
+                    onShare={() => toast({
+                      title: "Sharing — coming soon",
+                      description: "Per-project sharing controls are planned. For now, agency teammates already have access via shared agency membership.",
+                    })}
+                    onArchive={() => toast({
+                      title: "Archive — coming soon",
+                      description: "We'll add an archived state so finished projects can be hidden from the active list without deleting their data.",
+                    })}
+                  />
 
-                  {/* Expanded children */}
-                  {hasChildren && (
+                  {/* Expanded suite children — same as before, just outside
+                      the new card so the white-card aesthetic is preserved
+                      for the parent. */}
+                  {hasChildren && isExpanded && (
                     <Collapsible open={isExpanded}>
                       <CollapsibleContent>
                         <div className="ml-6 mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                          {children.map((child) => {
+                          {children!.map((child) => {
                             const childAny = child as any;
                             return (
                               <Card
@@ -880,11 +796,6 @@ export default function ProjectsPage() {
                                         {childAny.scale_classification && (
                                           <span className="text-[10px] text-muted-foreground">
                                             {String(childAny.scale_classification).replace(/_/g, " ")}
-                                          </span>
-                                        )}
-                                        {childAny.footprint_sqft && (
-                                          <span className="text-[10px] text-muted-foreground">
-                                            {Number(childAny.footprint_sqft).toLocaleString()} sqft
                                           </span>
                                         )}
                                       </div>

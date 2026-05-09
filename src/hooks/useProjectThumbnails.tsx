@@ -1,12 +1,12 @@
-// useProjectThumbnails — bulk-fetch one hero render URL per project so
-// the projects list can show a visual reference for each card / row
-// without firing one query per project (would be N+1 on a 50-project
-// page).
+// useProjectThumbnails — bulk-fetch ALL current render URLs per project
+// so the projects list can:
+//   1. Show a visual reference (first hero) for each card
+//   2. Scrub through additional renders on hover (banner peek-through)
 //
-// The picker prefers `hero_34` (the canonical 3/4 hero view) but falls
-// back to any other hero variant if the user only generated other
-// angles. Returns a Map<projectId, public_url> keyed for O(1) lookup
-// in the projects list render.
+// Single query for the whole list — N+1-safe on a 50-project page.
+// Returned shape is `Map<projectId, string[]>` ordered hero-first,
+// then any other render. The first element is the "primary" thumb;
+// the rest power the hover scrub.
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +15,7 @@ export function useProjectThumbnails(projectIds: string[]) {
   return useQuery({
     queryKey: ["project-thumbnails", [...projectIds].sort().join(",")],
     enabled: projectIds.length > 0,
-    queryFn: async (): Promise<Map<string, string>> => {
+    queryFn: async (): Promise<Map<string, string[]>> => {
       const { data, error } = await supabase
         .from("project_images" as any)
         .select("project_id, public_url, angle_id, is_current, created_at")
@@ -30,25 +30,30 @@ export function useProjectThumbnails(projectIds: string[]) {
         angle_id: string;
       }>;
 
-      // First pass: prefer hero_34. Second pass: any hero variant.
-      // Third pass: any current image. Stop at the first found per project.
-      const byProject = new Map<string, string>();
-      const recordIfMissing = (id: string, url: string) => {
-        if (!byProject.has(id) && url) byProject.set(id, url);
+      // Bucket all images per project, then sort each list:
+      // hero_34 → other hero variants → everything else, deduped.
+      const byProject = new Map<string, string[]>();
+      const seenKeys = new Set<string>(); // key = project_id|public_url
+
+      const heroPriority = (angleId: string): number => {
+        if (angleId === "hero_34" || angleId.startsWith("hero_34__v__")) return 0;
+        if (angleId.toLowerCase().startsWith("hero")) return 1;
+        return 2;
       };
 
-      for (const r of rows) {
-        if (r.angle_id === "hero_34" || r.angle_id.startsWith("hero_34__v__")) {
-          recordIfMissing(r.project_id, r.public_url);
-        }
-      }
-      for (const r of rows) {
-        if (r.angle_id.toLowerCase().startsWith("hero")) {
-          recordIfMissing(r.project_id, r.public_url);
-        }
-      }
-      for (const r of rows) {
-        recordIfMissing(r.project_id, r.public_url);
+      // Pre-sort by hero priority then created-at desc (already sorted).
+      const sorted = [...rows].sort(
+        (a, b) => heroPriority(a.angle_id) - heroPriority(b.angle_id),
+      );
+
+      for (const r of sorted) {
+        if (!r.public_url) continue;
+        const k = `${r.project_id}|${r.public_url}`;
+        if (seenKeys.has(k)) continue;
+        seenKeys.add(k);
+        const existing = byProject.get(r.project_id);
+        if (existing) existing.push(r.public_url);
+        else byProject.set(r.project_id, [r.public_url]);
       }
 
       return byProject;

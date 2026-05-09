@@ -33,6 +33,14 @@ import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./L
 // InspirationUpload was removed from this view — visual references are
 // handled at the project level (Upload step + Brand intelligence).
 // Spatial step now focuses on geometry + layout only.
+import { SpatialCanvas } from "./SpatialCanvas";
+import {
+  type BoothGeometry,
+  boothGeometryFromLegacy,
+  normalizedFromAbsoluteZone,
+  type AbsoluteZone,
+} from "@/lib/geometryModel";
+import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
 import { ZoneDetailPanel } from "./ZoneDetailPanel";
 import { FloorPlanAnnotations, type FloorPlanAnnotation } from "./FloorPlanAnnotations";
 import { ConstraintPanel } from "./ConstraintPanel";
@@ -503,6 +511,73 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     setFloorPlanView("blocks");
   }, [pendingVariation]);
 
+  // ── Spatial canvas integration ──────────────────────────────────
+  // The interactive canvas operates on absolute-unit zones (ft / m).
+  // We derive a BoothGeometry from the current normalized zones each
+  // render; user edits flow back through onGeometryChange, get
+  // round-tripped to the legacy NormalizedZone shape, and persist via
+  // saveProjectField. Variations are unaffected — the canonical store
+  // is currentConfig.zones.
+  const { system: measurementSystem } = useMeasurementSystem(projectId, brief);
+  const canvasGeometry: BoothGeometry = useMemo(() => {
+    return boothGeometryFromLegacy(
+      // Force the project-level measurement system over whatever the
+      // footprint string happened to be parsed as. This is the same
+      // override applied in PromptGenerator's render call.
+      { ...boothDimensions, measurementSystem },
+      normalizedZones,
+    );
+  }, [boothDimensions, normalizedZones, measurementSystem]);
+
+  const handleCanvasGeometryChange = useCallback(
+    (next: BoothGeometry) => {
+      if (!currentConfig || !spatialData) return;
+      // Convert each absolute zone back into the legacy NormalizedZone
+      // shape used by spatialData.configs[].zones. Preserve any fields
+      // (notes, requirements, adjacencies) that aren't represented in
+      // the canvas model.
+      const legacyZones = next.zones.map((abs: AbsoluteZone) => {
+        const original = currentConfig.zones?.find((z: any) => z.id === abs.id);
+        const normalized = normalizedFromAbsoluteZone(abs, next, boothDimensions.totalSqft);
+        return {
+          ...(original ?? {}),
+          ...normalized,
+          // Preserve fields the canvas owns
+          customPromptOverride: abs.customPromptOverride,
+          // Persist heightFt so re-deriving geometry later doesn't lose
+          // user-edited heights.
+          heightFt: abs.heightFt,
+        };
+      });
+      const updatedConfig = { ...currentConfig, zones: legacyZones };
+      const updatedConfigs = [...(spatialData.configs ?? [])];
+      updatedConfigs[activeFootprint] = updatedConfig;
+      const updatedSpatial = {
+        ...spatialData,
+        configs: updatedConfigs,
+        // Persist the booth-level fields the canvas may edit too
+        // (ceiling height not currently surfaced in the canvas UI but
+        // the field is reserved for it).
+        ceilingHeightFt: next.ceilingHeightFt,
+      };
+      // Optimistic local update via project store + persist to DB.
+      if (currentProject) {
+        useProjectStore.getState().setElementData("spatialStrategy", updatedSpatial);
+      }
+      if (projectId) {
+        saveProjectField(projectId, "spatial_strategy", updatedSpatial);
+      }
+    },
+    [
+      currentConfig,
+      spatialData,
+      boothDimensions.totalSqft,
+      activeFootprint,
+      currentProject,
+      projectId,
+    ],
+  );
+
   // Annotation handlers
   const handleAddAnnotation = useCallback((annotation: FloorPlanAnnotation) => {
     const updated = [...floorPlanAnnotations, annotation];
@@ -606,6 +681,44 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
           </Button>
         </div>
       </div>
+
+      {/* Materials & Mood — surfaced ABOVE the canvas so the user sees
+          the design language while authoring zones. Used to be buried
+          at the bottom of the right rail. */}
+      {spatialData.materialsAndMood && spatialData.materialsAndMood.length > 0 && (
+        <Card className="element-card">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Materials &amp; Mood</CardTitle>
+            <Badge variant="outline" className="text-[10px]">
+              {spatialData.materialsAndMood.length} entries
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {spatialData.materialsAndMood.map((mat: any, i: number) => (
+                <div
+                  key={i}
+                  className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm"
+                >
+                  <div className="font-medium">{mat.material}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                    {mat.use && <span className="block">{mat.use}</span>}
+                    {mat.feel && <span className="block">{mat.feel}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Interactive spatial canvas — primary editing surface for booth
+          geometry. Edits flow through handleCanvasGeometryChange to
+          spatialStrategy.configs[].zones, persisted via saveProjectField. */}
+      <SpatialCanvas
+        geometry={canvasGeometry}
+        onGeometryChange={handleCanvasGeometryChange}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Floor Plan */}
@@ -930,23 +1043,9 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
               />
             </TabsContent>
           </Tabs>
-          
-          {/* Materials & Mood */}
-          <Card className="element-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Materials & Mood</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {spatialData.materialsAndMood?.map((mat: any, i: number) => (
-                <div key={i} className="text-sm">
-                  <span className="font-medium">{mat.material}</span>
-                  <p className="text-xs text-muted-foreground">
-                    {mat.use} — {mat.feel}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          {/* Materials & Mood was here — moved above the canvas so it
+              informs layout authoring rather than being buried below the
+              fold of the right rail. */}
         </div>
       </div>
 

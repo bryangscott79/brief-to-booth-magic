@@ -754,18 +754,34 @@ export function PromptGenerator() {
     promptVersions.selectVersion(versionId);
   };
 
-  // Spatial canvas — shown above every phase so the user can refine
-  // the floor plan, zone heights, or per-zone prompt overrides at any
-  // time, including after the hero is generated. Edits flow through
-  // captureGeometryRefs() on the next render call so the image model
-  // gets the updated geometry as a visual reference.
+  // Spatial canvas — shown above every phase as a read-only preview
+  // that mirrors the current spatialData. Edits happen in the Spatial
+  // step (the canonical edit surface). Geometry refs are still
+  // captured here at render time so the image model gets the latest
+  // visual reference, but the canvas itself can't be modified here.
   const spatialPanel = (
-    <SpatialCanvas
-      ref={spatialCanvasRef}
-      geometry={geometry}
-      onGeometryChange={setGeometry}
-      getZoneDefaultPrompt={getZoneDefaultPrompt}
-    />
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Layout preview — edit the spatial layout in the{" "}
+          <button
+            type="button"
+            onClick={() => navigate("/spatial")}
+            className="text-primary underline-offset-2 hover:underline"
+          >
+            Spatial step
+          </button>
+          . Updates here flow through to the next render automatically.
+        </p>
+      </div>
+      <SpatialCanvas
+        ref={spatialCanvasRef}
+        geometry={geometry}
+        onGeometryChange={setGeometry}
+        getZoneDefaultPrompt={getZoneDefaultPrompt}
+        readonly
+      />
+    </div>
   );
 
   // Versions header — shown above every phase. Lets the user switch between

@@ -15,7 +15,7 @@
 // and emits updates. State persistence lives in the parent (which can
 // throttle, undo/redo, or persist to the project).
 
-import { useMemo, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useMemo, useRef, useEffect, forwardRef, useImperativeHandle, useState } from "react";
 import { Stage, Layer, Rect, Text, Line, Group } from "react-konva";
 import type Konva from "konva";
 import { Transformer } from "react-konva";
@@ -105,9 +105,39 @@ export const SpatialCanvasTopDown = forwardRef<
   },
   ref,
 ) {
+  // Track the actual width available to us so the Konva Stage can size
+  // dynamically. ResizeObserver fires whenever the wrapper dimensions
+  // change (window resize, sidebar toggle, parent grid breakpoint).
+  // Without this, the Stage stays at MAX_CANVAS_SIZE and overflows
+  // narrower parents — producing the horizontal scrollbar + cropped
+  // labels users were seeing.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [observedWidth, setObservedWidth] = useState<number | null>(null);
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const el = wrapperRef.current;
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (typeof w === "number" && w > 0) {
+        setObservedWidth(w);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Effective max size: respect the prop ceiling, but never exceed the
+  // actual container width. Floor at 240px so the canvas stays usable
+  // even on very narrow viewports (it'll just scroll internally rather
+  // than overflow the parent and crop the booth outline).
+  const effectiveMaxSize = useMemo(() => {
+    if (observedWidth == null) return maxCanvasSize;
+    return Math.max(240, Math.min(maxCanvasSize, observedWidth));
+  }, [observedWidth, maxCanvasSize]);
+
   const { pxPerUnit, canvasW, canvasH } = useMemo(
-    () => computeScale(geometry, maxCanvasSize),
-    [geometry.width, geometry.depth, maxCanvasSize],
+    () => computeScale(geometry, effectiveMaxSize),
+    [geometry.width, geometry.depth, effectiveMaxSize],
   );
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
@@ -217,7 +247,10 @@ export const SpatialCanvasTopDown = forwardRef<
 
   // ─── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="relative inline-block rounded-lg border border-border bg-muted/20 select-none">
+    <div
+      ref={wrapperRef}
+      className="relative w-full rounded-lg border border-border bg-muted/20 select-none flex items-center justify-center"
+    >
       <Stage
         ref={stageRef}
         width={canvasW}

@@ -179,13 +179,13 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
       <div
         className={
           showIso
-            ? "grid grid-cols-1 md:grid-cols-2 gap-3 items-start"
+            ? "grid grid-cols-1 xl:grid-cols-2 gap-3 items-start"
             : "grid grid-cols-1 gap-3"
         }
       >
         <div
           ref={topDownContainerRef}
-          className="flex items-center justify-center min-w-0 overflow-auto"
+          className="min-w-0"
         >
           <SpatialCanvasTopDown
             ref={topDownRef}
@@ -285,8 +285,9 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
           {/* Inline canvas — hidden when the expanded dialog is open
               (which mounts its own copy of the grid at larger sizes).
               Only one mount is active at a time so refs and capture
-              behavior stay deterministic. */}
-          {!isExpanded && renderCanvasGrid({ maxCanvasSize: 460, isoHeight: 460 })}
+              behavior stay deterministic. The top-down auto-sizes via
+              ResizeObserver up to a generous 720px ceiling. */}
+          {!isExpanded && renderCanvasGrid({ maxCanvasSize: 720, isoHeight: 520 })}
 
           {/* AI export preview — shows the literal floor plan PNG that
               gets passed to the image model so the user can verify what

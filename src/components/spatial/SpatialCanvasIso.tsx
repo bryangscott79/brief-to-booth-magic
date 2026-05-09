@@ -87,7 +87,9 @@ function ZoneBox({
         <planeGeometry args={[w, d]} />
         <meshBasicMaterial color={zone.colorHex} opacity={0.6} transparent />
       </mesh>
-      {/* Floating zone label above the box. */}
+      {/* Floating zone label above the box. Long names get truncated
+          at ~14 chars + ellipsis to prevent the text from extending
+          past the canvas bounds and bleeding into adjacent zones. */}
       <Text
         position={[0, h / 2 + 1.5, 0]}
         fontSize={1.2}
@@ -96,8 +98,9 @@ function ZoneBox({
         anchorY="middle"
         outlineWidth={0.05}
         outlineColor="#000000"
+        maxWidth={Math.max(w - 0.5, 4)}
       >
-        {zone.name}
+        {zone.name.length > 18 ? `${zone.name.slice(0, 16)}…` : zone.name}
       </Text>
     </group>
   );

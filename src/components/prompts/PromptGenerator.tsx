@@ -76,9 +76,12 @@ import { PreflightChecklist } from "@/components/prompts/PreflightChecklist";
 import { SpatialCanvas, type SpatialCanvasHandle } from "@/components/spatial/SpatialCanvas";
 import {
   type BoothGeometry,
+  type AbsoluteZone,
   boothGeometryFromLegacy,
+  normalizedFromAbsoluteZone,
 } from "@/lib/geometryModel";
 import { useGeometryReferences } from "@/hooks/useGeometryReferences";
+import { saveProjectField } from "@/hooks/useProjectSync";
 
 // Versioning + style presets
 import { usePromptVersions } from "@/hooks/usePromptVersions";
@@ -245,6 +248,62 @@ export function PromptGenerator() {
   useEffect(() => {
     setGeometry(initialGeometry);
   }, [initialGeometry]);
+
+  // Write-through geometry handler — mirrors SpatialPlanner.handleCanvasGeometryChange
+  // so users can manipulate the canvas from the Prompts step (incl. the
+  // expanded fullscreen view) and edits persist back to spatial_strategy.
+  // Without this the canvas was readonly here, which made expanding feel
+  // broken: the user opened the fullscreen editor and discovered they
+  // couldn't drag/resize anything. We update local geometry optimistically
+  // and write the legacy-shape zones back to configs[0] (the only config
+  // PromptGenerator reads from) so the next render and any return trip to
+  // the Spatial step see the change.
+  const handleGeometryChange = useCallback(
+    (next: BoothGeometry) => {
+      setGeometry(next);
+      if (!spatialData || !currentProject) return;
+      const config = spatialData.configs?.[0];
+      if (!config) return;
+      const legacyZones = next.zones.map((abs: AbsoluteZone) => {
+        const original = config.zones?.find((z: any) => z.id === abs.id);
+        const normalized = normalizedFromAbsoluteZone(
+          abs,
+          next,
+          boothDimensions.totalSqft,
+        );
+        return {
+          ...(original ?? {}),
+          ...normalized,
+          // Canvas-owned fields. Without these the next round-trip
+          // through boothGeometryFromLegacy would lose the user's
+          // height / shape / per-zone prompt edits.
+          customPromptOverride: abs.customPromptOverride,
+          heightFt: abs.heightFt,
+          shape: abs.shape,
+          shapeParams: abs.shapeParams,
+        };
+      });
+      const updatedConfigs = [...(spatialData.configs ?? [])];
+      updatedConfigs[0] = { ...config, zones: legacyZones };
+      const updatedSpatial = {
+        ...spatialData,
+        configs: updatedConfigs,
+        ceilingHeightFt: next.ceilingHeightFt,
+      };
+      useProjectStore
+        .getState()
+        .setElementData("spatialStrategy", updatedSpatial);
+      if (effectiveProjectId) {
+        saveProjectField(effectiveProjectId, "spatial_strategy", updatedSpatial);
+      }
+    },
+    [
+      spatialData,
+      currentProject,
+      boothDimensions.totalSqft,
+      effectiveProjectId,
+    ],
+  );
 
   const spatialCanvasRef = useRef<SpatialCanvasHandle>(null);
   const geometryRefs = useGeometryReferences(effectiveProjectId);
@@ -754,32 +813,34 @@ export function PromptGenerator() {
     promptVersions.selectVersion(versionId);
   };
 
-  // Spatial canvas — shown above every phase as a read-only preview
-  // that mirrors the current spatialData. Edits happen in the Spatial
-  // step (the canonical edit surface). Geometry refs are still
-  // captured here at render time so the image model gets the latest
-  // visual reference, but the canvas itself can't be modified here.
+  // Spatial canvas — shown above every phase as a fully editable surface.
+  // Edits write through to spatial_strategy via handleGeometryChange so
+  // the canvas behaves the same here as it does in the Spatial step
+  // (Expand → drag/resize/reshape works in either place). Geometry refs
+  // are still captured here at render time so the image model gets the
+  // latest visual reference.
   const spatialPanel = (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs text-muted-foreground">
-          Layout preview — edit the spatial layout in the{" "}
+          Live spatial layout — drag, resize, or reshape zones here, or
+          jump to the{" "}
           <button
             type="button"
             onClick={() => navigate("/spatial")}
             className="text-primary underline-offset-2 hover:underline"
           >
             Spatial step
-          </button>
-          . Updates here flow through to the next render automatically.
+          </button>{" "}
+          for the full editing toolkit. Edits save automatically and feed
+          the next render.
         </p>
       </div>
       <SpatialCanvas
         ref={spatialCanvasRef}
         geometry={geometry}
-        onGeometryChange={setGeometry}
+        onGeometryChange={handleGeometryChange}
         getZoneDefaultPrompt={getZoneDefaultPrompt}
-        readonly
       />
     </div>
   );

@@ -117,13 +117,24 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
   ctx.fillText(`${depthLabel}`, 0, 0);
   ctx.restore();
 
-  // ── Front-aisle indicator at top ─────────────────────────────────
+  // ── Front-aisle indicator at the BOTTOM (front-at-bottom layout) ─
+  // The canvas y-axis is flipped in zone rendering so booth y=0 (front)
+  // ends up at the canvas bottom. This label calls out the front edge
+  // for the AI model (and any human reading the export).
   ctx.font = "bold 24px system-ui, sans-serif";
   ctx.fillStyle = "#475569";
   ctx.fillText(
-    "▼ FRONT (primary aisle) ▼",
+    "▲ FRONT (primary aisle) ▲",
     x0 + (bw * pxPerUnit) / 2,
-    y0 - 18,
+    yMax + 22,
+  );
+  // Counter-label at the top so the AI sees both edges named.
+  ctx.font = "bold 20px system-ui, sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  ctx.fillText(
+    "BACK",
+    x0 + (bw * pxPerUnit) / 2,
+    y0 - 22,
   );
 
   // ── Total area + ceiling height in upper-left corner ─────────────
@@ -170,7 +181,13 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
   return canvas.toDataURL("image/png");
 }
 
-/** Draw one zone rectangle + labels. */
+/** Draw one zone rectangle + labels.
+ *
+ * The y-axis is FLIPPED relative to canvas pixels so that the booth's
+ * front edge (y=0) appears at the BOTTOM of the export. So a zone whose
+ * front edge is at booth y=`zone.y` and depth `zone.depth` has its
+ * top-left canvas corner at: `(zone.x, geometry.depth - zone.y - zone.depth)`.
+ */
 function drawZone(
   ctx: CanvasRenderingContext2D,
   zone: AbsoluteZone,
@@ -180,7 +197,8 @@ function drawZone(
   pxPerUnit: number,
 ) {
   const px = x0 + zone.x * pxPerUnit;
-  const py = y0 + zone.y * pxPerUnit;
+  const py =
+    y0 + (geometry.depth - zone.y - zone.depth) * pxPerUnit;
   const pw = zone.width * pxPerUnit;
   const pd = zone.depth * pxPerUnit;
 

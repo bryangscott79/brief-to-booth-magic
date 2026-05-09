@@ -143,10 +143,17 @@ export const SpatialCanvasTopDown = forwardRef<
   );
 
   // ─── Coordinate helpers (real units ↔ canvas pixels) ────────────────
+  // Y-axis is FLIPPED: in the data model y=0 is the booth's FRONT (primary
+  // aisle) and y=depth is the back. Visually we want FRONT at the BOTTOM
+  // of the canvas — matches how a viewer reads the floor plan ("you're
+  // standing in the aisle, looking into the booth"). So booth y=0 maps
+  // to canvas y=bottom, and booth y=depth maps to canvas y=top.
   const toPxX = (units: number) => CANVAS_PADDING + units * pxPerUnit;
-  const toPxY = (units: number) => CANVAS_PADDING + units * pxPerUnit;
+  const toPxY = (units: number) =>
+    CANVAS_PADDING + (geometry.depth - units) * pxPerUnit;
   const toUnitsX = (px: number) => (px - CANVAS_PADDING) / pxPerUnit;
-  const toUnitsY = (px: number) => (px - CANVAS_PADDING) / pxPerUnit;
+  const toUnitsY = (px: number) =>
+    geometry.depth - (px - CANVAS_PADDING) / pxPerUnit;
 
   // Attach the transformer to the currently-selected zone so the user
   // sees corner resize handles. Re-runs whenever selection changes.
@@ -224,10 +231,12 @@ export const SpatialCanvasTopDown = forwardRef<
         <Layer listening={false}>
           {/* Outer dark backdrop */}
           <Rect x={0} y={0} width={canvasW} height={canvasH} fill="rgba(15,18,28,1)" />
-          {/* Booth floor */}
+          {/* Booth floor — note we use toPxY(geometry.depth) for the
+              top-left corner because the y-axis is flipped (back of booth
+              maps to canvas top, front maps to canvas bottom). */}
           <Rect
             x={toPxX(0)}
-            y={toPxY(0)}
+            y={toPxY(geometry.depth)}
             width={geometry.width * pxPerUnit}
             height={geometry.depth * pxPerUnit}
             fill="rgba(255,255,255,0.04)"
@@ -243,15 +252,28 @@ export const SpatialCanvasTopDown = forwardRef<
               strokeWidth={g.major ? 1 : 0.5}
             />
           ))}
-          {/* Top edge label = "FRONT (aisle)" */}
+          {/* "BACK" label at the top of the canvas (which is the back of
+              the booth in our flipped layout). */}
           <Text
             x={toPxX(0)}
-            y={toPxY(0) - 18}
+            y={toPxY(geometry.depth) - 18}
             width={geometry.width * pxPerUnit}
             align="center"
-            text="FRONT (primary aisle)"
+            text="BACK"
+            fontSize={10}
+            fill="rgba(255,255,255,0.4)"
+          />
+          {/* "FRONT (primary aisle)" label at the bottom of the canvas
+              — the booth's front edge faces the viewer. */}
+          <Text
+            x={toPxX(0)}
+            y={toPxY(0) + 4}
+            width={geometry.width * pxPerUnit}
+            align="center"
+            text="▲ FRONT (primary aisle) ▲"
             fontSize={11}
-            fill="rgba(255,255,255,0.5)"
+            fontStyle="bold"
+            fill="rgba(255,255,255,0.65)"
           />
           {/* Booth dimensions on outside */}
           <Text
@@ -296,8 +318,13 @@ export const SpatialCanvasTopDown = forwardRef<
                   if (node) zoneNodesRef.current.set(zone.id, node);
                   else zoneNodesRef.current.delete(zone.id);
                 }}
+                // Canvas top-left of the Group corresponds to the BACK-LEFT
+                // of the zone in booth coordinates (y is flipped: front
+                // at canvas-bottom). zone.y is the FRONT edge in booth
+                // units — the back edge is zone.y + zone.depth, mapped
+                // via toPxY back to canvas y at the top of the zone rect.
                 x={toPxX(zone.x)}
-                y={toPxY(zone.y)}
+                y={toPxY(zone.y + zone.depth)}
                 // CRITICAL: explicit width/height. Konva groups default
                 // to 0×0 unless set, which made onTransformEnd read
                 // newW = 0 × scaleX = 0 — collapsing every resize to 1×1.
@@ -309,36 +336,56 @@ export const SpatialCanvasTopDown = forwardRef<
                   onSelectZone(zone.id);
                 }}
                 onDragMove={(e) => {
-                  // Snap on each frame for visual feedback.
+                  // Snap on each frame for visual feedback. Note y math
+                  // converts the dragged top-left (= zone back-edge in
+                  // booth units) into the front-edge zone.y.
                   const node = e.target;
-                  const xUnits = snapToGrid(toUnitsX(node.x()), geometry.measurementSystem);
-                  const yUnits = snapToGrid(toUnitsY(node.y()), geometry.measurementSystem);
+                  const xUnits = snapToGrid(
+                    toUnitsX(node.x()),
+                    geometry.measurementSystem,
+                  );
+                  const backEdgeUnits = toUnitsY(node.y());
+                  const frontEdgeUnits = snapToGrid(
+                    backEdgeUnits - zone.depth,
+                    geometry.measurementSystem,
+                  );
                   // Clamp to booth bounds.
                   const maxX = Math.max(0, geometry.width - zone.width);
                   const maxY = Math.max(0, geometry.depth - zone.depth);
                   const clampedX = Math.max(0, Math.min(xUnits, maxX));
-                  const clampedY = Math.max(0, Math.min(yUnits, maxY));
+                  const clampedY = Math.max(0, Math.min(frontEdgeUnits, maxY));
                   node.x(toPxX(clampedX));
-                  node.y(toPxY(clampedY));
+                  node.y(toPxY(clampedY + zone.depth));
                 }}
                 onDragEnd={(e) => {
                   const node = e.target;
+                  const backEdgeUnits = toUnitsY(node.y());
                   updateZone(zone.id, {
                     x: snapToGrid(toUnitsX(node.x()), geometry.measurementSystem),
-                    y: snapToGrid(toUnitsY(node.y()), geometry.measurementSystem),
+                    y: snapToGrid(
+                      backEdgeUnits - zone.depth,
+                      geometry.measurementSystem,
+                    ),
                   });
                 }}
                 onTransformEnd={(e) => {
                   const node = e.target;
-                  // Konva tracks scale on transformer; we convert back to width/depth in units.
+                  // Konva tracks scale on transformer; we convert back
+                  // to width/depth in units. After resize, the top-left
+                  // of the Group in canvas = the new back-left corner
+                  // in booth coords, so front-edge = top-left's booth y
+                  // minus the new depth.
                   const newW = (node.width() * node.scaleX()) / pxPerUnit;
                   const newD = (node.height() * node.scaleY()) / pxPerUnit;
-                  // Reset scale, push real width/height back to the rect.
                   node.scaleX(1);
                   node.scaleY(1);
+                  const backEdgeUnits = toUnitsY(node.y());
                   updateZone(zone.id, {
                     x: snapToGrid(toUnitsX(node.x()), geometry.measurementSystem),
-                    y: snapToGrid(toUnitsY(node.y()), geometry.measurementSystem),
+                    y: snapToGrid(
+                      backEdgeUnits - newD,
+                      geometry.measurementSystem,
+                    ),
                     width: snapToGrid(newW, geometry.measurementSystem),
                     depth: snapToGrid(newD, geometry.measurementSystem),
                   });

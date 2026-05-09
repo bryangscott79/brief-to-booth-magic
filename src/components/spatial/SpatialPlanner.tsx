@@ -30,7 +30,9 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { FlowOverlay, generateFlowPaths } from "./FlowOverlay";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./LayoutVariations";
-import { InspirationUpload, type InspirationImage } from "./InspirationUpload";
+// InspirationUpload was removed from this view — visual references are
+// handled at the project level (Upload step + Brand intelligence).
+// Spatial step now focuses on geometry + layout only.
 import { ZoneDetailPanel } from "./ZoneDetailPanel";
 import { FloorPlanAnnotations, type FloorPlanAnnotation } from "./FloorPlanAnnotations";
 import { ConstraintPanel } from "./ConstraintPanel";
@@ -225,7 +227,6 @@ export function SpatialPlanner() {
   const [showFlow, setShowFlow] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [activeVariation, setActiveVariation] = useState("balanced");
-  const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
   const [activeTab, setActiveTab] = useState<"layout" | "metrics" | "constraints" | "costs">("layout");
   const [selectedZone, setSelectedZone] = useState<{ zone: NormalizedZone; colors: any } | null>(null);
   const [floorPlanView, setFloorPlanView] = useState<"blocks" | "render">("blocks");
@@ -929,12 +930,6 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
               />
             </TabsContent>
           </Tabs>
-          
-          {/* Inspiration Images */}
-          <InspirationUpload 
-            images={inspirationImages}
-            onImagesChange={setInspirationImages}
-          />
           
           {/* Materials & Mood */}
           <Card className="element-card">

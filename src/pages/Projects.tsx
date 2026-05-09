@@ -46,12 +46,25 @@ import {
   ChevronRight,
   Layers,
   LayoutGrid,
+  List as ListIcon,
+  Building2,
+  X,
 } from "lucide-react";
 import { useProjects, DBProject } from "@/hooks/useProjects";
 import { useProjectStore } from "@/store/projectStore";
 import { useIsAdmin } from "@/hooks/useAdminRole";
 import { useAuth } from "@/hooks/useAuth";
+import { useClients, type Client } from "@/hooks/useClients";
+import { useProjectThumbnails } from "@/hooks/useProjectThumbnails";
+import { ProjectVisualThumb } from "@/components/projects/ProjectVisualThumb";
 import { formatDistanceToNow } from "date-fns";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // --- Pipeline step definitions ---
 // Each check reflects the minimum data needed to consider that step "done"
@@ -171,6 +184,36 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [expandedSuites, setExpandedSuites] = useState<Set<string>>(new Set());
 
+  // Per-client filter for the projects list. "all" means no filter.
+  const [clientFilter, setClientFilter] = useState<string>("all");
+  // Grid (default) vs table view. Persists in localStorage so users
+  // don't have to re-toggle every visit.
+  const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
+    if (typeof window === "undefined") return "grid";
+    const stored = window.localStorage.getItem("projects:viewMode");
+    return stored === "table" ? "table" : "grid";
+  });
+  const setViewModePersisted = (mode: "grid" | "table") => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("projects:viewMode", mode);
+    }
+  };
+
+  // Clients in the agency — used for the filter dropdown and to resolve
+  // each project's client name + brand colors + logo for the visuals.
+  const { data: clients = [] } = useClients();
+  const clientById = useMemo(() => {
+    const m = new Map<string, Client>();
+    for (const c of clients) m.set(c.id, c);
+    return m;
+  }, [clients]);
+
+  // Bulk-fetch one hero thumbnail per project so the list can render
+  // a visual reference for every card / row in a single query.
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const { data: thumbnailsByProject } = useProjectThumbnails(projectIds);
+
   // Group projects: standalone, parents (with children), children (hidden at top level)
   const { topLevel, childrenByParent } = useMemo(() => {
     const childMap = new Map<string, DBProject[]>();
@@ -200,17 +243,59 @@ export default function ProjectsPage() {
     return { topLevel: top, childrenByParent: childMap };
   }, [projects]);
 
-  // Client-side filter by search query (project name or owner user_id prefix)
+  // Client-side filters: search (name/owner/brand) AND client selector.
   const filtered = useMemo(() => {
-    if (!search.trim()) return topLevel;
-    const q = search.toLowerCase();
-    return topLevel.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.user_id.toLowerCase().includes(q) ||
-        (p.parsed_brief as any)?.brand?.name?.toLowerCase().includes(q)
-    );
-  }, [topLevel, search]);
+    let list = topLevel;
+    if (clientFilter !== "all") {
+      list = list.filter((p) => p.client_id === clientFilter);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.user_id.toLowerCase().includes(q) ||
+          (p.parsed_brief as any)?.brand?.name?.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [topLevel, search, clientFilter]);
+
+  /**
+   * Resolve the best display name for a project's client.
+   *   1. Linked client record (clients.name)
+   *   2. parsed_brief.brand.name (when no client linked yet)
+   *   3. null (no client info available)
+   */
+  const resolveClientName = (project: DBProject): string | null => {
+    if (project.client_id) {
+      const c = clientById.get(project.client_id);
+      if (c) return c.name;
+    }
+    const brand = (project.parsed_brief as any)?.brand?.name;
+    return typeof brand === "string" ? brand : null;
+  };
+
+  /** Resolve the linked client record (or null) for visual + tag use. */
+  const resolveClient = (project: DBProject): Client | null =>
+    project.client_id ? clientById.get(project.client_id) ?? null : null;
+
+  // Group filtered projects by client for the table view.
+  const groupedByClient = useMemo(() => {
+    const groups = new Map<string, { name: string; projects: DBProject[] }>();
+    for (const p of filtered) {
+      const name = resolveClientName(p) ?? "Unassigned";
+      const key = p.client_id ?? `__brand__:${name.toLowerCase()}`;
+      const existing = groups.get(key);
+      if (existing) existing.projects.push(p);
+      else groups.set(key, { name, projects: [p] });
+    }
+    // Sort group entries by name for stable display.
+    return Array.from(groups.entries())
+      .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+      .map(([key, value]) => ({ key, ...value }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, clientById]);
 
   const toggleSuiteExpand = (id: string) => {
     setExpandedSuites((prev) => {
@@ -382,9 +467,75 @@ export default function ProjectsPage() {
             />
           </div>
 
+          {/* Client filter — surfaces every client in the agency that
+              has at least one project, plus an "All" option. Hidden when
+              there are no clients to filter. */}
+          {clients.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger className="h-8 text-xs w-[180px]">
+                  <SelectValue placeholder="All clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All clients</SelectItem>
+                  {clients
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {clientFilter !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setClientFilter("all")}
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Clear client filter"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* View mode toggle — grid (default) or table. Persists in
+              localStorage so users don't have to re-toggle every visit. */}
+          <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 gap-0.5 ml-auto">
+            <button
+              type="button"
+              onClick={() => setViewModePersisted("grid")}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                viewMode === "grid"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Grid view"
+            >
+              <LayoutGrid className="h-3 w-3" />
+              Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewModePersisted("table")}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                viewMode === "table"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Table view (grouped by client)"
+            >
+              <ListIcon className="h-3 w-3" />
+              Table
+            </button>
+          </div>
+
           {/* Result count */}
-          {search && (
-            <span className="text-xs text-muted-foreground">
+          {(search || clientFilter !== "all") && (
+            <span className="text-xs text-muted-foreground basis-full sm:basis-auto">
               {filtered.length} result{filtered.length !== 1 ? "s" : ""}
             </span>
           )}
@@ -422,6 +573,109 @@ export default function ProjectsPage() {
               )}
             </CardContent>
           </Card>
+        ) : viewMode === "table" ? (
+          // ── Table view — grouped by client ─────────────────────────
+          <div className="space-y-6">
+            {groupedByClient.map((group) => (
+              <div key={group.key} className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.name}
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                    {group.projects.length}
+                  </Badge>
+                </div>
+                <Card className="overflow-hidden">
+                  <div className="divide-y divide-border">
+                    {group.projects.map((project) => {
+                      const isOwnProject = project.user_id === user?.id;
+                      const children = childrenByParent.get(project.id);
+                      const hasChildren = !!children && children.length > 0;
+                      const completedCount = PIPELINE_STEPS.filter((s) => s.check(project)).length;
+                      const pct = Math.round((completedCount / PIPELINE_STEPS.length) * 100);
+                      const heroUrl = thumbnailsByProject?.get(project.id) ?? null;
+                      const client = resolveClient(project);
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          onClick={() => handleOpenProject(project)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                        >
+                          <ProjectVisualThumb
+                            heroUrl={heroUrl}
+                            client={client}
+                            projectName={project.name}
+                            size={44}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium truncate">{project.name}</span>
+                              {hasChildren && (
+                                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                                  <Layers className="h-2.5 w-2.5 mr-0.5" />
+                                  Suite · {children.length}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}
+                              </span>
+                              <span>· {pct}% complete</span>
+                              {!isOwnProject && (
+                                <span className="flex items-center gap-1 text-muted-foreground/70">
+                                  <Shield className="h-2.5 w-2.5" />
+                                  Shared
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Badge variant={STATUS_BADGES[project.status]?.variant || "outline"} className="shrink-0">
+                            {STATUS_BADGES[project.status]?.label || project.status}
+                          </Badge>
+                          {isOwnProject && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Permanently delete "{project.name}" and all its data. Cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((project) => {
@@ -429,6 +683,9 @@ export default function ProjectsPage() {
               const children = childrenByParent.get(project.id);
               const hasChildren = !!children && children.length > 0;
               const isExpanded = expandedSuites.has(project.id);
+              const heroUrl = thumbnailsByProject?.get(project.id) ?? null;
+              const client = resolveClient(project);
+              const clientName = resolveClientName(project);
 
               return (
                 <div key={project.id} className={hasChildren ? "col-span-full" : ""}>
@@ -453,7 +710,25 @@ export default function ProjectsPage() {
                                 : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                             </button>
                           )}
-                          <CardTitle className="text-base leading-snug break-words min-w-0 flex-1">{project.name}</CardTitle>
+                          {/* Visual reference: hero render → client logo
+                              → brand-color swatch → folder icon. */}
+                          <ProjectVisualThumb
+                            heroUrl={heroUrl}
+                            client={client}
+                            projectName={project.name}
+                            size={48}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <CardTitle className="text-base leading-snug break-words">
+                              {project.name}
+                            </CardTitle>
+                            {clientName && (
+                              <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
+                                <Building2 className="h-3 w-3" />
+                                <span className="truncate">{clientName}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {hasChildren && (

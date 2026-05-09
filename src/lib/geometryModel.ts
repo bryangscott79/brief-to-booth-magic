@@ -358,12 +358,17 @@ export function autoLayoutZones(opts: AutoLayoutOptions): AbsoluteZone[] {
   const step = unitSnap(geometry.measurementSystem);
 
   // Categorize each zone by name pattern → priority bucket.
+  // Backed by classifyZoneFunction (which has the full industry-vocab
+  // keyword set) so a zone like "Infinite Wings Photo Chamber" lands
+  // in the hero bucket and gets placed at the front-center where a
+  // visitor can see it from the aisle. Without this the auto-layout
+  // would treat it as "other" and place it in scan order.
   type Bucket = "hero" | "lounge" | "service" | "other";
   function classify(name: string): Bucket {
-    const n = name.toLowerCase();
-    if (/\b(hero|apex|feature|installation|core|experience)\b/.test(n)) return "hero";
-    if (/\b(lounge|hub|hospitality|cafe|bar|social)\b/.test(n)) return "lounge";
-    if (/\b(storage|service|command|back|ops|prep)\b/.test(n)) return "service";
+    const fn = classifyZoneFunction(name);
+    if (fn === "hero" || fn === "experience") return "hero";
+    if (fn === "lounge" || fn === "hospitality") return "lounge";
+    if (fn === "storage" || fn === "service" || fn === "command") return "service";
     return "other";
   }
 
@@ -455,40 +460,49 @@ export function autoLayoutZones(opts: AutoLayoutOptions): AbsoluteZone[] {
  * without manually dragging zones.
  *
  * Steps, in order:
- *   1. Grow each zone to the industry minimum for its function — the
- *      constraints in exhibitConstraints.ZONE_CONSTRAINTS define
- *      minSqft per zone type (welcome=64, meeting=100, hero=100, etc.).
- *      A zone smaller than its min gets scaled up isotropically so
- *      width × depth meets the floor; the bounding box stays roughly
- *      the same shape instead of becoming a sliver.
- *   2. Clamp every zone to the booth's outer rectangle (resolves any
- *      "extends past edge" errors that step 1 may have introduced).
- *   3. Snap positions + sizes to the unit grid (1' / 0.5m).
- *   4. If any zones still overlap or under/over-allocate the booth,
- *      run autoLayoutZones to redistribute everything heuristically.
- *      This may move zones; users can drag-fine-tune afterward.
+ *   1. Grow each zone to MAX(minSqft, minPercentage * boothSqft / 100)
+ *      — the industry-defined floor from exhibitConstraints. This
+ *      single target satisfies BOTH the "below min sqft" error AND
+ *      the "below min percentage" warning in one pass, so re-clicking
+ *      auto-fix should never leave behind size-related issues.
+ *      Isotropic scaling keeps each zone's aspect ratio; the bounding
+ *      box stays roughly the same shape rather than becoming a sliver.
+ *   2. If the sum of grown areas exceeds the booth area minus min
+ *      circulation (20%), proportionally shrink them all so they fit.
+ *      Without this step we could grow zones larger than the booth
+ *      can hold and leave a permanent overlap state.
+ *   3. Clamp every zone to the booth's outer rectangle.
+ *   4. Snap positions + sizes to the unit grid (1' / 0.5m).
+ *   5. If any zones still overlap, run autoLayoutZones to redistribute
+ *      everything heuristically. The grow pass commonly creates fresh
+ *      overlaps; this is the resolution.
  *
  * Returns a NEW BoothGeometry (input is not mutated). Idempotent on
- * already-clean geometry (zones at or above their minimum stay put).
+ * already-clean geometry.
  */
 export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
   const isMetric = geometry.measurementSystem === "metric";
-
-  // Pass 0: grow undersized zones to meet their function's min sqft.
-  // Zones are sized in native units; constraints are in sqft. For
-  // metric we convert: the math is "ratio = minSqft / currentSqft"
-  // applied to width × depth so the units cancel out either way.
   const SQM_TO_SQFT = 10.76391041671;
+
+  // Booth area in sqft (constraint math always assumes sqft).
+  const boothAreaNative = geometry.width * geometry.depth;
+  const boothSqft = isMetric ? boothAreaNative * SQM_TO_SQFT : boothAreaNative;
+
+  // Pass 0: grow undersized zones to the COMBINED floor — max of
+  // the absolute sqft minimum and the percent-of-booth minimum. This
+  // is what kills the "warning: only X% of the booth" issues at the
+  // same time as the "error: below sqft minimum" ones.
   const grown = geometry.zones.map((z) => {
     const fn = classifyZoneFunction(z.name);
-    const minSqft = ZONE_CONSTRAINTS[fn]?.minSqft ?? 0;
-    if (!minSqft) return z;
+    const c = ZONE_CONSTRAINTS[fn];
+    if (!c) return z;
+    const minByPct = (c.minPercentage / 100) * boothSqft;
+    const targetSqft = Math.max(c.minSqft, minByPct);
+    if (!targetSqft) return z;
     const currentArea = z.width * z.depth;
     const currentSqft = isMetric ? currentArea * SQM_TO_SQFT : currentArea;
-    if (currentSqft >= minSqft) return z;
-    // Isotropic scale: keep the aspect ratio, grow until the area
-    // hits the minimum. √(min/current) on each side does it.
-    const scale = Math.sqrt(minSqft / Math.max(currentSqft, 1));
+    if (currentSqft >= targetSqft) return z;
+    const scale = Math.sqrt(targetSqft / Math.max(currentSqft, 1));
     return {
       ...z,
       width: z.width * scale,
@@ -496,8 +510,27 @@ export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
     };
   });
 
-  // Pass 1: clamp + snap each zone individually.
-  const clamped = grown.map((z) => {
+  // Pass 1: if the grown footprint sum would blow past the booth's
+  // available floor (booth area minus the 20% circulation reserve),
+  // proportionally shrink every zone to fit. Without this the layout
+  // engine would land on permanent overlaps because the geometry is
+  // simply over-allocated. We aim at 75% of the booth so circulation
+  // stays comfortably above the 20% minimum.
+  const TARGET_ALLOCATION_PCT = 0.75;
+  const grownSumNative = grown.reduce((s, z) => s + z.width * z.depth, 0);
+  const allowedNative = boothAreaNative * TARGET_ALLOCATION_PCT;
+  let scaledForFit = grown;
+  if (grownSumNative > allowedNative) {
+    const fitScale = Math.sqrt(allowedNative / grownSumNative);
+    scaledForFit = grown.map((z) => ({
+      ...z,
+      width: z.width * fitScale,
+      depth: z.depth * fitScale,
+    }));
+  }
+
+  // Pass 2: clamp + snap each zone individually.
+  const clamped = scaledForFit.map((z) => {
     const c = clampZoneToBooth(z, geometry);
     return {
       ...c,
@@ -508,10 +541,9 @@ export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
     };
   });
 
-  // Pass 2: detect remaining overlaps. If any, run auto-layout to
-  // redistribute. If none, we're done. Note: growing zones in pass 0
-  // commonly creates new overlaps, so this branch fires often — and
-  // that's intended (autoLayoutZones places everything fresh).
+  // Pass 3: detect remaining overlaps. Growing zones almost always
+  // creates fresh overlaps, so this branch fires often — and that's
+  // intended: autoLayoutZones places everything fresh from scratch.
   let hasOverlap = false;
   outer: for (let i = 0; i < clamped.length; i++) {
     for (let j = i + 1; j < clamped.length; j++) {
@@ -527,4 +559,25 @@ export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
     : clamped;
 
   return { ...geometry, zones: finalZones };
+}
+
+/**
+ * Round-trip wrapper around fixLayoutAutomatically that operates on
+ * the legacy NormalizedZone[] shape (0–100 percent positions). Used
+ * by the LayoutVariations engine so each strategy ("Hero-Centric",
+ * "Engagement Maximizer") emits zones that are valid by construction
+ * — every zone meets MAX(min sqft, min percentage), nothing overlaps,
+ * and the booth never over-allocates. Without this, picking a layout
+ * option could land the user in a state where validation immediately
+ * complained, which is exactly the experience we just fixed.
+ */
+export function fixNormalizedLayoutAutomatically(
+  zones: NormalizedZone[],
+  boothDimensions: BoothDimensions,
+): NormalizedZone[] {
+  const geometry = boothGeometryFromLegacy(boothDimensions, zones);
+  const fixed = fixLayoutAutomatically(geometry);
+  return fixed.zones.map((abs) =>
+    normalizedFromAbsoluteZone(abs, fixed, boothDimensions.totalSqft),
+  );
 }

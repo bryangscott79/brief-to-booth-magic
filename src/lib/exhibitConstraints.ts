@@ -296,22 +296,108 @@ export const CIRCULATION_REQUIREMENTS = {
 
 // --- HELPER FUNCTIONS ---
 
-/** Classify zone function from zone name string */
+/** Classify zone function from zone name string.
+ *
+ * Order matters: more specific zone keywords come first so a zone
+ * named "Hero Photo Chamber" classifies as "hero" rather than
+ * "experience". The keyword lists were expanded after a real project
+ * (Red Bull "Infinite Wings Photo Chamber") classified as "general"
+ * because none of its words matched, even though the zone was clearly
+ * the booth's focal point. The vocabulary now covers the immersive /
+ * photogenic / showcase language brands actually use. */
 export function classifyZoneFunction(zoneName: string): ZoneFunction {
   const name = zoneName.toLowerCase();
-  if (name.includes("hero") || name.includes("apex") || name.includes("core")) return "hero";
-  if (name.includes("experience") || name.includes("interactive")) return "experience";
+  if (
+    name.includes("hero") ||
+    name.includes("apex") ||
+    name.includes("core") ||
+    name.includes("centerpiece") ||
+    name.includes("focal")
+  )
+    return "hero";
+  if (
+    name.includes("experience") ||
+    name.includes("interactive") ||
+    name.includes("immersive") ||
+    name.includes("chamber") ||
+    name.includes("photo") ||
+    name.includes("gallery") ||
+    name.includes("exhibit") ||
+    name.includes("installation") ||
+    name.includes("activation") ||
+    name.includes("feature wall")
+  )
+    return "experience";
   if (name.includes("reception")) return "reception";
-  if (name.includes("welcome")) return "welcome";
-  if (name.includes("meeting") || name.includes("suite") || name.includes("bd") || name.includes("conference")) return "meeting";
-  if (name.includes("lounge") || name.includes("hub") || name.includes("casual")) return "lounge";
-  if (name.includes("hospitality") || name.includes("f&b") || name.includes("bar")) return "hospitality";
+  if (
+    name.includes("welcome") ||
+    name.includes("entry") ||
+    name.includes("greet") ||
+    name.includes("triage") ||
+    name.includes("beacon")
+  )
+    return "welcome";
+  if (
+    name.includes("meeting") ||
+    name.includes("suite") ||
+    name.includes("bd") ||
+    name.includes("conference") ||
+    name.includes("private")
+  )
+    return "meeting";
+  if (
+    name.includes("lounge") ||
+    name.includes("hub") ||
+    name.includes("casual") ||
+    name.includes("oasis") ||
+    name.includes("relax") ||
+    name.includes("seating")
+  )
+    return "lounge";
+  if (
+    name.includes("hospitality") ||
+    name.includes("f&b") ||
+    name.includes("bar") ||
+    name.includes("cafe") ||
+    name.includes("sampling") ||
+    name.includes("tasting") ||
+    name.includes("refresh")
+  )
+    return "hospitality";
   if (name.includes("demo")) return "demo";
-  if (name.includes("product") || name.includes("showcase")) return "product";
-  if (name.includes("storytelling") || name.includes("content") || name.includes("digital") || name.includes("horizon") || name.includes("future") || name.includes("preview")) return "storytelling";
-  if (name.includes("storage") || name.includes("back of house") || name.includes("boh")) return "storage";
-  if (name.includes("command") || name.includes("tech") || name.includes("av")) return "command";
-  if (name.includes("service")) return "service";
+  if (
+    name.includes("product") ||
+    name.includes("showcase") ||
+    name.includes("display")
+  )
+    return "product";
+  if (
+    name.includes("storytelling") ||
+    name.includes("content") ||
+    name.includes("digital") ||
+    name.includes("horizon") ||
+    name.includes("future") ||
+    name.includes("preview") ||
+    name.includes("kiosk") ||
+    name.includes("narrative")
+  )
+    return "storytelling";
+  if (
+    name.includes("storage") ||
+    name.includes("back of house") ||
+    name.includes("boh") ||
+    name.includes("staff") ||
+    name.includes("ops")
+  )
+    return "storage";
+  if (
+    name.includes("command") ||
+    name.includes("tech") ||
+    name.includes("av") ||
+    name.includes("control")
+  )
+    return "command";
+  if (name.includes("service") || name.includes("support")) return "service";
   return "general";
 }
 
@@ -516,7 +602,15 @@ export function calculateUtilityRequirements(
   };
 }
 
-/** Validate sightlines - check hero is visible from aisles */
+/** Validate sightlines - check hero is visible from aisles.
+ *
+ * "Hero" is matched in two passes: first via classifyZoneFunction
+ * (catches names with hero/experience/chamber/etc.) and, failing
+ * that, by area-dominance — any zone occupying ≥15% of the booth's
+ * total zone footprint reads as a focal point regardless of name.
+ * Without the dominance fallback, a project like Red Bull's
+ * "Infinite Wings Photo Chamber" (260 sqft / 21%) would still
+ * trigger "no hero zone" because the literal word "hero" is absent. */
 export function validateSightlines(
   zones: Array<{ name: string; position: { x: number; y: number; width: number; height: number } }>,
   _boothWidth: number,
@@ -524,8 +618,32 @@ export function validateSightlines(
 ): ValidationResult[] {
   const results: ValidationResult[] = [];
 
-  // Find hero zone
-  const heroZone = zones.find(z => classifyZoneFunction(z.name) === "hero" || classifyZoneFunction(z.name) === "experience");
+  // Pass 1: name-based classification.
+  let heroZone = zones.find(
+    (z) =>
+      classifyZoneFunction(z.name) === "hero" ||
+      classifyZoneFunction(z.name) === "experience",
+  );
+
+  // Pass 2: area-dominance fallback. Largest zone wins if it's at
+  // least 15% of the total ALLOCATED footprint (not booth area —
+  // dominance is relative to the design, not the empty booth).
+  if (!heroZone && zones.length > 0) {
+    const totalAllocated = zones.reduce(
+      (s, z) => s + z.position.width * z.position.height,
+      0,
+    );
+    const largest = [...zones].sort(
+      (a, b) =>
+        b.position.width * b.position.height -
+        a.position.width * a.position.height,
+    )[0];
+    const largestArea = largest.position.width * largest.position.height;
+    if (totalAllocated > 0 && largestArea / totalAllocated >= 0.15) {
+      heroZone = largest;
+    }
+  }
+
   if (!heroZone) {
     results.push({
       severity: "warning",

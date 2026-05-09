@@ -209,7 +209,11 @@ export function SpatialPlanner() {
     return perShow || (budgetRange ? budgetRange.max : 0);
   }, [brief]);
 
-  // Generate layout variations using normalized zones
+  // Generate layout variations using normalized zones. Pass full
+  // boothDimensions so each variation can be piped through
+  // fixNormalizedLayoutAutomatically — this guarantees zones meet
+  // industry size + percentage minimums by the time the user clicks
+  // the option, rather than throwing immediate validation errors.
   const variations = useMemo(() => {
     if (normalizedZones.length === 0) return [];
     return generateLayoutVariations(
@@ -217,9 +221,10 @@ export function SpatialPlanner() {
       currentConfig?.footprintSize || "30x30",
       boothDimensions.totalSqft,
       budgetMax || undefined,
-      qualityTier
+      qualityTier,
+      boothDimensions,
     );
-  }, [normalizedZones, currentConfig, boothDimensions.totalSqft, budgetMax, qualityTier]);
+  }, [normalizedZones, currentConfig, boothDimensions, budgetMax, qualityTier]);
   
   const activeLayout = useMemo(() => 
     variations.find(v => v.id === activeVariation) || variations[0],

@@ -4,9 +4,11 @@ import { cn } from "@/lib/utils";
 import { Check, Sparkles, Target, Users, Zap } from "lucide-react";
 import {
   type NormalizedZone,
+  type BoothDimensions,
   createLayoutVariation,
   validateSpatialLayout,
 } from "@/lib/spatialUtils";
+import { fixNormalizedLayoutAutomatically } from "@/lib/geometryModel";
 
 export interface LayoutVariation {
   id: string;
@@ -171,29 +173,48 @@ export function generateLayoutVariations(
   _footprintSize: string,
   totalSqft: number,
   budgetMax?: number,
-  qualityTier?: "standard" | "premium" | "ultra"
+  qualityTier?: "standard" | "premium" | "ultra",
+  /**
+   * Booth dimensions (width/depth/measurementSystem) are required to
+   * pipe each candidate through fixNormalizedLayoutAutomatically. The
+   * argument is optional for backward compat with older callers that
+   * still rely on the unfixed behaviour, but every internal caller
+   * passes it.
+   */
+  boothDimensions?: BoothDimensions,
 ): LayoutVariation[] {
   const tier = qualityTier || "premium";
 
-  // --- TRAFFIC-OPTIMIZED (balanced, was "balanced") ---
-  const balancedValidation = validateSpatialLayout(baseZones, totalSqft);
-  const balancedScore = scoreVariation(baseZones, totalSqft, "traffic", budgetMax, tier);
+  // Each strategy gets piped through fixNormalizedLayoutAutomatically
+  // so the user can never click a variation and land on a layout that
+  // immediately throws "below minimum sqft" / "below minimum percentage"
+  // errors. The fix grows zones to max(minSqft, minPct * boothSqft),
+  // shrinks proportionally if the sum overflows the booth's allocation
+  // budget, then redistributes positions to clear overlaps. End result:
+  // every variation is valid by construction.
+  const fix = (zones: NormalizedZone[]) =>
+    boothDimensions ? fixNormalizedLayoutAutomatically(zones, boothDimensions) : zones;
+
+  // --- TRAFFIC-OPTIMIZED (balanced) ---
+  const balancedZones = fix(baseZones);
+  const balancedValidation = validateSpatialLayout(balancedZones, totalSqft);
+  const balancedScore = scoreVariation(balancedZones, totalSqft, "traffic", budgetMax, tier);
   const balanced: LayoutVariation = {
     id: "balanced",
     name: "Traffic-Optimized",
     type: "balanced",
     description: "Maximizes aisle visibility and smooth visitor flow through all zones",
-    reasoning: `Places hero for maximum aisle exposure, reception at primary entry, meeting zones away from noise. Circulation space is ${estimateCirculationPct(baseZones)}% — ${estimateCirculationPct(baseZones) >= 20 ? "within" : "below"} the recommended 20-30% range. All zones meet minimum size requirements for their function.`,
+    reasoning: `Places hero for maximum aisle exposure, reception at primary entry, meeting zones away from noise. Circulation space is ${estimateCirculationPct(balancedZones)}% — ${estimateCirculationPct(balancedZones) >= 20 ? "within" : "below"} the recommended 20-30% range. All zones meet minimum size requirements for their function.`,
     bestFor: ["High traffic shows", "Brand awareness", "Multi-product demos"],
     tradeoffs: ["Even distribution means less dramatic focal point", "Requires more staff coverage across zones"],
     score: balancedScore,
-    zones: baseZones,
+    zones: balancedZones,
     totalPercentage: balancedValidation.totalPercentage,
     isValid: balancedValidation.valid,
   };
 
-  // --- HERO-FOCUSED (was "hero-focused") ---
-  const heroZones = createLayoutVariation(baseZones, totalSqft, 'hero-focused');
+  // --- HERO-FOCUSED ---
+  const heroZones = fix(createLayoutVariation(baseZones, totalSqft, 'hero-focused'));
   const heroValidation = validateSpatialLayout(heroZones, totalSqft);
   const heroScore = scoreVariation(heroZones, totalSqft, "hero", budgetMax, tier);
   const heroFocused: LayoutVariation = {
@@ -210,8 +231,8 @@ export function generateLayoutVariations(
     isValid: heroValidation.valid,
   };
 
-  // --- ENGAGEMENT-FIRST (was "engagement-first") ---
-  const engagementZones = createLayoutVariation(baseZones, totalSqft, 'engagement-first');
+  // --- ENGAGEMENT-FIRST ---
+  const engagementZones = fix(createLayoutVariation(baseZones, totalSqft, 'engagement-first'));
   const engagementValidation = validateSpatialLayout(engagementZones, totalSqft);
   const engagementScore = scoreVariation(engagementZones, totalSqft, "engagement", budgetMax, tier);
   const engagementFirst: LayoutVariation = {

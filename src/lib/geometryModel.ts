@@ -16,6 +16,7 @@
  */
 
 import type { NormalizedZone, BoothDimensions } from "./spatialUtils";
+import { ZONE_CONSTRAINTS, classifyZoneFunction } from "./exhibitConstraints";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,17 @@ export function normalizedFromAbsoluteZone(
     requirements: [],
     adjacencies: [],
     notes: zone.notes ?? "",
+    // Pass canvas-owned fields straight through so the legacy zone we
+    // persist keeps height/shape/override alongside the position. The
+    // SpatialPlanner round-trip ALSO writes these explicitly, but
+    // including them here makes the conversion lossless on its own
+    // and protects callers that don't merge with the original zone.
+    heightFt: zone.heightFt,
+    ...(zone.shape ? { shape: zone.shape } : {}),
+    ...(zone.shapeParams ? { shapeParams: zone.shapeParams } : {}),
+    ...(zone.customPromptOverride
+      ? { customPromptOverride: zone.customPromptOverride }
+      : {}),
   };
 }
 
@@ -443,19 +455,49 @@ export function autoLayoutZones(opts: AutoLayoutOptions): AbsoluteZone[] {
  * without manually dragging zones.
  *
  * Steps, in order:
- *   1. Clamp every zone to the booth's outer rectangle (resolves any
- *      "extends past edge" errors).
- *   2. Snap positions + sizes to the unit grid (1' / 0.5m).
- *   3. If any zones still overlap or under/over-allocate the booth,
+ *   1. Grow each zone to the industry minimum for its function — the
+ *      constraints in exhibitConstraints.ZONE_CONSTRAINTS define
+ *      minSqft per zone type (welcome=64, meeting=100, hero=100, etc.).
+ *      A zone smaller than its min gets scaled up isotropically so
+ *      width × depth meets the floor; the bounding box stays roughly
+ *      the same shape instead of becoming a sliver.
+ *   2. Clamp every zone to the booth's outer rectangle (resolves any
+ *      "extends past edge" errors that step 1 may have introduced).
+ *   3. Snap positions + sizes to the unit grid (1' / 0.5m).
+ *   4. If any zones still overlap or under/over-allocate the booth,
  *      run autoLayoutZones to redistribute everything heuristically.
  *      This may move zones; users can drag-fine-tune afterward.
  *
- * Returns a NEW BoothGeometry (input is not mutated). Idempotent —
- * running it twice on already-clean geometry is a no-op.
+ * Returns a NEW BoothGeometry (input is not mutated). Idempotent on
+ * already-clean geometry (zones at or above their minimum stay put).
  */
 export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
+  const isMetric = geometry.measurementSystem === "metric";
+
+  // Pass 0: grow undersized zones to meet their function's min sqft.
+  // Zones are sized in native units; constraints are in sqft. For
+  // metric we convert: the math is "ratio = minSqft / currentSqft"
+  // applied to width × depth so the units cancel out either way.
+  const SQM_TO_SQFT = 10.76391041671;
+  const grown = geometry.zones.map((z) => {
+    const fn = classifyZoneFunction(z.name);
+    const minSqft = ZONE_CONSTRAINTS[fn]?.minSqft ?? 0;
+    if (!minSqft) return z;
+    const currentArea = z.width * z.depth;
+    const currentSqft = isMetric ? currentArea * SQM_TO_SQFT : currentArea;
+    if (currentSqft >= minSqft) return z;
+    // Isotropic scale: keep the aspect ratio, grow until the area
+    // hits the minimum. √(min/current) on each side does it.
+    const scale = Math.sqrt(minSqft / Math.max(currentSqft, 1));
+    return {
+      ...z,
+      width: z.width * scale,
+      depth: z.depth * scale,
+    };
+  });
+
   // Pass 1: clamp + snap each zone individually.
-  const clamped = geometry.zones.map((z) => {
+  const clamped = grown.map((z) => {
     const c = clampZoneToBooth(z, geometry);
     return {
       ...c,
@@ -467,7 +509,9 @@ export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
   });
 
   // Pass 2: detect remaining overlaps. If any, run auto-layout to
-  // redistribute. If none, we're done.
+  // redistribute. If none, we're done. Note: growing zones in pass 0
+  // commonly creates new overlaps, so this branch fires often — and
+  // that's intended (autoLayoutZones places everything fresh).
   let hasOverlap = false;
   outer: for (let i = 0; i < clamped.length; i++) {
     for (let j = i + 1; j < clamped.length; j++) {

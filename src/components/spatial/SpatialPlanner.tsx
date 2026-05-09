@@ -1003,12 +1003,20 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                     {boothDimensions.depth}'
                   </div>
                   
-                  {/* Main floor plan container */}
-                  <div 
+                  {/* Main floor plan container — sized to fill the
+                      column, capped at 720px wide and 70vh tall so it
+                      scales with the page instead of the old fixed
+                      240×400 pixel box. Aspect-ratio keeps the booth's
+                      true proportions; whichever dimension hits its cap
+                      first wins, the other adapts. The 4 sides label
+                      uses the actual booth dimensions, so the visual
+                      and the labels stay in lockstep. */}
+                  <div
                     className="relative bg-muted/30 rounded border-2 border-dashed border-border"
-                    style={{ 
-                      width: `${boothDimensions.displayWidth * zoom}px`, 
-                      height: `${boothDimensions.displayHeight * zoom}px`,
+                    style={{
+                      width: `min(100%, ${720 * zoom}px)`,
+                      maxHeight: `min(70vh, ${720 * zoom}px)`,
+                      aspectRatio: `${boothDimensions.width} / ${boothDimensions.depth}`,
                       transition: "all 0.3s ease"
                     }}
                   >

@@ -28,6 +28,26 @@ export interface NormalizedZone {
   requirements: string[];
   adjacencies: string[];
   notes: string;
+  // ─── Canvas-owned extras ──────────────────────────────────────
+  // These fields originate from edits in the SpatialCanvas. They
+  // weren't part of the legacy AI-generated NormalizedZone shape,
+  // so they're optional. Including them on the canonical type
+  // means normalizeZones() preserves them through the round-trip
+  // (spatialData.configs[].zones → normalizedZones → BoothGeometry
+  // and back). Without this, every render would strip the user's
+  // height / shape / prompt edits.
+  /** Per-zone wall/ceiling height in feet. Default heuristic by name. */
+  heightFt?: number;
+  /** Drawing shape: "rect" (default), "diamond", "L", or "circle". */
+  shape?: "rect" | "L" | "circle" | "diamond";
+  /** Shape-specific extras (L-corner notch geometry, etc.). */
+  shapeParams?: {
+    lCorner?: "NE" | "NW" | "SE" | "SW";
+    lNotchWidthRatio?: number;
+    lNotchDepthRatio?: number;
+  };
+  /** User-edited prompt override for this zone's interior render. */
+  customPromptOverride?: string;
 }
 
 export interface BoothDimensions {
@@ -270,6 +290,17 @@ export function normalizeZone(zone: any, index: number, totalSqft: number): Norm
     requirements: Array.isArray(zone.requirements) ? zone.requirements : [],
     adjacencies: Array.isArray(zone.adjacencies) ? zone.adjacencies : [],
     notes: typeof zone.notes === 'string' ? zone.notes : '',
+    // Pass through canvas-owned fields. Without these, every
+    // round-trip through normalizeZone() silently dropped the user's
+    // height / shape / per-zone prompt edits, which is why height
+    // changes in the toolbar didn't move the iso extrusion and
+    // picking "diamond" reverted to a rectangle.
+    ...(typeof zone.heightFt === 'number' ? { heightFt: zone.heightFt } : {}),
+    ...(zone.shape ? { shape: zone.shape } : {}),
+    ...(zone.shapeParams ? { shapeParams: zone.shapeParams } : {}),
+    ...(typeof zone.customPromptOverride === 'string'
+      ? { customPromptOverride: zone.customPromptOverride }
+      : {}),
   };
 }
 

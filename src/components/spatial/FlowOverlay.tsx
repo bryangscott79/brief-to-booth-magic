@@ -11,10 +11,18 @@ interface FlowPath {
 interface FlowOverlayProps {
   paths: FlowPath[];
   showHeatmap?: boolean;
+  /** Render the dotted flow paths + entry-point indicator. Defaults to
+   *  true for backward compat. Set to false to render heatmap-only. */
+  showPaths?: boolean;
   zones: any[];
 }
 
-export function FlowOverlay({ paths, showHeatmap = false, zones }: FlowOverlayProps) {
+export function FlowOverlay({
+  paths,
+  showHeatmap = false,
+  showPaths = true,
+  zones,
+}: FlowOverlayProps) {
   return (
     <svg 
       className="absolute inset-0 pointer-events-none" 
@@ -67,8 +75,9 @@ export function FlowOverlay({ paths, showHeatmap = false, zones }: FlowOverlayPr
         />
       ))}
       
-      {/* Flow paths */}
-      {paths.map((path) => {
+      {/* Flow paths — only when showPaths is on. Heatmap-only mode
+          (heatmap toggled, flow toggled off) skips this whole block. */}
+      {showPaths && paths.map((path) => {
         const midX = (path.from.x + path.to.x) / 2;
         const midY = (path.from.y + path.to.y) / 2 - (path.curved ? 15 : 0);
         
@@ -102,18 +111,21 @@ export function FlowOverlay({ paths, showHeatmap = false, zones }: FlowOverlayPr
         );
       })}
       
-      {/* Entry point indicator */}
-      <g transform="translate(50, 95)">
-        <circle r="3" className="fill-primary/40" />
-        <circle r="1.5" className="fill-primary" />
-        <text 
-          y="8" 
-          textAnchor="middle" 
-          className="fill-muted-foreground text-[3px]"
-        >
-          Entry
-        </text>
-      </g>
+      {/* Entry point indicator — paired with the paths, so it hides
+          when paths are off (otherwise the dot floats with no context). */}
+      {showPaths && (
+        <g transform="translate(50, 95)">
+          <circle r="3" className="fill-primary/40" />
+          <circle r="1.5" className="fill-primary" />
+          <text
+            y="8"
+            textAnchor="middle"
+            className="fill-muted-foreground text-[3px]"
+          >
+            Entry
+          </text>
+        </g>
+      )}
     </svg>
   );
 }

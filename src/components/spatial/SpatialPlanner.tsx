@@ -780,9 +780,12 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         <ValidationPanel validation={validation} />
       )}
 
-      {/* Footprint Selector */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
+      {/* Footprint Selector. Flow + Heatmap toggles used to live to
+          the right here as page-level chips, but they only affect the
+          bottom Floor Plan card — they're now in that card's header,
+          where the relationship is obvious. */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-2 flex-wrap">
           {spatialData.configs.map((config: any, index: number) => (
             <button
               key={config.footprintSize}
@@ -800,26 +803,6 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
               </span>
             </button>
           ))}
-        </div>
-        
-        {/* View toggles */}
-        <div className="flex gap-2">
-          <Button
-            variant={showFlow ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setShowFlow(!showFlow)}
-          >
-            {showFlow ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
-            Flow
-          </Button>
-          <Button
-            variant={showHeatmap ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setShowHeatmap(!showHeatmap)}
-          >
-            <TrendingUp className="h-4 w-4 mr-1" />
-            Heatmap
-          </Button>
         </div>
       </div>
 
@@ -872,7 +855,42 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                 {activeLayout.name} • {metrics.flowEfficiency}% flow efficiency • {boothDimensions.width}' × {boothDimensions.depth}'
               </p>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap items-center">
+              {/* Flow + Heatmap overlays — moved here from up next to
+                  the footprint selector. They only affect the Zones
+                  view of THIS card, so they belong in this header
+                  rather than as floating page-level chips. Hidden when
+                  the Render view is active (overlays apply to the
+                  block layout, not the AI-rendered image). */}
+              {floorPlanView === "blocks" && (
+                <>
+                  <Button
+                    variant={showFlow ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setShowFlow(!showFlow)}
+                    title="Toggle visitor-flow arrows on the floor plan"
+                  >
+                    {showFlow ? (
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                    ) : (
+                      <EyeOff className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Flow
+                  </Button>
+                  <Button
+                    variant={showHeatmap ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setShowHeatmap(!showHeatmap)}
+                    title="Toggle dwell-time heatmap on the floor plan"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 mr-1" />
+                    Heatmap
+                  </Button>
+                  <span className="w-px h-6 bg-border mx-1" />
+                </>
+              )}
               {/* View mode toggle */}
               <div className="flex rounded-md border border-border mr-2">
                 <button
@@ -1020,17 +1038,21 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
                       transition: "all 0.3s ease"
                     }}
                   >
-                    {/* Flow overlay — y-flipped to match the zone blocks
-                        (front-at-bottom). We pre-transform zones + paths
-                        rather than CSS-flipping the SVG so arrowheads
-                        keep their natural direction. */}
-                    {showFlow && (
+                    {/* Flow + heatmap overlay — y-flipped to match the
+                        zone blocks (front-at-bottom). Mounted whenever
+                        EITHER toggle is on so heatmap can render solo
+                        (the previous gate was `showFlow &&` which is
+                        why ticking just Heatmap did nothing). Inside
+                        FlowOverlay the paths are gated on showPaths so
+                        each layer shows independently. */}
+                    {(showFlow || showHeatmap) && (
                       <FlowOverlay
                         paths={flowPaths.map((p) => ({
                           ...p,
                           from: { x: p.from.x, y: 100 - p.from.y },
                           to: { x: p.to.x, y: 100 - p.to.y },
                         }))}
+                        showPaths={showFlow}
                         showHeatmap={showHeatmap}
                         zones={activeLayout.zones.map((z: NormalizedZone) => ({
                           ...z,

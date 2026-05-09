@@ -249,17 +249,18 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
     // proportions that match what the AI model will reason about.
     const longestSide = Math.max(wFt, dFt);
     const orthoExtent = longestSide * 0.85;
-    // Iso-style angle. CRITICAL: the booth's FRONT (primary aisle) is
-    // at z=0 and the BACK is at z=dFt. To put the front in the
-    // foreground (matches the canvas's front-at-bottom convention and
-    // matches a visitor's perspective walking up to the booth), the
-    // camera sits at NEGATIVE z — in front of the booth, looking back
-    // into it. The +x and +y position keep the standard right-side
-    // top-down isometric tilt; only z flips. Without this flip the
-    // back wall obscured the front and the iso looked "backwards" to
-    // the user.
+    // Iso-style angle. The booth's FRONT is at z=0, BACK at z=dFt; the
+    // FRONT-LEFT corner is the world origin. We want:
+    //   • Front in the foreground (camera at negative z, in front of booth)
+    //   • World +x to read as screen-RIGHT (camera on the LEFT side of booth)
+    //   • Slight tilt down (+y above the booth)
+    // First fix put camera at +x — that put back-wall in foreground (wrong).
+    // Second fix moved to (+x, +y, -z) — front faced camera, but the right
+    // hand x axis ended up on screen-LEFT (mirror flip the user reported).
+    // This third take puts camera at the FRONT-LEFT-ABOVE corner, looking
+    // back into the booth: front is in foreground, world +x reads right.
     const camPos: [number, number, number] = [
-      wFt + longestSide * 0.4,
+      -longestSide * 0.4,
       longestSide * 1.1,
       -longestSide * 0.4,
     ];

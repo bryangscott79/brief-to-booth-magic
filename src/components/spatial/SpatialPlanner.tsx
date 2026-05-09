@@ -1002,39 +1002,49 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
               </div>
             ) : (
               /* Zone Blocks View - WITH PROPER ASPECT RATIO */
-              <div 
+              <div
                 className="grid-pattern rounded-lg p-4 overflow-auto"
                 style={{ minHeight: "400px" }}
               >
-                {/* Booth container with correct aspect ratio */}
-                <div className="relative mx-auto" style={{ width: 'fit-content' }}>
+                {/* Booth container with correct aspect ratio.
+                    The outer wrapper used to be `width: fit-content`
+                    which collapsed to 0 once the inner container went
+                    `width: min(100%, …)` — circular dependency turned
+                    the floor plan into an empty grid. We size the
+                    outer to a max-width directly and let the inner
+                    fill it; the labels are positioned relative to
+                    THIS box, so they still hug the floor plan corners. */}
+                <div
+                  className="relative mx-auto"
+                  style={{
+                    width: `min(100%, ${720 * zoom}px)`,
+                    maxWidth: `${720 * zoom}px`,
+                  }}
+                >
                   {/* Width label */}
                   <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground font-medium">
                     {boothDimensions.width}'
                   </div>
-                  
+
                   {/* Depth label */}
-                  <div 
+                  <div
                     className="absolute -left-6 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium"
                     style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg) translateY(50%)' }}
                   >
                     {boothDimensions.depth}'
                   </div>
-                  
-                  {/* Main floor plan container — sized to fill the
-                      column, capped at 720px wide and 70vh tall so it
-                      scales with the page instead of the old fixed
-                      240×400 pixel box. Aspect-ratio keeps the booth's
-                      true proportions; whichever dimension hits its cap
-                      first wins, the other adapts. The 4 sides label
-                      uses the actual booth dimensions, so the visual
-                      and the labels stay in lockstep. */}
+
+                  {/* Main floor plan container — fills the wrapper
+                      width and derives height from the booth's
+                      aspect ratio. The wrapper bounds the width, so
+                      this stays sane on wide columns; aspect-ratio
+                      keeps the booth's true proportions whether the
+                      booth is wide (60×30) or tall (30×50). */}
                   <div
-                    className="relative bg-muted/30 rounded border-2 border-dashed border-border"
+                    className="relative bg-muted/30 rounded border-2 border-dashed border-border w-full"
                     style={{
-                      width: `min(100%, ${720 * zoom}px)`,
-                      maxHeight: `min(70vh, ${720 * zoom}px)`,
                       aspectRatio: `${boothDimensions.width} / ${boothDimensions.depth}`,
+                      maxHeight: '70vh',
                       transition: "all 0.3s ease"
                     }}
                   >

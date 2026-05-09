@@ -548,6 +548,11 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
           // Persist heightFt so re-deriving geometry later doesn't lose
           // user-edited heights.
           heightFt: abs.heightFt,
+          // Persist shape fields too (rect / L / circle + L corner +
+          // notch ratios) so a project save round-trip keeps the user's
+          // shape edits intact.
+          shape: abs.shape,
+          shapeParams: abs.shapeParams,
         };
       });
       const updatedConfig = { ...currentConfig, zones: legacyZones };

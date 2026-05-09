@@ -19,6 +19,39 @@ import type { NormalizedZone, BoothDimensions } from "./spatialUtils";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
+/**
+ * Available zone shapes. The `width` × `depth` bounding box still
+ * controls where the zone sits and how it interacts with overlap /
+ * clamp logic; the shape only changes how the footprint is drawn
+ * inside that box.
+ *
+ *   • rect   — solid rectangle (default)
+ *   • L      — L-shape: rectangle minus a notch in one corner. Useful
+ *              for corner counters that wrap around a column or
+ *              demarcate two zone halves.
+ *   • circle — filled ellipse (a perfect circle when width === depth).
+ *              Used for round bars, pedestals, central display rounds.
+ */
+export type ZoneShape = "rect" | "L" | "circle";
+
+export type LCorner = "NE" | "NW" | "SE" | "SW";
+
+/**
+ * Shape-specific extra parameters. Stored as an object so future
+ * shapes can add their own fields without breaking the discriminated
+ * union (and so persisting + parsing stays robust).
+ */
+export interface ZoneShapeParams {
+  /** Only meaningful for L shapes. Which corner of the bounding box
+   *  is "notched out" (i.e., empty). */
+  lCorner?: LCorner;
+  /** L-shape notch width as a fraction of the zone's width (0.1–0.9).
+   *  Default 0.5 (half-width notch → equal-leg L). */
+  lNotchWidthRatio?: number;
+  /** L-shape notch depth as a fraction of the zone's depth (0.1–0.9). */
+  lNotchDepthRatio?: number;
+}
+
 /** A zone expressed in real units (ft for imperial, m for metric). */
 export interface AbsoluteZone {
   id: string;
@@ -31,6 +64,13 @@ export interface AbsoluteZone {
   width: number;
   /** Footprint depth (along y). Real units. */
   depth: number;
+  /**
+   * Drawing shape inside the bounding box. Defaults to "rect" when
+   * unset (legacy zones from before the shape system shipped).
+   */
+  shape?: ZoneShape;
+  /** Shape-specific extras (notch geometry for L shapes, etc.). */
+  shapeParams?: ZoneShapeParams;
   /**
    * Wall/ceiling height in FEET regardless of measurement system.
    * Image generation contexts always think in feet for height — most
@@ -74,6 +114,42 @@ export interface BoothGeometry {
   zones: AbsoluteZone[];
 }
 
+// ─── Shape helpers ────────────────────────────────────────────────────────
+
+/**
+ * Resolve the effective shape for a zone. Legacy zones (before the
+ * shape system shipped) have no `shape` field — they're treated as
+ * rectangles.
+ */
+export function effectiveShape(zone: AbsoluteZone): ZoneShape {
+  return zone.shape ?? "rect";
+}
+
+/**
+ * Compute the L-shape notch in real units (ft / m). The notch is the
+ * "empty" corner — the zone footprint is the bounding box MINUS this
+ * rectangle. Defaults to a quarter-quarter notch if params are absent.
+ */
+export function resolveLNotch(zone: AbsoluteZone): {
+  corner: LCorner;
+  notchWidth: number;
+  notchDepth: number;
+} {
+  const params = zone.shapeParams ?? {};
+  const corner = params.lCorner ?? "NE";
+  const wRatio = clamp01(params.lNotchWidthRatio ?? 0.5);
+  const dRatio = clamp01(params.lNotchDepthRatio ?? 0.5);
+  return {
+    corner,
+    notchWidth: zone.width * wRatio,
+    notchDepth: zone.depth * dRatio,
+  };
+}
+
+function clamp01(value: number): number {
+  return Math.max(0.1, Math.min(0.9, value));
+}
+
 // ─── Conversion: legacy normalized zone (% based) → absolute ──────────────
 
 const DEFAULT_HEIGHT_FT_BY_KIND: Array<{ match: RegExp; height: number }> = [
@@ -103,6 +179,15 @@ export function absoluteFromNormalizedZone(
 ): AbsoluteZone {
   const { width: bw, depth: bd } = boothDimensions;
   const p = zone.position;
+  // Read fields that may have been persisted on the legacy zone but
+  // aren't part of NormalizedZone proper (heightFt, shape, etc.).
+  // Spread-cast lets us pick them up without changing the legacy type.
+  const extras = zone as unknown as {
+    heightFt?: number;
+    shape?: ZoneShape;
+    shapeParams?: ZoneShapeParams;
+    customPromptOverride?: string;
+  };
   return {
     id: zone.id,
     name: zone.name,
@@ -110,9 +195,14 @@ export function absoluteFromNormalizedZone(
     y: (p.y / 100) * bd,
     width: (p.width / 100) * bw,
     depth: (p.height / 100) * bd,
-    heightFt: defaultHeightForZone(zone.name),
+    heightFt: typeof extras.heightFt === "number" ? extras.heightFt : defaultHeightForZone(zone.name),
     colorHex: zone.colorCode,
     notes: zone.notes,
+    ...(extras.shape ? { shape: extras.shape } : {}),
+    ...(extras.shapeParams ? { shapeParams: extras.shapeParams } : {}),
+    ...(extras.customPromptOverride
+      ? { customPromptOverride: extras.customPromptOverride }
+      : {}),
   };
 }
 

@@ -17,6 +17,7 @@
 // at the dark-themed thumbnail size we were capturing before.
 
 import type { BoothGeometry, AbsoluteZone } from "./geometryModel";
+import { effectiveShape } from "./geometryModel";
 
 /** Long-side resolution in pixels. Booth aspect ratio is preserved. */
 const EXPORT_LONG_SIDE = 1400;
@@ -202,14 +203,16 @@ function drawZone(
   const pw = zone.width * pxPerUnit;
   const pd = zone.depth * pxPerUnit;
 
-  // Fill: zone color at 25% alpha for readability
+  // Trace the shape's path once, then fill + stroke. Reuses the same
+  // path so the AI model sees a consistent footprint outline (filled
+  // body + thick zone-color border) regardless of shape kind.
+  ctx.beginPath();
+  traceZonePath(ctx, zone, px, py, pw, pd);
   ctx.fillStyle = hexWithAlpha(zone.colorHex, 0.25);
-  ctx.fillRect(px, py, pw, pd);
-
-  // Outline: thick zone color
+  ctx.fill();
   ctx.strokeStyle = zone.colorHex;
   ctx.lineWidth = 3;
-  ctx.strokeRect(px, py, pw, pd);
+  ctx.stroke();
 
   // Label inside the zone — name (bold), footprint, height
   const padX = 12;
@@ -246,6 +249,89 @@ function drawZone(
     px + padX,
     py + padY + 56,
   );
+}
+
+/**
+ * Trace a path representing the zone's shape inside its bounding box
+ * (top-left = `(px, py)`, dims = `pw × pd`). Caller is responsible for
+ * `beginPath()` + `fill()` / `stroke()`. The path covers the visible
+ * footprint — bounding box for rect, ellipse for circle, L-polygon
+ * with the configured corner notched out for L.
+ */
+function traceZonePath(
+  ctx: CanvasRenderingContext2D,
+  zone: AbsoluteZone,
+  px: number,
+  py: number,
+  pw: number,
+  pd: number,
+) {
+  const shape = effectiveShape(zone);
+
+  if (shape === "circle") {
+    // canvas y in this export is NOT flipped per-zone — the bounding
+    // box is already positioned with front-at-bottom in the caller.
+    // Ellipse centered in the bounding box.
+    ctx.ellipse(px + pw / 2, py + pd / 2, pw / 2, pd / 2, 0, 0, Math.PI * 2);
+    return;
+  }
+
+  if (shape === "L") {
+    // The corner field uses the SCREEN orientation of the zone:
+    //   NE = top-right, NW = top-left, SE = bottom-right, SW = bottom-left.
+    // Because the floor plan PNG draws each zone with its bounding
+    // box's top edge corresponding to the booth's BACK (we flipped
+    // y-axis at the booth level, but the zone's local bounding box
+    // is still drawn top-down). Notching out NE thus removes the
+    // back-right corner of the booth — matches the user's mental
+    // model of where the L's empty quadrant is.
+    const params = zone.shapeParams ?? {};
+    const wRatio = clamp01(params.lNotchWidthRatio ?? 0.5);
+    const dRatio = clamp01(params.lNotchDepthRatio ?? 0.5);
+    const corner = params.lCorner ?? "NE";
+    const nw = pw * wRatio;
+    const nd = pd * dRatio;
+
+    if (corner === "NE") {
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + pw - nw, py);
+      ctx.lineTo(px + pw - nw, py + nd);
+      ctx.lineTo(px + pw, py + nd);
+      ctx.lineTo(px + pw, py + pd);
+      ctx.lineTo(px, py + pd);
+    } else if (corner === "NW") {
+      ctx.moveTo(px + nw, py);
+      ctx.lineTo(px + pw, py);
+      ctx.lineTo(px + pw, py + pd);
+      ctx.lineTo(px, py + pd);
+      ctx.lineTo(px, py + nd);
+      ctx.lineTo(px + nw, py + nd);
+    } else if (corner === "SE") {
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + pw, py);
+      ctx.lineTo(px + pw, py + pd - nd);
+      ctx.lineTo(px + pw - nw, py + pd - nd);
+      ctx.lineTo(px + pw - nw, py + pd);
+      ctx.lineTo(px, py + pd);
+    } else {
+      // SW
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + pw, py);
+      ctx.lineTo(px + pw, py + pd);
+      ctx.lineTo(px + nw, py + pd);
+      ctx.lineTo(px + nw, py + pd - nd);
+      ctx.lineTo(px, py + pd - nd);
+    }
+    ctx.closePath();
+    return;
+  }
+
+  // Default: rectangle.
+  ctx.rect(px, py, pw, pd);
+}
+
+function clamp01(v: number): number {
+  return Math.max(0.1, Math.min(0.9, v));
 }
 
 /** Format a dimension as "30 FT" or "9.0 M". */

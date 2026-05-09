@@ -16,7 +16,7 @@
 // throttle, undo/redo, or persist to the project).
 
 import { useMemo, useRef, useEffect, forwardRef, useImperativeHandle, useState } from "react";
-import { Stage, Layer, Rect, Text, Line, Group } from "react-konva";
+import { Stage, Layer, Rect, Text, Line, Group, Ellipse } from "react-konva";
 import type Konva from "konva";
 import { Transformer } from "react-konva";
 import {
@@ -28,6 +28,8 @@ import {
   formatZoneFootprint,
   formatZoneArea,
   zonesOverlap,
+  effectiveShape,
+  resolveLNotch,
 } from "@/lib/geometryModel";
 
 const CANVAS_PADDING = 32; // px on each side, leaves room for dimension rulers
@@ -424,18 +426,115 @@ export const SpatialCanvasTopDown = forwardRef<
                   });
                 }}
               >
-                <Rect
-                  width={zone.width * pxPerUnit}
-                  height={zone.depth * pxPerUnit}
-                  fill={zone.colorHex + "55"} // 33% alpha
-                  stroke={
-                    isOverlapping ? "#ef4444"
-                      : isSelected ? "#ffffff"
-                      : zone.colorHex
+                {(() => {
+                  // Shape-aware rendering: rect (default), L, or circle.
+                  // Selection + overlap colors are shared; the shape
+                  // picker on the selected-zone toolbar controls which
+                  // primitive is drawn.
+                  const shape = effectiveShape(zone);
+                  const fill = zone.colorHex + "55"; // 33% alpha
+                  const stroke = isOverlapping
+                    ? "#ef4444"
+                    : isSelected
+                    ? "#ffffff"
+                    : zone.colorHex;
+                  const strokeWidth = isSelected ? 2.5 : isOverlapping ? 2 : 1.5;
+                  const pw = zone.width * pxPerUnit;
+                  const pd = zone.depth * pxPerUnit;
+
+                  if (shape === "circle") {
+                    return (
+                      <Ellipse
+                        x={pw / 2}
+                        y={pd / 2}
+                        radiusX={pw / 2}
+                        radiusY={pd / 2}
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                      />
+                    );
                   }
-                  strokeWidth={isSelected ? 2.5 : isOverlapping ? 2 : 1.5}
-                  cornerRadius={2}
-                />
+
+                  if (shape === "L") {
+                    // Build the L-shape polygon points by walking the
+                    // bounding box and cutting in/out at the notched
+                    // corner. Local coords: (0,0) = top-left of group.
+                    // Points order is clockwise starting at top-left.
+                    const { corner, notchWidth, notchDepth } = resolveLNotch(zone);
+                    const nw = notchWidth * pxPerUnit;
+                    const nd = notchDepth * pxPerUnit;
+                    let points: number[];
+                    switch (corner) {
+                      case "NE":
+                        // Notch removed from top-right corner.
+                        points = [
+                          0, 0,
+                          pw - nw, 0,
+                          pw - nw, nd,
+                          pw, nd,
+                          pw, pd,
+                          0, pd,
+                        ];
+                        break;
+                      case "NW":
+                        // Notch removed from top-left corner.
+                        points = [
+                          nw, 0,
+                          pw, 0,
+                          pw, pd,
+                          0, pd,
+                          0, nd,
+                          nw, nd,
+                        ];
+                        break;
+                      case "SE":
+                        // Notch removed from bottom-right corner.
+                        points = [
+                          0, 0,
+                          pw, 0,
+                          pw, pd - nd,
+                          pw - nw, pd - nd,
+                          pw - nw, pd,
+                          0, pd,
+                        ];
+                        break;
+                      case "SW":
+                      default:
+                        // Notch removed from bottom-left corner.
+                        points = [
+                          0, 0,
+                          pw, 0,
+                          pw, pd,
+                          nw, pd,
+                          nw, pd - nd,
+                          0, pd - nd,
+                        ];
+                        break;
+                    }
+                    return (
+                      <Line
+                        points={points}
+                        closed
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                      />
+                    );
+                  }
+
+                  // Default: rectangle.
+                  return (
+                    <Rect
+                      width={pw}
+                      height={pd}
+                      fill={fill}
+                      stroke={stroke}
+                      strokeWidth={strokeWidth}
+                      cornerRadius={2}
+                    />
+                  );
+                })()}
                 {/* Zone name + dimensions label inside the rect */}
                 <Text
                   x={6}

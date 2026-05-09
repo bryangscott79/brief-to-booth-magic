@@ -18,6 +18,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrthographicCamera, Edges, Text, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import * as THREE from "three";
 import type { BoothGeometry, AbsoluteZone } from "@/lib/geometryModel";
+import { effectiveShape, resolveLNotch } from "@/lib/geometryModel";
 
 /** 1 meter in feet. */
 const M_TO_FT = 3.28084;
@@ -53,6 +54,83 @@ export interface SpatialCanvasIsoProps {
  * booth's front-left corner; THREE's coords are (x: width, y: up, z: depth)
  * so we map zone.x → x, zone.y → z, heightFt → y.
  */
+/**
+ * Build a Three.js Shape for one zone in its LOCAL coords (origin at
+ * the zone's bounding-box center on the floor plane). The shape is
+ * drawn flat in 2D (x, y) and then extruded vertically (along world Y)
+ * by the caller.
+ *
+ *   • rect   — half-w × half-d centered rectangle
+ *   • L      — same rectangle minus a notch at the configured corner
+ *   • circle — ellipse with rx = w/2, ry = d/2 (perfect circle when w==d)
+ */
+function buildZoneShape(zone: AbsoluteZone, w: number, d: number): THREE.Shape {
+  const shape = new THREE.Shape();
+  const halfW = w / 2;
+  const halfD = d / 2;
+
+  const kind = effectiveShape(zone);
+
+  if (kind === "circle") {
+    // Ellipse: 32 segments is plenty for visual smoothness without
+    // bloating geometry. Center at origin, rx = w/2, ry = d/2.
+    shape.absellipse(0, 0, halfW, halfD, 0, Math.PI * 2, false, 0);
+    return shape;
+  }
+
+  if (kind === "L") {
+    const { corner, notchWidth, notchDepth } = resolveLNotch(zone);
+    // Walk the bounding box clockwise, cutting in/out at the notched
+    // corner. Local coords: origin at center, +x right, +y "up" in
+    // the 2D shape plane (which becomes the floor when extruded).
+    // We want corner mapping consistent with the top-down renderer:
+    //   NE = top-right of the 2D shape
+    //   NW = top-left
+    //   SE = bottom-right
+    //   SW = bottom-left
+    if (corner === "NE") {
+      shape.moveTo(-halfW, halfD);
+      shape.lineTo(halfW - notchWidth, halfD);
+      shape.lineTo(halfW - notchWidth, halfD - notchDepth);
+      shape.lineTo(halfW, halfD - notchDepth);
+      shape.lineTo(halfW, -halfD);
+      shape.lineTo(-halfW, -halfD);
+    } else if (corner === "NW") {
+      shape.moveTo(-halfW + notchWidth, halfD);
+      shape.lineTo(halfW, halfD);
+      shape.lineTo(halfW, -halfD);
+      shape.lineTo(-halfW, -halfD);
+      shape.lineTo(-halfW, halfD - notchDepth);
+      shape.lineTo(-halfW + notchWidth, halfD - notchDepth);
+    } else if (corner === "SE") {
+      shape.moveTo(-halfW, halfD);
+      shape.lineTo(halfW, halfD);
+      shape.lineTo(halfW, -halfD + notchDepth);
+      shape.lineTo(halfW - notchWidth, -halfD + notchDepth);
+      shape.lineTo(halfW - notchWidth, -halfD);
+      shape.lineTo(-halfW, -halfD);
+    } else {
+      // SW
+      shape.moveTo(-halfW, halfD);
+      shape.lineTo(halfW, halfD);
+      shape.lineTo(halfW, -halfD);
+      shape.lineTo(-halfW + notchWidth, -halfD);
+      shape.lineTo(-halfW + notchWidth, -halfD + notchDepth);
+      shape.lineTo(-halfW, -halfD + notchDepth);
+    }
+    shape.closePath();
+    return shape;
+  }
+
+  // Default: rectangle.
+  shape.moveTo(-halfW, halfD);
+  shape.lineTo(halfW, halfD);
+  shape.lineTo(halfW, -halfD);
+  shape.lineTo(-halfW, -halfD);
+  shape.closePath();
+  return shape;
+}
+
 function ZoneBox({
   zone,
   system,
@@ -69,10 +147,16 @@ function ZoneBox({
   const cz = toFt(zone.y, system) + d / 2;
   const cy = h / 2;
 
+  // Build the 2D footprint shape, then extrude it vertically so the
+  // zone reads as a 3D volume. ExtrudeGeometry extrudes along +Z in
+  // its local frame; we rotate -90° around X so the extrusion axis
+  // aligns with world Y (up).
+  const footprintShape = useMemo(() => buildZoneShape(zone, w, d), [zone, w, d]);
+
   return (
     <group position={[cx, cy, cz]}>
-      <mesh>
-        <boxGeometry args={[w, h, d]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <extrudeGeometry args={[footprintShape, { depth: h, bevelEnabled: false }]} />
         <meshStandardMaterial
           color={zone.colorHex}
           transparent
@@ -82,9 +166,12 @@ function ZoneBox({
         />
         <Edges color={highlighted ? "#ffffff" : zone.colorHex} threshold={1} />
       </mesh>
-      {/* Floor footprint — slightly darker fill so zones still read from above. */}
+      {/* Floor footprint shape — slightly darker fill so zones still
+          read from above. Uses the same THREE.Shape extruded by 0.04
+          (just the floor "tile") to avoid z-fighting with the booth
+          floor plane underneath. */}
       <mesh position={[0, -h / 2 + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[w, d]} />
+        <shapeGeometry args={[footprintShape]} />
         <meshBasicMaterial color={zone.colorHex} opacity={0.6} transparent />
       </mesh>
       {/* Floating zone label above the box. Long names get truncated

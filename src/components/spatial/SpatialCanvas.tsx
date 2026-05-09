@@ -31,17 +31,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon } from "lucide-react";
+import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon } from "lucide-react";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
 import { renderFloorPlanForExport } from "@/lib/renderFloorPlanForExport";
 import {
   type BoothGeometry,
   type AbsoluteZone,
+  type ZoneShape,
+  type LCorner,
   autoLayoutZones,
   boothArea,
   totalZoneArea,
   zonesOverlap,
+  effectiveShape,
 } from "@/lib/geometryModel";
 
 export interface CapturedRefs {
@@ -322,6 +325,89 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                   ? `${selectedZone.width.toFixed(1)}m × ${selectedZone.depth.toFixed(1)}m`
                   : `${Math.round(selectedZone.width)}' × ${Math.round(selectedZone.depth)}'`}
               </span>
+              <span className="text-muted-foreground">·</span>
+              {/* Shape picker — rect / L / circle. Rect is the default;
+                  L is for corner counters (notch out one corner); circle
+                  draws an ellipse inside the bounding box (perfect circle
+                  when width === depth). */}
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Shape:</span>
+                <div className="flex items-center rounded-md border border-border bg-muted/30 p-0.5 gap-0.5">
+                  {(
+                    [
+                      { id: "rect", icon: Square, title: "Rectangle" },
+                      { id: "L", icon: BoxIcon, title: "L-shape (corner counter)" },
+                      { id: "circle", icon: CircleIcon, title: "Circle / ellipse" },
+                    ] as Array<{ id: ZoneShape; icon: typeof Square; title: string }>
+                  ).map((opt) => {
+                    const Icon = opt.icon;
+                    const active = effectiveShape(selectedZone) === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        title={opt.title}
+                        onClick={() => {
+                          onGeometryChange({
+                            ...geometry,
+                            zones: geometry.zones.map((z) =>
+                              z.id === selectedZone.id ? { ...z, shape: opt.id } : z,
+                            ),
+                          });
+                        }}
+                        className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                          active
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className="h-3 w-3" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* L-corner picker — only meaningful when shape === "L".
+                  4 buttons in a 2×2 grid representing which corner is
+                  notched out of the zone's bounding box. */}
+              {effectiveShape(selectedZone) === "L" && (
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">Corner:</span>
+                  <div className="grid grid-cols-2 gap-0.5 p-0.5 rounded-md border border-border bg-muted/30">
+                    {(["NW", "NE", "SW", "SE"] as LCorner[]).map((c) => {
+                      const active = (selectedZone.shapeParams?.lCorner ?? "NE") === c;
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          title={`Notch the ${c} corner`}
+                          onClick={() => {
+                            onGeometryChange({
+                              ...geometry,
+                              zones: geometry.zones.map((z) =>
+                                z.id === selectedZone.id
+                                  ? {
+                                      ...z,
+                                      shape: "L",
+                                      shapeParams: { ...(z.shapeParams ?? {}), lCorner: c },
+                                    }
+                                  : z,
+                              ),
+                            });
+                          }}
+                          className={`h-3.5 w-4 rounded-sm flex items-center justify-center text-[8px] font-mono font-bold transition-colors ${
+                            active
+                              ? "bg-background text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <span className="text-muted-foreground">·</span>
               <label className="flex items-center gap-1.5 text-muted-foreground">
                 Height:

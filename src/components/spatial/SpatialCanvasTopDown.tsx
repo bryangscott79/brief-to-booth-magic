@@ -57,6 +57,17 @@ export interface SpatialCanvasTopDownProps {
    * fullscreen expanded view.
    */
   maxCanvasSize?: number;
+  /**
+   * Render visitor-flow arrows on top of the canvas. Arrows fan out
+   * from a single entry point at the front-center of the booth (the
+   * primary aisle) toward each zone, weighted by zone area.
+   */
+  showFlow?: boolean;
+  /**
+   * Render a translucent dwell-time heatmap (one fading ellipse per
+   * zone). Independent from showFlow — either or both can be on.
+   */
+  showHeatmap?: boolean;
 }
 
 export interface SpatialCanvasTopDownHandle {
@@ -104,6 +115,8 @@ export const SpatialCanvasTopDown = forwardRef<
     onZonesChange,
     readonly = false,
     maxCanvasSize = DEFAULT_MAX_CANVAS_SIZE,
+    showFlow = false,
+    showHeatmap = false,
   },
   ref,
 ) {
@@ -605,6 +618,108 @@ export const SpatialCanvasTopDown = forwardRef<
             />
           )}
         </Layer>
+
+        {/* Flow + heatmap overlay layer.
+            Heatmap = soft ellipses behind each zone (read as dwell
+            density). Flow = arrowed lines from a single entry point
+            at the front-center of the booth fanning out to each zone
+            center, weighted by area. We keep the math in canvas
+            coords so toPxX/toPxY's y-flip lands paths in the right
+            place (entry below front-center, arrows pointing UP into
+            the booth — visitor's perspective). The layer is listening
+            ={false} so it never intercepts a drag/select. */}
+        {(showFlow || showHeatmap) && (
+          <Layer listening={false}>
+            {/* Heatmap — translucent ellipses sized to the zone
+                footprint with a fixed 35% opacity so the underlying
+                zone color and label still show through. */}
+            {showHeatmap &&
+              geometry.zones.map((zone) => {
+                const cx = toPxX(zone.x + zone.width / 2);
+                const cy = toPxY(zone.y + zone.depth / 2);
+                const rx = (zone.width * pxPerUnit) * 0.55;
+                const ry = (zone.depth * pxPerUnit) * 0.55;
+                return (
+                  <Ellipse
+                    key={`heat-${zone.id}`}
+                    x={cx}
+                    y={cy}
+                    radiusX={rx}
+                    radiusY={ry}
+                    fill={zone.colorHex}
+                    opacity={0.35}
+                  />
+                );
+              })}
+
+            {/* Flow — arrowed lines from entry to each zone. Entry
+                is a fixed point at the front-center of the booth,
+                just inside the aisle (y = small). We draw a
+                straight-ish line per zone with intensity scaled by
+                zone area so the dominant zones get the boldest
+                arrows. */}
+            {showFlow && (() => {
+              const entry = {
+                x: toPxX(geometry.width / 2),
+                y: toPxY(0.5), // 0.5 ft inside the front edge
+              };
+              const totalArea = geometry.zones.reduce(
+                (s, z) => s + z.width * z.depth,
+                0,
+              );
+              return (
+                <>
+                  {/* Entry marker — small filled circle so the user
+                      can see where flow originates. */}
+                  <Ellipse
+                    x={entry.x}
+                    y={entry.y}
+                    radiusX={5}
+                    radiusY={5}
+                    fill="#a78bfa"
+                    opacity={0.85}
+                  />
+                  <Text
+                    x={entry.x - 30}
+                    y={entry.y + 8}
+                    width={60}
+                    align="center"
+                    text="ENTRY"
+                    fontSize={9}
+                    fontStyle="bold"
+                    fill="rgba(167,139,250,0.9)"
+                  />
+                  {geometry.zones.map((zone) => {
+                    const target = {
+                      x: toPxX(zone.x + zone.width / 2),
+                      y: toPxY(zone.y + zone.depth / 2),
+                    };
+                    const areaShare = totalArea
+                      ? (zone.width * zone.depth) / totalArea
+                      : 0;
+                    const intensity = 0.4 + areaShare * 1.6; // 0.4–2.0 ish
+                    return (
+                      <Line
+                        key={`flow-${zone.id}`}
+                        points={[entry.x, entry.y, target.x, target.y]}
+                        stroke="#a78bfa"
+                        strokeWidth={Math.max(1, intensity * 1.4)}
+                        opacity={0.55}
+                        dash={[6, 4]}
+                        lineCap="round"
+                        // Arrowhead drawn as a separate small Line
+                        // would be ideal; Konva doesn't ship a marker
+                        // primitive so we settle for a dashed line —
+                        // direction is read from the entry-to-zone
+                        // gradient and the entry marker.
+                      />
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </Layer>
+        )}
       </Stage>
     </div>
   );

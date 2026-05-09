@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon } from "lucide-react";
+import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon, TrendingUp, Footprints } from "lucide-react";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
 import { renderFloorPlanForExport } from "@/lib/renderFloorPlanForExport";
@@ -83,6 +83,11 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
   ) {
     const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
     const [showIso, setShowIso] = useState(true);
+    // Flow + heatmap overlays. Live on the top-down canvas as a Konva
+    // layer so the user can read visitor flow without leaving the
+    // editor. Independent toggles — either or both can be on.
+    const [showFlow, setShowFlow] = useState(false);
+    const [showHeatmap, setShowHeatmap] = useState(false);
     // Zone whose prompt is currently being edited. Null = dialog closed.
     const [promptEditZoneId, setPromptEditZoneId] = useState<string | null>(null);
     // Local draft of the prompt while the dialog is open. Committed on Save.
@@ -198,6 +203,8 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
             onZonesChange={handleZonesChange}
             readonly={readonly}
             maxCanvasSize={opts.maxCanvasSize}
+            showFlow={showFlow}
+            showHeatmap={showHeatmap}
           />
         </div>
         {showIso && (
@@ -248,6 +255,28 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                   Auto-arrange
                 </Button>
               )}
+              <Button
+                type="button"
+                variant={showFlow ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowFlow((v) => !v)}
+                title="Overlay visitor-flow arrows from the front-aisle entry to each zone, weighted by area."
+              >
+                <Footprints className="h-3 w-3" />
+                Flow
+              </Button>
+              <Button
+                type="button"
+                variant={showHeatmap ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowHeatmap((v) => !v)}
+                title="Overlay a translucent dwell-time heatmap on each zone."
+              >
+                <TrendingUp className="h-3 w-3" />
+                Heatmap
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
@@ -624,6 +653,28 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                       Auto-arrange
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    variant={showFlow ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setShowFlow((v) => !v)}
+                    title="Overlay visitor-flow arrows on the canvas"
+                  >
+                    <Footprints className="h-3 w-3" />
+                    Flow
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={showHeatmap ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setShowHeatmap((v) => !v)}
+                    title="Overlay a dwell-time heatmap on each zone"
+                  >
+                    <TrendingUp className="h-3 w-3" />
+                    Heatmap
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"

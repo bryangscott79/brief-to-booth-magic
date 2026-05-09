@@ -146,16 +146,27 @@ function ZoneBox({
   zone,
   system,
   highlighted,
+  boothDepthFt,
 }: {
   zone: AbsoluteZone;
   system: "imperial" | "metric";
   highlighted: boolean;
+  /** Booth depth in feet, used to FLIP the data Y → world Z mapping. */
+  boothDepthFt: number;
 }) {
   const w = toFt(zone.width, system);
   const d = toFt(zone.depth, system);
   const h = zone.heightFt;
   const cx = toFt(zone.x, system) + w / 2;
-  const cz = toFt(zone.y, system) + d / 2;
+  // CRITICAL: flip data y → world z so that data y=0 (booth FRONT,
+  // primary aisle) maps to world z = boothDepthFt (the FAR end in
+  // world coords). With the camera at (+X, +Y, +Z), that puts the
+  // FRONT in the foreground AND keeps world +X on screen-right —
+  // the only camera angle that satisfies both constraints. Earlier
+  // attempts that put camera at -Z to bring front forward
+  // unavoidably mirrored X (Three.js' right vector flips when the
+  // camera's view direction crosses the world up plane).
+  const cz = boothDepthFt - toFt(zone.y, system) - d / 2;
   const cy = h / 2;
 
   // Build the 2D footprint shape, then extrude it vertically so the
@@ -249,20 +260,17 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
     // proportions that match what the AI model will reason about.
     const longestSide = Math.max(wFt, dFt);
     const orthoExtent = longestSide * 0.85;
-    // Iso-style angle. The booth's FRONT is at z=0, BACK at z=dFt; the
-    // FRONT-LEFT corner is the world origin. We want:
-    //   • Front in the foreground (camera at negative z, in front of booth)
-    //   • World +x to read as screen-RIGHT (camera on the LEFT side of booth)
-    //   • Slight tilt down (+y above the booth)
-    // First fix put camera at +x — that put back-wall in foreground (wrong).
-    // Second fix moved to (+x, +y, -z) — front faced camera, but the right
-    // hand x axis ended up on screen-LEFT (mirror flip the user reported).
-    // This third take puts camera at the FRONT-LEFT-ABOVE corner, looking
-    // back into the booth: front is in foreground, world +x reads right.
+    // Standard isometric: camera at (+X, +Y, +Z). With our z-flip in
+    // ZoneBox (data y → world z = dFt - data y), the booth's front
+    // (data y=0) sits at world z=dFt, which is CLOSER to the camera
+    // — front in foreground. World +X stays on screen-right because
+    // the camera is at +Z (Three.js' right vector flips sign when
+    // the camera crosses the world-up plane to look "back through"
+    // the scene; staying at +Z avoids that flip).
     const camPos: [number, number, number] = [
-      -longestSide * 0.4,
+      longestSide * 1.4,
       longestSide * 1.1,
-      -longestSide * 0.4,
+      longestSide * 1.4,
     ];
 
     // Stash the latest scene + camera handles so the PNG capture path
@@ -344,11 +352,15 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
               zone={z}
               system={geometry.measurementSystem}
               highlighted={z.id === highlightedZoneId}
+              boothDepthFt={dFt}
             />
           ))}
 
-          {/* 5'8" silhouette in the front-left corner — visual scale anchor. */}
-          {showHuman && <HumanSilhouette x={1.5} z={1.5} />}
+          {/* 5'8" silhouette in the front-left corner — visual scale
+              anchor. With the data y → world z flip, "front" lives at
+              world z = dFt, so place the human there (1.5 ft inside)
+              instead of at z=1.5 which would now be the BACK wall. */}
+          {showHuman && <HumanSilhouette x={1.5} z={dFt - 1.5} />}
 
           {/* Compass gizmo (top-right) so the viewer can read N/E/S/W axes */}
           <GizmoHelper alignment="top-right" margin={[60, 60]}>

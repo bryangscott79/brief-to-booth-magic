@@ -38,6 +38,7 @@ import {
   type BoothGeometry,
   boothGeometryFromLegacy,
   normalizedFromAbsoluteZone,
+  fixLayoutAutomatically,
   type AbsoluteZone,
 } from "@/lib/geometryModel";
 import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
@@ -1026,10 +1027,22 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
             </TabsContent>
 
             <TabsContent value="constraints" className="space-y-4 mt-4">
-              {/* Full constraint panel with ADA, zone sizing, sightlines, utilities */}
+              {/* Full constraint panel with ADA, zone sizing, sightlines,
+                  utilities — plus a one-click layout repair button that
+                  clamps zones to bounds, snaps to grid, and redistributes
+                  overlaps via the same heuristic as the canvas's
+                  Auto-arrange button. */}
               <ConstraintPanel
                 zones={activeLayout.zones}
                 boothDimensions={boothDimensions}
+                onAutoFix={() => {
+                  const fixed = fixLayoutAutomatically(canvasGeometry);
+                  handleCanvasGeometryChange(fixed);
+                  toast({
+                    title: "Layout repaired",
+                    description: "Zones clamped to bounds, snapped to grid, and overlaps resolved.",
+                  });
+                }}
               />
             </TabsContent>
 

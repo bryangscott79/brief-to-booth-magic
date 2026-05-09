@@ -16,9 +16,11 @@ import {
   Eye,
   Zap,
   ShieldCheck,
+  Wand2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
@@ -41,13 +43,21 @@ interface ConstraintPanelProps {
   zones: NormalizedZone[];
   boothDimensions: BoothDimensions;
   compact?: boolean;
+  /**
+   * Optional one-click layout-fix handler. When provided, an "Auto-fix
+   * layout" button appears whenever errors or warnings exist. Clamps
+   * zones to bounds, snaps to grid, and redistributes overlaps — uses
+   * the fixLayoutAutomatically helper from lib/geometryModel.ts at
+   * the call site. Hidden when the layout is already clean (no issues).
+   */
+  onAutoFix?: () => void;
 }
 
 // ============================================
 // COMPONENT
 // ============================================
 
-export function ConstraintPanel({ zones, boothDimensions, compact = false }: ConstraintPanelProps) {
+export function ConstraintPanel({ zones, boothDimensions, compact = false, onAutoFix }: ConstraintPanelProps) {
   const totalSqft = boothDimensions.totalSqft;
 
   // Run all validations
@@ -91,21 +101,38 @@ export function ConstraintPanel({ zones, boothDimensions, compact = false }: Con
             <span className={cn("text-2xl font-bold", healthColor)}>{healthScore}</span>
           </div>
           <Progress value={healthScore} className="h-2" />
-          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-            {errors.length > 0 && (
-              <span className="flex items-center gap-1 text-red-500">
-                <XCircle className="h-3 w-3" /> {errors.length} errors
-              </span>
-            )}
-            {warnings.length > 0 && (
-              <span className="flex items-center gap-1 text-yellow-500">
-                <AlertTriangle className="h-3 w-3" /> {warnings.length} warnings
-              </span>
-            )}
-            {errors.length === 0 && warnings.length === 0 && (
-              <span className="flex items-center gap-1 text-green-500">
-                <CheckCircle2 className="h-3 w-3" /> All checks passed
-              </span>
+          <div className="flex items-center justify-between gap-4 mt-2">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+              {errors.length > 0 && (
+                <span className="flex items-center gap-1 text-red-500">
+                  <XCircle className="h-3 w-3" /> {errors.length} errors
+                </span>
+              )}
+              {warnings.length > 0 && (
+                <span className="flex items-center gap-1 text-yellow-500">
+                  <AlertTriangle className="h-3 w-3" /> {warnings.length} warnings
+                </span>
+              )}
+              {errors.length === 0 && warnings.length === 0 && (
+                <span className="flex items-center gap-1 text-green-500">
+                  <CheckCircle2 className="h-3 w-3" /> All checks passed
+                </span>
+              )}
+            </div>
+            {/* One-click layout repair. Hidden when the layout is clean
+                AND when no fix handler was wired (e.g., legacy contexts). */}
+            {onAutoFix && (errors.length > 0 || warnings.length > 0) && (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={onAutoFix}
+                title="Clamp zones to booth bounds, snap to grid, and redistribute overlapping zones"
+              >
+                <Wand2 className="h-3 w-3" />
+                Auto-fix layout
+              </Button>
             )}
           </div>
         </CardContent>

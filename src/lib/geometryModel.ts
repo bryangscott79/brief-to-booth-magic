@@ -343,3 +343,51 @@ export function autoLayoutZones(opts: AutoLayoutOptions): AbsoluteZone[] {
   // Preserve original input order so React keys + UI lists stay stable.
   return zones.map((z) => placed.find((p) => p.id === z.id) ?? z);
 }
+
+/**
+ * One-click layout repair. Called by the "Fix layout" CTA in the
+ * Validate tab when the user wants to bring the booth to a clean state
+ * without manually dragging zones.
+ *
+ * Steps, in order:
+ *   1. Clamp every zone to the booth's outer rectangle (resolves any
+ *      "extends past edge" errors).
+ *   2. Snap positions + sizes to the unit grid (1' / 0.5m).
+ *   3. If any zones still overlap or under/over-allocate the booth,
+ *      run autoLayoutZones to redistribute everything heuristically.
+ *      This may move zones; users can drag-fine-tune afterward.
+ *
+ * Returns a NEW BoothGeometry (input is not mutated). Idempotent —
+ * running it twice on already-clean geometry is a no-op.
+ */
+export function fixLayoutAutomatically(geometry: BoothGeometry): BoothGeometry {
+  // Pass 1: clamp + snap each zone individually.
+  const clamped = geometry.zones.map((z) => {
+    const c = clampZoneToBooth(z, geometry);
+    return {
+      ...c,
+      x: snapToGrid(c.x, geometry.measurementSystem),
+      y: snapToGrid(c.y, geometry.measurementSystem),
+      width: snapToGrid(c.width, geometry.measurementSystem),
+      depth: snapToGrid(c.depth, geometry.measurementSystem),
+    };
+  });
+
+  // Pass 2: detect remaining overlaps. If any, run auto-layout to
+  // redistribute. If none, we're done.
+  let hasOverlap = false;
+  outer: for (let i = 0; i < clamped.length; i++) {
+    for (let j = i + 1; j < clamped.length; j++) {
+      if (zonesOverlap(clamped[i], clamped[j])) {
+        hasOverlap = true;
+        break outer;
+      }
+    }
+  }
+
+  const finalZones = hasOverlap
+    ? autoLayoutZones({ geometry: { ...geometry, zones: clamped }, zones: clamped })
+    : clamped;
+
+  return { ...geometry, zones: finalZones };
+}

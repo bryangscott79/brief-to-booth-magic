@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -57,6 +57,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClients, type Client } from "@/hooks/useClients";
 import { useProjectThumbnails } from "@/hooks/useProjectThumbnails";
 import { ProjectVisualThumb } from "@/components/projects/ProjectVisualThumb";
+import {
+  statusPalette,
+  resolveClientDisplayName,
+  resolveActivationDisplayName,
+} from "@/lib/projectDisplay";
 import { formatDistanceToNow } from "date-fns";
 import {
   Select,
@@ -157,13 +162,23 @@ function ProjectProgressBar({ project }: { project: DBProject }) {
   );
 }
 
-const STATUS_BADGES: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
-  draft: { label: "Draft", variant: "outline" },
-  parsing: { label: "Parsing", variant: "secondary" },
-  reviewed: { label: "Reviewed", variant: "secondary" },
-  generating: { label: "Generating", variant: "secondary" },
-  completed: { label: "Completed", variant: "default" },
-};
+/**
+ * Renders a project's status as a color-coded pill — distinct hues for
+ * draft (amber), parsing (sky), reviewed (indigo), generating (violet),
+ * and delivered (emerald). Replaces the prior shadcn variant mapping
+ * which only had 3 visual tones across 5 states.
+ */
+function StatusPill({ status, className }: { status: string | null | undefined; className?: string }) {
+  const p = statusPalette(status);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium ${p.badgeClass} ${className ?? ""}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${p.dotClass}`} />
+      {p.label}
+    </span>
+  );
+}
 
 type OwnerFilter = "mine" | "all";
 
@@ -612,7 +627,14 @@ export default function ProjectsPage() {
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-medium truncate">{project.name}</span>
+                              {/* Table row uses the activation name as the
+                                  primary label (the client is already the
+                                  group header above). Falls back to the
+                                  project name when no clean activation
+                                  name can be derived. */}
+                              <span className="text-sm font-medium truncate">
+                                {resolveActivationDisplayName(project, group.name) ?? project.name}
+                              </span>
                               {hasChildren && (
                                 <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
                                   <Layers className="h-2.5 w-2.5 mr-0.5" />
@@ -634,9 +656,7 @@ export default function ProjectsPage() {
                               )}
                             </div>
                           </div>
-                          <Badge variant={STATUS_BADGES[project.status]?.variant || "outline"} className="shrink-0">
-                            {STATUS_BADGES[project.status]?.label || project.status}
-                          </Badge>
+                          <StatusPill status={project.status} className="shrink-0" />
                           {isOwnProject && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -685,7 +705,15 @@ export default function ProjectsPage() {
               const isExpanded = expandedSuites.has(project.id);
               const heroUrl = thumbnailsByProject?.get(project.id) ?? null;
               const client = resolveClient(project);
-              const clientName = resolveClientName(project);
+              const clientName = resolveClientDisplayName(project, clientById);
+              const activationName = resolveActivationDisplayName(project, clientName);
+              // Title hierarchy:
+              //   • clientName as the big top line when we have one
+              //   • activationName as the muted subtitle
+              //   • If no client info exists yet, the messy project.name
+              //     becomes the top line so the card still has SOME title.
+              const titleLine = clientName ?? project.name;
+              const subtitleLine = clientName ? activationName : null;
 
               return (
                 <div key={project.id} className={hasChildren ? "col-span-full" : ""}>
@@ -698,91 +726,86 @@ export default function ProjectsPage() {
                     onClick={() => handleOpenProject(project)}
                   >
                     <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {hasChildren && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleSuiteExpand(project.id); }}
-                              className="shrink-0 p-0.5 rounded hover:bg-muted transition-colors"
-                            >
-                              {isExpanded
-                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                            </button>
+                      <div className="flex items-start gap-3">
+                        {hasChildren && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleSuiteExpand(project.id); }}
+                            className="shrink-0 p-0.5 rounded hover:bg-muted transition-colors"
+                          >
+                            {isExpanded
+                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          </button>
+                        )}
+                        {/* Visual reference: hero render → client logo →
+                            brand-color swatch → folder icon. */}
+                        <ProjectVisualThumb
+                          heroUrl={heroUrl}
+                          client={client}
+                          projectName={project.name}
+                          size={56}
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          {/* Top row: status pill + suite badge.
+                              Pulled to its own row so the title gets the
+                              full width below it. */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <StatusPill status={project.status} />
+                            {hasChildren && (
+                              <Badge variant="secondary" className="text-[10px] h-5">
+                                <Layers className="h-2.5 w-2.5 mr-0.5" />
+                                Suite · {children.length}
+                              </Badge>
+                            )}
+                          </div>
+                          {/* Title hierarchy: CLIENT NAME first, activation
+                              subtitle second. Falls back to project.name
+                              when no client/brand info is available yet. */}
+                          <CardTitle className="text-base leading-tight break-words">
+                            {titleLine}
+                          </CardTitle>
+                          {subtitleLine && (
+                            <p className="text-xs text-muted-foreground leading-snug line-clamp-2">
+                              {subtitleLine}
+                            </p>
                           )}
-                          {/* Visual reference: hero render → client logo
-                              → brand-color swatch → folder icon. */}
-                          <ProjectVisualThumb
-                            heroUrl={heroUrl}
-                            client={client}
-                            projectName={project.name}
-                            size={48}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <CardTitle className="text-base leading-snug break-words">
-                              {project.name}
-                            </CardTitle>
-                            {clientName && (
-                              <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
-                                <Building2 className="h-3 w-3" />
-                                <span className="truncate">{clientName}</span>
-                              </div>
+                          {/* Meta line: updated time + ownership chip,
+                              compact and out of the way. */}
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}
+                            </span>
+                            {isOwnProject ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1 text-primary/80">
+                                    <User className="h-2.5 w-2.5" />
+                                    Mine
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">Your project</TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1">
+                                    <Shield className="h-2.5 w-2.5" />
+                                    Shared
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Owner: {project.user_id.slice(0, 8)}…
+                                </TooltipContent>
+                              </Tooltip>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {hasChildren && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              <Layers className="h-2.5 w-2.5 mr-1" />
-                              {children.length} activation{children.length !== 1 ? "s" : ""}
-                            </Badge>
-                          )}
-                          <Badge variant={STATUS_BADGES[project.status]?.variant || "outline"}>
-                            {STATUS_BADGES[project.status]?.label || project.status}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <CardDescription className="flex items-center gap-1 text-xs">
-                          <Calendar className="h-3 w-3" />
-                          Updated {formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}
-                        </CardDescription>
-                        {/* Owner chip */}
-                        {isOwnProject ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold leading-none">
-                                <User className="h-2.5 w-2.5" />
-                                Mine
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Your project</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold leading-none">
-                                <Shield className="h-2.5 w-2.5" />
-                                Shared
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">
-                              Owner: {project.user_id.slice(0, 8)}…
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
                       <ProjectProgressBar project={project} />
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="text-sm text-muted-foreground">
-                          {project.parsed_brief ? (
-                            <span>{(project.parsed_brief as any).brand?.name || "Brief uploaded"}</span>
-                          ) : (
-                            <span>No brief uploaded</span>
-                          )}
-                        </div>
+                      <div className="flex items-center justify-end mt-3">
                         <div className="flex items-center gap-1">
                           {/* Suite overview shortcut */}
                           {hasChildren && (
@@ -866,9 +889,7 @@ export default function ProjectsPage() {
                                         )}
                                       </div>
                                     </div>
-                                    <Badge variant={STATUS_BADGES[child.status]?.variant || "outline"} className="text-[10px] shrink-0">
-                                      {STATUS_BADGES[child.status]?.label || child.status}
-                                    </Badge>
+                                    <StatusPill status={child.status} className="shrink-0" />
                                   </div>
                                 </CardContent>
                               </Card>

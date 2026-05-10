@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon, TrendingUp, Footprints, Plus, Trash2 } from "lucide-react";
+import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon, TrendingUp, Footprints, Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
@@ -78,11 +78,27 @@ export interface SpatialCanvasProps {
    * preview contexts where prompt editing doesn't apply).
    */
   getZoneDefaultPrompt?: (zoneId: string) => string;
+  /**
+   * Optional AI-enrichment callback. When wired, surfaces a "Suggest
+   * layout" button that calls the enrich-spatial edge function to
+   * auto-populate structural form / visual brief / intent / materials
+   * per zone, plus 3–6 sculptural features. The parent owns the
+   * network call and the merge; this prop just toggles the button on.
+   */
+  onEnrichSpatial?: () => void | Promise<void>;
+  isEnriching?: boolean;
 }
 
 export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>(
   function SpatialCanvas(
-    { geometry, onGeometryChange, readonly = false, getZoneDefaultPrompt },
+    {
+      geometry,
+      onGeometryChange,
+      readonly = false,
+      getZoneDefaultPrompt,
+      onEnrichSpatial,
+      isEnriching = false,
+    },
     ref,
   ) {
     const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -405,6 +421,24 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
               )}
             </CardTitle>
             <div className="flex items-center gap-1 flex-wrap">
+              {!readonly && onEnrichSpatial && (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => onEnrichSpatial()}
+                  disabled={isEnriching}
+                  title="Use AI to suggest structural form, visual brief, intent, materials, and sculptural features anchored to your zones. Built from the brief + hero installation."
+                >
+                  {isEnriching ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  {isEnriching ? "Enriching…" : "Suggest layout"}
+                </Button>
+              )}
               {!readonly && (
                 <Button
                   type="button"
@@ -841,6 +875,23 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                     >
                       <Wand2 className="h-3 w-3" />
                       Auto-arrange
+                    </Button>
+                  )}
+                  {!readonly && onEnrichSpatial && (
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => onEnrichSpatial()}
+                      disabled={isEnriching}
+                    >
+                      {isEnriching ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      {isEnriching ? "Enriching…" : "Suggest layout"}
                     </Button>
                   )}
                   {!readonly && <FeatureAddMenu onAdd={handleAddFeature} />}

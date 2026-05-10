@@ -650,6 +650,93 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     ],
   );
 
+  // ── Spatial enrichment ─────────────────────────────────────────
+  // Phase 2 of the spatial-as-design-source rebuild. Calls the
+  // enrich-spatial edge function with the current zones + brief +
+  // hero + booth dims; the LLM returns structuralForm /
+  // featureDescription / intent / materialIds per zone plus 3–6
+  // sculptural features anchored to zones. We merge those into the
+  // current geometry (preserving canvas-owned shape/heightFt edits)
+  // and write through handleCanvasGeometryChange so the response
+  // hits the same persistence path as a manual edit.
+  const [isEnriching, setIsEnriching] = useState(false);
+  const handleEnrichSpatial = useCallback(async () => {
+    if (!spatialData || !currentConfig) return;
+    setIsEnriching(true);
+    try {
+      const heroInstallation =
+        currentProject?.elements.interactiveMechanics?.data?.hero ?? null;
+      const { data, error } = await supabase.functions.invoke(
+        "enrich-spatial",
+        {
+          body: {
+            parsedBrief: brief,
+            bigIdea,
+            heroInstallation,
+            spatialStrategy: spatialData,
+            boothDimensions,
+          },
+        },
+      );
+      if (error) throw error;
+      const enr = data?.enrichment;
+      if (!enr) throw new Error("No enrichment returned");
+      // Merge per-zone metadata into the current canvasGeometry. We
+      // match on zone id so missing zones fall through unchanged and
+      // user-edited canvas state (shape, heightFt) is preserved.
+      const zoneMap = new Map<string, any>(
+        (enr.zones ?? []).map((z: any) => [z.id, z]),
+      );
+      const mergedZones = canvasGeometry.zones.map((z) => {
+        const meta = zoneMap.get(z.id);
+        if (!meta) return z;
+        return {
+          ...z,
+          structuralForm: meta.structuralForm ?? z.structuralForm,
+          featureDescription:
+            meta.featureDescription ?? z.featureDescription,
+          intent: meta.intent ?? z.intent,
+          materialIds: Array.isArray(meta.materialIds)
+            ? meta.materialIds
+            : z.materialIds,
+        };
+      });
+      // Replace features wholesale — the LLM gives us a complete
+      // proposal anchored to the zones. The user can then drag /
+      // delete / refine via the canvas toolbar.
+      const nextGeometry: BoothGeometry = {
+        ...canvasGeometry,
+        zones: mergedZones,
+        features: Array.isArray(enr.features) ? enr.features : [],
+      };
+      handleCanvasGeometryChange(nextGeometry);
+      toast({
+        title: "Spatial enriched",
+        description: `Updated ${enr.zones?.length ?? 0} zones and added ${enr.features?.length ?? 0} features.`,
+      });
+    } catch (e) {
+      console.error("enrich-spatial failed:", e);
+      toast({
+        title: "Enrichment failed",
+        description:
+          e instanceof Error ? e.message : "Could not generate spatial enrichment.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnriching(false);
+    }
+  }, [
+    spatialData,
+    currentConfig,
+    currentProject,
+    brief,
+    bigIdea,
+    boothDimensions,
+    canvasGeometry,
+    handleCanvasGeometryChange,
+    toast,
+  ]);
+
   // Annotation handlers
   // Annotation add/remove handlers were tied to the FloorPlanAnnotations
   // component inside the now-removed Floor Plan card. The state (above)
@@ -763,6 +850,8 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         geometry={canvasGeometry}
         onGeometryChange={handleCanvasGeometryChange}
         getZoneDefaultPrompt={getZoneDefaultPrompt}
+        onEnrichSpatial={handleEnrichSpatial}
+        isEnriching={isEnriching}
       />
 
       {/* Layout / Metrics / Validate / Costs tabs — used to live in the

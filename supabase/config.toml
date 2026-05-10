@@ -18,6 +18,15 @@ verify_jwt = false
 [functions.generate-materials]
 verify_jwt = false
 
+[functions.enrich-spatial]
+verify_jwt = false
+# Phase 2 of the spatial-as-design-source rebuild. Given existing
+# zones + brief + hero, returns structuralForm/featureDescription/
+# intent/materialIds per zone plus 3–6 sculptural BoothFeatures
+# anchored to those zones. Client calls this from a "Suggest layout"
+# button in the SpatialCanvas; response writes through the same
+# spatialStrategy persistence path as canvas edits.
+
 [functions.generate-3d-brief]
 verify_jwt = false
 

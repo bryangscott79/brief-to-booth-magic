@@ -56,6 +56,32 @@ export interface ZoneShapeParams {
   lNotchDepthRatio?: number;
 }
 
+/**
+ * Structural form describes the architectural CHARACTER of a zone —
+ * not its footprint shape (that's `shape`), but how it reads in
+ * three dimensions. The image model uses this to decide what walls,
+ * ceilings, and openings to render around the zone footprint.
+ *
+ *   • open      — no walls; defined by floor pattern / props alone
+ *                 (sampling counters, demo islands)
+ *   • enclosed  — 4 walls and a ceiling (photo chambers, AV rooms)
+ *   • canopy    — overhead structure with open sides (lounges with
+ *                 tension fabric, shaded hospitality zones)
+ *   • alcove    — 3 walls open on the aisle side (kiosks, welcome
+ *                 stations that face the aisle)
+ *   • platform  — raised floor, no walls (DJ stages, presentation
+ *                 areas, elevated demos)
+ *   • tower     — vertical sculpture, footprint << height (brand
+ *                 markers, totems, beacon structures)
+ */
+export type StructuralForm =
+  | "open"
+  | "enclosed"
+  | "canopy"
+  | "alcove"
+  | "platform"
+  | "tower";
+
 /** A zone expressed in real units (ft for imperial, m for metric). */
 export interface AbsoluteZone {
   id: string;
@@ -88,6 +114,35 @@ export interface AbsoluteZone {
   /** Optional notes / requirements that may be surfaced in prompts. */
   notes?: string;
   /**
+   * Architectural form of the zone (walls, canopy, alcove, etc.).
+   * Drives how the image model imagines the third dimension. Missing
+   * = "open" (legacy zones). See `StructuralForm` jsdoc above.
+   */
+  structuralForm?: StructuralForm;
+  /**
+   * One- or two-sentence description of what this zone LOOKS like —
+   * the visual identity beyond function. Example: "Mirror-clad
+   * walkthrough chamber with iridescent LED interior and wing
+   * sculpture overhead." Surfaced on the AI input PNG and injected
+   * into the per-zone interior prompt so the model has explicit
+   * visual language tied to this footprint.
+   */
+  featureDescription?: string;
+  /**
+   * The visitor experience that happens here — what people DO in this
+   * zone. Example: "Step into the chamber, pose in front of the
+   * Infinite Wings, get a branded photo and AirDrop it to share."
+   * Distinct from featureDescription (which is what it looks like).
+   */
+  intent?: string;
+  /**
+   * IDs (or names) of materials from spatialData.materialsAndMood
+   * that apply to this zone. Lets a single materials catalog bind to
+   * specific zones rather than being a generic mood board. Empty =
+   * inherits the booth's default palette.
+   */
+  materialIds?: string[];
+  /**
    * User-edited prompt override for the zone-interior render of this
    * zone. When set, replaces the auto-generated zone interior prompt
    * verbatim. Surfaced via "Edit prompt" in the SpatialCanvas; cleared
@@ -97,6 +152,83 @@ export interface AbsoluteZone {
    * affected (they describe zones via SPATIAL LAYOUT, not by full
    * prompts per zone).
    */
+  customPromptOverride?: string;
+}
+
+// ─── Booth features (sculptural objects, not functional zones) ────────────
+
+/**
+ * Form types for non-zone objects placed in the booth. These
+ * describe the FORM of a structural feature — a sculpture, ribbon,
+ * tower, screen — independent of what zone they belong to. A "DJ
+ * Performance Platform" zone might contain a `platform` feature
+ * plus a `screen` feature plus a pair of `totem` features.
+ */
+export type FeatureFormType =
+  | "tower"      // vertical sculpture (height >> footprint)
+  | "ribbon"     // curving path-based sculpture (LED ribbon, fabric drape)
+  | "archway"    // gateway between zones
+  | "canopy"     // overhead shade structure
+  | "sculpture"  // freeform 3D object
+  | "screen"     // LED wall, projection surface
+  | "totem"      // signage column or brand marker
+  | "platform"   // raised stage
+  | "bar"        // counter or service surface
+  | "kiosk";     // small enclosed booth
+
+/**
+ * Footprint shape for a feature. Richer than zone `shape` because
+ * features express organic / path-based geometry — ribbons curve
+ * through space, archways span two anchor points, sculptures have
+ * arbitrary outlines. `points` and `path` are in LOCAL coords
+ * relative to the feature's anchor (x, y).
+ */
+export type FeatureShape =
+  | { kind: "rect"; width: number; depth: number }
+  | { kind: "circle"; radius: number }
+  | { kind: "ellipse"; radiusX: number; radiusY: number }
+  | { kind: "polygon"; points: Array<{ x: number; y: number }> }
+  | { kind: "ribbon"; path: Array<{ x: number; y: number }>; thickness: number };
+
+/**
+ * A non-zone structural object in the booth — towers, ribbons,
+ * archways, screens, sculptures. Features can be standalone or
+ * associated with a zone (zoneId). They contribute to the visual
+ * identity of the booth without being functional partitions of the
+ * floor plan, and they can express organic shapes that zones can't.
+ */
+export interface BoothFeature {
+  id: string;
+  name: string;
+  /** Anchor point in booth coords (front-left = 0,0). */
+  x: number;
+  y: number;
+  /** Footprint shape relative to anchor (see FeatureShape). */
+  shape: FeatureShape;
+  /** Floor offset in feet — typically 0, but a hanging element
+   *  could start at 8 ft for an overhead canopy. */
+  baseHeightFt: number;
+  /** Top of feature in feet. baseHeightFt to topHeightFt is the
+   *  feature's vertical extent, which the iso renders as an
+   *  extruded prism in 3D. */
+  topHeightFt: number;
+  /** What KIND of object (tower / ribbon / canopy / etc.). The
+   *  image model uses this to render the right material & form. */
+  formType: FeatureFormType;
+  /** Visual description — the brand-specific look. Example:
+   *  "Iridescent dichroic ribbon arching from welcome to photo
+   *  chamber, embedded with LED neon that pulses with the music." */
+  description?: string;
+  /** Materials catalog refs (same shape as zone.materialIds). */
+  materialIds?: string[];
+  /** Hex color used in the canvas + iso. Visual only — the image
+   *  model renders by description, not color. */
+  colorHex: string;
+  /** If the feature anchors / belongs to a zone, link to it so
+   *  prompts and validation can group them. Optional — a feature
+   *  can also float free in circulation space. */
+  zoneId?: string;
+  /** User-editable prompt override (mirrors zone.customPromptOverride). */
   customPromptOverride?: string;
 }
 
@@ -116,6 +248,31 @@ export interface BoothGeometry {
   measurementSystem: "imperial" | "metric";
   /** Zones inside the booth, in absolute coords. */
   zones: AbsoluteZone[];
+  /**
+   * Sculptural / structural objects placed in the booth. Optional
+   * for backward compat with legacy spatialData payloads that only
+   * carried zones. Empty array vs missing both mean "no features."
+   */
+  features?: BoothFeature[];
+  /**
+   * Materials & mood catalog. Originates from
+   * spatialData.materialsAndMood; carried on geometry so the canvas
+   * can show / bind materials to zones + features without
+   * round-tripping through the parent component every time.
+   */
+  materialsCatalog?: MaterialEntry[];
+}
+
+/**
+ * One entry in the booth's materials & mood catalog. Brands define
+ * a small palette of materials (8–12 max) that get referenced from
+ * zones and features. The `id` is stable so zones can keep their
+ * material refs even if the user renames an entry.
+ */
+export interface MaterialEntry {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 // ─── Shape helpers ────────────────────────────────────────────────────────
@@ -191,6 +348,10 @@ export function absoluteFromNormalizedZone(
     shape?: ZoneShape;
     shapeParams?: ZoneShapeParams;
     customPromptOverride?: string;
+    structuralForm?: StructuralForm;
+    featureDescription?: string;
+    intent?: string;
+    materialIds?: string[];
   };
   return {
     id: zone.id,
@@ -204,17 +365,34 @@ export function absoluteFromNormalizedZone(
     notes: zone.notes,
     ...(extras.shape ? { shape: extras.shape } : {}),
     ...(extras.shapeParams ? { shapeParams: extras.shapeParams } : {}),
+    ...(extras.structuralForm ? { structuralForm: extras.structuralForm } : {}),
+    ...(extras.featureDescription
+      ? { featureDescription: extras.featureDescription }
+      : {}),
+    ...(extras.intent ? { intent: extras.intent } : {}),
+    ...(Array.isArray(extras.materialIds) && extras.materialIds.length > 0
+      ? { materialIds: extras.materialIds }
+      : {}),
     ...(extras.customPromptOverride
       ? { customPromptOverride: extras.customPromptOverride }
       : {}),
   };
 }
 
-/** Build a full BoothGeometry from the current legacy spatialData shape. */
+/** Build a full BoothGeometry from the current legacy spatialData shape.
+ *
+ * Optional `extra` carries data that lives on spatialData but isn't
+ * part of the zones array — features, the materials & mood catalog,
+ * the ceiling height. Missing extras fall back to sensible defaults
+ * so legacy callers (none of these fields populated) keep working. */
 export function boothGeometryFromLegacy(
   boothDimensions: BoothDimensions,
   normalizedZones: NormalizedZone[],
   ceilingHeightFt = 12,
+  extra: {
+    features?: BoothFeature[];
+    materialsCatalog?: MaterialEntry[];
+  } = {},
 ): BoothGeometry {
   return {
     width: boothDimensions.width,
@@ -222,6 +400,10 @@ export function boothGeometryFromLegacy(
     ceilingHeightFt,
     measurementSystem: boothDimensions.measurementSystem,
     zones: normalizedZones.map((z) => absoluteFromNormalizedZone(z, boothDimensions)),
+    ...(extra.features ? { features: extra.features } : {}),
+    ...(extra.materialsCatalog
+      ? { materialsCatalog: extra.materialsCatalog }
+      : {}),
   };
 }
 
@@ -256,13 +438,20 @@ export function normalizedFromAbsoluteZone(
     adjacencies: [],
     notes: zone.notes ?? "",
     // Pass canvas-owned fields straight through so the legacy zone we
-    // persist keeps height/shape/override alongside the position. The
-    // SpatialPlanner round-trip ALSO writes these explicitly, but
-    // including them here makes the conversion lossless on its own
-    // and protects callers that don't merge with the original zone.
+    // persist keeps every editable attribute alongside the position.
+    // Without this, every render would silently drop the user's
+    // structural / material / intent edits.
     heightFt: zone.heightFt,
     ...(zone.shape ? { shape: zone.shape } : {}),
     ...(zone.shapeParams ? { shapeParams: zone.shapeParams } : {}),
+    ...(zone.structuralForm ? { structuralForm: zone.structuralForm } : {}),
+    ...(zone.featureDescription
+      ? { featureDescription: zone.featureDescription }
+      : {}),
+    ...(zone.intent ? { intent: zone.intent } : {}),
+    ...(Array.isArray(zone.materialIds) && zone.materialIds.length > 0
+      ? { materialIds: zone.materialIds }
+      : {}),
     ...(zone.customPromptOverride
       ? { customPromptOverride: zone.customPromptOverride }
       : {}),

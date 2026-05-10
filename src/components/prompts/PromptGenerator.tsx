@@ -232,12 +232,44 @@ export function PromptGenerator() {
   // (percentage-based zones); user edits flow into local state. We
   // capture floor-plan + iso PNGs from this geometry at generation time
   // and pass them to the image model as visual ground truth.
+  // Derive features + materials catalog from spatialData. Same shape
+  // SpatialPlanner uses; centralizing here would be the next refactor
+  // when we extract a useBoothGeometry hook. For now, inline.
+  const promptBoothFeatures = useMemo(() => {
+    const raw = (spatialData as any)?.features ?? [];
+    return Array.isArray(raw) ? raw : [];
+  }, [spatialData]);
+  const promptMaterialsCatalog = useMemo(() => {
+    const raw = ((spatialData as any)?.materialsAndMood ?? []) as Array<{
+      id?: string;
+      material?: string;
+      name?: string;
+      feel?: string;
+      description?: string;
+    }>;
+    return raw.map((m, i) => ({
+      id: m.id ?? `mat_${i}`,
+      name: m.name ?? m.material ?? `Material ${i + 1}`,
+      description: m.description ?? m.feel ?? "",
+    }));
+  }, [spatialData]);
+
   const initialGeometry = useMemo<BoothGeometry>(
-    () => boothGeometryFromLegacy(boothDimensions, normalizedZones),
+    () =>
+      boothGeometryFromLegacy(boothDimensions, normalizedZones, 12, {
+        features: promptBoothFeatures,
+        materialsCatalog: promptMaterialsCatalog,
+      }),
     // Re-derive only when the legacy source changes — user edits to
     // the canvas live in `geometry` below and aren't overwritten.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [boothDimensions.width, boothDimensions.depth, normalizedZones.length],
+    [
+      boothDimensions.width,
+      boothDimensions.depth,
+      normalizedZones.length,
+      promptBoothFeatures,
+      promptMaterialsCatalog,
+    ],
   );
   const [geometry, setGeometry] = useState<BoothGeometry>(initialGeometry);
 
@@ -276,17 +308,25 @@ export function PromptGenerator() {
           ...normalized,
           // Canvas-owned fields. Without these the next round-trip
           // through boothGeometryFromLegacy would lose the user's
-          // height / shape / per-zone prompt edits.
+          // edits to height / shape / structural form / materials /
+          // intent / featureDescription / per-zone prompt.
           customPromptOverride: abs.customPromptOverride,
           heightFt: abs.heightFt,
           shape: abs.shape,
           shapeParams: abs.shapeParams,
+          structuralForm: abs.structuralForm,
+          featureDescription: abs.featureDescription,
+          intent: abs.intent,
+          materialIds: abs.materialIds,
         };
       });
       const updatedConfigs = [...(spatialData.configs ?? [])];
       updatedConfigs[0] = { ...config, zones: legacyZones };
       const updatedSpatial = {
         ...spatialData,
+        // Features live at spatialData root and survive footprint
+        // switches — persist alongside zones.
+        features: next.features ?? [],
         configs: updatedConfigs,
         ceilingHeightFt: next.ceilingHeightFt,
       };

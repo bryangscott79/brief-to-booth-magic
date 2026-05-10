@@ -17,7 +17,7 @@ import { useMemo, forwardRef, useImperativeHandle, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrthographicCamera, Edges, Text, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import * as THREE from "three";
-import type { BoothGeometry, AbsoluteZone } from "@/lib/geometryModel";
+import type { BoothGeometry, AbsoluteZone, BoothFeature } from "@/lib/geometryModel";
 import { effectiveShape, resolveLNotch } from "@/lib/geometryModel";
 
 /** 1 meter in feet. */
@@ -215,6 +215,115 @@ function ZoneBox({
   );
 }
 
+/**
+ * Build a 2D THREE.Shape for a feature's footprint. Mirrors the
+ * top-down Konva renderer one-to-one so the iso geometry reads as
+ * the 3D version of what the user sees in 2D. For ribbon shapes we
+ * inflate the polyline into a thin rectangle along its bounding box
+ * so the extrusion has volume — Three.js doesn't have a native
+ * "thick polyline" shape.
+ */
+function buildFeatureFootprint(feature: BoothFeature): THREE.Shape | null {
+  const s = feature.shape;
+  const shape = new THREE.Shape();
+  if (s.kind === "rect") {
+    shape.moveTo(0, 0);
+    shape.lineTo(s.width, 0);
+    shape.lineTo(s.width, s.depth);
+    shape.lineTo(0, s.depth);
+    shape.closePath();
+    return shape;
+  }
+  if (s.kind === "circle") {
+    shape.absellipse(0, 0, s.radius, s.radius, 0, Math.PI * 2, false, 0);
+    return shape;
+  }
+  if (s.kind === "ellipse") {
+    shape.absellipse(0, 0, s.radiusX, s.radiusY, 0, Math.PI * 2, false, 0);
+    return shape;
+  }
+  if (s.kind === "polygon") {
+    if (s.points.length < 3) return null;
+    shape.moveTo(s.points[0].x, s.points[0].y);
+    for (let i = 1; i < s.points.length; i++) {
+      shape.lineTo(s.points[i].x, s.points[i].y);
+    }
+    shape.closePath();
+    return shape;
+  }
+  if (s.kind === "ribbon") {
+    if (s.path.length < 2) return null;
+    // Approximate a ribbon as the bounding-box polygon of the path
+    // expanded by half its thickness on each side. Good enough for
+    // the iso preview; the AI prompt carries the actual ribbon
+    // language ("curved iridescent LED ribbon"), so this is a
+    // visual stand-in rather than a faithful 3D rendering.
+    const xs = s.path.map((p) => p.x);
+    const ys = s.path.map((p) => p.y);
+    const minX = Math.min(...xs) - s.thickness / 2;
+    const maxX = Math.max(...xs) + s.thickness / 2;
+    const minY = Math.min(...ys) - s.thickness / 2;
+    const maxY = Math.max(...ys) + s.thickness / 2;
+    shape.moveTo(minX, minY);
+    shape.lineTo(maxX, minY);
+    shape.lineTo(maxX, maxY);
+    shape.lineTo(minX, maxY);
+    shape.closePath();
+    return shape;
+  }
+  return null;
+}
+
+/**
+ * Renders a BoothFeature as an extruded prism in the iso scene.
+ * The feature's anchor (x, y) becomes the world (x, z) origin of
+ * the local shape. Vertical extent is `topHeightFt - baseHeightFt`,
+ * and the prism is positioned with its bottom at baseHeightFt off
+ * the floor so canopies / hanging elements read correctly.
+ */
+function FeatureBox({
+  feature,
+  boothDepthFt,
+}: {
+  feature: BoothFeature;
+  boothDepthFt: number;
+}) {
+  const footprint = useMemo(() => buildFeatureFootprint(feature), [feature]);
+  const verticalExtent = Math.max(0.1, feature.topHeightFt - feature.baseHeightFt);
+  // Mirror the data-y → world-z flip used for zones so features sit
+  // correctly relative to the front-of-booth.
+  const cz = boothDepthFt - feature.y;
+  if (!footprint) return null;
+  return (
+    <group position={[feature.x, feature.baseHeightFt, cz]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <extrudeGeometry
+          args={[footprint, { depth: verticalExtent, bevelEnabled: false }]}
+        />
+        <meshStandardMaterial
+          color={feature.colorHex}
+          transparent
+          opacity={0.5}
+          metalness={0.15}
+          roughness={0.7}
+        />
+        <Edges color={feature.colorHex} threshold={1} />
+      </mesh>
+      <Text
+        position={[0, verticalExtent + 1, 0]}
+        fontSize={0.9}
+        color="#ffffff"
+        anchorX="left"
+        anchorY="bottom"
+        outlineWidth={0.04}
+        outlineColor="#000000"
+      >
+        {feature.name}
+      </Text>
+    </group>
+  );
+}
+
 /** A simple stick-figure silhouette for human-scale calibration. */
 function HumanSilhouette({ x, z }: { x: number; z: number }) {
   return (
@@ -354,6 +463,14 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
               highlighted={z.id === highlightedZoneId}
               boothDepthFt={dFt}
             />
+          ))}
+
+          {/* Features as extruded prisms — towers / ribbons / canopies
+              / sculptures sit on top of zones in 3D space. They use
+              the same data-y → world-z flip as zones so everything
+              shares one coordinate convention. */}
+          {(geometry.features ?? []).map((f) => (
+            <FeatureBox key={f.id} feature={f} boothDepthFt={dFt} />
           ))}
 
           {/* 5'8" silhouette in the front-left corner — visual scale

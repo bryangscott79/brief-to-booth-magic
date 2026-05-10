@@ -46,6 +46,14 @@ export interface NormalizedZone {
     lNotchWidthRatio?: number;
     lNotchDepthRatio?: number;
   };
+  /** Architectural form of the zone — drives 3D character. */
+  structuralForm?: "open" | "enclosed" | "canopy" | "alcove" | "platform" | "tower";
+  /** What this zone LOOKS like (visual identity, distinct from function). */
+  featureDescription?: string;
+  /** What visitors DO in this zone (the experience). */
+  intent?: string;
+  /** Material catalog refs (ids into spatialData.materialsAndMood). */
+  materialIds?: string[];
   /** User-edited prompt override for this zone's interior render. */
   customPromptOverride?: string;
 }
@@ -298,6 +306,14 @@ export function normalizeZone(zone: any, index: number, totalSqft: number): Norm
     ...(typeof zone.heightFt === 'number' ? { heightFt: zone.heightFt } : {}),
     ...(zone.shape ? { shape: zone.shape } : {}),
     ...(zone.shapeParams ? { shapeParams: zone.shapeParams } : {}),
+    ...(zone.structuralForm ? { structuralForm: zone.structuralForm } : {}),
+    ...(typeof zone.featureDescription === 'string' && zone.featureDescription
+      ? { featureDescription: zone.featureDescription }
+      : {}),
+    ...(typeof zone.intent === 'string' && zone.intent ? { intent: zone.intent } : {}),
+    ...(Array.isArray(zone.materialIds) && zone.materialIds.length > 0
+      ? { materialIds: zone.materialIds }
+      : {}),
     ...(typeof zone.customPromptOverride === 'string'
       ? { customPromptOverride: zone.customPromptOverride }
       : {}),

@@ -28,6 +28,8 @@ import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./L
 import { SpatialCanvas } from "./SpatialCanvas";
 import {
   type BoothGeometry,
+  type BoothFeature,
+  type MaterialEntry,
   boothGeometryFromLegacy,
   normalizedFromAbsoluteZone,
   fixLayoutAutomatically,
@@ -552,6 +554,32 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
   // saveProjectField. Variations are unaffected — the canonical store
   // is currentConfig.zones.
   const { system: measurementSystem } = useMeasurementSystem(projectId, brief);
+  // Derive features + materials catalog from spatialData. Features
+  // live alongside zones at the spatialData root (not per-config) so
+  // they survive footprint switches. Materials catalog is normalized
+  // from the existing materialsAndMood array — the canvas needs ids
+  // for binding, so we mint stable ids if the source entries don't
+  // have them yet (legacy projects).
+  const boothFeatures: BoothFeature[] = useMemo(() => {
+    const raw = (spatialData?.features ?? []) as BoothFeature[];
+    return Array.isArray(raw) ? raw : [];
+  }, [spatialData]);
+
+  const materialsCatalog: MaterialEntry[] = useMemo(() => {
+    const raw = (spatialData?.materialsAndMood ?? []) as Array<{
+      id?: string;
+      material?: string;
+      name?: string;
+      feel?: string;
+      description?: string;
+    }>;
+    return raw.map((m, i) => ({
+      id: m.id ?? `mat_${i}`,
+      name: m.name ?? m.material ?? `Material ${i + 1}`,
+      description: m.description ?? m.feel ?? "",
+    }));
+  }, [spatialData]);
+
   const canvasGeometry: BoothGeometry = useMemo(() => {
     return boothGeometryFromLegacy(
       // Force the project-level measurement system over whatever the
@@ -559,8 +587,10 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       // override applied in PromptGenerator's render call.
       { ...boothDimensions, measurementSystem },
       normalizedZones,
+      12,
+      { features: boothFeatures, materialsCatalog },
     );
-  }, [boothDimensions, normalizedZones, measurementSystem]);
+  }, [boothDimensions, normalizedZones, measurementSystem, boothFeatures, materialsCatalog]);
 
   const handleCanvasGeometryChange = useCallback(
     (next: BoothGeometry) => {
@@ -568,35 +598,39 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       // Convert each absolute zone back into the legacy NormalizedZone
       // shape used by spatialData.configs[].zones. Preserve any fields
       // (notes, requirements, adjacencies) that aren't represented in
-      // the canvas model.
+      // the canvas model. normalizedFromAbsoluteZone now spreads the
+      // canvas-owned fields itself (heightFt, shape, structuralForm,
+      // featureDescription, intent, materialIds, customPromptOverride)
+      // so the explicit re-spread below is a belt-and-suspenders kept
+      // for clarity rather than necessity.
       const legacyZones = next.zones.map((abs: AbsoluteZone) => {
         const original = currentConfig.zones?.find((z: any) => z.id === abs.id);
         const normalized = normalizedFromAbsoluteZone(abs, next, boothDimensions.totalSqft);
         return {
           ...(original ?? {}),
           ...normalized,
-          // Preserve fields the canvas owns
           customPromptOverride: abs.customPromptOverride,
-          // Persist heightFt so re-deriving geometry later doesn't lose
-          // user-edited heights.
           heightFt: abs.heightFt,
-          // Persist shape fields too (rect / L / circle + L corner +
-          // notch ratios) so a project save round-trip keeps the user's
-          // shape edits intact.
           shape: abs.shape,
           shapeParams: abs.shapeParams,
+          structuralForm: abs.structuralForm,
+          featureDescription: abs.featureDescription,
+          intent: abs.intent,
+          materialIds: abs.materialIds,
         };
       });
       const updatedConfig = { ...currentConfig, zones: legacyZones };
       const updatedConfigs = [...(spatialData.configs ?? [])];
       updatedConfigs[activeFootprint] = updatedConfig;
+      // Features live at spatialData root (not per-config) — they
+      // describe sculptural objects in the booth and don't change
+      // per footprint. Persist alongside zones so a single save keeps
+      // every spatial edit consistent.
       const updatedSpatial = {
         ...spatialData,
         configs: updatedConfigs,
-        // Persist the booth-level fields the canvas may edit too
-        // (ceiling height not currently surfaced in the canvas UI but
-        // the field is reserved for it).
         ceilingHeightFt: next.ceilingHeightFt,
+        features: next.features ?? [],
       };
       // Optimistic local update via project store + persist to DB.
       if (currentProject) {

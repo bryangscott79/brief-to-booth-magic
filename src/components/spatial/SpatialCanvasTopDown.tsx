@@ -21,6 +21,7 @@ import type Konva from "konva";
 import { Transformer } from "react-konva";
 import {
   type AbsoluteZone,
+  type BoothFeature,
   type BoothGeometry,
   unitSnap,
   snapToGrid,
@@ -68,6 +69,18 @@ export interface SpatialCanvasTopDownProps {
    * zone). Independent from showFlow — either or both can be on.
    */
   showHeatmap?: boolean;
+  /**
+   * Sculptural / structural objects (towers, ribbons, archways,
+   * sculptures, etc.) drawn on top of zones. These are NOT
+   * functional partitions of the floor plan — they're objects you
+   * place inside it. They render as filled outlines with a label
+   * and the form-type icon; clicking selects, dragging moves.
+   */
+  features?: BoothFeature[];
+  /** Currently-selected feature id (separate selection space from zones). */
+  selectedFeatureId?: string | null;
+  onSelectFeature?: (id: string | null) => void;
+  onFeaturesChange?: (features: BoothFeature[]) => void;
 }
 
 export interface SpatialCanvasTopDownHandle {
@@ -117,6 +130,10 @@ export const SpatialCanvasTopDown = forwardRef<
     maxCanvasSize = DEFAULT_MAX_CANVAS_SIZE,
     showFlow = false,
     showHeatmap = false,
+    features = [],
+    selectedFeatureId = null,
+    onSelectFeature,
+    onFeaturesChange,
   },
   ref,
 ) {
@@ -618,6 +635,151 @@ export const SpatialCanvasTopDown = forwardRef<
             />
           )}
         </Layer>
+
+        {/* Features layer — sculptural objects (towers, ribbons,
+            archways, sculptures, screens, totems, platforms, bars,
+            kiosks). They render ON TOP of zones because they're the
+            booth's visual identity inside the functional footprint.
+            Each feature is a draggable Group with a shape primitive
+            inside; click selects, drag updates the anchor x/y. */}
+        {features.length > 0 && (
+          <Layer>
+            {features.map((feature) => {
+              const isSelected = feature.id === selectedFeatureId;
+              const stroke = isSelected ? "#ffffff" : feature.colorHex;
+              const strokeWidth = isSelected ? 2.5 : 1.8;
+              const fill = feature.colorHex + (isSelected ? "88" : "55");
+              return (
+                <Group
+                  key={feature.id}
+                  x={toPxX(feature.x)}
+                  y={toPxY(feature.y)}
+                  draggable={!readonly}
+                  onMouseDown={(e) => {
+                    e.cancelBubble = true;
+                    onSelectFeature?.(feature.id);
+                  }}
+                  onDragEnd={(e) => {
+                    if (!onFeaturesChange) return;
+                    const node = e.target;
+                    const newX = snapToGrid(
+                      toUnitsX(node.x()),
+                      geometry.measurementSystem,
+                    );
+                    const newY = snapToGrid(
+                      toUnitsY(node.y()),
+                      geometry.measurementSystem,
+                    );
+                    // Clamp to booth bounds.
+                    const clampedX = Math.max(0, Math.min(geometry.width, newX));
+                    const clampedY = Math.max(0, Math.min(geometry.depth, newY));
+                    onFeaturesChange(
+                      features.map((f) =>
+                        f.id === feature.id ? { ...f, x: clampedX, y: clampedY } : f,
+                      ),
+                    );
+                  }}
+                >
+                  {(() => {
+                    // Render the feature's footprint per its shape kind.
+                    // All coords are LOCAL to the Group (anchor at 0,0
+                    // in canvas space). We multiply real units by
+                    // pxPerUnit to land everything at the right scale.
+                    const s = feature.shape;
+                    if (s.kind === "rect") {
+                      return (
+                        <Rect
+                          width={s.width * pxPerUnit}
+                          height={s.depth * pxPerUnit}
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                          dash={feature.baseHeightFt > 0 ? [6, 4] : undefined}
+                          cornerRadius={2}
+                        />
+                      );
+                    }
+                    if (s.kind === "circle") {
+                      return (
+                        <Ellipse
+                          x={0}
+                          y={0}
+                          radiusX={s.radius * pxPerUnit}
+                          radiusY={s.radius * pxPerUnit}
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                        />
+                      );
+                    }
+                    if (s.kind === "ellipse") {
+                      return (
+                        <Ellipse
+                          x={0}
+                          y={0}
+                          radiusX={s.radiusX * pxPerUnit}
+                          radiusY={s.radiusY * pxPerUnit}
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                        />
+                      );
+                    }
+                    if (s.kind === "polygon") {
+                      // Flatten {x,y} → [x0,y0,x1,y1,...] and apply
+                      // the y-flip per point so the polygon orients
+                      // with the canvas's front-at-bottom convention.
+                      const pts: number[] = [];
+                      for (const p of s.points) {
+                        pts.push(p.x * pxPerUnit, -p.y * pxPerUnit);
+                      }
+                      return (
+                        <Line
+                          points={pts}
+                          closed
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                        />
+                      );
+                    }
+                    if (s.kind === "ribbon") {
+                      // Ribbon = thick polyline. Konva's stroke
+                      // supports lineCap/round so we just emit the
+                      // path with thickness as strokeWidth.
+                      const pts: number[] = [];
+                      for (const p of s.path) {
+                        pts.push(p.x * pxPerUnit, -p.y * pxPerUnit);
+                      }
+                      return (
+                        <Line
+                          points={pts}
+                          stroke={stroke}
+                          strokeWidth={Math.max(2, s.thickness * pxPerUnit)}
+                          opacity={0.85}
+                          lineCap="round"
+                          lineJoin="round"
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
+                  {/* Label at the anchor corner. Form type sits in
+                      brackets so a quick scan tells you what KIND
+                      of object it is. */}
+                  <Text
+                    x={4}
+                    y={-18}
+                    text={`${feature.name} · [${feature.formType}]`}
+                    fontSize={11}
+                    fontStyle="bold"
+                    fill="rgba(255,255,255,0.9)"
+                  />
+                </Group>
+              );
+            })}
+          </Layer>
+        )}
 
         {/* Flow + heatmap overlay layer.
             Heatmap = soft ellipses behind each zone (read as dwell

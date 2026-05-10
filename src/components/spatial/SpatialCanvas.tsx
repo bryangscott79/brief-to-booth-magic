@@ -31,13 +31,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon, TrendingUp, Footprints } from "lucide-react";
+import { Layers, Wand2, Maximize2, Eye, EyeOff, FileText, RotateCcw, Expand, Minimize, Image as ImageIcon, Square, Circle as CircleIcon, Box as BoxIcon, Diamond as DiamondIcon, TrendingUp, Footprints, Plus, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { SpatialCanvasTopDown, type SpatialCanvasTopDownHandle } from "./SpatialCanvasTopDown";
 import { SpatialCanvasIso, type SpatialCanvasIsoHandle } from "./SpatialCanvasIso";
 import { renderFloorPlanForExport } from "@/lib/renderFloorPlanForExport";
 import {
   type BoothGeometry,
   type AbsoluteZone,
+  type BoothFeature,
+  type FeatureFormType,
+  type StructuralForm,
   type ZoneShape,
   type LCorner,
   autoLayoutZones,
@@ -82,6 +86,9 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
     ref,
   ) {
     const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+    // Selecting a feature is a separate concern from selecting a zone;
+    // both can be active independently and each has its own toolbar.
+    const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
     const [showIso, setShowIso] = useState(true);
     // Flow + heatmap overlays. Live on the top-down canvas as a Konva
     // layer so the user can read visitor flow without leaving the
@@ -139,10 +146,156 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
       [geometry, onGeometryChange],
     );
 
+    const handleFeaturesChange = useCallback(
+      (features: BoothFeature[]) => {
+        onGeometryChange({ ...geometry, features });
+      },
+      [geometry, onGeometryChange],
+    );
+
     const handleAutoArrange = useCallback(() => {
       const zones = autoLayoutZones({ geometry, zones: geometry.zones });
       onGeometryChange({ ...geometry, zones });
     }, [geometry, onGeometryChange]);
+
+    // Add a new feature, defaulted by formType. Each form gets a
+    // sensible starting shape + dimensions so the user gets visible
+    // geometry on first add — they can drag/resize from there.
+    const handleAddFeature = useCallback(
+      (formType: FeatureFormType) => {
+        const id = `feat_${Date.now().toString(36)}_${Math.random()
+          .toString(36)
+          .slice(2, 6)}`;
+        const cx = geometry.width / 2;
+        const cy = geometry.depth / 2;
+        const palette = ["#a78bfa", "#f59e0b", "#22d3ee", "#f472b6", "#34d399"];
+        const colorHex =
+          palette[(geometry.features?.length ?? 0) % palette.length];
+        // Default shape per formType. Tower/totem → small circle.
+        // Ribbon → 3-point wave path. Canopy → ellipse. Archway →
+        // wide thin rect. Sculpture → hexagonal polygon.
+        const defaults: Record<
+          FeatureFormType,
+          { shape: BoothFeature["shape"]; baseHt: number; topHt: number }
+        > = {
+          tower: { shape: { kind: "circle", radius: 1.5 }, baseHt: 0, topHt: 14 },
+          totem: { shape: { kind: "circle", radius: 1 }, baseHt: 0, topHt: 10 },
+          canopy: {
+            shape: { kind: "ellipse", radiusX: 5, radiusY: 4 },
+            baseHt: 8,
+            topHt: 11,
+          },
+          archway: {
+            shape: { kind: "rect", width: 6, depth: 0.5 },
+            baseHt: 0,
+            topHt: 12,
+          },
+          sculpture: {
+            shape: {
+              kind: "polygon",
+              points: [
+                { x: 0, y: 2 },
+                { x: 1.7, y: 1 },
+                { x: 1.7, y: -1 },
+                { x: 0, y: -2 },
+                { x: -1.7, y: -1 },
+                { x: -1.7, y: 1 },
+              ],
+            },
+            baseHt: 0,
+            topHt: 12,
+          },
+          screen: {
+            shape: { kind: "rect", width: 8, depth: 0.5 },
+            baseHt: 0,
+            topHt: 10,
+          },
+          ribbon: {
+            shape: {
+              kind: "ribbon",
+              path: [
+                { x: 0, y: 0 },
+                { x: 4, y: 1 },
+                { x: 8, y: -1 },
+                { x: 12, y: 0 },
+              ],
+              thickness: 1.5,
+            },
+            baseHt: 6,
+            topHt: 11,
+          },
+          platform: {
+            shape: { kind: "rect", width: 6, depth: 4 },
+            baseHt: 0,
+            topHt: 1.5,
+          },
+          bar: {
+            shape: { kind: "rect", width: 8, depth: 1.5 },
+            baseHt: 0,
+            topHt: 3.5,
+          },
+          kiosk: {
+            shape: { kind: "rect", width: 3, depth: 3 },
+            baseHt: 0,
+            topHt: 8,
+          },
+        };
+        const d = defaults[formType];
+        const newFeature: BoothFeature = {
+          id,
+          name: formType.charAt(0).toUpperCase() + formType.slice(1),
+          x: cx,
+          y: cy,
+          shape: d.shape,
+          baseHeightFt: d.baseHt,
+          topHeightFt: d.topHt,
+          formType,
+          colorHex,
+        };
+        onGeometryChange({
+          ...geometry,
+          features: [...(geometry.features ?? []), newFeature],
+        });
+        setSelectedFeatureId(id);
+        setSelectedZoneId(null);
+      },
+      [geometry, onGeometryChange],
+    );
+
+    const handleDeleteFeature = useCallback(
+      (id: string) => {
+        onGeometryChange({
+          ...geometry,
+          features: (geometry.features ?? []).filter((f) => f.id !== id),
+        });
+        setSelectedFeatureId(null);
+      },
+      [geometry, onGeometryChange],
+    );
+
+    const updateFeature = useCallback(
+      (id: string, patch: Partial<BoothFeature>) => {
+        onGeometryChange({
+          ...geometry,
+          features: (geometry.features ?? []).map((f) =>
+            f.id === id ? { ...f, ...patch } : f,
+          ),
+        });
+      },
+      [geometry, onGeometryChange],
+    );
+
+    const updateZone = useCallback(
+      (id: string, patch: Partial<AbsoluteZone>) => {
+        onGeometryChange({
+          ...geometry,
+          zones: geometry.zones.map((z) =>
+            z.id === id ? { ...z, ...patch } : z,
+          ),
+        });
+      },
+      [geometry, onGeometryChange],
+    );
 
     // Live stats: allocation %, overlap warnings.
     const stats = useMemo(() => {
@@ -199,12 +352,22 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
             ref={topDownRef}
             geometry={geometry}
             selectedZoneId={selectedZoneId}
-            onSelectZone={setSelectedZoneId}
+            onSelectZone={(id) => {
+              setSelectedZoneId(id);
+              if (id) setSelectedFeatureId(null);
+            }}
             onZonesChange={handleZonesChange}
             readonly={readonly}
             maxCanvasSize={opts.maxCanvasSize}
             showFlow={showFlow}
             showHeatmap={showHeatmap}
+            features={geometry.features ?? []}
+            selectedFeatureId={selectedFeatureId}
+            onSelectFeature={(id) => {
+              setSelectedFeatureId(id);
+              if (id) setSelectedZoneId(null);
+            }}
+            onFeaturesChange={handleFeaturesChange}
           />
         </div>
         {showIso && (
@@ -254,6 +417,9 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                   <Wand2 className="h-3 w-3" />
                   Auto-arrange
                 </Button>
+              )}
+              {!readonly && (
+                <FeatureAddMenu onAdd={handleAddFeature} />
               )}
               <Button
                 type="button"
@@ -345,6 +511,30 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
               />
             </div>
           )}
+
+          {selectedZone && !readonly && (
+            <ZoneMetadataPanel
+              zone={selectedZone}
+              materialsCatalog={geometry.materialsCatalog ?? []}
+              onChange={(patch) => updateZone(selectedZone.id, patch)}
+            />
+          )}
+
+          {/* Selected feature toolbar — mirrors the zone toolbar but
+              for sculptural objects. */}
+          {selectedFeatureId && !readonly && (() => {
+            const f = (geometry.features ?? []).find((x) => x.id === selectedFeatureId);
+            if (!f) return null;
+            return (
+              <FeatureMetadataPanel
+                feature={f}
+                materialsCatalog={geometry.materialsCatalog ?? []}
+                ceilingFt={geometry.ceilingHeightFt}
+                onChange={(patch) => updateFeature(f.id, patch)}
+                onDelete={() => handleDeleteFeature(f.id)}
+              />
+            );
+          })()}
 
           {selectedZone && !readonly && (
             <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-xs flex-wrap">
@@ -653,6 +843,7 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
                       Auto-arrange
                     </Button>
                   )}
+                  {!readonly && <FeatureAddMenu onAdd={handleAddFeature} />}
                   <Button
                     type="button"
                     variant={showFlow ? "secondary" : "ghost"}
@@ -729,6 +920,30 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
             {/* Selected-zone toolbar mirrors the inline one but pinned
                 to the dialog footer so it's always visible while editing. */}
             {selectedZone && !readonly && (
+              <div className="shrink-0">
+                <ZoneMetadataPanel
+                  zone={selectedZone}
+                  materialsCatalog={geometry.materialsCatalog ?? []}
+                  onChange={(patch) => updateZone(selectedZone.id, patch)}
+                />
+              </div>
+            )}
+            {selectedFeatureId && !readonly && (() => {
+              const f = (geometry.features ?? []).find((x) => x.id === selectedFeatureId);
+              if (!f) return null;
+              return (
+                <div className="shrink-0">
+                  <FeatureMetadataPanel
+                    feature={f}
+                    materialsCatalog={geometry.materialsCatalog ?? []}
+                    ceilingFt={geometry.ceilingHeightFt}
+                    onChange={(patch) => updateFeature(f.id, patch)}
+                    onDelete={() => handleDeleteFeature(f.id)}
+                  />
+                </div>
+              );
+            })()}
+            {selectedZone && !readonly && (
               <div className="shrink-0 flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-xs flex-wrap">
                 <span className="font-medium">{selectedZone.name}</span>
                 <span className="text-muted-foreground">
@@ -790,4 +1005,336 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
     );
   },
 );
+
+// ─── Feature add menu ──────────────────────────────────────────────
+// Dropdown that lets the user spawn a new sculptural object in the
+// booth. Each form type has a sensible default shape + height so the
+// new feature shows up in the canvas immediately and can be dragged
+// or refined from there. Defined at module scope so the re-render
+// isn't gated on the parent's render cycle.
+
+const FEATURE_TYPES: Array<{
+  id: FeatureFormType;
+  label: string;
+  hint: string;
+}> = [
+  { id: "tower", label: "Tower", hint: "Vertical brand marker / totem column" },
+  { id: "ribbon", label: "Ribbon", hint: "Curving LED or fabric path" },
+  { id: "archway", label: "Archway", hint: "Gateway between zones" },
+  { id: "canopy", label: "Canopy", hint: "Overhead shade / ceiling element" },
+  { id: "sculpture", label: "Sculpture", hint: "Freeform 3D feature" },
+  { id: "screen", label: "Screen", hint: "LED wall or projection surface" },
+  { id: "totem", label: "Totem", hint: "Branded signage column" },
+  { id: "platform", label: "Platform", hint: "Raised stage / DJ deck" },
+  { id: "bar", label: "Bar / Counter", hint: "Service or sampling counter" },
+  { id: "kiosk", label: "Kiosk", hint: "Small enclosed booth" },
+];
+
+// ─── Zone metadata panel ───────────────────────────────────────────
+// The "below the chips" row that captures every non-geometric thing
+// about a zone: structural form (open/canopy/alcove/etc.), what it
+// LOOKS like, what visitors DO there, and which materials it pulls
+// from the brand's palette. All optional — this is meta on top of
+// the geometry, not required for a zone to render.
+
+const STRUCTURAL_FORMS: Array<{ id: StructuralForm; label: string; hint: string }> = [
+  { id: "open", label: "Open", hint: "No walls (sampling, demos)" },
+  { id: "enclosed", label: "Enclosed", hint: "4 walls + ceiling (chambers)" },
+  { id: "canopy", label: "Canopy", hint: "Overhead structure, open sides" },
+  { id: "alcove", label: "Alcove", hint: "3 walls open to aisle (kiosks)" },
+  { id: "platform", label: "Platform", hint: "Raised floor, no walls (stages)" },
+  { id: "tower", label: "Tower", hint: "Vertical, small footprint" },
+];
+
+function ZoneMetadataPanel({
+  zone,
+  materialsCatalog,
+  onChange,
+}: {
+  zone: AbsoluteZone;
+  materialsCatalog: { id: string; name: string }[];
+  onChange: (patch: Partial<AbsoluteZone>) => void;
+}) {
+  const selectedMaterials = new Set(zone.materialIds ?? []);
+  return (
+    <div className="rounded-md border border-border bg-card/50 px-3 py-2 space-y-2 text-xs">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-muted-foreground font-medium">{zone.name}</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="text-muted-foreground">Form:</span>
+        <div className="flex items-center rounded-md border border-border bg-muted/30 p-0.5 gap-0.5 flex-wrap">
+          {STRUCTURAL_FORMS.map((f) => {
+            const active = (zone.structuralForm ?? "open") === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                title={f.hint}
+                onClick={() => onChange({ structuralForm: f.id })}
+                className={`h-6 px-2 rounded text-[11px] transition-colors ${
+                  active
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        <label className="block">
+          <span className="text-[11px] text-muted-foreground">
+            Visual brief — what it looks like
+          </span>
+          <Input
+            value={zone.featureDescription ?? ""}
+            onChange={(e) => onChange({ featureDescription: e.target.value })}
+            placeholder="e.g. Mirror-clad walkthrough chamber with iridescent LED interior"
+            className="h-7 text-xs mt-0.5"
+          />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-muted-foreground">
+            Intent — what visitors do here
+          </span>
+          <Input
+            value={zone.intent ?? ""}
+            onChange={(e) => onChange({ intent: e.target.value })}
+            placeholder="e.g. Step in, pose with the wings, get a branded photo"
+            className="h-7 text-xs mt-0.5"
+          />
+        </label>
+      </div>
+      {materialsCatalog.length > 0 && (
+        <div className="flex items-start gap-2 flex-wrap">
+          <span className="text-muted-foreground pt-0.5">Materials:</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {materialsCatalog.map((m) => {
+              const active = selectedMaterials.has(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    const next = new Set(selectedMaterials);
+                    if (active) next.delete(m.id);
+                    else next.add(m.id);
+                    onChange({ materialIds: Array.from(next) });
+                  }}
+                  className={`h-6 px-2 rounded-full border text-[10px] transition-colors ${
+                    active
+                      ? "bg-primary/15 border-primary/50 text-primary"
+                      : "bg-muted/30 border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={m.name}
+                >
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Feature metadata panel ────────────────────────────────────────
+// Form-type picker, dimensions, height range, description, materials.
+// Reuses the same compact-row pattern as the zone toolbar so the two
+// surfaces feel unified.
+
+const FEATURE_FORMS: Array<{ id: FeatureFormType; label: string }> = [
+  { id: "tower", label: "Tower" },
+  { id: "ribbon", label: "Ribbon" },
+  { id: "archway", label: "Arch" },
+  { id: "canopy", label: "Canopy" },
+  { id: "sculpture", label: "Sculpture" },
+  { id: "screen", label: "Screen" },
+  { id: "totem", label: "Totem" },
+  { id: "platform", label: "Platform" },
+  { id: "bar", label: "Bar" },
+  { id: "kiosk", label: "Kiosk" },
+];
+
+function FeatureMetadataPanel({
+  feature,
+  materialsCatalog,
+  ceilingFt,
+  onChange,
+  onDelete,
+}: {
+  feature: BoothFeature;
+  materialsCatalog: { id: string; name: string }[];
+  ceilingFt: number;
+  onChange: (patch: Partial<BoothFeature>) => void;
+  onDelete: () => void;
+}) {
+  const selectedMaterials = new Set(feature.materialIds ?? []);
+  return (
+    <div className="rounded-md border border-border bg-card/50 px-3 py-2 space-y-2 text-xs">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Input
+          value={feature.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          className="h-7 text-xs font-medium w-44"
+        />
+        <span className="text-muted-foreground">·</span>
+        <span className="text-muted-foreground">Form:</span>
+        <select
+          value={feature.formType}
+          onChange={(e) =>
+            onChange({ formType: e.target.value as FeatureFormType })
+          }
+          className="h-7 px-2 rounded border border-border bg-background text-xs"
+        >
+          {FEATURE_FORMS.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted-foreground">·</span>
+        <label className="flex items-center gap-1 text-muted-foreground">
+          Base
+          <Input
+            type="number"
+            value={feature.baseHeightFt}
+            min={0}
+            max={ceilingFt}
+            step={0.5}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              if (!Number.isFinite(v)) return;
+              onChange({ baseHeightFt: Math.max(0, Math.min(ceilingFt, v)) });
+            }}
+            className="h-6 w-14 text-xs"
+          />
+          ft
+        </label>
+        <label className="flex items-center gap-1 text-muted-foreground">
+          Top
+          <Input
+            type="number"
+            value={feature.topHeightFt}
+            min={feature.baseHeightFt + 0.5}
+            max={ceilingFt}
+            step={0.5}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              if (!Number.isFinite(v)) return;
+              onChange({
+                topHeightFt: Math.max(feature.baseHeightFt + 0.5, Math.min(ceilingFt, v)),
+              });
+            }}
+            className="h-6 w-14 text-xs"
+          />
+          ft
+        </label>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 text-[11px] gap-1 px-2 ml-auto text-destructive hover:text-destructive"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3 w-3" />
+          Delete
+        </Button>
+      </div>
+      <label className="block">
+        <span className="text-[11px] text-muted-foreground">
+          Description — what this object looks like
+        </span>
+        <Input
+          value={feature.description ?? ""}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="e.g. Iridescent dichroic ribbon arching from welcome to photo chamber, embedded with LED neon"
+          className="h-7 text-xs mt-0.5"
+        />
+      </label>
+      {materialsCatalog.length > 0 && (
+        <div className="flex items-start gap-2 flex-wrap">
+          <span className="text-muted-foreground pt-0.5">Materials:</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {materialsCatalog.map((m) => {
+              const active = selectedMaterials.has(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    const next = new Set(selectedMaterials);
+                    if (active) next.delete(m.id);
+                    else next.add(m.id);
+                    onChange({ materialIds: Array.from(next) });
+                  }}
+                  className={`h-6 px-2 rounded-full border text-[10px] transition-colors ${
+                    active
+                      ? "bg-primary/15 border-primary/50 text-primary"
+                      : "bg-muted/30 border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={m.name}
+                >
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeatureAddMenu({
+  onAdd,
+}: {
+  onAdd: (formType: FeatureFormType) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 text-xs gap-1"
+        onClick={() => setOpen((v) => !v)}
+        title="Drop a sculptural object (tower, ribbon, sculpture, screen, etc.) into the booth"
+      >
+        <Plus className="h-3 w-3" />
+        Add feature
+      </Button>
+      {open && (
+        <>
+          {/* Click-away — covers the rest of the page so the user
+              doesn't have to find the trigger again to dismiss. */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute top-full mt-1 right-0 z-50 w-64 rounded-md border border-border bg-popover shadow-lg p-1">
+            {FEATURE_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  onAdd(t.id);
+                  setOpen(false);
+                }}
+                className="w-full text-left rounded px-2 py-1.5 hover:bg-accent text-xs"
+              >
+                <div className="font-medium">{t.label}</div>
+                <div className="text-[10px] text-muted-foreground">{t.hint}</div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 

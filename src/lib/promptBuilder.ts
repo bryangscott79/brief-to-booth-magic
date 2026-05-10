@@ -241,16 +241,87 @@ THIS IS CRITICAL: This zone is part of the SAME booth as the hero image referenc
     parts.push("Same materials and design language as hero image.");
   }
 
+  // ── Canvas-defined structural metadata. When the user has bound
+  //    a structural form, visual brief, intent, or material refs to
+  //    THIS zone in the spatial canvas, those fields take precedence
+  //    over the keyword-classifier prose above. They're the explicit
+  //    user-defined identity for this space.
+  const zoneAny = zone as any;
+  if (zoneAny.structuralForm) {
+    parts.push("");
+    parts.push("STRUCTURAL FORM (canvas-defined):");
+    const formGuide: Record<string, string> = {
+      open: "Open footprint with no walls — floor pattern + props define the space",
+      enclosed: "Four walls + ceiling — fully enclosed chamber",
+      canopy: "Overhead structure with open sides — covered but airy",
+      alcove: "Three walls open to the aisle — kiosk-like recess",
+      platform: "Raised floor with no walls — platform / stage",
+      tower: "Vertical sculpture, footprint << height — tall brand marker",
+    };
+    parts.push(
+      `- ${zoneAny.structuralForm.toUpperCase()}: ${formGuide[zoneAny.structuralForm] ?? ""}`,
+    );
+  }
+  if (zoneAny.featureDescription) {
+    parts.push("");
+    parts.push("VISUAL BRIEF (user-authored, canvas-defined):");
+    parts.push(zoneAny.featureDescription);
+  }
+  if (zoneAny.intent) {
+    parts.push("");
+    parts.push("VISITOR EXPERIENCE (canvas-defined):");
+    parts.push(zoneAny.intent);
+  }
+
   parts.push("");
   parts.push("MATERIALS (from hero image):");
-  if (materialsAndMood?.length > 0) {
+  // Per-zone material bindings take precedence — if the canvas zone
+  // pinned specific materials from the catalog, use only those. Falls
+  // back to the full materialsAndMood list when no binding is set.
+  const zoneMaterialIds: string[] = Array.isArray(zoneAny.materialIds)
+    ? zoneAny.materialIds
+    : [];
+  if (zoneMaterialIds.length > 0 && materialsAndMood?.length > 0) {
+    const bound = materialsAndMood.filter((m: any) => {
+      const id = m.id ?? m.material ?? m.name;
+      return zoneMaterialIds.includes(id);
+    });
+    if (bound.length > 0) {
+      bound.forEach((m: any) => {
+        const name = m.name ?? m.material ?? "Material";
+        const feel = m.description ?? m.feel ?? "";
+        parts.push(feel ? `- ${name}: ${feel}` : `- ${name}`);
+      });
+    } else {
+      parts.push("- Materials per project palette");
+    }
+  } else if (materialsAndMood?.length > 0) {
     materialsAndMood.forEach((m: any) => {
-      parts.push(`- ${m.material}: ${m.feel}`);
+      parts.push(`- ${m.material ?? m.name}: ${m.feel ?? m.description ?? ""}`);
     });
   } else {
     parts.push("- Premium materials matching hero image");
     parts.push("- Consistent lighting color temperature");
     parts.push("- Same flooring throughout");
+  }
+
+  // ── Features anchored to this zone — sculptural objects placed
+  //    via the canvas. Pulled from spatialData.features (carried on
+  //    the brief's optional "spatial features" extension). Each
+  //    feature contributes a structural callout the model uses as
+  //    explicit geometry (tower / ribbon / archway / etc.) rather
+  //    than inventing one. Skip entirely when no features attach.
+  const features: any[] = ((zone as any)._features as any[]) ?? [];
+  if (features.length > 0) {
+    parts.push("");
+    parts.push("FEATURES IN THIS ZONE:");
+    features.forEach((f) => {
+      const heightRange = `${f.baseHeightFt ?? 0}–${f.topHeightFt ?? "?"} ft`;
+      const desc = f.description ? ` — ${f.description}` : "";
+      parts.push(
+        `- ${(f.formType ?? "object").toUpperCase()} "${f.name ?? "Unnamed"}" (${heightRange})${desc}`,
+      );
+    });
   }
 
   parts.push("");
@@ -447,8 +518,22 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
   // Check for zone interior angles first
   const zoneAngle = zoneInteriorAngles.find((a: ZoneInteriorAngle) => a.id === angleId);
   if (zoneAngle?.isZoneInterior && zoneAngle.zoneData) {
+    // Attach the features anchored to this zone so the prompt builder
+    // can list each one with its formType + description as explicit
+    // structural language. spatialData.features is the canonical
+    // store; we filter to the ones whose zoneId matches.
+    const allFeatures = Array.isArray((spatialData as any)?.features)
+      ? ((spatialData as any).features as any[])
+      : [];
+    const zoneFeatures = allFeatures.filter(
+      (f) => f.zoneId === zoneAngle.zoneData!.id,
+    );
+    const zoneWithFeatures = {
+      ...zoneAngle.zoneData,
+      _features: zoneFeatures,
+    } as any;
     const zonePrompt = generateZoneInteriorPrompt(
-      zoneAngle.zoneData,
+      zoneWithFeatures,
       brief,
       bigIdea,
       boothDimensions,

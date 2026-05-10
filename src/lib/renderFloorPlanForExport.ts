@@ -16,7 +16,11 @@
 // model reads dimension labels at this resolution far more reliably than
 // at the dark-themed thumbnail size we were capturing before.
 
-import type { BoothGeometry, AbsoluteZone } from "./geometryModel";
+import type {
+  BoothGeometry,
+  AbsoluteZone,
+  BoothFeature,
+} from "./geometryModel";
 import { effectiveShape } from "./geometryModel";
 
 /** Long-side resolution in pixels. Booth aspect ratio is preserved. */
@@ -92,6 +96,18 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
     drawZone(ctx, zone, geometry, x0, y0, pxPerUnit);
   }
 
+  // ── Features ─────────────────────────────────────────────────────
+  // Sculptural objects render ON TOP of zones — they're the booth's
+  // visual identity, not its functional partitions. The image model
+  // reads "TOWER · DICHROIC FILM · 14ft" at the feature's position
+  // and uses it as explicit structural language. Without this layer,
+  // the model has to invent vertical geometry (which is exactly the
+  // failure mode that produced the iridescent ribbon "slide" — a
+  // photogenic but architecturally implausible feature).
+  for (const feature of geometry.features ?? []) {
+    drawFeature(ctx, feature, geometry, x0, y0, pxPerUnit);
+  }
+
   // ── Perimeter dimension labels (BOLD) ────────────────────────────
   ctx.fillStyle = "#0f172a";
   ctx.font = "bold 36px system-ui, sans-serif";
@@ -151,6 +167,10 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
   ctx.fillText(`Total: ${totalArea} ${areaUnit}`, 16, 16);
   ctx.fillText(`Ceiling: ${ceilingHeightFt} ft max`, 16, 44);
 
+  // Materials catalog rendered AFTER the scale bar so it can use the
+  // scale bar's pixel width to leave room. See block below the scale
+  // bar code for the actual draw.
+
   // ── Scale bar (10 ft / 5 m reference) ────────────────────────────
   const scaleBarUnits = measurementSystem === "metric" ? 5 : 10;
   const scaleBarPx = scaleBarUnits * pxPerUnit;
@@ -178,6 +198,37 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
     scaleBarX + scaleBarPx,
     scaleBarY - 12,
   );
+
+  // ── Materials & mood catalog (lower-left, above the scale bar
+  //    line). Every approved material from the brand palette listed
+  //    compact so the image model knows the full vocabulary even for
+  //    zones that didn't bind specific materials. ────────────────
+  const catalog = geometry.materialsCatalog ?? [];
+  if (catalog.length > 0) {
+    const visibleCount = Math.min(catalog.length, 7);
+    const blockHeight = (visibleCount + 1) * 18;
+    const blockY = canvasH - 36 - blockHeight;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = "bold 16px system-ui, sans-serif";
+    ctx.fillStyle = "#0f172a";
+    ctx.fillText("MATERIALS & MOOD", 16, blockY);
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.fillStyle = "#475569";
+    const reservedRight = scaleBarPx + 64; // leave room for the scale bar
+    catalog.slice(0, 7).forEach((m, i) => {
+      const desc = m.description ? ` — ${m.description}` : "";
+      const line = clipText(
+        ctx,
+        `• ${m.name}${desc}`,
+        canvasW - 32 - reservedRight,
+      );
+      ctx.fillText(line, 16, blockY + 22 + i * 18);
+    });
+    if (catalog.length > 7) {
+      ctx.fillText(`(+${catalog.length - 7} more)`, 16, blockY + 22 + 7 * 18);
+    }
+  }
 
   return canvas.toDataURL("image/png");
 }
@@ -249,6 +300,170 @@ function drawZone(
     px + padX,
     py + padY + 56,
   );
+
+  // ── Structural metadata, when set. The image model reads these as
+  //    explicit visual cues. Order: form (bold uppercase) → visual
+  //    brief → materials list. Skip lines that aren't populated so
+  //    zones with only function (no structural intent) stay clean. */
+  let metaY = py + padY + 80;
+  if (zone.structuralForm) {
+    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.fillStyle = "#7c3aed"; // distinct from the slate body text
+    ctx.fillText(
+      zone.structuralForm.toUpperCase(),
+      px + padX,
+      metaY,
+    );
+    metaY += 22;
+  }
+  if (zone.featureDescription) {
+    ctx.font = "italic 14px system-ui, sans-serif";
+    ctx.fillStyle = "#334155";
+    const lines = wrapText(ctx, zone.featureDescription, pw - padX * 2);
+    for (const line of lines.slice(0, 3)) {
+      ctx.fillText(line, px + padX, metaY);
+      metaY += 18;
+    }
+  }
+  if (zone.intent) {
+    ctx.font = "14px system-ui, sans-serif";
+    ctx.fillStyle = "#475569";
+    const lines = wrapText(ctx, `→ ${zone.intent}`, pw - padX * 2);
+    for (const line of lines.slice(0, 2)) {
+      ctx.fillText(line, px + padX, metaY);
+      metaY += 18;
+    }
+  }
+  if (zone.materialIds && zone.materialIds.length > 0) {
+    const catalog = geometry.materialsCatalog ?? [];
+    const names = zone.materialIds
+      .map((id) => catalog.find((m) => m.id === id)?.name)
+      .filter(Boolean)
+      .join(" · ");
+    if (names) {
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillStyle = "#64748b";
+      const lines = wrapText(ctx, `Materials: ${names}`, pw - padX * 2);
+      for (const line of lines.slice(0, 2)) {
+        ctx.fillText(line, px + padX, metaY);
+        metaY += 16;
+      }
+    }
+  }
+}
+
+/**
+ * Draw one BoothFeature (tower, ribbon, sculpture, etc.) on top of the
+ * zones layer. Each feature gets a colored outline + a label tag that
+ * names the form type and (when present) the first material. The
+ * image model reads these as discrete sculptural callouts.
+ */
+function drawFeature(
+  ctx: CanvasRenderingContext2D,
+  feature: BoothFeature,
+  geometry: BoothGeometry,
+  x0: number,
+  y0: number,
+  pxPerUnit: number,
+) {
+  // Anchor in canvas pixels with the y-flip applied (y=0 = front).
+  const ax = x0 + feature.x * pxPerUnit;
+  const ay = y0 + (geometry.depth - feature.y) * pxPerUnit;
+
+  ctx.save();
+  ctx.translate(ax, ay);
+  // Local +y in feature shape coords corresponds to "deeper into the
+  // booth" which is upward on the canvas (because of the flip), so
+  // we mirror y when drawing each shape kind. Drawing math below
+  // negates y to land everything correctly.
+  ctx.fillStyle = hexWithAlpha(feature.colorHex, 0.45);
+  ctx.strokeStyle = feature.colorHex;
+  ctx.lineWidth = 3;
+
+  const s = feature.shape;
+  ctx.beginPath();
+  if (s.kind === "rect") {
+    ctx.rect(0, -s.depth * pxPerUnit, s.width * pxPerUnit, s.depth * pxPerUnit);
+  } else if (s.kind === "circle") {
+    ctx.arc(0, 0, s.radius * pxPerUnit, 0, Math.PI * 2);
+  } else if (s.kind === "ellipse") {
+    ctx.ellipse(0, 0, s.radiusX * pxPerUnit, s.radiusY * pxPerUnit, 0, 0, Math.PI * 2);
+  } else if (s.kind === "polygon" && s.points.length >= 3) {
+    ctx.moveTo(s.points[0].x * pxPerUnit, -s.points[0].y * pxPerUnit);
+    for (let i = 1; i < s.points.length; i++) {
+      ctx.lineTo(s.points[i].x * pxPerUnit, -s.points[i].y * pxPerUnit);
+    }
+    ctx.closePath();
+  } else if (s.kind === "ribbon" && s.path.length >= 2) {
+    // Draw the ribbon as a thick polyline. Skip fill (would just be
+    // a stroked path); the AI input PNG only needs the centerline
+    // and thickness as visual reference.
+    ctx.lineWidth = Math.max(4, s.thickness * pxPerUnit);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.moveTo(s.path[0].x * pxPerUnit, -s.path[0].y * pxPerUnit);
+    for (let i = 1; i < s.path.length; i++) {
+      ctx.lineTo(s.path[i].x * pxPerUnit, -s.path[i].y * pxPerUnit);
+    }
+  }
+  if (s.kind === "ribbon") {
+    ctx.stroke();
+  } else {
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Label tag — form type in caps (so the model treats it like a
+  // discrete object class), feature name, and the first material when
+  // bound. Anchored at the feature's anchor with a small offset so
+  // it doesn't bury the shape outline.
+  const catalog = geometry.materialsCatalog ?? [];
+  const matName = (feature.materialIds ?? [])
+    .map((id) => catalog.find((m) => m.id === id)?.name)
+    .filter(Boolean)[0];
+  const label = matName
+    ? `${feature.formType.toUpperCase()} · ${feature.name} · ${matName}`
+    : `${feature.formType.toUpperCase()} · ${feature.name}`;
+
+  ctx.font = "bold 13px system-ui, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#0f172a";
+  ctx.fillText(label, 6, 6);
+
+  // Height range — visible as a small subtitle so the model knows
+  // base + top in feet.
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillStyle = "#475569";
+  ctx.fillText(
+    `${feature.baseHeightFt}–${feature.topHeightFt} ft`,
+    6,
+    24,
+  );
+
+  ctx.restore();
+}
+
+/** Wrap text to a max width using greedy word fits. */
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const w of words) {
+    const candidate = current ? `${current} ${w}` : w;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = w;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 /**

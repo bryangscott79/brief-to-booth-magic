@@ -337,7 +337,7 @@ THIS IS CRITICAL: This zone is part of the SAME booth as the hero image referenc
 
   parts.push("");
   parts.push("NEGATIVE PROMPT:");
-  parts.push(`${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic stock photo"}, cartoon style, different color scheme than hero, different lighting than hero, generic conference room, hotel meeting room, different architectural style, inconsistent materials, different floor, different walls, mismatched design`);
+  parts.push(`${brief.brand.visualIdentity?.avoidImagery?.join(", ") || "generic stock photo"}, cartoon style, different color scheme than hero, different lighting than hero, generic conference room, hotel meeting room, different architectural style, inconsistent materials, different floor, different walls, mismatched design, overlaid text on the image, floating zone-name labels, dimension callouts, percentage labels, leader lines, annotation captions, architectural-diagram styling, "5'×12'" or "10ft" or "21%" style measurement annotations, any text not naturally on the physical booth surface`);
 
   parts.push("");
   parts.push("Aspect ratio: 16:9");
@@ -626,7 +626,7 @@ STYLE:
 ${rules.styleReference}
 
 NEGATIVE PROMPT:
-${brief.brand?.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, unrealistic lighting, blurry, low quality, ${rules.negativeAdditions}
+${brief.brand?.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon style, oversaturated colors, unrealistic lighting, blurry, low quality, ${rules.negativeAdditions}, overlaid text on the image, floating zone-name labels, dimension callouts, percentage labels, leader lines, annotation captions, architectural-diagram overlay, "5'×12'" or "10ft" or "21%" style measurement annotations, any text not naturally appearing on the physical booth surface
 ${buildBrandIntelBlock(brandIntelligence)}
 Aspect ratio: ${angle.aspectRatio}
 ${complianceBlock}`;

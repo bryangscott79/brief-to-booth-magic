@@ -196,7 +196,14 @@ function buildGeometryReferenceBlock(req: GenerateViewRequest): string {
   parts.push("THIS VIEW must match the same booth shown in the floor plan and");
   parts.push("isometric references — same proportions, same zone positions, same");
   parts.push("maximum height. The hero reference image shows finishes/style; the");
-  parts.push("geometry references show physical size and layout. Both apply.\n");
+  parts.push("geometry references show physical size and layout. Both apply.");
+  parts.push("");
+  parts.push("⚠️ NO OVERLAID TEXT. The geometry references contain zone names,");
+  parts.push("dimensions, percentages, structural-form tags, material lists, and");
+  parts.push("ft-tall callouts for YOUR consumption only. Do NOT transcribe,");
+  parts.push("recreate, or include any of those labels in the rendered output.");
+  parts.push("The output must look like a photograph — zero overlay annotations,");
+  parts.push("no leader lines, no captions, no architectural-diagram styling.\n");
   return parts.join("\n");
 }
 
@@ -226,6 +233,10 @@ function buildGeometryClosingReinforcement(req: GenerateViewRequest): string {
     "references, the REFERENCES WIN. Render what the floor plan and",
     "isometric show, dressed with the materials, lighting, and brand",
     "identity described above.",
+    "",
+    "NO OVERLAID TEXT. Reference-image labels (zone names, dimensions,",
+    "percentages, callouts) are diagnostic — never reproduce them in the",
+    "output. Clean photographic render only.",
   ].join("\n");
 }
 

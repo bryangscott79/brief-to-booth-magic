@@ -199,6 +199,24 @@ function buildGeometryReferenceBlock(req: GenerateHeroRequest): string {
   parts.push("These references are GROUND TRUTH. Do not invent different proportions,");
   parts.push("zone positions, or volumetric scale. The text below describes design");
   parts.push("intent (materials, mood, brand). The geometry IS the geometry shown.");
+  parts.push("");
+  parts.push("⚠️ CRITICAL — TEXT POLICY:");
+  parts.push("  The reference images contain LABELS (zone names, dimensions like");
+  parts.push("  \"5'×12'\", percentages, structural-form tags, materials lists, ft-tall");
+  parts.push("  callouts). These labels exist ONLY so YOU, the image model, can read");
+  parts.push("  spatial intent. They are NOT part of the final image.");
+  parts.push("");
+  parts.push("  Do NOT transcribe, copy, recreate, mimic, or include ANY text from");
+  parts.push("  the reference images in the rendered output. The final render must");
+  parts.push("  contain ZERO overlaid text — no zone names, no dimension callouts,");
+  parts.push("  no percentage labels, no leader lines, no annotations, no captions,");
+  parts.push("  no architectural diagram styling. Only brand signage that would");
+  parts.push("  naturally appear ON the physical booth (logos on facade, screen");
+  parts.push("  content) is allowed.");
+  parts.push("");
+  parts.push("  The rendered booth must look like a photograph of a real exhibit —");
+  parts.push("  not an annotated diagram, not a labeled rendering, not a design");
+  parts.push("  presentation. Clean, photoreal, zero overlaid copy.");
 
   return parts.join("\n");
 }
@@ -231,6 +249,15 @@ function buildGeometryClosingReinforcement(req: GenerateHeroRequest): string {
     "appears to disagree with the references, the REFERENCES WIN. Render",
     "what the floor plan and isometric show, dressed with the materials,",
     "lighting, and brand identity described in the body of this prompt.",
+    "",
+    "NO OVERLAID TEXT. The reference images contain zone-name labels,",
+    "dimensions, percentages, and material callouts for YOUR consumption",
+    "only. The output image must contain ZERO of those labels — no zone",
+    "names floating in the air, no dimension callouts, no percentage tags,",
+    "no leader lines, no annotation captions, no architectural-rendering",
+    "overlay style. Render as a clean photograph of the physical booth.",
+    "Brand signage that would naturally appear ON the booth surfaces",
+    "(logos on facades, screen content) is fine; everything else is not.",
   ].join("\n");
 }
 

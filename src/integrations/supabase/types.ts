@@ -378,6 +378,51 @@ export type Database = {
         }
         Relationships: []
       }
+      brand_guidelines: {
+        Row: {
+          client_id: string
+          color_system: Json | null
+          created_at: string
+          guidelines_version: string | null
+          id: string
+          logo_rules: Json | null
+          materials_finishes: Json | null
+          photography_style: Json | null
+          tone_of_voice: Json | null
+          typography: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          color_system?: Json | null
+          created_at?: string
+          guidelines_version?: string | null
+          id?: string
+          logo_rules?: Json | null
+          materials_finishes?: Json | null
+          photography_style?: Json | null
+          tone_of_voice?: Json | null
+          typography?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          color_system?: Json | null
+          created_at?: string
+          guidelines_version?: string | null
+          id?: string
+          logo_rules?: Json | null
+          materials_finishes?: Json | null
+          photography_style?: Json | null
+          tone_of_voice?: Json | null
+          typography?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       brand_intelligence: {
         Row: {
           approved_at: string | null

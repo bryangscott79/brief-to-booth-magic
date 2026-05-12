@@ -523,6 +523,54 @@ export function PromptGenerator() {
     [promptParams, activePreset, activeCustomEmphasis],
   );
 
+  // ─── ADDITIONAL HOOKS HOISTED ABOVE EARLY-RETURN ──────────────────
+  // Same reason: React requires identical hook count between the
+  // loading-pass render (where the early-return below fires) and
+  // the loaded-pass render. Anything below this block must NOT call
+  // a hook.
+
+  // Orphaned-versions detection — reads promptVersions + savedImages.
+  // No dependency on brief/spatialData/bigIdea, safe on loading pass.
+  const alreadyHasLegacyVersion = useMemo(
+    () => promptVersions.versions.some((v) => v.claimsUnversioned === true),
+    [promptVersions.versions],
+  );
+  const orphanedVersions = useMemo(() => {
+    if (!effectiveProjectId) return [];
+    return findOrphanedVersions({
+      savedImages,
+      knownVersionIds: promptVersions.versions.map((v) => v.id),
+      includeLegacy: !alreadyHasLegacyVersion,
+    });
+  }, [effectiveProjectId, savedImages, promptVersions.versions, alreadyHasLegacyVersion]);
+
+  // Brief-readiness jump handler — pure navigation, no brief deps.
+  const handleReadinessJump = useCallback(
+    (gap: CheckResult) => {
+      const step = gap.jumpTo?.step;
+      switch (step) {
+        case "brief":
+          navigate("/upload");
+          break;
+        case "review":
+          navigate("/review");
+          break;
+        case "elements":
+          navigate("/generate");
+          break;
+        case "spatial":
+        case "materials":
+          navigate("/spatial");
+          break;
+        case "prompts":
+          break;
+        default:
+          break;
+      }
+    },
+    [navigate],
+  );
+
   if (!brief || !spatialData || !bigIdea) {
     return (
       <div className="text-center py-12">
@@ -824,23 +872,8 @@ export function PromptGenerator() {
   const completedCount = Object.values(generatedImages).filter(img => img.status === "complete").length;
   const totalViews = allAngles.length;
 
-  // Detect orphaned versions — image rows in project_images carry a version
-  // suffix in their angle_id; if a suffix doesn't match any current version
-  // metadata, those images belong to a "lost" version that can be restored.
-  // Also detects legacy (no-suffix) renders saved before versioning existed,
-  // unless we already have a version flagged claimsUnversioned for them.
-  const alreadyHasLegacyVersion = useMemo(
-    () => promptVersions.versions.some((v) => v.claimsUnversioned === true),
-    [promptVersions.versions],
-  );
-  const orphanedVersions = useMemo(() => {
-    if (!effectiveProjectId) return [];
-    return findOrphanedVersions({
-      savedImages,
-      knownVersionIds: promptVersions.versions.map((v) => v.id),
-      includeLegacy: !alreadyHasLegacyVersion,
-    });
-  }, [effectiveProjectId, savedImages, promptVersions.versions, alreadyHasLegacyVersion]);
+  // alreadyHasLegacyVersion + orphanedVersions are hoisted above the
+  // early-return at the top of the component (React #310).
 
   const handleRecoverOrphan = (
     versionId: string,
@@ -1221,37 +1254,9 @@ export function PromptGenerator() {
     );
   }
 
-  // Phase 3: All Views Generated / Generating
-  // Map a readiness-check jumpTo into a real navigation. Each step
-  // matches a route the app exposes; we route through the existing
-  // useProjectNavigate hook so query params (project id) survive.
-  const handleReadinessJump = useCallback(
-    (gap: CheckResult) => {
-      const step = gap.jumpTo?.step;
-      switch (step) {
-        case "brief":
-          navigate("/upload");
-          break;
-        case "review":
-          navigate("/review");
-          break;
-        case "elements":
-          navigate("/generate");
-          break;
-        case "spatial":
-        case "materials":
-          navigate("/spatial");
-          break;
-        case "prompts":
-          // Already here.
-          break;
-        default:
-          break;
-      }
-    },
-    [navigate],
-  );
-
+  // handleReadinessJump hoisted above the early-return at the top of
+  // the component (React #310). The duplicate that lived here was the
+  // bug.
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {versionsHeader}

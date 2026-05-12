@@ -1,3 +1,5 @@
+// polish-rhino-render — DEPLOY TOKEN: 2026-05-12-r7-openai-required
+// OPENAI_API_KEY is now non-optional for all image renders.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callGemini } from "../_shared/ai-gateway.ts";
 

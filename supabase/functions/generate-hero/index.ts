@@ -1,10 +1,11 @@
-// generate-hero — DEPLOY TOKEN: 2026-05-07-r6-image2-spec
+// generate-hero — DEPLOY TOKEN: 2026-05-12-r7-openai-required
 // (Lovable's pipeline keys deployment off file content hash — bump this
 //  comment to force a redeploy when the function code changes need to
 //  propagate. The ai-gateway changes that matter for this version:
 //   - callOpenAIImage uses model "gpt-image-2"
 //   - callAnthropic falls back across LOVABLE_API_KEY / ANTHROPIC_KEY
-//   - response carries modelUsed for client-side observability)
+//   - response carries modelUsed for client-side observability
+//   - OPENAI_API_KEY is now non-optional for all image renders)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini, callOpenAIImage } from "../_shared/ai-gateway.ts";

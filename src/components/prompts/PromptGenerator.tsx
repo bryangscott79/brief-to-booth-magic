@@ -8,10 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Copy, 
-  Check, 
+import {
+  Copy,
+  Check,
   ChevronRight,
   Camera,
   Sparkles,
@@ -23,7 +24,8 @@ import {
   RefreshCw,
   MessageSquare,
   Layers,
-  FolderOpen
+  FolderOpen,
+  Maximize2,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
@@ -108,6 +110,10 @@ export function PromptGenerator() {
   const projectId = searchParams.get("project");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showGallery, setShowGallery] = useState(false);
+  // Lightbox for click-to-expand on any generated render.
+  // useImageLightbox returns an open() trigger + props spread for
+  // the ImageLightbox component instance below.
+  const lightbox = useImageLightbox();
 
   // Global render store
   const renderStore = useRenderStore();
@@ -1102,13 +1108,20 @@ export function PromptGenerator() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg overflow-hidden border bg-muted">
-              <img 
-                src={heroImage!} 
-                alt="Generated Hero" 
+            <button
+              type="button"
+              className="block w-full rounded-lg overflow-hidden border bg-muted cursor-zoom-in transition-shadow hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              onClick={() =>
+                lightbox.open(heroImage!, "Generated Hero", "Hero render")
+              }
+              title="Click to view full size"
+            >
+              <img
+                src={heroImage!}
+                alt="Generated Hero"
                 className="w-full h-auto"
               />
-            </div>
+            </button>
 
             {heroIterations.length > 1 && (
               <div className="space-y-2">
@@ -1256,11 +1269,44 @@ export function PromptGenerator() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                           {images.map((img) => (
                             <div key={img.id} className="group relative rounded-lg overflow-hidden border bg-muted">
-                              <img src={img.public_url} alt={img.angle_name} className="w-full aspect-video object-cover" />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <button
+                                type="button"
+                                className="block w-full cursor-zoom-in focus:outline-none"
+                                onClick={() =>
+                                  lightbox.open(
+                                    img.public_url,
+                                    img.angle_name,
+                                    img.angle_name,
+                                  )
+                                }
+                                title="Click to view full size"
+                              >
+                                <img
+                                  src={img.public_url}
+                                  alt={img.angle_name}
+                                  className="w-full aspect-video object-cover"
+                                />
+                              </button>
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
                                 <Button
                                   variant="secondary"
                                   size="sm"
+                                  className="pointer-events-auto"
+                                  onClick={() =>
+                                    lightbox.open(
+                                      img.public_url,
+                                      img.angle_name,
+                                      img.angle_name,
+                                    )
+                                  }
+                                >
+                                  <Maximize2 className="h-3 w-3 mr-1" />
+                                  Expand
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="pointer-events-auto"
                                   onClick={() => downloadImage(img.public_url, img.angle_name)}
                                 >
                                   <Download className="h-3 w-3 mr-1" />
@@ -1315,13 +1361,20 @@ export function PromptGenerator() {
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-[400px,1fr] gap-4">
-            <div className="rounded-lg overflow-hidden border">
-              <img 
-                src={heroImage!} 
-                alt="Reference" 
+            <button
+              type="button"
+              className="block rounded-lg overflow-hidden border cursor-zoom-in transition-shadow hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              onClick={() =>
+                lightbox.open(heroImage!, "Style reference", "Style reference (3/4 hero)")
+              }
+              title="Click to view full size"
+            >
+              <img
+                src={heroImage!}
+                alt="Reference"
                 className="w-full h-auto object-contain"
               />
-            </div>
+            </button>
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-medium mb-2">Booth Specifications</h4>
@@ -1540,7 +1593,20 @@ export function PromptGenerator() {
                         </div>
                       )}
                       {imageData?.status === "complete" && imageData.url && (
-                        <img src={imageData.url} alt={angle.name} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          className="w-full h-full cursor-zoom-in focus:outline-none"
+                          onClick={() =>
+                            lightbox.open(imageData.url!, angle.name, angle.name)
+                          }
+                          title="Click to view full size"
+                        >
+                          <img
+                            src={imageData.url}
+                            alt={angle.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
                       )}
                       {imageData?.status === "error" && (
                         <div className="text-center text-destructive">
@@ -1578,6 +1644,11 @@ export function PromptGenerator() {
           </div>
         </>
       )}
+
+      {/* Click-to-expand lightbox for any generated render. Mounted
+          once at the page level; consumed by every <img onClick={…}>
+          via the lightbox.open() helper. */}
+      <ImageLightbox {...lightbox.props} />
     </div>
   );
 }

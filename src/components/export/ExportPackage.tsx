@@ -17,6 +17,7 @@ import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useProjectImages } from "@/hooks/useProjectImages";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
 import { supabase } from "@/integrations/supabase/client";
 import { ProposalExport } from "./ProposalExport";
 import { DesignedDeck } from "./DesignedDeck";
@@ -86,6 +87,8 @@ export function ExportPackage() {
   const { currentProject } = useProjectStore();
   const { navigate } = useProjectNavigate();
   const { toast } = useToast();
+  // Click-to-expand on any render thumbnail in the export page.
+  const lightbox = useImageLightbox();
 
   const projectId = currentProject?.id;
   const { data: images } = useProjectImages(projectId);
@@ -647,7 +650,19 @@ export function ExportPackage() {
               {rhinoRenders
                 .filter(r => r.polish_status === "complete" && r.polished_public_url)
                 .map(r => (
-                  <div key={r.id} className="relative aspect-video rounded-lg overflow-hidden bg-muted group">
+                  <button
+                    type="button"
+                    key={r.id}
+                    className="relative aspect-video rounded-lg overflow-hidden bg-muted group text-left cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-primary"
+                    onClick={() =>
+                      lightbox.open(
+                        r.polished_public_url!,
+                        r.view_name || "Polished render",
+                        r.view_name || "Polished render",
+                      )
+                    }
+                    title="Click to view full size"
+                  >
                     <img
                       src={r.polished_public_url!}
                       alt={r.view_name || "Polished render"}
@@ -658,7 +673,7 @@ export function ExportPackage() {
                         {r.view_name || "Untitled View"}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
@@ -673,6 +688,9 @@ export function ExportPackage() {
         clientId={currentProject?.clientId ?? null}
         projectId={projectId ?? null}
       />
+
+      {/* Click-to-expand for any render thumbnail on this page. */}
+      <ImageLightbox {...lightbox.props} />
     </div>
   );
 }

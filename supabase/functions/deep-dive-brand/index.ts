@@ -494,6 +494,11 @@ Extract the brand profile from the attached PDF using the build_brand_profile to
       },
     };
 
+    const dataUrl = `data:application/pdf;base64,${fileBase64}`;
+    // Drop the caller's reference so the original base64 string can be GC'd
+    // once we hand off to the fetch body. Saves ~1x the PDF size.
+    fileBase64 = "";
+
     const ai = await callGemini({
       usage: await buildUsageContext(req, "deep-dive-brand").catch(() => undefined),
       model: "google/gemini-2.5-pro",
@@ -505,7 +510,7 @@ Extract the brand profile from the attached PDF using the build_brand_profile to
             { type: "text", text: userPrompt },
             {
               type: "image_url",
-              image_url: { url: `data:application/pdf;base64,${fileBase64}` },
+              image_url: { url: dataUrl },
             },
           ],
         },

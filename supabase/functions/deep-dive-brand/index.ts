@@ -413,7 +413,22 @@ async function runPdfDeepDive(
   industry?: string,
 ): Promise<Response> {
   try {
-    console.log(`[deep-dive PDF] Starting for ${clientName ?? "(unnamed)"}`);
+    // Edge-runtime workers cap RAM at ~256MB. The base64 PDF lives in memory,
+    // gets concatenated into a data URL (2x), then JSON.stringify'd into the
+    // fetch body (3x+). Anything over ~6MB base64 reliably trips
+    // WORKER_RESOURCE_LIMIT. Cap upfront with a clean error.
+    const approxBytes = Math.floor((fileBase64.length * 3) / 4);
+    const MAX_PDF_BYTES = 6 * 1024 * 1024; // 6MB raw PDF
+    if (approxBytes > MAX_PDF_BYTES) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `PDF is too large (${(approxBytes / 1024 / 1024).toFixed(1)}MB). Please upload a brand book under 6MB, or compress/split the file.`,
+        }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    console.log(`[deep-dive PDF] Starting for ${clientName ?? "(unnamed)"} (${(approxBytes / 1024 / 1024).toFixed(1)}MB)`);
 
     const systemPrompt = `You are a brand strategist analysing a brand book / guideline PDF to build a complete brand intelligence profile for an experiential design agency.
 
@@ -479,6 +494,11 @@ Extract the brand profile from the attached PDF using the build_brand_profile to
       },
     };
 
+    const dataUrl = `data:application/pdf;base64,${fileBase64}`;
+    // Drop the caller's reference so the original base64 string can be GC'd
+    // once we hand off to the fetch body. Saves ~1x the PDF size.
+    fileBase64 = "";
+
     const ai = await callGemini({
       usage: await buildUsageContext(req, "deep-dive-brand").catch(() => undefined),
       model: "google/gemini-2.5-pro",
@@ -490,7 +510,7 @@ Extract the brand profile from the attached PDF using the build_brand_profile to
             { type: "text", text: userPrompt },
             {
               type: "image_url",
-              image_url: { url: `data:application/pdf;base64,${fileBase64}` },
+              image_url: { url: dataUrl },
             },
           ],
         },

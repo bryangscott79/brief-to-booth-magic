@@ -96,30 +96,111 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
    * Shared post-processing: takes the deep-dive response (URL or PDF
    * mode — both shapes are identical) and persists everything back
    * to brand_intelligence + brand_guidelines + the client row.
+   *
+   * Dedupe rules:
+   *   • Match existing entries by (category, title) — that's how deep-
+   *     dive names its outputs (e.g. "Mission", "Brand Colors").
+   *   • Identical content + same approval state → skip silently.
+   *   • New content with the same title → UPDATE the existing entry
+   *     (keeps the user's approval state intact; they review the
+   *     freshened content).
+   *   • Brand-new (title, category) → INSERT.
+   *
+   * The brand_guidelines upsert is non-fatal — that table is a
+   * structured projection of brand_intelligence and the schema cache
+   * sometimes lags a migration. We log + continue rather than blowing
+   * up the whole flow when it errors.
    */
   const persistDeepDiveResult = async (data: any) => {
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+
     if (data.entries?.length) {
-      await batchCreate.mutateAsync(
-        data.entries.map((e: any) => ({
-          client_id: client.id,
-          category: e.category,
-          title: e.title,
-          content: e.content,
-          tags: e.tags,
-          source: "ai_extracted" as const,
-          source_project_id: null,
-          is_approved: false,
-          approved_at: null,
-          confidence_score: 0.85,
-        })),
-      );
+      const incoming = data.entries as Array<{
+        category: string;
+        title: string;
+        content: string;
+        tags: string[];
+      }>;
+      // Index existing entries by category+title for O(1) dedupe.
+      const existingByKey = new Map<string, BrandIntelligenceEntry>();
+      for (const e of entries) {
+        existingByKey.set(`${e.category}::${e.title}`, e);
+      }
+
+      const toCreate: typeof incoming = [];
+      const toUpdate: Array<{ id: string; content: string; tags: string[] }> = [];
+      for (const inc of incoming) {
+        const key = `${inc.category}::${inc.title}`;
+        const existing = existingByKey.get(key);
+        if (!existing) {
+          toCreate.push(inc);
+        } else if (
+          existing.content.trim() === inc.content.trim() &&
+          JSON.stringify(existing.tags ?? []) === JSON.stringify(inc.tags ?? [])
+        ) {
+          skippedCount++;
+        } else {
+          toUpdate.push({ id: existing.id, content: inc.content, tags: inc.tags });
+        }
+      }
+
+      if (toCreate.length > 0) {
+        await batchCreate.mutateAsync(
+          toCreate.map((e) => ({
+            client_id: client.id,
+            category: e.category as BrandIntelligenceEntry["category"],
+            title: e.title,
+            content: e.content,
+            tags: e.tags,
+            source: "ai_extracted" as const,
+            source_project_id: null,
+            is_approved: false,
+            approved_at: null,
+            confidence_score: 0.85,
+          })),
+        );
+        createdCount = toCreate.length;
+      }
+
+      if (toUpdate.length > 0) {
+        // Update existing rows individually — Supabase doesn't expose a
+        // bulk upsert by (client_id, category, title) without a unique
+        // constraint, and we don't want to add one because user-edited
+        // entries may legitimately share a title.
+        for (const u of toUpdate) {
+          const { error } = await supabase
+            .from("brand_intelligence")
+            .update({ content: u.content, tags: u.tags, updated_at: new Date().toISOString() } as any)
+            .eq("id", u.id);
+          if (error) {
+            console.warn(`[deep-dive] Failed to update entry ${u.id}:`, error.message);
+          } else {
+            updatedCount++;
+          }
+        }
+      }
     }
+
     if (data.guidelines) {
-      await upsertGuidelines.mutateAsync({
-        clientId: client.id,
-        ...data.guidelines,
-      });
+      try {
+        await upsertGuidelines.mutateAsync({
+          clientId: client.id,
+          ...data.guidelines,
+        });
+      } catch (err) {
+        // brand_guidelines is supplementary structured data — the
+        // primary store is brand_intelligence. If the schema cache
+        // hasn't caught up to a migration or the table is missing,
+        // log + continue rather than failing the whole deep dive.
+        console.warn(
+          "[deep-dive] brand_guidelines upsert failed (non-fatal):",
+          (err as any)?.message ?? err,
+        );
+      }
     }
+
     const patch: any = { id: client.id, name: client.name };
     if (data.logoUrl && !client.logo_url) patch.logo_url = data.logoUrl;
     if (data.colors?.primary && !client.primary_color) patch.primary_color = data.colors.primary;
@@ -127,6 +208,8 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
     if (Object.keys(patch).length > 2) {
       await upsertClient.mutateAsync(patch);
     }
+
+    return { createdCount, updatedCount, skippedCount };
   };
 
   const handleDeepDive = async () => {
@@ -161,11 +244,11 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Deep dive failed");
 
-      await persistDeepDiveResult(data);
+      const summary = await persistDeepDiveResult(data);
 
       toast({
         title: "Deep dive complete",
-        description: `${data.entries?.length ?? 0} new insights added — review and approve below.`,
+        description: dedupSummary(summary),
       });
     } catch (e: any) {
       toast({
@@ -294,11 +377,11 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
       }
       if (!data?.success) throw new Error(data?.error || "PDF deep dive failed");
 
-      await persistDeepDiveResult(data);
+      const summary = await persistDeepDiveResult(data);
 
       toast({
-        title: "PDF processed",
-        description: `${data.entries?.length ?? 0} new insights extracted from "${pdfFile.name}".`,
+        title: `Processed "${pdfFile.name}"`,
+        description: dedupSummary(summary),
       });
       setPdfFile(null);
     } catch (e: any) {
@@ -604,6 +687,16 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                           </Button>
                         </div>
                       </div>
+                      {/* Visual color swatches for the "Brand Colors" entry.
+                          Without these the brand-color list reads as a wall
+                          of hex strings; with them, the user instantly sees
+                          the palette. Hex extraction matches both styles
+                          deep-dive emits — "#FF5000 — Name (Usage)" and
+                          bare "#FF5000" lines. */}
+                      {category === "visual_identity" &&
+                        entry.title === "Brand Colors" && (
+                          <ColorSwatchRow content={entry.content} />
+                        )}
                       <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
                         {entry.content}
                       </p>
@@ -624,6 +717,65 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── dedupSummary ─────────────────────────────────────────────────────────
+// Builds the toast description from the persistDeepDiveResult counts so
+// re-runs report "3 added · 2 updated · 4 unchanged" instead of "9 new
+// insights added" (which was the lie that caused the duplicate-entries
+// bug).
+
+function dedupSummary({
+  createdCount,
+  updatedCount,
+  skippedCount,
+}: {
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+}): string {
+  const parts: string[] = [];
+  if (createdCount > 0) parts.push(`${createdCount} added`);
+  if (updatedCount > 0) parts.push(`${updatedCount} updated`);
+  if (skippedCount > 0) parts.push(`${skippedCount} unchanged`);
+  if (parts.length === 0) return "No changes — re-run produced the same data.";
+  return parts.join(" · ") + ". Review pending entries below.";
+}
+
+// ─── ColorSwatchRow ───────────────────────────────────────────────────────
+// Parses hex codes out of the "Brand Colors" entry's freeform text and
+// renders a row of color squares. Each swatch shows the hex underneath so
+// the visual reads as both palette + reference card. Greedy hex match
+// (#abc or #abcdef) deduped in order so repeated mentions don't double up.
+
+function ColorSwatchRow({ content }: { content: string }) {
+  // Match #FFF, #FFFF, #FFFFFF, #FFFFFFFF (3/4/6/8-digit). Brand books
+  // typically use 6-digit but we accept the rest too. Case-insensitive.
+  const matches = content.match(/#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})\b/gi) ?? [];
+  if (matches.length === 0) return null;
+  const seen = new Set<string>();
+  const hexes: string[] = [];
+  for (const m of matches) {
+    const key = m.toUpperCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      hexes.push(m);
+    }
+  }
+  return (
+    <div className="flex flex-wrap gap-2 mb-2 mt-0.5">
+      {hexes.map((hex) => (
+        <div key={hex} className="flex flex-col items-center gap-0.5">
+          <div
+            className="w-9 h-9 rounded-md border border-border shadow-sm"
+            style={{ backgroundColor: hex }}
+            title={hex}
+          />
+          <span className="text-[9px] font-mono text-muted-foreground">{hex.toUpperCase()}</span>
+        </div>
+      ))}
     </div>
   );
 }

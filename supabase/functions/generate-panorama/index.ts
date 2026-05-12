@@ -150,7 +150,7 @@ serve(async (req) => {
     const panoramaPrompt = `Generate a photorealistic EQUIRECTANGULAR 360° PANORAMIC image of the interior of a ${typeLabel} space called "${spaceName}".
 
 IMAGE FORMAT REQUIREMENTS (CRITICAL):
-- The image MUST be in equirectangular projection format (2:1 aspect ratio)
+- The image MUST be in equirectangular projection format (3:2 aspect ratio)
 - The image should wrap seamlessly — the left edge connects to the right edge
 - The camera is positioned at the CENTER of the space at eye level (5.5 feet / 1.7 meters)
 - Show the FULL 360° view: front, left, back, right, ceiling, and floor are ALL visible
@@ -171,7 +171,7 @@ ${consistencyBlock}
 ${brandContext ? `\n## BRAND CONTEXT\n${brandContext}` : ""}
 ${suiteContext ? `\n## SUITE CONTEXT\n${suiteContext}` : ""}
 
-OUTPUT: A single photorealistic equirectangular 360° panoramic image (2:1 aspect ratio) showing the complete interior environment of "${spaceName}".`;
+OUTPUT: A single photorealistic equirectangular 360° panoramic image (3:2 aspect ratio) showing the complete interior environment of "${spaceName}".`;
 
     console.log("Generating panorama for:", spaceName, {
       hasReference: !!referenceImageUrl,

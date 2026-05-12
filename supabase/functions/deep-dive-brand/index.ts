@@ -1,9 +1,20 @@
 // Deep Dive Brand
-// Given a website URL + client name, scrapes the homepage + key brand pages
-// (about, mission, values) via Firecrawl, then asks Gemini 2.5 Pro to extract
-// a comprehensive structured brand profile: mission, vision, values, tone of
-// voice, personality, sentiment, target audience, messaging pillars, dos/don'ts,
-// competitors, plus colors, fonts, and logo URL pulled from Firecrawl branding.
+// Builds a structured brand intelligence profile from one of two sources:
+//
+//   URL mode:  Given a website URL + client name, scrapes the homepage + key
+//              brand pages (about, mission, values) via Firecrawl, then asks
+//              Gemini 2.5 Pro to extract the profile from the scraped text +
+//              branding signals.
+//
+//   PDF mode:  Given a base64-encoded PDF (a brand book, guideline doc, or
+//              identity guide), passes it directly to Gemini 2.5 Pro as
+//              multimodal input. Skips Firecrawl entirely. Useful when the
+//              brand has no public site or when the agency has an internal
+//              guideline PDF that's richer than the public site.
+//
+// Both modes converge on the same `build_brand_profile` tool schema and
+// produce the same response shape, so the rest of the app doesn't have to
+// branch on source.
 //
 // Returns:
 //   - entries[]   : brand_intelligence rows ready for batchCreate (pending review)
@@ -70,11 +81,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { url, clientName, industry } = await req.json();
+    const body = await req.json();
+    const { url, clientName, industry, fileBase64, fileType } = body as {
+      url?: string;
+      clientName?: string;
+      industry?: string;
+      fileBase64?: string;
+      fileType?: string;
+    };
+
+    // PDF MODE — when a PDF is uploaded we skip Firecrawl entirely and
+    // pass the file directly to Gemini's multimodal input. The tool
+    // call output uses the same schema as the URL path so downstream
+    // code is unchanged.
+    if (fileBase64 && fileType === "pdf") {
+      return await runPdfDeepDive(req, fileBase64, clientName, industry);
+    }
 
     if (!url) {
       return new Response(
-        JSON.stringify({ success: false, error: "URL is required" }),
+        JSON.stringify({ success: false, error: "Either url or a PDF (fileBase64 + fileType='pdf') is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -370,3 +396,221 @@ Extract the brand profile using the build_brand_profile tool.`;
     );
   }
 });
+
+// ─── PDF MODE ────────────────────────────────────────────────────────────────
+//
+// When the user uploads a brand book / guideline PDF instead of (or in
+// addition to) supplying a URL, we skip Firecrawl entirely and pass the
+// PDF directly to Gemini 2.5 Pro as multimodal input. Same tool schema
+// as the URL path; same downstream conversion to brand_intelligence
+// entries + guidelines payload. The shared profileToResponse() helper
+// keeps both modes producing the exact same response shape.
+
+async function runPdfDeepDive(
+  req: Request,
+  fileBase64: string,
+  clientName?: string,
+  industry?: string,
+): Promise<Response> {
+  try {
+    console.log(`[deep-dive PDF] Starting for ${clientName ?? "(unnamed)"}`);
+
+    const systemPrompt = `You are a brand strategist analysing a brand book / guideline PDF to build a complete brand intelligence profile for an experiential design agency.
+
+Your job: extract a clear, actionable brand profile that a designer can use to craft on-brand spatial experiences. Brand books often contain explicit specs (color hex codes, typography rules, logo clear-space, photography guidelines, dos & don'ts) — capture every literal value you see. If a field is genuinely unknown, return an empty string or empty array — never invent specifics. Be concise.
+
+IMPORTANT for color: brand books typically state color hex values directly. Always capture them as hex (e.g. "#FF6B00"). If only Pantone or CMYK is given, return the closest hex equivalent. Group colors as primary / secondary / accent per the PDF's own classification when possible.`;
+
+    const userPrompt = `CLIENT: ${clientName || "(unknown)"}
+INDUSTRY: ${industry || "(unknown)"}
+
+Extract the brand profile from the attached PDF using the build_brand_profile tool. Scan EVERY page — brand books often store color codes and typography rules deep into the document. Tables and sidebars matter.`;
+
+    // Same tool schema as the URL path. Inline rather than DRY-refactored
+    // to keep the diff focused — both copies stay in sync via review.
+    const tool = {
+      type: "function",
+      function: {
+        name: "build_brand_profile",
+        description: "Extract a comprehensive brand profile from the supplied brand-book PDF.",
+        parameters: {
+          type: "object",
+          properties: {
+            mission: { type: "string", description: "The brand's mission statement (one sentence)." },
+            vision: { type: "string", description: "The brand's vision for the future (one sentence)." },
+            values: { type: "array", items: { type: "string" }, description: "Core brand values (3-7 short phrases)." },
+            personality: { type: "array", items: { type: "string" }, description: "Brand personality adjectives (4-7)." },
+            toneOfVoice: { type: "string", description: "How the brand speaks: 1-3 sentences describing voice and tone." },
+            sentiment: { type: "string", description: "Overall emotional sentiment of the brand." },
+            targetAudience: { type: "string", description: "Primary target audience description." },
+            messagingPillars: { type: "array", items: { type: "string" }, description: "Top 3-5 messaging pillars / themes." },
+            taglines: { type: "array", items: { type: "string" }, description: "Brand taglines / recurring phrases observed in the PDF." },
+            dos: { type: "array", items: { type: "string" }, description: "On-brand do's." },
+            donts: { type: "array", items: { type: "string" }, description: "Off-brand don'ts." },
+            competitors: { type: "array", items: { type: "string" } },
+            colors: {
+              type: "object",
+              properties: {
+                primary: { type: "array", items: { type: "object", properties: { hex: { type: "string" }, name: { type: "string" }, usage: { type: "string" } } } },
+                secondary: { type: "array", items: { type: "object", properties: { hex: { type: "string" }, name: { type: "string" }, usage: { type: "string" } } } },
+                accent: { type: "array", items: { type: "object", properties: { hex: { type: "string" }, name: { type: "string" }, usage: { type: "string" } } } },
+              },
+            },
+            typography: {
+              type: "object",
+              properties: {
+                primaryTypeface: { type: "string" },
+                secondaryTypeface: { type: "string" },
+                usageRules: { type: "string" },
+              },
+            },
+            photographyStyle: {
+              type: "object",
+              properties: {
+                style: { type: "string", description: "Description of photography/imagery style." },
+                dos: { type: "array", items: { type: "string" } },
+                donts: { type: "array", items: { type: "string" } },
+              },
+            },
+            logoUrl: { type: "string", description: "Empty for PDF mode unless an asset URL appears inline." },
+          },
+          required: ["mission", "values", "personality", "toneOfVoice", "messagingPillars"],
+        },
+      },
+    };
+
+    const ai = await callGemini({
+      usage: await buildUsageContext(req, "deep-dive-brand").catch(() => undefined),
+      model: "google/gemini-2.5-pro",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userPrompt },
+            {
+              type: "image_url",
+              image_url: { url: `data:application/pdf;base64,${fileBase64}` },
+            },
+          ],
+        },
+      ],
+      tools: [tool],
+      toolChoice: { type: "function", function: { name: "build_brand_profile" } },
+      temperature: 0.3,
+      maxTokens: 4096,
+    });
+
+    const profile: any = ai.toolCalls?.[0]?.arguments || {};
+    if (!profile.colors) profile.colors = { primary: [], secondary: [], accent: [] };
+    profile.colors.primary = profile.colors.primary || [];
+    profile.colors.secondary = profile.colors.secondary || [];
+    profile.colors.accent = profile.colors.accent || [];
+
+    // Convert profile → entries[] + guidelines. Same logic as the URL
+    // path; duplicated here to keep the PDF path self-contained. If
+    // we ever do a third source we should extract this to a helper.
+    const entries: Array<{ category: string; title: string; content: string; tags: string[] }> = [];
+    const push = (category: string, title: string, content: string, tags: string[]) => {
+      if (content && content.trim().length > 0) {
+        entries.push({ category, title, content: content.trim(), tags });
+      }
+    };
+    if (profile.mission) push("strategic_voice", "Mission", profile.mission, ["mission", "purpose"]);
+    if (profile.vision) push("strategic_voice", "Vision", profile.vision, ["vision", "future"]);
+    if (profile.values?.length) push("strategic_voice", "Core Values", profile.values.map((v: string) => `• ${v}`).join("\n"), ["values"]);
+    if (profile.personality?.length) push("strategic_voice", "Brand Personality", profile.personality.join(", "), ["personality"]);
+    if (profile.toneOfVoice) push("strategic_voice", "Tone of Voice", profile.toneOfVoice, ["voice", "tone"]);
+    if (profile.sentiment) push("strategic_voice", "Brand Sentiment", profile.sentiment, ["sentiment", "emotion"]);
+    if (profile.targetAudience) push("strategic_voice", "Target Audience", profile.targetAudience, ["audience"]);
+    if (profile.messagingPillars?.length) push("strategic_voice", "Messaging Pillars", profile.messagingPillars.map((p: string) => `• ${p}`).join("\n"), ["messaging"]);
+    if (profile.taglines?.length) push("strategic_voice", "Taglines", profile.taglines.join("\n"), ["taglines"]);
+    if (profile.competitors?.length) push("strategic_voice", "Competitors", profile.competitors.join(", "), ["competitors"]);
+
+    const allColors = [
+      ...(profile.colors.primary || []),
+      ...(profile.colors.secondary || []),
+      ...(profile.colors.accent || []),
+    ].filter((c: any) => c?.hex);
+    if (allColors.length) {
+      const colorLines = allColors
+        .map((c: any) => `${c.hex}${c.name ? ` — ${c.name}` : ""}${c.usage ? ` (${c.usage})` : ""}`)
+        .join("\n");
+      push("visual_identity", "Brand Colors", colorLines, ["colors"]);
+    }
+    if (profile.typography?.primaryTypeface || profile.typography?.secondaryTypeface) {
+      const lines = [
+        profile.typography.primaryTypeface && `Primary: ${profile.typography.primaryTypeface}`,
+        profile.typography.secondaryTypeface && `Secondary: ${profile.typography.secondaryTypeface}`,
+        profile.typography.usageRules && `Usage: ${profile.typography.usageRules}`,
+      ].filter(Boolean).join("\n");
+      push("visual_identity", "Typography", lines, ["typography", "fonts"]);
+    }
+    if (profile.photographyStyle?.style) {
+      push("visual_identity", "Photography Style", profile.photographyStyle.style, ["photography", "imagery"]);
+    }
+    if (profile.dos?.length) push("process_procedure", "Brand Do's", profile.dos.map((d: string) => `• ${d}`).join("\n"), ["dos"]);
+    if (profile.donts?.length) push("process_procedure", "Brand Don'ts", profile.donts.map((d: string) => `• ${d}`).join("\n"), ["donts"]);
+
+    const guidelines = {
+      colorSystem: {
+        primary: profile.colors.primary || [],
+        secondary: profile.colors.secondary || [],
+        accent: profile.colors.accent || [],
+        forbidden: [],
+      },
+      typography: {
+        primaryTypeface: profile.typography?.primaryTypeface || "",
+        secondaryTypeface: profile.typography?.secondaryTypeface || "",
+        sizeScale: "",
+        usageRules: profile.typography?.usageRules || "",
+      },
+      logoRules: {
+        clearSpace: "",
+        minSize: "",
+        forbiddenTreatments: [],
+        usageNotes: profile.logoUrl ? `Primary logo: ${profile.logoUrl}` : "",
+      },
+      photographyStyle: {
+        style: profile.photographyStyle?.style || "",
+        dos: profile.photographyStyle?.dos || profile.dos || [],
+        donts: profile.photographyStyle?.donts || profile.donts || [],
+      },
+      toneOfVoice: {
+        description: profile.toneOfVoice || "",
+        messagingPillars: profile.messagingPillars || [],
+        taglines: profile.taglines || [],
+      },
+      materialsFinishes: {
+        preferred: [],
+        forbidden: [],
+        finishNotes: "",
+      },
+    };
+
+    const primaryHex = allColors[0]?.hex || "";
+    const secondaryHex = allColors[1]?.hex || "";
+
+    console.log(`[deep-dive PDF] Done — ${entries.length} entries, colors=${allColors.length}`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        entries,
+        guidelines,
+        logoUrl: profile.logoUrl || "",
+        colors: { primary: primaryHex, secondary: secondaryHex },
+        profile,
+        source: "pdf",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (error) {
+    console.error("[deep-dive PDF] error:", error);
+    const msg = error instanceof Error ? error.message : "PDF deep dive failed";
+    return new Response(
+      JSON.stringify({ success: false, error: msg }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+}

@@ -25,6 +25,9 @@ import {
   Image as ImageIcon,
   Check,
   Trash2,
+  FileText,
+  Upload,
+  Globe,
 } from "lucide-react";
 import {
   useBrandIntelligence,
@@ -85,6 +88,45 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
 
   const [diving, setDiving] = useState(false);
   const [website, setWebsite] = useState(client.website ?? "");
+  const [mode, setMode] = useState<"url" | "pdf">("url");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+
+  /**
+   * Shared post-processing: takes the deep-dive response (URL or PDF
+   * mode — both shapes are identical) and persists everything back
+   * to brand_intelligence + brand_guidelines + the client row.
+   */
+  const persistDeepDiveResult = async (data: any) => {
+    if (data.entries?.length) {
+      await batchCreate.mutateAsync(
+        data.entries.map((e: any) => ({
+          client_id: client.id,
+          category: e.category,
+          title: e.title,
+          content: e.content,
+          tags: e.tags,
+          source: "ai_extracted" as const,
+          source_project_id: null,
+          is_approved: false,
+          approved_at: null,
+          confidence_score: 0.85,
+        })),
+      );
+    }
+    if (data.guidelines) {
+      await upsertGuidelines.mutateAsync({
+        clientId: client.id,
+        ...data.guidelines,
+      });
+    }
+    const patch: any = { id: client.id, name: client.name };
+    if (data.logoUrl && !client.logo_url) patch.logo_url = data.logoUrl;
+    if (data.colors?.primary && !client.primary_color) patch.primary_color = data.colors.primary;
+    if (data.colors?.secondary && !client.secondary_color) patch.secondary_color = data.colors.secondary;
+    if (Object.keys(patch).length > 2) {
+      await upsertClient.mutateAsync(patch);
+    }
+  };
 
   const handleDeepDive = async () => {
     const url = website.trim();
@@ -118,39 +160,7 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Deep dive failed");
 
-      // Persist new intelligence as pending review
-      if (data.entries?.length) {
-        await batchCreate.mutateAsync(
-          data.entries.map((e: any) => ({
-            client_id: client.id,
-            category: e.category,
-            title: e.title,
-            content: e.content,
-            tags: e.tags,
-            source: "ai_extracted" as const,
-            source_project_id: null,
-            is_approved: false,
-            approved_at: null,
-            confidence_score: 0.85,
-          })),
-        );
-      }
-
-      // Mirror structured guidelines + colors/logo onto the client
-      if (data.guidelines) {
-        await upsertGuidelines.mutateAsync({
-          clientId: client.id,
-          ...data.guidelines,
-        });
-      }
-
-      const patch: any = { id: client.id, name: client.name };
-      if (data.logoUrl && !client.logo_url) patch.logo_url = data.logoUrl;
-      if (data.colors?.primary && !client.primary_color) patch.primary_color = data.colors.primary;
-      if (data.colors?.secondary && !client.secondary_color) patch.secondary_color = data.colors.secondary;
-      if (Object.keys(patch).length > 2) {
-        await upsertClient.mutateAsync(patch);
-      }
+      await persistDeepDiveResult(data);
 
       toast({
         title: "Deep dive complete",
@@ -159,6 +169,67 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
     } catch (e: any) {
       toast({
         title: "Deep dive failed",
+        description: e.message || String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setDiving(false);
+    }
+  };
+
+  /**
+   * PDF-mode deep dive — uploads a brand book / guidelines PDF and
+   * runs the same extraction flow as the URL path. Useful when the
+   * brand has a richer internal guideline doc than the public site
+   * (or no public site at all).
+   */
+  const handlePdfDeepDive = async () => {
+    if (!pdfFile) {
+      toast({
+        title: "PDF required",
+        description: "Choose a brand book or guideline PDF first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setDiving(true);
+    try {
+      // Read the file as base64 via FileReader. PDFs up to ~10MB are
+      // fine for Gemini's multimodal input; we cap further on the
+      // server side if needed.
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // strip the "data:application/pdf;base64," prefix
+          const comma = result.indexOf(",");
+          resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(pdfFile);
+      });
+
+      const { data, error } = await supabase.functions.invoke("deep-dive-brand", {
+        body: {
+          fileBase64,
+          fileType: "pdf",
+          clientName: client.name,
+          industry: client.industry ?? "",
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "PDF deep dive failed");
+
+      await persistDeepDiveResult(data);
+
+      toast({
+        title: "PDF processed",
+        description: `${data.entries?.length ?? 0} new insights extracted from "${pdfFile.name}".`,
+      });
+      setPdfFile(null);
+    } catch (e: any) {
+      toast({
+        title: "PDF deep dive failed",
         description: e.message || String(e),
         variant: "destructive",
       });
@@ -177,7 +248,11 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
 
   return (
     <div className="space-y-4">
-      {/* Deep dive control */}
+      {/* Deep dive control — supports BOTH a website URL (Firecrawl
+          scrape) and a brand-book PDF upload (Gemini multimodal). Both
+          paths produce the same brand_intelligence + brand_guidelines
+          output, so users can mix and match — e.g. run the URL dive
+          first, then layer in a PDF guideline for richer specs. */}
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader>
           <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -187,47 +262,127 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                 Brand auto-discovery
               </CardTitle>
               <CardDescription className="mt-1">
-                Scrape the brand's website to pull mission, vision, values, tone of voice, colors,
-                fonts, logo, and more. Re-run anytime to refresh.
+                Pull mission, vision, values, tone of voice, colors, fonts, logo, and brand rules
+                — from a website OR an uploaded brand book / guideline PDF. Re-run anytime to
+                refresh or layer in more sources.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex gap-2 flex-wrap">
-            <div className="flex-1 min-w-[220px] space-y-1.5">
-              <Label className="text-xs">Website</Label>
-              <Input
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://www.brand.com"
-                disabled={diving}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button onClick={handleDeepDive} disabled={diving || !website.trim()}>
-                {diving ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    Diving…
-                  </>
-                ) : entries.length > 0 ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    Re-run deep dive
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                    Run deep dive
-                  </>
-                )}
-              </Button>
-            </div>
+          {/* Mode toggle */}
+          <div className="inline-flex rounded-md border border-border bg-muted/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setMode("url")}
+              disabled={diving}
+              className={`h-7 px-3 rounded text-xs flex items-center gap-1.5 transition-colors ${
+                mode === "url"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              Website
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("pdf")}
+              disabled={diving}
+              className={`h-7 px-3 rounded text-xs flex items-center gap-1.5 transition-colors ${
+                mode === "pdf"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Brand book PDF
+            </button>
           </div>
+
+          {mode === "url" ? (
+            <div className="flex gap-2 flex-wrap">
+              <div className="flex-1 min-w-[220px] space-y-1.5">
+                <Label className="text-xs">Website</Label>
+                <Input
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://www.brand.com"
+                  disabled={diving}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={handleDeepDive} disabled={diving || !website.trim()}>
+                  {diving ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Diving…
+                    </>
+                  ) : entries.length > 0 ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      Re-run deep dive
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      Run deep dive
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label className="text-xs">Brand book / guideline PDF</Label>
+              <div className="flex gap-2 flex-wrap">
+                <div className="flex-1 min-w-[220px]">
+                  <label
+                    className={`flex items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-2 cursor-pointer hover:border-primary/40 transition-colors ${
+                      diving ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                  >
+                    <Upload className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground truncate">
+                      {pdfFile ? pdfFile.name : "Choose a PDF…"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      className="hidden"
+                      disabled={diving}
+                      onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={handlePdfDeepDive} disabled={diving || !pdfFile}>
+                    {diving ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Extracting…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                        Extract from PDF
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Drop in a brand book, identity guide, or visual-language doc. Gemini reads the
+                whole PDF — colors, type rules, dos & don'ts, photography guidelines — and stores
+                each finding as a reviewable brand-intelligence entry below.
+              </p>
+            </div>
+          )}
           {diving && (
             <p className="text-xs text-muted-foreground">
-              Scraping website, mapping About / Mission pages, extracting brand profile. 20–40s.
+              {mode === "url"
+                ? "Scraping website, mapping About / Mission pages, extracting brand profile. 20–40s."
+                : "Reading every page of the PDF, extracting colors, typography, voice, photography rules. 20–40s."}
             </p>
           )}
         </CardContent>

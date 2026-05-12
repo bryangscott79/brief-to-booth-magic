@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Sparkles, Check, Trash2, Globe, ArrowRight, Brain } from "lucide-react";
+import { Loader2, Sparkles, Check, Trash2, Globe, ArrowRight, Brain, FileText, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useUpsertClient,
@@ -71,6 +71,12 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
 
   const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState({ name: "", industry: "", website: "" });
+  // Optional brand-book PDF — when set, the deep dive runs in PDF
+  // mode (or runs both URL + PDF when both are provided, but for
+  // simplicity we only run one source per new-client creation; the
+  // user can layer in additional sources from the client detail page
+  // after creation).
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
 
   const [client, setClient] = useState<Client | null>(null);
   const [diveLoading, setDiveLoading] = useState(false);
@@ -104,19 +110,46 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
       // Move to step 2 immediately so the user sees progress
       setStep(2);
 
-      // 2) Skip dive if no website
-      if (!form.website.trim()) {
+      // 2) Skip dive if neither a website nor a PDF was provided.
+      //    The user can always add a source later from the client
+      //    detail page (BrandIntelligencePanel).
+      if (!form.website.trim() && !pdfFile) {
         setDiveLoading(false);
         return;
       }
 
-      // 3) Call deep-dive-brand edge function
-      const { data, error } = await supabase.functions.invoke("deep-dive-brand", {
-        body: {
+      // 3) Call deep-dive-brand edge function. The function supports
+      //    BOTH input modes — URL (Firecrawl + Gemini) and PDF
+      //    (Gemini multimodal). PDF takes priority when both are
+      //    supplied because a brand book is usually richer than the
+      //    public site; the user can re-run with the URL afterward.
+      let body: Record<string, any>;
+      if (pdfFile) {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            const comma = result.indexOf(",");
+            resolve(comma >= 0 ? result.slice(comma + 1) : result);
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(pdfFile);
+        });
+        body = {
+          fileBase64,
+          fileType: "pdf",
+          clientName: form.name.trim(),
+          industry: form.industry.trim(),
+        };
+      } else {
+        body = {
           url: form.website.trim(),
           clientName: form.name.trim(),
           industry: form.industry.trim(),
-        },
+        };
+      }
+      const { data, error } = await supabase.functions.invoke("deep-dive-brand", {
+        body,
       });
 
       if (error) throw error;
@@ -199,14 +232,15 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
 
   // ─── STEP 1 RENDER ─────────────────────────────────────────────────────────
   if (step === 1) {
+    const hasSource = !!form.website.trim() || !!pdfFile;
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2">
           <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <div className="text-xs text-muted-foreground">
-            We'll deep-dive the brand from their website — pulling logo, colors, fonts,
-            mission, vision, values, tone of voice, and more. You'll review & edit
-            everything before it's saved.
+            We'll deep-dive the brand from their website OR an uploaded brand book / guideline PDF
+            — pulling logo, colors, fonts, mission, vision, values, tone of voice, and more.
+            You'll review & edit everything before it's saved.
           </div>
         </div>
 
@@ -235,7 +269,45 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
             placeholder="https://www.samsung.com"
           />
           <p className="text-xs text-muted-foreground">
-            Optional, but required for the deep dive. You can add this later and re-run from the client page.
+            Optional. We scrape this for brand info if you don't upload a PDF below.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Brand book / guidelines PDF</Label>
+          <label
+            className={cn(
+              "flex items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-2 cursor-pointer hover:border-primary/40 transition-colors",
+              diveLoading && "opacity-50 pointer-events-none",
+            )}
+          >
+            <Upload className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground truncate flex-1">
+              {pdfFile ? pdfFile.name : "Choose a PDF (optional)…"}
+            </span>
+            {pdfFile && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setPdfFile(null);
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              disabled={diveLoading}
+              onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">
+            <FileText className="h-3 w-3 inline mr-1" />
+            Optional. If both website and PDF are provided, the PDF wins (richer source). You can
+            layer in the URL afterward from the client page.
           </p>
         </div>
 
@@ -249,7 +321,7 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
                 <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                 Creating…
               </>
-            ) : form.website.trim() ? (
+            ) : hasSource ? (
               <>
                 <Sparkles className="h-3.5 w-3.5 mr-1" />
                 Create & deep dive

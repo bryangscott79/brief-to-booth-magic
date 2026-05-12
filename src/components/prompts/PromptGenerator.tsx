@@ -1111,9 +1111,13 @@ export function PromptGenerator() {
             <button
               type="button"
               className="block w-full rounded-lg overflow-hidden border bg-muted cursor-zoom-in transition-shadow hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              onClick={() =>
-                lightbox.open(heroImage!, "Generated Hero", "Hero render")
-              }
+              onClick={(e) => {
+                // Stop propagation so the click can't be interpreted
+                // by Radix Dialog's outside-click detector if the
+                // lightbox happens to be in the middle of opening.
+                e.stopPropagation();
+                lightbox.open(heroImage!, "Generated Hero", "Hero render");
+              }}
               title="Click to view full size"
             >
               <img
@@ -1475,11 +1479,20 @@ export function PromptGenerator() {
                     </div>
                   )}
                   {imageData?.status === "complete" && imageData.url && (
-                    <img
-                      src={imageData.url}
-                      alt={angle.name}
-                      className="w-full h-full object-cover"
-                    />
+                    <button
+                      type="button"
+                      className="w-full h-full cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-primary block"
+                      onClick={() =>
+                        lightbox.open(imageData.url!, angle.name, angle.name)
+                      }
+                      title="Click to view full size"
+                    >
+                      <img
+                        src={imageData.url}
+                        alt={angle.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
                   )}
                   {imageData?.status === "error" && (
                     <div className="text-center text-destructive">

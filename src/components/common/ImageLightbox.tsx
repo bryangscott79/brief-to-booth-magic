@@ -1,29 +1,20 @@
-// ImageLightbox — full-screen image viewer for generated booth renders.
+// ImageLightbox — full-screen image viewer for generated renders.
 //
-// Click any render thumbnail / hero image → opens a near-fullscreen
-// modal that fits the image to the viewport with a quick toggle to
-// view at native pixel size. Designed for VIEWING, not downloading —
-// the download affordance lives elsewhere and stays on the cards.
+// Click any render thumbnail → opens a fullscreen modal that fits the
+// image to the viewport, with a quick toggle to native pixel size.
+// View-only: no download button (that affordance stays on the cards).
 //
-// Why a custom component instead of the shadcn Dialog directly:
-//   • DialogContent's base class caps width at max-w-lg and adds 6
-//     units of padding, which fights the "show this image as big as
-//     possible" goal. We override the className entirely.
-//   • We want a click on the overlay OR on the image's empty matte
-//     area to close, but clicks on the image itself should be silent
-//     (so users can copy-image without triggering close).
-//   • Mounting it inside Dialog gives us the focus trap, ESC handler,
-//     and portal for free.
+// Why a custom portal instead of shadcn Dialog: Radix Dialog's
+// pointer-event capture + outside-click detection was sometimes
+// closing the lightbox on the same synthetic click that opened it
+// (the trigger click being treated as "outside" before the portal
+// had finished mounting). A small custom portal sidesteps that
+// entirely and lets us own focus + ESC + backdrop-click directly.
 
-import {
-  Dialog,
-  DialogContent,
-  DialogPortal,
-  DialogOverlay,
-} from "@/components/ui/dialog";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { X, Maximize2, Minimize2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface ImageLightboxProps {
@@ -46,117 +37,124 @@ export function ImageLightbox({
   onClose,
   caption,
 }: ImageLightboxProps) {
-  // Local zoom state — "fit" centers the image inside the viewport
-  // with object-contain; "actual" shows it at natural pixel size and
-  // enables horizontal/vertical scroll for very large renders. The
-  // toggle defaults back to "fit" each time the lightbox reopens so
-  // the user always starts with the full image in view.
+  // Local zoom state — "fit" centers + object-contains, "actual"
+  // shows at native pixel size with scroll. Resets each time the
+  // lightbox opens so the user always starts on Fit.
   const [zoomMode, setZoomMode] = useState<"fit" | "actual">("fit");
   useEffect(() => {
     if (open) setZoomMode("fit");
   }, [open, src]);
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogPortal>
-        <DialogOverlay className="bg-black/85 backdrop-blur-sm" />
-        {/*
-          We bypass the default DialogContent base class and render
-          our own near-fullscreen surface so the image gets the
-          space it deserves. Custom className means none of the
-          width/padding caps from the original apply.
-        */}
-        <DialogContent
-          className={cn(
-            "fixed inset-0 z-50 w-screen h-screen max-w-none translate-x-0 translate-y-0 top-0 left-0",
-            "bg-transparent border-0 p-0 shadow-none rounded-none",
-            "flex flex-col",
-            // Hide the built-in close X — we render our own top-right
-            // control with the zoom toggle so they live as a pair.
-            "[&>button:last-child]:hidden",
-          )}
-          // Click-outside the image (the matte area) closes the lightbox.
-          // The image itself swallows the click so users can right-click
-          // / drag-to-copy without dismissing.
-          onClick={onClose}
+  // ESC closes. Add the listener only while open so we don't have a
+  // dangling document handler when the lightbox isn't mounted.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  // Lock body scroll while the lightbox is open so the page behind
+  // doesn't scroll when the user scrolls the actual-size image.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col"
+      // Clicking the matte (anywhere except the image / controls) closes.
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Image preview"
+    >
+      {/* Top controls — zoom + close. Pinned top-right with a
+          translucent backdrop so they read against any image. */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-1 rounded-md bg-black/60 backdrop-blur-sm p-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs text-white hover:bg-white/15 hover:text-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomMode((m) => (m === "fit" ? "actual" : "fit"));
+          }}
+          title={
+            zoomMode === "fit"
+              ? "View at 100% (actual pixel size)"
+              : "Fit to viewport"
+          }
         >
-          {/* Top controls — zoom + close. Pinned top-right with a
-              translucent backdrop so they read against any image. */}
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-1 rounded-md bg-black/60 backdrop-blur-sm p-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-white hover:bg-white/15 hover:text-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                setZoomMode((m) => (m === "fit" ? "actual" : "fit"));
-              }}
-              title={
-                zoomMode === "fit"
-                  ? "View at 100% (actual pixel size)"
-                  : "Fit to viewport"
-              }
-            >
-              {zoomMode === "fit" ? (
-                <>
-                  <Maximize2 className="h-3.5 w-3.5 mr-1" />
-                  100%
-                </>
-              ) : (
-                <>
-                  <Minimize2 className="h-3.5 w-3.5 mr-1" />
-                  Fit
-                </>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-              }}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Image surface. Scroll container so 100% mode can pan
-              past the viewport. Centered with flex. */}
-          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-6">
-            <img
-              src={src}
-              alt={alt ?? "Generated render"}
-              onClick={(e) => e.stopPropagation()}
-              className={cn(
-                "shadow-2xl rounded-md transition-all duration-200",
-                zoomMode === "fit"
-                  ? "max-w-[95vw] max-h-[88vh] object-contain"
-                  : "max-w-none max-h-none",
-              )}
-              draggable={false}
-            />
-          </div>
-
-          {/* Caption strip — thin, optional. The model never sees
-              this; it's user-facing context like the angle name. */}
-          {caption && (
-            <div className="shrink-0 px-6 pb-4 text-center">
-              <p
-                className="inline-block rounded-full bg-black/60 backdrop-blur-sm px-4 py-1.5 text-xs text-white/90"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {caption}
-              </p>
-            </div>
+          {zoomMode === "fit" ? (
+            <>
+              <Maximize2 className="h-3.5 w-3.5 mr-1" />
+              100%
+            </>
+          ) : (
+            <>
+              <Minimize2 className="h-3.5 w-3.5 mr-1" />
+              Fit
+            </>
           )}
-        </DialogContent>
-      </DialogPortal>
-    </Dialog>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Image surface. Scroll container so 100% mode can pan past
+          the viewport. Centered with flex. */}
+      <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-6">
+        <img
+          src={src}
+          alt={alt ?? "Generated render"}
+          // Don't close when the user clicks the image itself —
+          // they may want to right-click / drag-copy.
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "shadow-2xl rounded-md transition-all duration-200",
+            zoomMode === "fit"
+              ? "max-w-[95vw] max-h-[88vh] object-contain"
+              : "max-w-none max-h-none",
+          )}
+          draggable={false}
+        />
+      </div>
+
+      {/* Caption strip — thin, optional. */}
+      {caption && (
+        <div className="shrink-0 px-6 pb-4 text-center">
+          <p
+            className="inline-block rounded-full bg-black/60 backdrop-blur-sm px-4 py-1.5 text-xs text-white/90"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {caption}
+          </p>
+        </div>
+      )}
+    </div>,
+    document.body,
   );
 }
 

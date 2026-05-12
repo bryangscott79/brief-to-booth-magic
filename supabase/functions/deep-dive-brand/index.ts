@@ -91,6 +91,8 @@ Deno.serve(async (req) => {
       fileType,
       storageBucket,
       storagePath,
+      pageImages,
+      pageStoragePaths,
     } = body as {
       url?: string;
       clientName?: string;
@@ -104,7 +106,62 @@ Deno.serve(async (req) => {
        *  often blow past that once base64 expands them ~33%. */
       storageBucket?: string;
       storagePath?: string;
+      /** Base64 JPEG-encoded pages rendered client-side via pdfjs.
+       *  This is how arbitrarily-large PDFs go through: the client
+       *  rasterises each page to a compressed JPEG (~150-300KB),
+       *  total payload stays under the 6MB cap even for 40-page
+       *  brand books. Each page is passed to Gemini as a separate
+       *  image — vision handles them better than a stuffed-together
+       *  multi-page PDF anyway. */
+      pageImages?: string[];
+      /** Same idea as pageImages but the pages live in Supabase
+       *  Storage. Used when even the rendered pages exceed the
+       *  request body cap (rare). */
+      pageStoragePaths?: Array<{ storageBucket: string; storagePath: string }>;
     };
+
+    // PAGE-IMAGES MODE (preferred for any PDF > a few MB). The
+    // client renders the source PDF to JPEG pages via pdfjs and
+    // posts the array. We hand each page to Gemini as a separate
+    // image_url — multi-image inputs are well-supported and reads
+    // text/colors more reliably than a multi-page PDF blob.
+    if (Array.isArray(pageImages) && pageImages.length > 0) {
+      console.log(`[deep-dive] PDF mode (pageImages): ${pageImages.length} pages`);
+      return await runPagesDeepDive(req, pageImages, clientName, industry);
+    }
+
+    // PAGE-IMAGES-FROM-STORAGE — same as above but the pages live
+    // in Storage. Function downloads each one and proceeds.
+    if (Array.isArray(pageStoragePaths) && pageStoragePaths.length > 0) {
+      console.log(`[deep-dive] PDF mode (pageStoragePaths): ${pageStoragePaths.length} pages`);
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const downloaded: string[] = [];
+      for (const p of pageStoragePaths) {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from(p.storageBucket)
+          .download(p.storagePath);
+        if (dlErr || !blob) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Could not download page ${p.storagePath}: ${dlErr?.message ?? "no data"}`,
+            }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        let binary = "";
+        const chunk = 32 * 1024;
+        for (let i = 0; i < buf.length; i += chunk) {
+          binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+        }
+        downloaded.push(btoa(binary));
+      }
+      return await runPagesDeepDive(req, downloaded, clientName, industry);
+    }
 
     // PDF MODE — when a PDF is uploaded we skip Firecrawl entirely and
     // pass the file directly to Gemini's multimodal input. Two input
@@ -680,6 +737,249 @@ Extract the brand profile from the attached PDF using the build_brand_profile to
   } catch (error) {
     console.error("[deep-dive PDF] error:", error);
     const msg = error instanceof Error ? error.message : "PDF deep dive failed";
+    return new Response(
+      JSON.stringify({ success: false, error: msg }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+}
+
+// ─── PAGES MODE ──────────────────────────────────────────────────────────────
+//
+// When the client rasterises the PDF (via pdfjs) we receive an array
+// of base64 JPEGs — one per page. Each is sent to Gemini as its own
+// image_url part. Same tool schema, same entries/guidelines build as
+// the other PDF paths. This is how 30+ MB brand books actually go
+// through end-to-end: ~200 KB per page × 20-40 pages = 4-8 MB total,
+// which fits.
+
+async function runPagesDeepDive(
+  req: Request,
+  pageImages: string[],
+  clientName?: string,
+  industry?: string,
+): Promise<Response> {
+  try {
+    // Sanity-check the total payload — even rendered pages can blow
+    // worker memory if someone hands us a 100-page deck. Cap at 80
+    // pages worth of typical JPEGs (~16 MB raw bytes).
+    const totalBase64Bytes = pageImages.reduce((sum, p) => sum + p.length, 0);
+    const approxRawBytes = Math.floor((totalBase64Bytes * 3) / 4);
+    const MAX_PAGES_BYTES = 12 * 1024 * 1024;
+    if (approxRawBytes > MAX_PAGES_BYTES) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Rendered pages total ${(approxRawBytes / 1024 / 1024).toFixed(1)}MB — over the 12MB limit. Reduce maxPages, lower image quality, or split into multiple runs.`,
+        }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    console.log(
+      `[deep-dive PAGES] ${pageImages.length} pages, ${(approxRawBytes / 1024 / 1024).toFixed(1)}MB total`,
+    );
+
+    const systemPrompt = `You are a brand strategist analysing a brand book / guideline that has been rasterised to one image per page. The images are in source order. Capture every literal spec you can read off the pages — color hex values, typography rules, photography guidelines, dos & don'ts.
+
+If a field is genuinely unknown, return an empty string or empty array — never invent specifics. Be concise.
+
+IMPORTANT for color: brand books typically state color hex values directly. Always capture them as hex (e.g. "#FF6B00"). If only Pantone or CMYK is shown, return the closest hex equivalent.`;
+
+    const userPrompt = `CLIENT: ${clientName || "(unknown)"}
+INDUSTRY: ${industry || "(unknown)"}
+
+The attached images are the pages of a brand book, in order. Extract the brand profile using the build_brand_profile tool. Scan every page — color specs and typography rules often appear deep in the document.`;
+
+    // Same tool schema as the other PDF paths. Inlined rather than
+    // DRY-extracted to keep this commit's diff focused. Future refactor
+    // should pull the schema + entries-build into a shared module.
+    const tool = {
+      type: "function",
+      function: {
+        name: "build_brand_profile",
+        description: "Extract a comprehensive brand profile from the rasterised brand-book pages.",
+        parameters: {
+          type: "object",
+          properties: {
+            mission: { type: "string" },
+            vision: { type: "string" },
+            values: { type: "array", items: { type: "string" } },
+            personality: { type: "array", items: { type: "string" } },
+            toneOfVoice: { type: "string" },
+            sentiment: { type: "string" },
+            targetAudience: { type: "string" },
+            messagingPillars: { type: "array", items: { type: "string" } },
+            taglines: { type: "array", items: { type: "string" } },
+            dos: { type: "array", items: { type: "string" } },
+            donts: { type: "array", items: { type: "string" } },
+            competitors: { type: "array", items: { type: "string" } },
+            colors: {
+              type: "object",
+              properties: {
+                primary: { type: "array", items: { type: "object", properties: { hex: { type: "string" }, name: { type: "string" }, usage: { type: "string" } } } },
+                secondary: { type: "array", items: { type: "object", properties: { hex: { type: "string" }, name: { type: "string" }, usage: { type: "string" } } } },
+                accent: { type: "array", items: { type: "object", properties: { hex: { type: "string" }, name: { type: "string" }, usage: { type: "string" } } } },
+              },
+            },
+            typography: {
+              type: "object",
+              properties: {
+                primaryTypeface: { type: "string" },
+                secondaryTypeface: { type: "string" },
+                usageRules: { type: "string" },
+              },
+            },
+            photographyStyle: {
+              type: "object",
+              properties: {
+                style: { type: "string" },
+                dos: { type: "array", items: { type: "string" } },
+                donts: { type: "array", items: { type: "string" } },
+              },
+            },
+            logoUrl: { type: "string" },
+          },
+          required: ["mission", "values", "personality", "toneOfVoice", "messagingPillars"],
+        },
+      },
+    };
+
+    // Build a single user message whose content is the prompt text
+    // followed by every page as a separate image_url. Gemini reads
+    // multi-image inputs natively; the order matches the original
+    // PDF so the model can reason about page-to-page flow.
+    const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      { type: "text", text: userPrompt },
+    ];
+    for (const jpegBase64 of pageImages) {
+      userContent.push({
+        type: "image_url",
+        image_url: { url: `data:image/jpeg;base64,${jpegBase64}` },
+      });
+    }
+    // Don't hold onto the original array longer than necessary — once
+    // userContent has the data URLs, the caller's array can be GC'd.
+    pageImages = [];
+
+    const ai = await callGemini({
+      usage: await buildUsageContext(req, "deep-dive-brand").catch(() => undefined),
+      model: "google/gemini-2.5-pro",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent as any },
+      ],
+      tools: [tool],
+      toolChoice: { type: "function", function: { name: "build_brand_profile" } },
+      temperature: 0.3,
+      maxTokens: 4096,
+    });
+
+    const profile: any = ai.toolCalls?.[0]?.arguments || {};
+    if (!profile.colors) profile.colors = { primary: [], secondary: [], accent: [] };
+    profile.colors.primary = profile.colors.primary || [];
+    profile.colors.secondary = profile.colors.secondary || [];
+    profile.colors.accent = profile.colors.accent || [];
+
+    // Convert profile → entries[] + guidelines. Identical to the
+    // runPdfDeepDive path; both should be extracted to a shared
+    // helper in the next refactor.
+    const entries: Array<{ category: string; title: string; content: string; tags: string[] }> = [];
+    const push = (category: string, title: string, content: string, tags: string[]) => {
+      if (content && content.trim().length > 0) {
+        entries.push({ category, title, content: content.trim(), tags });
+      }
+    };
+    if (profile.mission) push("strategic_voice", "Mission", profile.mission, ["mission", "purpose"]);
+    if (profile.vision) push("strategic_voice", "Vision", profile.vision, ["vision", "future"]);
+    if (profile.values?.length) push("strategic_voice", "Core Values", profile.values.map((v: string) => `• ${v}`).join("\n"), ["values"]);
+    if (profile.personality?.length) push("strategic_voice", "Brand Personality", profile.personality.join(", "), ["personality"]);
+    if (profile.toneOfVoice) push("strategic_voice", "Tone of Voice", profile.toneOfVoice, ["voice", "tone"]);
+    if (profile.sentiment) push("strategic_voice", "Brand Sentiment", profile.sentiment, ["sentiment", "emotion"]);
+    if (profile.targetAudience) push("strategic_voice", "Target Audience", profile.targetAudience, ["audience"]);
+    if (profile.messagingPillars?.length) push("strategic_voice", "Messaging Pillars", profile.messagingPillars.map((p: string) => `• ${p}`).join("\n"), ["messaging"]);
+    if (profile.taglines?.length) push("strategic_voice", "Taglines", profile.taglines.join("\n"), ["taglines"]);
+    if (profile.competitors?.length) push("strategic_voice", "Competitors", profile.competitors.join(", "), ["competitors"]);
+
+    const allColors = [
+      ...(profile.colors.primary || []),
+      ...(profile.colors.secondary || []),
+      ...(profile.colors.accent || []),
+    ].filter((c: any) => c?.hex);
+    if (allColors.length) {
+      const colorLines = allColors
+        .map((c: any) => `${c.hex}${c.name ? ` — ${c.name}` : ""}${c.usage ? ` (${c.usage})` : ""}`)
+        .join("\n");
+      push("visual_identity", "Brand Colors", colorLines, ["colors"]);
+    }
+    if (profile.typography?.primaryTypeface || profile.typography?.secondaryTypeface) {
+      const lines = [
+        profile.typography.primaryTypeface && `Primary: ${profile.typography.primaryTypeface}`,
+        profile.typography.secondaryTypeface && `Secondary: ${profile.typography.secondaryTypeface}`,
+        profile.typography.usageRules && `Usage: ${profile.typography.usageRules}`,
+      ].filter(Boolean).join("\n");
+      push("visual_identity", "Typography", lines, ["typography", "fonts"]);
+    }
+    if (profile.photographyStyle?.style) {
+      push("visual_identity", "Photography Style", profile.photographyStyle.style, ["photography", "imagery"]);
+    }
+    if (profile.dos?.length) push("process_procedure", "Brand Do's", profile.dos.map((d: string) => `• ${d}`).join("\n"), ["dos"]);
+    if (profile.donts?.length) push("process_procedure", "Brand Don'ts", profile.donts.map((d: string) => `• ${d}`).join("\n"), ["donts"]);
+
+    const guidelines = {
+      colorSystem: {
+        primary: profile.colors.primary || [],
+        secondary: profile.colors.secondary || [],
+        accent: profile.colors.accent || [],
+        forbidden: [],
+      },
+      typography: {
+        primaryTypeface: profile.typography?.primaryTypeface || "",
+        secondaryTypeface: profile.typography?.secondaryTypeface || "",
+        sizeScale: "",
+        usageRules: profile.typography?.usageRules || "",
+      },
+      logoRules: {
+        clearSpace: "",
+        minSize: "",
+        forbiddenTreatments: [],
+        usageNotes: profile.logoUrl ? `Primary logo: ${profile.logoUrl}` : "",
+      },
+      photographyStyle: {
+        style: profile.photographyStyle?.style || "",
+        dos: profile.photographyStyle?.dos || profile.dos || [],
+        donts: profile.photographyStyle?.donts || profile.donts || [],
+      },
+      toneOfVoice: {
+        description: profile.toneOfVoice || "",
+        messagingPillars: profile.messagingPillars || [],
+        taglines: profile.taglines || [],
+      },
+      materialsFinishes: {
+        preferred: [],
+        forbidden: [],
+        finishNotes: "",
+      },
+    };
+
+    const primaryHex = allColors[0]?.hex || "";
+    const secondaryHex = allColors[1]?.hex || "";
+    console.log(`[deep-dive PAGES] Done — ${entries.length} entries, colors=${allColors.length}`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        entries,
+        guidelines,
+        logoUrl: profile.logoUrl || "",
+        colors: { primary: primaryHex, secondary: secondaryHex },
+        profile,
+        source: "pdf-pages",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (error) {
+    console.error("[deep-dive PAGES] error:", error);
+    const msg = error instanceof Error ? error.message : "Page-mode deep dive failed";
     return new Response(
       JSON.stringify({ success: false, error: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -33,6 +33,7 @@ import {
 import { useUpsertBrandGuidelines } from "@/hooks/useBrandGuidelines";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { renderPdfToImages } from "@/lib/pdfPageRenderer";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -130,16 +131,15 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
       //    that once base64 expands them ~33%.
       let body: Record<string, any>;
       if (pdfFile) {
-        // Hard cap matches the edge function's worker-memory ceiling.
-        // Reject larger files here with an actionable message instead
-        // of letting the upload complete and fail server-side.
-        const PDF_HARD_MAX = 6 * 1024 * 1024;
-        if (pdfFile.size > PDF_HARD_MAX) {
-          throw new Error(
-            `PDF is ${(pdfFile.size / 1024 / 1024).toFixed(1)}MB — limit is 6MB. Compress or split the brand book and try again.`,
-          );
-        }
+        // Three-tier PDF flow, mirrors the BrandIntelligencePanel:
+        //   ≤2MB  → send inline base64
+        //   ≤6MB  → upload raw PDF to Storage, function fetches server-side
+        //   >6MB  → pdfjs renders pages to JPEGs client-side (this is
+        //           how arbitrarily-large brand books actually go through;
+        //           total payload after rasterisation usually 3-6MB even
+        //           for 30+MB source PDFs)
         const INLINE_MAX = 2 * 1024 * 1024;
+        const STORAGE_MAX = 6 * 1024 * 1024;
         if (pdfFile.size <= INLINE_MAX) {
           const fileBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -157,7 +157,7 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
             clientName: form.name.trim(),
             industry: form.industry.trim(),
           };
-        } else {
+        } else if (pdfFile.size <= STORAGE_MAX) {
           const storageBucket = "knowledge-base";
           const storagePath = `clients/${newClient.id}/brand-pdf/${Date.now()}_${pdfFile.name}`;
           const { error: upErr } = await supabase.storage
@@ -170,6 +170,27 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
           body = {
             storageBucket,
             storagePath,
+            clientName: form.name.trim(),
+            industry: form.industry.trim(),
+          };
+        } else {
+          // pdfjs rendering. No progress UI in the wizard for now —
+          // the user already sees a "Deep-diving the brand…" loading
+          // state in Step 2.
+          const { pages, totalPages } = await renderPdfToImages(pdfFile, {
+            maxWidth: 1500,
+            quality: 0.72,
+            maxPages: 40,
+          });
+          if (pages.length === 0) throw new Error("Could not render any pages from this PDF.");
+          if (pages.length < totalPages) {
+            toast({
+              title: "PDF truncated",
+              description: `Sent the first ${pages.length} of ${totalPages} pages.`,
+            });
+          }
+          body = {
+            pageImages: pages.map((p) => p.jpegBase64),
             clientName: form.name.trim(),
             industry: form.industry.trim(),
           };
@@ -353,8 +374,9 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
           </label>
           <p className="text-xs text-muted-foreground">
             <FileText className="h-3 w-3 inline mr-1" />
-            Optional, max 6MB. If both website and PDF are provided, the PDF wins (richer source).
-            You can layer in the URL afterward from the client page.
+            Optional — any size up to 40 pages. Big PDFs are rasterised page-by-page in your
+            browser before extraction. If both website and PDF are provided, the PDF wins (richer
+            source).
           </p>
         </div>
 

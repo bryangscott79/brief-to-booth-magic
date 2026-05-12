@@ -60,6 +60,7 @@
     "konva": "^9.3.22",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
+    "pdfjs-dist": "^5.7.284",
     "playcanvas": "^2.17.2",
     "pptxgenjs": "^4.0.1",
     "react": "^18.3.1",

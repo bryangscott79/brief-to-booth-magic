@@ -40,6 +40,7 @@ import {
 } from "@/hooks/useClients";
 import { useUpsertBrandGuidelines } from "@/hooks/useBrandGuidelines";
 import { useToast } from "@/hooks/use-toast";
+import { renderPdfToImages } from "@/lib/pdfPageRenderer";
 
 const CATEGORY_META: Record<
   string,
@@ -178,17 +179,26 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
   };
 
   /**
-   * PDF-mode deep dive — uploads the brand book to Supabase Storage
-   * first (Edge Function request bodies cap around 6MB, and a typical
-   * brand book bloats past that once base64 expands by ~33%), then
-   * tells the function where to find it. The function downloads via
-   * the service role, encodes server-side, and feeds Gemini. For
-   * small PDFs (<2MB) we still send inline as a fast path that
-   * avoids the storage round-trip.
+   * Tracks pdfjs page-rendering progress so we can show the user
+   * something useful during the 2-6s rasterise phase on large PDFs.
+   */
+  const [renderProgress, setRenderProgress] = useState<string>("");
+
+  /**
+   * PDF deep dive — three paths depending on file size:
    *
-   * Server worker memory tops out around 6MB of raw PDF; reject
-   * larger files client-side with an actionable message instead of
-   * letting the user wait for the upload only to fail server-side.
+   *   ≤ 2 MB:   send the raw PDF inline as base64 (fastest, no
+   *             rendering step, exactly how the original flow worked).
+   *
+   *   2-6 MB:   upload raw PDF to Supabase Storage, function downloads
+   *             server-side. Bypasses the request body cap, edge
+   *             worker memory still handles it.
+   *
+   *   > 6 MB:   client-side pdfjs renders each page to a JPEG at
+   *             ~1500px wide. Total payload after rasterisation is
+   *             typically 3-6MB even for 30+ MB brand books. Gemini
+   *             reads multi-image inputs page-by-page. This is how
+   *             arbitrarily-large brand books actually go through.
    */
   const handlePdfDeepDive = async () => {
     if (!pdfFile) {
@@ -199,21 +209,14 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
       });
       return;
     }
-    const PDF_HARD_MAX = 6 * 1024 * 1024;
-    if (pdfFile.size > PDF_HARD_MAX) {
-      toast({
-        title: "PDF too large",
-        description: `${(pdfFile.size / 1024 / 1024).toFixed(1)}MB exceeds the 6MB limit. Try a compressed version, or split the brand book into key pages (cover + color/type pages).`,
-        variant: "destructive",
-      });
-      return;
-    }
     setDiving(true);
+    setRenderProgress("");
     try {
-      const INLINE_MAX = 2 * 1024 * 1024; // 2 MB raw
+      const INLINE_MAX = 2 * 1024 * 1024;
+      const STORAGE_MAX = 6 * 1024 * 1024;
       let body: Record<string, any>;
+
       if (pdfFile.size <= INLINE_MAX) {
-        // Inline base64 — fine for small PDFs, no storage round-trip.
         const fileBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => {
@@ -230,10 +233,7 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
           clientName: client.name,
           industry: client.industry ?? "",
         };
-      } else {
-        // Storage upload — bypasses the Edge Function request body
-        // limit. Path is namespaced per client so re-runs overwrite
-        // the previous brand-book upload rather than littering.
+      } else if (pdfFile.size <= STORAGE_MAX) {
         const storageBucket = "knowledge-base";
         const storagePath = `clients/${client.id}/brand-pdf/${Date.now()}_${pdfFile.name}`;
         const { error: upErr } = await supabase.storage
@@ -246,6 +246,31 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
           clientName: client.name,
           industry: client.industry ?? "",
         };
+      } else {
+        // Large brand book — rasterise client-side and send pages.
+        setRenderProgress("Rendering PDF pages…");
+        const { pages, totalPages } = await renderPdfToImages(pdfFile, {
+          maxWidth: 1500,
+          quality: 0.72,
+          maxPages: 40,
+          onProgress: (i, total) =>
+            setRenderProgress(`Rendered page ${i} of ${total}…`),
+        });
+        if (pages.length === 0) {
+          throw new Error("Could not render any pages from this PDF.");
+        }
+        if (pages.length < totalPages) {
+          toast({
+            title: "PDF truncated",
+            description: `Sent the first ${pages.length} of ${totalPages} pages. Anything past page ${pages.length} won't be analysed.`,
+          });
+        }
+        body = {
+          pageImages: pages.map((p) => p.jpegBase64),
+          clientName: client.name,
+          industry: client.industry ?? "",
+        };
+        setRenderProgress("");
       }
 
       const { data, error } = await supabase.functions.invoke("deep-dive-brand", {
@@ -421,9 +446,10 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Drop in a brand book, identity guide, or visual-language doc (up to 6MB). Gemini
-                reads the whole PDF — colors, type rules, dos & don'ts, photography guidelines —
-                and stores each finding as a reviewable brand-intelligence entry below.
+                Drop in a brand book, identity guide, or visual-language doc — any size up to 40
+                pages. Gemini reads colors, type rules, dos & don'ts, photography guidelines, and
+                stores each finding as a reviewable brand-intelligence entry below. Large PDFs are
+                rasterised page-by-page in your browser before extraction.
               </p>
             </div>
           )}
@@ -431,6 +457,8 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
             <p className="text-xs text-muted-foreground">
               {mode === "url"
                 ? "Scraping website, mapping About / Mission pages, extracting brand profile. 20–40s."
+                : renderProgress
+                ? renderProgress
                 : "Reading every page of the PDF, extracting colors, typography, voice, photography rules. 20–40s."}
             </p>
           )}

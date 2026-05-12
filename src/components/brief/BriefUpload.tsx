@@ -25,6 +25,7 @@ import { ALL_PROJECT_TYPES, DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
 import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";
 import { useCustomProjectTypes, useUpsertCustomProjectType } from "@/hooks/useCustomProjectTypes";
+import { BrandGuidePrompt } from "@/components/brief/BrandGuidePrompt";
 
 interface BriefUploadProps {
   projectId: string | null;
@@ -1013,6 +1014,21 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
             <Button size="sm" variant="ghost" onClick={() => setIsCreatingClient(false)}>Cancel</Button>
           </div>
         )}
+
+        {/* ── Brand-guide prompt ──────────────────────────────────────────
+            Whenever the matched client (existing) has thin brand
+            intelligence, surface a CTA to deep-dive the brand from a
+            URL or upload a brand-book PDF — same flow as the client
+            page, just inline here so new projects under existing
+            clients can't skip the brand layer. Hidden automatically
+            when the client already has ≥4 brand intelligence entries
+            or when the user dismisses it for this session. */}
+        {selectedClientId &&
+          !newClientConfirmed &&
+          (() => {
+            const matched = clients.find((c) => c.id === selectedClientId);
+            return matched ? <BrandGuidePrompt client={matched} /> : null;
+          })()}
       </div>
 
       <div className="border-t border-border" />

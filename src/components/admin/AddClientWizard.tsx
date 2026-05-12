@@ -123,24 +123,57 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
       //    (Gemini multimodal). PDF takes priority when both are
       //    supplied because a brand book is usually richer than the
       //    public site; the user can re-run with the URL afterward.
+      //
+      //    PDFs over 2MB are uploaded to Supabase Storage first; the
+      //    function downloads server-side. Edge Function request
+      //    bodies cap around 6MB, and brand books usually blow past
+      //    that once base64 expands them ~33%.
       let body: Record<string, any>;
       if (pdfFile) {
-        const fileBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            const comma = result.indexOf(",");
-            resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        // Hard cap matches the edge function's worker-memory ceiling.
+        // Reject larger files here with an actionable message instead
+        // of letting the upload complete and fail server-side.
+        const PDF_HARD_MAX = 6 * 1024 * 1024;
+        if (pdfFile.size > PDF_HARD_MAX) {
+          throw new Error(
+            `PDF is ${(pdfFile.size / 1024 / 1024).toFixed(1)}MB — limit is 6MB. Compress or split the brand book and try again.`,
+          );
+        }
+        const INLINE_MAX = 2 * 1024 * 1024;
+        if (pdfFile.size <= INLINE_MAX) {
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              const comma = result.indexOf(",");
+              resolve(comma >= 0 ? result.slice(comma + 1) : result);
+            };
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(pdfFile);
+          });
+          body = {
+            fileBase64,
+            fileType: "pdf",
+            clientName: form.name.trim(),
+            industry: form.industry.trim(),
           };
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(pdfFile);
-        });
-        body = {
-          fileBase64,
-          fileType: "pdf",
-          clientName: form.name.trim(),
-          industry: form.industry.trim(),
-        };
+        } else {
+          const storageBucket = "knowledge-base";
+          const storagePath = `clients/${newClient.id}/brand-pdf/${Date.now()}_${pdfFile.name}`;
+          const { error: upErr } = await supabase.storage
+            .from(storageBucket)
+            .upload(storagePath, pdfFile, {
+              upsert: false,
+              contentType: "application/pdf",
+            });
+          if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
+          body = {
+            storageBucket,
+            storagePath,
+            clientName: form.name.trim(),
+            industry: form.industry.trim(),
+          };
+        }
       } else {
         body = {
           url: form.website.trim(),
@@ -152,7 +185,21 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
         body,
       });
 
-      if (error) throw error;
+      // Surface the real error body when non-2xx — default is just
+      // "non-2xx status code" which doesn't help.
+      if (error) {
+        let detail = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx?.body) {
+            const parsed = typeof ctx.body === "string" ? JSON.parse(ctx.body) : ctx.body;
+            if (parsed?.error) detail = parsed.error;
+          }
+        } catch {
+          // fall through to default
+        }
+        throw new Error(detail);
+      }
       const result = data as DeepDiveResult;
       if (!result.success) throw new Error(result.error || "Deep dive failed");
 
@@ -306,8 +353,8 @@ export function AddClientWizard({ onClose }: { onClose: () => void }) {
           </label>
           <p className="text-xs text-muted-foreground">
             <FileText className="h-3 w-3 inline mr-1" />
-            Optional. If both website and PDF are provided, the PDF wins (richer source). You can
-            layer in the URL afterward from the client page.
+            Optional, max 6MB. If both website and PDF are provided, the PDF wins (richer source).
+            You can layer in the URL afterward from the client page.
           </p>
         </div>
 

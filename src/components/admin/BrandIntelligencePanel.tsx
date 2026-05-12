@@ -178,10 +178,17 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
   };
 
   /**
-   * PDF-mode deep dive — uploads a brand book / guidelines PDF and
-   * runs the same extraction flow as the URL path. Useful when the
-   * brand has a richer internal guideline doc than the public site
-   * (or no public site at all).
+   * PDF-mode deep dive — uploads the brand book to Supabase Storage
+   * first (Edge Function request bodies cap around 6MB, and a typical
+   * brand book bloats past that once base64 expands by ~33%), then
+   * tells the function where to find it. The function downloads via
+   * the service role, encodes server-side, and feeds Gemini. For
+   * small PDFs (<2MB) we still send inline as a fast path that
+   * avoids the storage round-trip.
+   *
+   * Server worker memory tops out around 6MB of raw PDF; reject
+   * larger files client-side with an actionable message instead of
+   * letting the user wait for the upload only to fail server-side.
    */
   const handlePdfDeepDive = async () => {
     if (!pdfFile) {
@@ -192,32 +199,74 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
       });
       return;
     }
+    const PDF_HARD_MAX = 6 * 1024 * 1024;
+    if (pdfFile.size > PDF_HARD_MAX) {
+      toast({
+        title: "PDF too large",
+        description: `${(pdfFile.size / 1024 / 1024).toFixed(1)}MB exceeds the 6MB limit. Try a compressed version, or split the brand book into key pages (cover + color/type pages).`,
+        variant: "destructive",
+      });
+      return;
+    }
     setDiving(true);
     try {
-      // Read the file as base64 via FileReader. PDFs up to ~10MB are
-      // fine for Gemini's multimodal input; we cap further on the
-      // server side if needed.
-      const fileBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          // strip the "data:application/pdf;base64," prefix
-          const comma = result.indexOf(",");
-          resolve(comma >= 0 ? result.slice(comma + 1) : result);
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(pdfFile);
-      });
-
-      const { data, error } = await supabase.functions.invoke("deep-dive-brand", {
-        body: {
+      const INLINE_MAX = 2 * 1024 * 1024; // 2 MB raw
+      let body: Record<string, any>;
+      if (pdfFile.size <= INLINE_MAX) {
+        // Inline base64 — fine for small PDFs, no storage round-trip.
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            const comma = result.indexOf(",");
+            resolve(comma >= 0 ? result.slice(comma + 1) : result);
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(pdfFile);
+        });
+        body = {
           fileBase64,
           fileType: "pdf",
           clientName: client.name,
           industry: client.industry ?? "",
-        },
+        };
+      } else {
+        // Storage upload — bypasses the Edge Function request body
+        // limit. Path is namespaced per client so re-runs overwrite
+        // the previous brand-book upload rather than littering.
+        const storageBucket = "knowledge-base";
+        const storagePath = `clients/${client.id}/brand-pdf/${Date.now()}_${pdfFile.name}`;
+        const { error: upErr } = await supabase.storage
+          .from(storageBucket)
+          .upload(storagePath, pdfFile, { upsert: false, contentType: "application/pdf" });
+        if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
+        body = {
+          storageBucket,
+          storagePath,
+          clientName: client.name,
+          industry: client.industry ?? "",
+        };
+      }
+
+      const { data, error } = await supabase.functions.invoke("deep-dive-brand", {
+        body,
       });
-      if (error) throw error;
+      // Surface the actual error message when the function returned a
+      // non-2xx — supabase-js's default error is just "non-2xx status
+      // code", which doesn't help diagnosis.
+      if (error) {
+        let detail = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx?.body) {
+            const parsed = typeof ctx.body === "string" ? JSON.parse(ctx.body) : ctx.body;
+            if (parsed?.error) detail = parsed.error;
+          }
+        } catch {
+          // ignore — fall back to default error.message
+        }
+        throw new Error(detail);
+      }
       if (!data?.success) throw new Error(data?.error || "PDF deep dive failed");
 
       await persistDeepDiveResult(data);
@@ -372,9 +421,9 @@ export function BrandIntelligencePanel({ client }: { client: Client }) {
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Drop in a brand book, identity guide, or visual-language doc. Gemini reads the
-                whole PDF — colors, type rules, dos & don'ts, photography guidelines — and stores
-                each finding as a reviewable brand-intelligence entry below.
+                Drop in a brand book, identity guide, or visual-language doc (up to 6MB). Gemini
+                reads the whole PDF — colors, type rules, dos & don'ts, photography guidelines —
+                and stores each finding as a reviewable brand-intelligence entry below.
               </p>
             </div>
           )}

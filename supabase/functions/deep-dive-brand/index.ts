@@ -23,6 +23,7 @@
 //   - logoUrl     : best-guess primary logo URL
 //   - colors      : { primary, secondary } convenience for the clients table
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 
 import { buildUsageContext } from "../_shared/usage-context.ts";
@@ -82,25 +83,76 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { url, clientName, industry, fileBase64, fileType } = body as {
+    const {
+      url,
+      clientName,
+      industry,
+      fileBase64,
+      fileType,
+      storageBucket,
+      storagePath,
+    } = body as {
       url?: string;
       clientName?: string;
       industry?: string;
       fileBase64?: string;
       fileType?: string;
+      /** When present, the function downloads the PDF from Supabase
+       *  Storage rather than reading an inline base64 string. This
+       *  is the recommended path for any PDF >2MB — Supabase Edge
+       *  Functions cap request bodies around 6MB and brand books
+       *  often blow past that once base64 expands them ~33%. */
+      storageBucket?: string;
+      storagePath?: string;
     };
 
     // PDF MODE — when a PDF is uploaded we skip Firecrawl entirely and
-    // pass the file directly to Gemini's multimodal input. The tool
-    // call output uses the same schema as the URL path so downstream
-    // code is unchanged.
+    // pass the file directly to Gemini's multimodal input. Two input
+    // shapes are supported:
+    //   1. { fileBase64, fileType: "pdf" } — inline; only for small PDFs
+    //   2. { storageBucket, storagePath } — function downloads from
+    //      Supabase Storage server-side. Use this for anything > ~2MB.
+    if (storageBucket && storagePath) {
+      console.log(`[deep-dive] PDF mode (storage): ${storageBucket}/${storagePath}`);
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const { data: blob, error: dlErr } = await supabase.storage
+        .from(storageBucket)
+        .download(storagePath);
+      if (dlErr || !blob) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Could not download PDF from ${storageBucket}/${storagePath}: ${dlErr?.message ?? "no data"}`,
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      // Encode in chunks to avoid stack overflow on large PDFs.
+      let binary = "";
+      const chunk = 32 * 1024;
+      for (let i = 0; i < buf.length; i += chunk) {
+        binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+      }
+      const downloadedBase64 = btoa(binary);
+      console.log(`[deep-dive] PDF size: ${(buf.length / 1024 / 1024).toFixed(2)} MB`);
+      return await runPdfDeepDive(req, downloadedBase64, clientName, industry);
+    }
+
     if (fileBase64 && fileType === "pdf") {
       return await runPdfDeepDive(req, fileBase64, clientName, industry);
     }
 
     if (!url) {
       return new Response(
-        JSON.stringify({ success: false, error: "Either url or a PDF (fileBase64 + fileType='pdf') is required" }),
+        JSON.stringify({
+          success: false,
+          error:
+            "Provide one of: a website URL, an inline PDF (fileBase64 + fileType='pdf'), or a Supabase Storage location (storageBucket + storagePath).",
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

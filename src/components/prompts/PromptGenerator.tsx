@@ -491,23 +491,14 @@ export function PromptGenerator() {
     [saveImage, promptVersions, ensureActiveVersion],
   );
 
-  if (!brief || !spatialData || !bigIdea) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Generate all elements first</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/generate")}>
-          Go to Generation
-        </Button>
-      </div>
-    );
-  }
-
-  /** Prompt builder params — shared across all generatePrompt calls */
+  /** Prompt builder params — shared across all generatePrompt calls.
+   *  Built unconditionally so hook order downstream stays stable even
+   *  when brief/spatial/bigIdea aren't ready yet. */
   const promptParams: GeneratePromptParams = {
-    brief,
-    bigIdea,
-    elements,
-    spatialData,
+    brief: brief!,
+    bigIdea: bigIdea!,
+    elements: elements!,
+    spatialData: spatialData!,
     boothDimensions,
     normalizedZones,
     zoneInteriorAngles,
@@ -519,6 +510,9 @@ export function PromptGenerator() {
    * Build the SYSTEM-generated prompt for an angle, ignoring any
    * zone-interior override. Used by the SpatialCanvas to show the
    * "default" prompt in the per-zone edit dialog.
+   *
+   * MUST stay above the early-return below — React requires the same
+   * hook order on every render.
    */
   const getZoneDefaultPrompt = useCallback(
     (zoneId: string): string => {
@@ -528,6 +522,17 @@ export function PromptGenerator() {
     },
     [promptParams, activePreset, activeCustomEmphasis],
   );
+
+  if (!brief || !spatialData || !bigIdea) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Generate all elements first</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate("/generate")}>
+          Go to Generation
+        </Button>
+      </div>
+    );
+  }
 
   /**
    * Local wrapper that closes over current project data + active style

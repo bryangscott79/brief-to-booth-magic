@@ -1,7 +1,8 @@
-// generate-view — DEPLOY TOKEN: 2026-05-07-r6-image2-spec
+// generate-view — DEPLOY TOKEN: 2026-05-12-r7-openai-required
 // Bump this comment to force Lovable to redeploy. Changes that need this
 // version of the function to be live: gpt-image-2 model id, modelUsed in
 // response, multi-secret fallback in shared ai-gateway.
+// OPENAI_API_KEY is now non-optional for all image renders.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";

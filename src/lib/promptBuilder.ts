@@ -643,6 +643,57 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
       ? `UNITS: METRIC. The booth is ${width}m wide × ${depth}m deep (${boothDimensions.totalAreaNative} sqm). Average visitor is 1.7 m tall.`
       : `UNITS: IMPERIAL. The booth is ${width} ft wide × ${depth} ft deep (${totalSqft} sq ft). Average visitor is 5'8" (1.7 m).`;
 
+  // ── BRIEF DIRECT REQUIREMENTS — surfaced at the top of the prompt
+  //    so the model can't drop them in the noise of the compliance
+  //    block at the end. These are LITERAL constraints from the
+  //    source brief: booth type with open-sides count, the must-show
+  //    tagline, and the visual language keywords that the brand
+  //    wants expressed AS ARCHITECTURE (not decoration). Without
+  //    this block the Eqvilent island rendered as inline because
+  //    the booth-type fact lived only in the late compliance section.
+  const briefBoothType = (brief?.spatial as any)?.boothType as
+    | "inline" | "peninsula" | "island" | "unknown" | undefined;
+  const briefOpenSides = (brief?.spatial as any)?.openSides as number | undefined;
+  const briefTagline = (brief?.brand as any)?.tagline as string | undefined;
+  const visualLanguage = (brief?.creative as any)?.visualLanguage as string[] | undefined;
+  const referenceLabels = (brief?.creative as any)?.referenceLabels as string[] | undefined;
+
+  const boothTypeLine =
+    briefBoothType && briefBoothType !== "unknown"
+      ? (() => {
+          const sides =
+            briefOpenSides ??
+            (briefBoothType === "island" ? 4
+              : briefBoothType === "peninsula" ? 3 : 1);
+          const sideDesc =
+            briefBoothType === "island"
+              ? "OPEN ON ALL FOUR SIDES — no back wall, no perimeter walls, free-standing structure visible from every angle"
+              : briefBoothType === "peninsula"
+              ? "OPEN ON THREE SIDES — one shared back wall, three aisle frontages"
+              : "OPEN ON ONE SIDE — single aisle frontage, back and sides closed";
+          return `BOOTH CONFIGURATION (BRIEF, NON-NEGOTIABLE): ${briefBoothType.toUpperCase()} booth with ${sides} aisle-facing open sides. ${sideDesc}.`;
+        })()
+      : "";
+  const taglineLine = briefTagline
+    ? `TAGLINE REQUIREMENT (BRIEF): the brand wordmark MUST display the descriptor "${briefTagline}" beneath the logo on at least one prominent face.`
+    : "";
+  const visualLangLine =
+    visualLanguage && visualLanguage.length > 0
+      ? `VISUAL LANGUAGE (BRIEF, structural — not decoration): the brand asks that ${visualLanguage.join(", ")} be expressed AS structural and architectural components of the booth itself (LED lines integrated into fascia, wave-form walls, round merch counter, etc.) — NOT applied as surface graphics or stickers.`
+      : "";
+  const referenceLine =
+    referenceLabels && referenceLabels.length > 0
+      ? `REFERENCE THEMES (BRIEF, anchor the design here): ${referenceLabels.join(" · ")}.`
+      : "";
+  const briefDirectBlock = [
+    boothTypeLine,
+    taglineLine,
+    visualLangLine,
+    referenceLine,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return `${promptOpener}
 
 ${unitsAssertion}
@@ -651,7 +702,7 @@ DIMENSIONS — STATED AS A SINGLE TRUTH:
 - Footprint: ${sizeLabel}
 - Booth type: ${rules.structureNoun}
 - The references attached at the head of the messages array show this exact footprint and zone layout. Match it precisely.
-
+${briefDirectBlock ? `\n${briefDirectBlock}\n` : ""}
 ${cameraInstruction}
 ${cameraScaleHint}
 

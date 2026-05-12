@@ -14,6 +14,10 @@ export interface ParsedBrief {
       avoidColors: string[];
       avoidImagery: string[];
     };
+    /** Literal tagline/descriptor that must appear ON booth signage
+     *  (e.g. "Quantitative Trading" under the wordmark). Optional —
+     *  empty when the brief doesn't specify. */
+    tagline?: string;
   };
 
   objectives: {
@@ -42,6 +46,12 @@ export interface ParsedBrief {
     modular: boolean;
     reuseRequirement: string;
     trafficRequirements: string;
+    /** Booth configuration from the brief. "unknown" when not stated;
+     *  use resolveBoothType() to fall back to an area-based heuristic. */
+    boothType?: "inline" | "peninsula" | "island" | "unknown";
+    /** Number of aisle-facing open sides explicitly stated in the
+     *  brief. 1 inline / 3 peninsula / 4 island. 0 when not stated. */
+    openSides?: number;
   };
 
   audiences: Array<{
@@ -58,6 +68,14 @@ export interface ParsedBrief {
     coreStrategy: string;
     thinkingFramework: string[];
     designPhilosophy: string;
+    /** Structural-design keywords the brand wants expressed as
+     *  ARCHITECTURE (not decoration). e.g. ["light", "waves", "lines",
+     *  "round element"]. Surfaced near the top of every render prompt. */
+    visualLanguage?: string[];
+    /** Labels above reference-image groups in the brief — e.g.
+     *  "Emphasis on lines", "A round element", "Premium materials".
+     *  The themes the brand is visually anchoring to. */
+    referenceLabels?: string[];
   };
 
   experience: {

@@ -223,35 +223,51 @@ function runBriefChecks(inputs: ReadinessInputs): GroupOutput {
     });
   }
 
-  // Booth type — explicit or inferable
+  // Booth type — STRONGLY prefer the brief saying it explicitly.
+  // Inferred-from-area gets partial credit because that's how a
+  // metric island ended up classified as "inline" before — the area
+  // heuristic is a fallback, not a substitute. When the brief states
+  // it, prompts can lift the exact configuration ("4 open sides, no
+  // back wall") to the top.
+  const briefBoothType = (brief?.spatial as any)?.boothType as
+    | "inline" | "peninsula" | "island" | "unknown" | undefined;
   const boothType = boothDimensions
     ? resolveBoothType(
         boothDimensions.totalSqft,
         boothDimensions.measurementSystem,
-        (brief?.spatial as any)?.boothType,
+        briefBoothType && briefBoothType !== "unknown" ? briefBoothType : undefined,
       )
     : null;
-  if (boothType) {
-    const fromBrief = (brief?.spatial as any)?.boothType;
+  if (boothType && briefBoothType && briefBoothType !== "unknown") {
     checks.push(
       pass(
         "spatial.boothType",
-        "Booth type (inline / peninsula / island)",
-        4,
-        fromBrief
-          ? `Brief says: ${boothType}.`
-          : `Inferred from area: ${boothType}.`,
+        "Booth type (explicit in brief)",
+        5,
+        `Brief says: ${boothType}.`,
       ),
     );
+  } else if (boothType) {
+    checks.push({
+      id: "spatial.boothType",
+      label: "Booth type (inferred from area)",
+      weight: 5,
+      earned: 3,
+      severity: "warn",
+      message: `Inferred ${boothType} from area — brief doesn't say.`,
+      fixHint:
+        "Add booth type to the brief verbatim — e.g. \"Type: Island booth, open on all four sides\". The image model anchors the entire scene to this fact; inferring is a fallback.",
+      jumpTo: { step: "brief", detail: "spatial.boothType" },
+    });
   } else {
     checks.push({
       id: "spatial.boothType",
       label: "Booth type",
-      weight: 4,
+      weight: 5,
       earned: 0,
-      severity: "warn",
-      message: "Can't determine booth type without dimensions.",
-      fixHint: "Once footprint is set, booth type is auto-inferred (or read from brief.spatial.boothType when present).",
+      severity: "fail",
+      message: "Can't determine booth type without dimensions or explicit brief mention.",
+      fixHint: "Set footprint, then re-run parse — or add 'Type: Island/Peninsula/Inline' to the brief.",
       jumpTo: { step: "brief", detail: "spatial.boothType" },
     });
   }
@@ -281,6 +297,24 @@ function runBriefChecks(inputs: ReadinessInputs): GroupOutput {
       fixHint:
         "List at least 2-3 design moves the brand DOES want. These shape the design-direction block in the prompt.",
       jumpTo: { step: "review", detail: "creative.embrace" },
+    }),
+  );
+
+  // Visual language — STRUCTURAL keywords ("waves", "lines", "round
+  // element", "light"). The promptBuilder surfaces these at the top
+  // of the prompt as "expressed as ARCHITECTURE not decoration."
+  // For Eqvilent's brief this is exactly what's been getting lost.
+  const visualLang = (brief?.creative as any)?.visualLanguage ?? [];
+  checks.push(
+    minLength({
+      id: "creative.visualLanguage",
+      label: "Visual language keywords",
+      weight: 4,
+      value: visualLang,
+      min: 2,
+      fixHint:
+        "Capture 2-4 structural-design keywords from the brief (e.g. \"waves\", \"lines\", \"light\", \"round element\"). These get surfaced at the top of every render prompt as ARCHITECTURAL components, not surface decoration.",
+      jumpTo: { step: "brief", detail: "creative.visualLanguage" },
     }),
   );
 

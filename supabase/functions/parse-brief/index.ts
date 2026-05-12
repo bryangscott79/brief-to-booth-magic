@@ -126,6 +126,34 @@ CRITICAL EXTRACTION RULES:
 8. For experience: look for "hero moment", "key features", "must-include", "required elements", "deliverables".
 9. For events: extract the event/show name, venue, city, dates — look in tables, headers, and body text.
 
+HIGH-PRIORITY FIELDS — these get LOST in renders when missed. Look for them explicitly:
+
+A. spatial.boothType — Look for the exact words "inline", "peninsula", "island" anywhere
+   in the doc. Phrases like "open aisles on all four sides", "all four sides open", "free-
+   standing", "all-sides exposure" → island. "Three open sides", "end-cap" → peninsula.
+   "Single aisle frontage", "back wall shared" → inline. If the brief explicitly says
+   "Type: Island booth" (or similar), capture it verbatim in spatial.boothType.
+
+B. brand.tagline — Look for an explicit descriptor or tagline that must appear ON the
+   booth signage. The brief sometimes states "logo must have descriptor (X)" or "the
+   tagline 'Y' should appear under the wordmark." Capture this — it's a literal render
+   requirement.
+
+C. creative.visualLanguage — A list of structural-design KEYWORDS the brand wants
+   expressed as ARCHITECTURE (not just decoration). Phrases like "light, waves, and
+   lines as structural and architectural components", "round element", "geometric
+   pattern", "soft curves", "vertical fins" all belong here. These drive how the
+   model imagines the booth's STRUCTURAL identity.
+
+D. spatial.openSides — Count of open aisle-facing sides. 1 for inline, 3 for peninsula,
+   4 for island. Look for the explicit phrase ("on all four sides", "three open sides")
+   before falling back to a value derived from boothType.
+
+E. creative.referenceImages — When the brief includes "References" or "Inspiration"
+   pages with thumbnails (Coca-Cola, Yandex, GCIE etc.), capture the LABEL above each
+   reference set (e.g. "Emphasis on lines", "A round element"). These are the visual
+   themes the brand is anchoring to.
+
 TABLE HANDLING: Documents often store critical data (budgets, booth sizes, dates) in tables formatted as tab-separated text. Parse these carefully.
 
 You MUST call the provided function tool to return your response. Return ALL fields populated as completely as possible.`;
@@ -156,6 +184,10 @@ const toolSchema = {
                 avoidImagery: { type: "array", items: { type: "string" } },
               },
               required: ["colors", "avoidColors", "avoidImagery"],
+            },
+            tagline: {
+              type: "string",
+              description: "Literal tagline/descriptor that must appear ON the booth signage (e.g. brief states 'logo must have descriptor (Quantitative Trading)'). Empty string if no explicit signage requirement.",
             },
           },
           required: ["name", "category", "pov", "personality", "competitors", "visualIdentity"],
@@ -212,6 +244,15 @@ const toolSchema = {
             trafficRequirements: { type: "string", description: "Traffic flow, open vs closed, etc." },
             indoorOutdoor: { type: "string", enum: ["indoor", "outdoor", "both", "unknown"] },
             floorType: { type: "string" },
+            boothType: {
+              type: "string",
+              enum: ["inline", "peninsula", "island", "unknown"],
+              description: "Booth configuration. Look for explicit mentions: 'inline', 'peninsula', 'island', or phrases like 'open on all four sides' (=island), 'three open sides' (=peninsula). Returns 'unknown' if the brief doesn't say.",
+            },
+            openSides: {
+              type: "number",
+              description: "Number of aisle-facing open sides. 1=inline, 3=peninsula, 4=island. 0 if not stated.",
+            },
           },
           required: ["footprints", "modular", "reuseRequirement", "trafficRequirements"],
         },
@@ -239,6 +280,16 @@ const toolSchema = {
             thinkingFramework: { type: "array", items: { type: "string" } },
             designPhilosophy: { type: "string" },
             moodKeywords: { type: "array", items: { type: "string" }, description: "Mood words: e.g. bold, minimal, futuristic" },
+            visualLanguage: {
+              type: "array",
+              items: { type: "string" },
+              description: "Structural-design KEYWORDS the brand wants expressed as ARCHITECTURE (not just decoration). Look for phrases like 'light, waves, and lines as structural and architectural components', 'round element', 'soft curves', 'vertical fins'. These drive how the model imagines the booth's structural identity. Capture each keyword separately: e.g. ['light', 'waves', 'lines', 'round element'].",
+            },
+            referenceLabels: {
+              type: "array",
+              items: { type: "string" },
+              description: "Labels above reference image groups in the brief. e.g. 'Emphasis on lines', 'A round element', 'Premium materials'. These are the visual themes the brand is anchoring to. NOT the captions of individual images — only the section headings.",
+            },
           },
           required: ["avoid", "embrace", "coreStrategy", "thinkingFramework", "designPhilosophy"],
         },

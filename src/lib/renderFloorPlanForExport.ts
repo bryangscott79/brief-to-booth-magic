@@ -92,9 +92,19 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
   ctx.strokeRect(x0, y0, bw * pxPerUnit, bd * pxPerUnit);
 
   // ── Zones ────────────────────────────────────────────────────────
-  for (const zone of zones) {
-    drawZone(ctx, zone, geometry, x0, y0, pxPerUnit);
-  }
+  // Each zone gets a 1-based index tag (Z1, Z2, …) so the in-booth
+  // marker stays tiny and the legend off the booth carries the
+  // narrative. The model reads number → metadata via the legend.
+  zones.forEach((zone, i) => {
+    drawZone(
+      ctx,
+      { ...zone, _index: i + 1 } as AbsoluteZone & { _index: number },
+      geometry,
+      x0,
+      y0,
+      pxPerUnit,
+    );
+  });
 
   // ── Features ─────────────────────────────────────────────────────
   // Sculptural objects render ON TOP of zones — they're the booth's
@@ -242,7 +252,11 @@ export function renderFloorPlanForExport(geometry: BoothGeometry): string {
  */
 function drawZone(
   ctx: CanvasRenderingContext2D,
-  zone: AbsoluteZone,
+  // _index is an optional, locally-attached numeric tag (Z1, Z2, …)
+  // that pairs the in-booth marker with the side legend entry. We
+  // widen the parameter type rather than mutate AbsoluteZone so the
+  // shared model stays clean.
+  zone: AbsoluteZone & { _index?: number },
   geometry: BoothGeometry,
   x0: number,
   y0: number,
@@ -265,91 +279,41 @@ function drawZone(
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Label inside the zone — name (bold), footprint, height
+  // Minimal in-zone marker — just a small numbered tag in the
+  // top-left corner. Image models were transcribing the previous
+  // dense zone labels (name + footprint + height + form + visual
+  // brief + intent + materials) as architectural-diagram overlays
+  // onto the rendered output. Pushing the rich metadata to a side
+  // ZONE INDEX panel (drawn later, outside the booth body) keeps
+  // it readable for the model but unlikely to be copied into the
+  // photograph it generates.
   const padX = 12;
   const padY = 14;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
 
-  // Name
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "bold 22px system-ui, sans-serif";
-  const nameLine = clipText(ctx, zone.name, pw - padX * 2);
-  ctx.fillText(nameLine, px + padX, py + padY);
+  // Numeric tag — drawn dimmer/smaller than the legacy bold name
+  // so the model reads it as reference data, not design intent.
+  // The number maps to a legend entry rendered outside the booth.
+  const tag = `Z${zone._index ?? "?"}`;
+  ctx.fillStyle = "rgba(15,23,42,0.55)";
+  ctx.font = "bold 18px system-ui, sans-serif";
+  ctx.fillText(tag, px + padX, py + padY);
 
-  // Footprint
-  ctx.font = "18px system-ui, sans-serif";
-  ctx.fillStyle = "#1e293b";
+  // Footprint dimensions only — the model genuinely needs these
+  // for sizing math and they're easy to verify against the booth
+  // outline. Kept compact and grey to discourage transcription.
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(71,85,105,0.7)";
   const footprint =
     geometry.measurementSystem === "metric"
       ? `${zone.width.toFixed(1)}m × ${zone.depth.toFixed(1)}m`
       : `${Math.round(zone.width)}' × ${Math.round(zone.depth)}'`;
-  ctx.fillText(footprint, px + padX, py + padY + 30);
-
-  // Area + height
-  const area = zone.width * zone.depth;
-  const areaUnit = geometry.measurementSystem === "metric" ? "sqm" : "sq ft";
-  const areaLabel =
-    geometry.measurementSystem === "metric"
-      ? area.toFixed(1)
-      : Math.round(area).toString();
-  ctx.font = "16px system-ui, sans-serif";
-  ctx.fillStyle = "#475569";
-  ctx.fillText(
-    `${areaLabel} ${areaUnit} · ${zone.heightFt} ft tall`,
-    px + padX,
-    py + padY + 56,
-  );
-
-  // ── Structural metadata, when set. The image model reads these as
-  //    explicit visual cues. Order: form (bold uppercase) → visual
-  //    brief → materials list. Skip lines that aren't populated so
-  //    zones with only function (no structural intent) stay clean. */
-  let metaY = py + padY + 80;
-  if (zone.structuralForm) {
-    ctx.font = "bold 14px system-ui, sans-serif";
-    ctx.fillStyle = "#7c3aed"; // distinct from the slate body text
-    ctx.fillText(
-      zone.structuralForm.toUpperCase(),
-      px + padX,
-      metaY,
-    );
-    metaY += 22;
-  }
-  if (zone.featureDescription) {
-    ctx.font = "italic 14px system-ui, sans-serif";
-    ctx.fillStyle = "#334155";
-    const lines = wrapText(ctx, zone.featureDescription, pw - padX * 2);
-    for (const line of lines.slice(0, 3)) {
-      ctx.fillText(line, px + padX, metaY);
-      metaY += 18;
-    }
-  }
-  if (zone.intent) {
-    ctx.font = "14px system-ui, sans-serif";
-    ctx.fillStyle = "#475569";
-    const lines = wrapText(ctx, `→ ${zone.intent}`, pw - padX * 2);
-    for (const line of lines.slice(0, 2)) {
-      ctx.fillText(line, px + padX, metaY);
-      metaY += 18;
-    }
-  }
-  if (zone.materialIds && zone.materialIds.length > 0) {
-    const catalog = geometry.materialsCatalog ?? [];
-    const names = zone.materialIds
-      .map((id) => catalog.find((m) => m.id === id)?.name)
-      .filter(Boolean)
-      .join(" · ");
-    if (names) {
-      ctx.font = "13px system-ui, sans-serif";
-      ctx.fillStyle = "#64748b";
-      const lines = wrapText(ctx, `Materials: ${names}`, pw - padX * 2);
-      for (const line of lines.slice(0, 2)) {
-        ctx.fillText(line, px + padX, metaY);
-        metaY += 16;
-      }
-    }
-  }
+  ctx.fillText(footprint, px + padX, py + padY + 22);
+  // Rich metadata (name, structuralForm, intent, materials) is
+  // rendered OUTSIDE the booth body in the ZONE INDEX legend so
+  // the image model has the context without the temptation to
+  // copy it as an architectural overlay onto the output.
 }
 
 /**
@@ -444,27 +408,10 @@ function drawFeature(
   ctx.restore();
 }
 
-/** Wrap text to a max width using greedy word fits. */
-function wrapText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const w of words) {
-    const candidate = current ? `${current} ${w}` : w;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = w;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
+// wrapText helper removed alongside the in-zone metadata blocks.
+// Rich zone metadata now travels through the prompt text, not the
+// reference PNG — keeping the PNG geometric reduces the model's
+// temptation to transcribe labels into the rendered output.
 
 /**
  * Trace a path representing the zone's shape inside its bounding box

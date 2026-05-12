@@ -155,7 +155,14 @@ THIS IS CRITICAL: This zone is part of the SAME booth as the hero image referenc
   parts.push(`ZONE: ${zone.name}`);
   parts.push("═══════════════════════════════════════");
   parts.push("");
-  parts.push(`Size: ${zone.sqft} sq ft (${zone.percentage}% of booth)`);
+  // Native-unit zone size for the prompt — metric projects get sqm,
+  // imperial gets sq ft. Without this the zone-interior renders
+  // contradicted the hero render's units.
+  const zoneSizeLabel =
+    boothDimensions.measurementSystem === "metric"
+      ? `${(zone.sqft / 10.76391041671).toFixed(1)} sqm`
+      : `${zone.sqft} sq ft`;
+  parts.push(`Size: ${zoneSizeLabel} (${zone.percentage}% of booth)`);
   parts.push(`Position: ${Math.round(zone.position.x)}% from left, ${Math.round(zone.position.y)}% from front`);
   parts.push("");
 
@@ -316,7 +323,14 @@ THIS IS CRITICAL: This zone is part of the SAME booth as the hero image referenc
     parts.push("");
     parts.push("FEATURES IN THIS ZONE:");
     features.forEach((f) => {
-      const heightRange = `${f.baseHeightFt ?? 0}–${f.topHeightFt ?? "?"} ft`;
+      // Height ranges store as feet on the model, so we convert to
+      // meters for metric projects to match the rest of the prompt.
+      const baseFt = f.baseHeightFt ?? 0;
+      const topFt = f.topHeightFt ?? 0;
+      const heightRange =
+        boothDimensions.measurementSystem === "metric"
+          ? `${(baseFt / 3.28084).toFixed(1)}–${(topFt / 3.28084).toFixed(1)} m`
+          : `${baseFt}–${topFt} ft`;
       const desc = f.description ? ` — ${f.description}` : "";
       parts.push(
         `- ${(f.formType ?? "object").toUpperCase()} "${f.name ?? "Unnamed"}" (${heightRange})${desc}`,
@@ -326,7 +340,11 @@ THIS IS CRITICAL: This zone is part of the SAME booth as the hero image referenc
 
   parts.push("");
   parts.push("CAMERA:");
-  parts.push("Eye level (5.5 feet), positioned INSIDE this zone looking inward.");
+  parts.push(
+    boothDimensions.measurementSystem === "metric"
+      ? "Eye level (1.7 m), positioned INSIDE this zone looking inward."
+      : "Eye level (5.5 feet), positioned INSIDE this zone looking inward.",
+  );
   parts.push("Show the space's depth and connection to the larger booth.");
   parts.push("Parts of the hero installation or main booth visible in background/periphery.");
 
@@ -388,10 +406,14 @@ export function buildBriefComplianceBlock(params: {
   parts.push("║   BRIEF COMPLIANCE CHECK (MANDATORY)  ║");
   parts.push("╚═══════════════════════════════════════╝\n");
 
-  // Project-type-aware size header
+  // Project-type-aware size header. Unit-aware so metric projects
+  // get "6m × 6m (36 sqm) — ISLAND booth" instead of the broken
+  // "6' × 6' (388 sq ft)" we used to emit.
   if (boothDimensions) {
-    const { width, depth, totalSqft } = boothDimensions;
-    parts.push(buildComplianceHeader(projectType, width, depth, totalSqft));
+    const { width, depth, totalSqft, measurementSystem } = boothDimensions;
+    parts.push(
+      buildComplianceHeader(projectType, width, depth, totalSqft, measurementSystem),
+    );
   }
 
   // Budget tier
@@ -547,10 +569,17 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
   const angle = ANGLE_CONFIG.find(a => a.id === angleId);
   if (!angle) return "";
 
-  const scaleBlock = buildProjectScaleBlock(projectType, width, depth, totalSqft);
+  // Thread the project's measurement system through every helper so
+  // every dimension, ceiling height, camera distance, and area string
+  // renders in native units. Mixed-unit prompts ("6' × 6' (388 sq ft)
+  // inline booth" when the brief said "6m × 6m island") were
+  // confusing the image model into rendering the wrong size + type.
+  const system = boothDimensions.measurementSystem;
+
+  const scaleBlock = buildProjectScaleBlock(projectType, width, depth, totalSqft, system);
   const zoneDescriptions = generateZoneDescriptionsForPrompt(normalizedZones, totalSqft, angleId);
-  const cameraInstruction = getProjectCameraInstructions(projectType, angleId, width, depth);
-  const cameraScaleHint = getProjectCameraScaleHint(projectType, footprintLabel, angleId);
+  const cameraInstruction = getProjectCameraInstructions(projectType, angleId, width, depth, system);
+  const cameraScaleHint = getProjectCameraScaleHint(projectType, footprintLabel, angleId, system);
 
   const heroInstallation = elements?.interactiveMechanics?.data?.hero;
   const heroDescription = heroInstallation
@@ -569,26 +598,30 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
     angle.name,
     width, depth, totalSqft,
     brief.brand?.name || "the brand",
-    brief.brand?.category || "brand"
+    brief.brand?.category || "brand",
+    system,
   );
 
-  // When the project is in metric, the rule-based scale block will still
-  // talk about feet (it's hard-coded to imperial language). We prepend an
-  // EXPLICIT METRIC OVERRIDE block so the model trusts these dimensions
-  // over any imperial references it sees later in the prompt.
-  const isMetric = boothDimensions.measurementSystem === "metric";
-  const unitOverride = isMetric
-    ? `\nUNIT SYSTEM — METRIC (override any imperial references below):
-- This ${rules.structureNoun} is exactly ${width}m × ${depth}m (${boothDimensions.totalAreaNative} sqm).
-- All linear dimensions are METERS, not feet.
-- All area numbers are SQUARE METERS, not square feet.
-- If subsequent text mentions "${width} feet" or "${depth}'", read those as ${width}m and ${depth}m.
-- Human scale: average visitor is 1.7m (5'7"); standing conversation circle is 1.2m diameter.
-\n`
-    : "";
+  // Single, unambiguous units line at the TOP of the prompt. Earlier
+  // versions tried a "metric override — read feet as meters" prelude
+  // and that confused the model more than it helped. With every block
+  // now emitting native units directly, the prompt is internally
+  // consistent and this line just states the convention plainly.
+  const sizeLabel = rules.sizeLabel(width, depth, totalSqft, system);
+  const unitsAssertion =
+    system === "metric"
+      ? `UNITS: METRIC. The booth is ${width}m wide × ${depth}m deep (${boothDimensions.totalAreaNative} sqm). Average visitor is 1.7 m tall.`
+      : `UNITS: IMPERIAL. The booth is ${width} ft wide × ${depth} ft deep (${totalSqft} sq ft). Average visitor is 5'8" (1.7 m).`;
 
   return `${promptOpener}
-${unitOverride}
+
+${unitsAssertion}
+
+DIMENSIONS — STATED AS A SINGLE TRUTH:
+- Footprint: ${sizeLabel}
+- Booth type: ${rules.structureNoun}
+- The references attached at the head of the messages array show this exact footprint and zone layout. Match it precisely.
+
 ${cameraInstruction}
 ${cameraScaleHint}
 

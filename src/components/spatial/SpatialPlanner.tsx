@@ -26,6 +26,7 @@ import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./L
 // iso, flow, and heatmap directly. AI-rendered 2D blueprint export will
 // move to a different surface when the user needs it again.
 import { SpatialCanvas } from "./SpatialCanvas";
+import { BriefReadinessPanel } from "@/components/common/BriefReadinessPanel";
 import {
   type BoothGeometry,
   type BoothFeature,
@@ -889,6 +890,30 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
             </TabsList>
 
             <TabsContent value="layout" className="space-y-4 mt-4">
+              {/* Brief readiness — same data, in-context. The Spatial
+                  step is where most gaps get closed (structural form,
+                  intent, materials), so the panel lives in the Layout
+                  tab alongside the variations. Each gap row routes
+                  back to whichever step owns it. */}
+              <BriefReadinessPanel
+                variant="panel"
+                inputs={{
+                  brief,
+                  bigIdea,
+                  elements: currentProject?.elements ?? null,
+                  spatialData,
+                  boothDimensions,
+                }}
+                onJump={(gap) => {
+                  const step = gap.jumpTo?.step;
+                  if (step === "brief") navigate("/upload");
+                  else if (step === "review") navigate("/review");
+                  else if (step === "elements") navigate("/generate");
+                  else if (step === "prompts") navigate("/prompts");
+                  // spatial / materials stay here.
+                }}
+              />
+
               {/* Layout Variations */}
               <LayoutVariations
                 variations={variations}

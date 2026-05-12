@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
+import { BriefReadinessPanel } from "@/components/common/BriefReadinessPanel";
+import type { CheckResult } from "@/lib/briefReadiness";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Copy,
@@ -1215,9 +1217,53 @@ export function PromptGenerator() {
   }
 
   // Phase 3: All Views Generated / Generating
+  // Map a readiness-check jumpTo into a real navigation. Each step
+  // matches a route the app exposes; we route through the existing
+  // useProjectNavigate hook so query params (project id) survive.
+  const handleReadinessJump = useCallback(
+    (gap: CheckResult) => {
+      const step = gap.jumpTo?.step;
+      switch (step) {
+        case "brief":
+          navigate("/upload");
+          break;
+        case "review":
+          navigate("/review");
+          break;
+        case "elements":
+          navigate("/generate");
+          break;
+        case "spatial":
+        case "materials":
+          navigate("/spatial");
+          break;
+        case "prompts":
+          // Already here.
+          break;
+        default:
+          break;
+      }
+    },
+    [navigate],
+  );
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {versionsHeader}
+      {/* Brief readiness pre-flight. Surfaces a score + top gaps so
+          the user fixes thin briefs BEFORE spending tokens on a
+          generic render. Click any gap to jump to the surface that
+          owns it. */}
+      <BriefReadinessPanel
+        inputs={{
+          brief,
+          bigIdea,
+          elements,
+          spatialData,
+          boothDimensions,
+        }}
+        onJump={handleReadinessJump}
+      />
       {/* Spatial canvas — still editable here. Re-render any view (or
           the whole set) and the latest geometry is what gets used. */}
       {spatialPanel}

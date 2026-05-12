@@ -21,6 +21,7 @@ import {
   getCameraInstructions as getProjectCameraInstructions,
   getCameraScaleHint as getProjectCameraScaleHint,
 } from "@/lib/projectTypeRules";
+import { evaluateBriefReadiness } from "@/lib/briefReadiness";
 
 // Re-export types that callers may need
 export type { NormalizedZone, BoothDimensions };
@@ -397,6 +398,9 @@ export function buildBriefComplianceBlock(params: {
   qualityTier?: "standard" | "premium" | "ultra";
   elements?: any;
   projectType?: string | null;
+  /** Optional spatialStrategy data — passed through to the readiness
+   *  scorer so the compliance block can include the gap summary. */
+  spatialData?: any;
 }): string {
   const { brief, boothDimensions, qualityTier, elements, projectType } = params;
   if (!brief) return "";
@@ -469,6 +473,29 @@ export function buildBriefComplianceBlock(params: {
     }
   }
 
+  // ── Brief readiness summary. The image model sees the same gaps
+  //    the user sees, so when a brief is thin the model is told it's
+  //    being asked to invent — which tends to make it lean harder on
+  //    the references rather than inventing detail. When the brief
+  //    is tight the line just confirms "all checks pass." */
+  const report = evaluateBriefReadiness({
+    brief,
+    bigIdea: elements?.bigIdea?.data ?? null,
+    elements,
+    spatialData: params.spatialData ?? null,
+    boothDimensions: boothDimensions ?? null,
+  });
+  parts.push("");
+  parts.push(`BRIEF READINESS: ${report.score}/100`);
+  if (report.topGaps.length > 0) {
+    parts.push(
+      "  Gaps the user did NOT fill in — model: do not invent specifics for these. Lean on references + brand defaults instead:",
+    );
+    for (const g of report.topGaps) {
+      parts.push(`    • ${g.label}: ${g.message}`);
+    }
+  }
+
   parts.push("\n╔═══════════════════════════════════════╗");
   parts.push("║         END COMPLIANCE CHECK           ║");
   parts.push("╚═══════════════════════════════════════╝");
@@ -528,13 +555,16 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
   const rules = getRules(projectType);
   const { width, depth, totalSqft, footprintLabel } = boothDimensions;
 
-  // Build the brief compliance block (appended to all prompts)
+  // Build the brief compliance block (appended to all prompts).
+  // Pass spatialData through so the readiness scorer can evaluate
+  // zones / features / materials and include the gap summary.
   const complianceBlock = buildBriefComplianceBlock({
     brief,
     boothDimensions,
     qualityTier: inferQualityTierFromBrief(brief, elements, boothDimensions),
     elements,
     projectType,
+    spatialData,
   });
 
   // Check for zone interior angles first

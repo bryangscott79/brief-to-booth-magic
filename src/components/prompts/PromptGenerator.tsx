@@ -45,6 +45,7 @@ import {
   calculateBoothDimensions,
   type GeneratePromptParams,
 } from "@/lib/promptBuilder";
+import { buildDesignContext } from "@/lib/designContextBuilder";
 
 // Project units (imperial/metric) — preserved through render generation.
 import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
@@ -385,6 +386,38 @@ export function PromptGenerator() {
     [boothDimensions, geometry.ceilingHeightFt],
   );
 
+  // ── Structured design context — fuels the edge function's prompt
+  //    sections (SCENE, STRUCTURAL APPROACH, HERO INSTALLATION, ZONE
+  //    LAYOUT, BRAND IDENTITY, MATERIALS, LIGHTING). Before this was
+  //    wired up, the edge function received `designContext: null` and
+  //    every brief-specific structured section was skipped, leaving the
+  //    model with only generic defaults at the top of the prompt and
+  //    the brief data buried at the bottom in NARRATIVE CONTEXT.
+  //
+  //    Zone names here are FUNCTIONAL descriptors ("lounge / informal
+  //    seating area"), not the AI-authored proper names ("The
+  //    Sanctuary") — the proper names made the image model render
+  //    overhead wayfinding signs on the booth fascia.
+  const designContext = useMemo(
+    () =>
+      buildDesignContext({
+        brief,
+        elements,
+        spatialData,
+        geometry,
+        totalSqft: boothDimensions.totalSqft,
+      }),
+    [brief, elements, spatialData, geometry, boothDimensions.totalSqft],
+  );
+
+  // Push the design context into the render store before generation so
+  // generateHeroImage / generateAllViews / regenerateView pick it up.
+  // The store reads it inside the async action and forwards it to the
+  // edge function on the request body.
+  useEffect(() => {
+    renderStore.setDesignContext(designContext);
+  }, [designContext, renderStore]);
+
   // Hydrate from saved images (filtered to the active version).
   //
   // project_images keys by angle_id. When a version is active we save under
@@ -701,6 +734,12 @@ export function PromptGenerator() {
       angles: allAngles,
       prompts,
       heroImageUrl: heroImage!,
+      // Thread the hero prompt text through to every view. The model
+      // gets both the hero pixels (palette/materials anchor) and the
+      // original design intent that produced them — so a side / back /
+      // interior / detail view can reason about both "what does this
+      // booth look like" and "what was it designed to be."
+      heroPromptText: heroPrompt || buildPrompt("hero_34"),
       projectId: projectId!,
       boothSize: boothDimensions.footprintLabel,
       boothDimensions: structuredBoothDims,
@@ -744,6 +783,7 @@ export function PromptGenerator() {
         angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio, isZoneInterior: !!(angle as any).isZoneInterior },
         prompt: generatedPrompts[angleId] || buildPrompt(angleId),
         heroImageUrl: heroImage,
+        heroPromptText: heroPrompt || buildPrompt("hero_34"),
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
         boothDimensions: structuredBoothDims,
@@ -828,6 +868,10 @@ export function PromptGenerator() {
         angles: allAngles,
         prompts,
         heroImageUrl: newHeroImage,
+        // Reuse the same hero prompt we just used to regenerate the
+        // hero — guarantees the views' "ORIGINAL HERO DESIGN INTENT"
+        // matches the actual pixels we're handing them as reference.
+        heroPromptText: heroPromptText,
         projectId: projectId!,
         boothSize: boothDimensions.footprintLabel,
         boothDimensions: structuredBoothDims,

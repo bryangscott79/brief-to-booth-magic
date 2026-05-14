@@ -1,6 +1,15 @@
+// generate-panorama — DEPLOY TOKEN: 2026-05-12-gpt-image-2-only
+//
+// Note on output aspect: gpt-image-2 only supports 1024×1024, 1536×1024,
+// and 1024×1536. A true equirectangular panorama needs 2:1 (e.g.
+// 2048×1024) which the model cannot natively produce. We use 1536×1024
+// (3:2 landscape — the widest available) and keep the prompt asking
+// for a wide panoramic-feel composition. Downstream VR viewers that
+// expect strict 2:1 equirectangular will need to letterbox or be
+// updated; the function itself returns a valid wide-format render.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callGemini } from "../_shared/ai-gateway.ts";
+import { callOpenAIImage } from "../_shared/ai-gateway.ts";
 
 import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
@@ -145,15 +154,19 @@ serve(async (req) => {
             ? "game launch activation"
             : "trade show booth";
 
-    const panoramaPrompt = `Generate a photorealistic EQUIRECTANGULAR 360° PANORAMIC image of the interior of a ${typeLabel} space called "${spaceName}".
+    // Prompt tuned for gpt-image-2's 1536×1024 (3:2) output. We can't
+    // ask for a true equirectangular 2:1 panorama, but we can ask for
+    // an ultra-wide architectural interior that captures as much of
+    // the room as a 3:2 frame allows. The result is a wide-angle
+    // interior, not a VR-grade panorama — if the UI needs strict 2:1,
+    // it should letterbox the output or skip the panorama feature.
+    const panoramaPrompt = `Generate an ultra-wide photorealistic interior view of a ${typeLabel} space called "${spaceName}".
 
-IMAGE FORMAT REQUIREMENTS (CRITICAL):
-- The image MUST be in equirectangular projection format (2:1 aspect ratio)
-- The image should wrap seamlessly — the left edge connects to the right edge
-- The camera is positioned at the CENTER of the space at eye level (5.5 feet / 1.7 meters)
-- Show the FULL 360° view: front, left, back, right, ceiling, and floor are ALL visible
-- The horizontal field of view spans the full 360 degrees
-- The vertical field of view spans approximately 180 degrees (floor to ceiling)
+FRAMING:
+- Wide-angle architectural interior photograph (wider than a normal lens — think 24mm equivalent or wider)
+- Camera positioned at the center of the space at eye level (5.5 feet / 1.7 meters)
+- Capture as much of the surrounding interior as possible in a single frame: front-facing walls/features prominent, side walls visible at the edges of the frame, floor and ceiling treatments both legible
+- The viewer should feel immersed in the space — they can see the breadth of the room without rotating their head
 
 SPACE DESCRIPTION:
 ${prompt}
@@ -169,45 +182,38 @@ ${consistencyBlock}
 ${brandContext ? `\n## BRAND CONTEXT\n${brandContext}` : ""}
 ${suiteContext ? `\n## SUITE CONTEXT\n${suiteContext}` : ""}
 
-OUTPUT: A single photorealistic equirectangular 360° panoramic image (2:1 aspect ratio) showing the complete interior environment of "${spaceName}".`;
+OUTPUT: A single photorealistic ultra-wide interior photograph showing the immersive environment of "${spaceName}".`;
 
-    console.log("Generating panorama for:", spaceName, {
+    console.log("[generate-panorama] Using OpenAI gpt-image-2 for:", spaceName, {
       hasReference: !!referenceImageUrl,
       boothSize,
       projectType,
     });
 
-    const messages = referenceImageUrl
-      ? [
-          {
-            role: "user" as const,
-            content: [
-              { type: "text" as const, text: panoramaPrompt },
-              {
-                type: "image_url" as const,
-                image_url: { url: referenceImageUrl },
-              },
-            ],
-          },
-        ]
-      : [{ role: "user" as const, content: panoramaPrompt }];
-
-    const result = await callGemini({
-      usage: await buildUsageContext(req, "generate-panorama").catch(() => undefined),
-      model: "google/gemini-3-pro-image-preview",
-      messages,
-      modalities: ["image", "text"],
-    });
-
-    const image = result.images?.[0];
-    if (!image) {
-      console.error("No image in response:", JSON.stringify(result));
-      throw new Error("No panorama generated");
+    let generatedImageUrl: string;
+    try {
+      const out = await callOpenAIImage({
+        usage: await buildUsageContext(req, "generate-panorama").catch(() => undefined),
+        prompt: panoramaPrompt,
+        referenceImageUrls: referenceImageUrl ? [referenceImageUrl] : [],
+        size: "1536x1024", // 3:2 — widest gpt-image-2 supports
+        quality: "high",
+      });
+      const img = out[0];
+      if (!img) {
+        throw new Error(
+          "gpt-image-2 returned no panorama. The prompt may have been filtered or the model is overloaded.",
+        );
+      }
+      generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+    } catch (e) {
+      console.error(`[generate-panorama] gpt-image-2 failed for ${spaceName}:`, e);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      throw new Error(
+        `Panorama generation failed via gpt-image-2: ${message}. ` +
+        `No fallback is configured.`,
+      );
     }
-
-    // Convert base64 to a data URL for the client
-    const generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
-    const responseText = result.text || "";
 
     console.log("Successfully generated panorama for:", spaceName);
 
@@ -216,7 +222,7 @@ OUTPUT: A single photorealistic equirectangular 360° panoramic image (2:1 aspec
         success: true,
         spaceName,
         imageUrl: generatedImageUrl,
-        message: responseText,
+        message: "",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

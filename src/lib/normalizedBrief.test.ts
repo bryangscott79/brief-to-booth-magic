@@ -7,7 +7,13 @@
 //   - composeViewPrompt() — Task 7
 
 import { describe, it, expect } from "vitest";
-import { normalizeBrief, validateBrief, composePrompt, composeViewPrompt } from "./normalizedBrief";
+import {
+  normalizeBrief,
+  validateBrief,
+  composePrompt,
+  composeViewPrompt,
+  validateParsedBriefForReview,
+} from "./normalizedBrief";
 import type { HeroSnapshot } from "./normalizedBrief";
 import {
   eqvilentParsedBrief,
@@ -287,6 +293,79 @@ describe("composePrompt — 5 output stages", () => {
     const out = composePrompt(normalized);
     expect(out.compliance.length).toBeGreaterThan(0);
     expect(out.compliance.some((c) => c.id === "footprint_match")).toBe(true);
+  });
+});
+
+// ─── Defensive normalization — survives partial / legacy briefs ─────
+//
+// Real-world parsedBrief data from the DB may be missing fields that
+// were added to the schema later (e.g. brand.visualIdentity, audiences,
+// creative.visualLanguage). The normalizer must NEVER crash on these
+// inputs — instead, it should fill defaults and let validateBrief
+// surface the missing data as gaps for the clarification UI to ask
+// about. Otherwise the React tree throws and the app-level error
+// boundary catches it, which the user perceives as the app being
+// "really unstable".
+
+describe("normalizeBrief — defensive against partial briefs", () => {
+  const meta = {
+    id: "test-partial",
+    name: "Partial Brief Test",
+    projectType: "exhibition_booth" as const,
+  };
+  const geometry = eqvilentGeometry;
+
+  it("does not crash when brief.brand.visualIdentity is undefined", () => {
+    const partial = {
+      brand: { name: "X", category: "", pov: "", personality: [], competitors: [] },
+    } as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"];
+    expect(() =>
+      normalizeBrief({ project: meta, parsedBrief: partial, geometry, elements: null }),
+    ).not.toThrow();
+  });
+
+  it("does not crash when brief.audiences is missing entirely", () => {
+    const partial = {
+      brand: {
+        name: "X",
+        category: "",
+        pov: "",
+        personality: [],
+        competitors: [],
+        visualIdentity: { colors: [], avoidColors: [], avoidImagery: [] },
+      },
+    } as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"];
+    expect(() =>
+      normalizeBrief({ project: meta, parsedBrief: partial, geometry, elements: null }),
+    ).not.toThrow();
+  });
+
+  it("does not crash when brief is essentially empty {} (e.g. corrupted row)", () => {
+    const partial = {} as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"];
+    expect(() =>
+      normalizeBrief({ project: meta, parsedBrief: partial, geometry, elements: null }),
+    ).not.toThrow();
+  });
+
+  it("validator on partial brief does not crash and returns gaps", () => {
+    const partial = {} as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"];
+    const normalized = normalizeBrief({
+      project: meta,
+      parsedBrief: partial,
+      geometry,
+      elements: null,
+    });
+    const result = validateBrief(normalized);
+    expect(Array.isArray(result.gaps)).toBe(true);
+    expect(Array.isArray(result.failures)).toBe(true);
+  });
+
+  it("validateParsedBriefForReview survives an empty brief", () => {
+    const partial = {} as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"];
+    expect(() => {
+      const result = validateParsedBriefForReview(partial);
+      expect(Array.isArray(result.gaps)).toBe(true);
+    }).not.toThrow();
   });
 });
 

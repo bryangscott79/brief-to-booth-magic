@@ -193,6 +193,114 @@ interface NormalizeBriefInput {
   elements: { interactiveMechanics?: { data?: { hero?: any } } } | null | undefined;
 }
 
+/**
+ * Fill a possibly-partial ParsedBrief with empty defaults for every
+ * required field. Defense-in-depth — the rest of the normalizer can
+ * then access nested fields without worrying that an older schema
+ * version, a corrupted DB row, or a half-finished parse left a hole.
+ *
+ * Without this guard, accessing e.g. `parsedBrief.brand.visualIdentity
+ * .colors` throws a TypeError when `visualIdentity` is undefined,
+ * which propagates up to React, trips the app-level error boundary,
+ * and looks to users like the app crashed.
+ *
+ * Returns a NEW object; never mutates the input.
+ */
+function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const b: any = brief ?? {};
+  return {
+    brand: {
+      name: b.brand?.name ?? "",
+      category: b.brand?.category ?? "",
+      pov: b.brand?.pov ?? "",
+      personality: Array.isArray(b.brand?.personality) ? b.brand.personality : [],
+      competitors: Array.isArray(b.brand?.competitors) ? b.brand.competitors : [],
+      visualIdentity: {
+        colors: Array.isArray(b.brand?.visualIdentity?.colors)
+          ? b.brand.visualIdentity.colors
+          : [],
+        avoidColors: Array.isArray(b.brand?.visualIdentity?.avoidColors)
+          ? b.brand.visualIdentity.avoidColors
+          : [],
+        avoidImagery: Array.isArray(b.brand?.visualIdentity?.avoidImagery)
+          ? b.brand.visualIdentity.avoidImagery
+          : [],
+      },
+      tagline: b.brand?.tagline,
+    },
+    objectives: {
+      primary: b.objectives?.primary ?? "",
+      secondary: Array.isArray(b.objectives?.secondary) ? b.objectives.secondary : [],
+      competitiveContext: b.objectives?.competitiveContext ?? "",
+      differentiationGoals: Array.isArray(b.objectives?.differentiationGoals)
+        ? b.objectives.differentiationGoals
+        : [],
+    },
+    events: {
+      shows: Array.isArray(b.events?.shows) ? b.events.shows : [],
+      primaryShow: b.events?.primaryShow,
+    },
+    spatial: {
+      footprints: Array.isArray(b.spatial?.footprints) ? b.spatial.footprints : [],
+      modular: b.spatial?.modular ?? false,
+      reuseRequirement: b.spatial?.reuseRequirement ?? "",
+      trafficRequirements: b.spatial?.trafficRequirements ?? "",
+      boothType: b.spatial?.boothType,
+      openSides: b.spatial?.openSides,
+    },
+    audiences: Array.isArray(b.audiences) ? b.audiences : [],
+    creative: {
+      avoid: Array.isArray(b.creative?.avoid) ? b.creative.avoid : [],
+      embrace: Array.isArray(b.creative?.embrace) ? b.creative.embrace : [],
+      coreStrategy: b.creative?.coreStrategy ?? "",
+      thinkingFramework: Array.isArray(b.creative?.thinkingFramework)
+        ? b.creative.thinkingFramework
+        : [],
+      designPhilosophy: b.creative?.designPhilosophy ?? "",
+      visualLanguage: Array.isArray(b.creative?.visualLanguage) ? b.creative.visualLanguage : [],
+      referenceLabels: Array.isArray(b.creative?.referenceLabels)
+        ? b.creative.referenceLabels
+        : [],
+    },
+    experience: {
+      hero: {
+        required: b.experience?.hero?.required ?? false,
+        description: b.experience?.hero?.description ?? "",
+        attributes: Array.isArray(b.experience?.hero?.attributes)
+          ? b.experience.hero.attributes
+          : [],
+      },
+      storytelling: {
+        required: b.experience?.storytelling?.required ?? false,
+        description: b.experience?.storytelling?.description ?? "",
+        audienceAdaptation: b.experience?.storytelling?.audienceAdaptation ?? false,
+      },
+      humanConnection: {
+        required: b.experience?.humanConnection?.required ?? false,
+        capacity: b.experience?.humanConnection?.capacity ?? "",
+        integrationRequirement: b.experience?.humanConnection?.integrationRequirement ?? "",
+      },
+      adjacentActivations: {
+        required: b.experience?.adjacentActivations?.required ?? false,
+        count: b.experience?.adjacentActivations?.count ?? "",
+        criteria: Array.isArray(b.experience?.adjacentActivations?.criteria)
+          ? b.experience.adjacentActivations.criteria
+          : [],
+      },
+    },
+    budget: {
+      perShow: b.budget?.perShow,
+      range: b.budget?.range,
+      inclusions: Array.isArray(b.budget?.inclusions) ? b.budget.inclusions : [],
+      exclusions: Array.isArray(b.budget?.exclusions) ? b.budget.exclusions : [],
+      efficiencyNotes: b.budget?.efficiencyNotes ?? "",
+    },
+    requiredDeliverables: Array.isArray(b.requiredDeliverables) ? b.requiredDeliverables : [],
+    winningCriteria: Array.isArray(b.winningCriteria) ? b.winningCriteria : [],
+  };
+}
+
 const HERO_KEYWORDS = [
   "hero",
   "experience",
@@ -284,7 +392,11 @@ function visibilityFromPosition(
 }
 
 export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
-  const { project, parsedBrief, geometry, elements } = input;
+  const { project, geometry, elements } = input;
+  // Apply defense-in-depth defaults so partial / legacy / corrupted
+  // briefs don't crash downstream field access. The validator surfaces
+  // the missing data as gaps for the clarification UI to ask about.
+  const parsedBrief = safeBrief(input.parsedBrief);
 
   const area = geometry.width * geometry.depth;
 
@@ -915,7 +1027,11 @@ function parseFootprintSize(label: string | undefined): {
 export function validateParsedBriefForReview(
   parsedBrief: ParsedBrief,
 ): ValidationResult {
-  const fp = parseFootprintSize(parsedBrief.spatial.footprints[0]?.size);
+  // Defense-in-depth — even though normalizeBrief applies safeBrief
+  // itself, we call it here too so the parseFootprintSize lookup below
+  // is safe against an entirely-missing spatial block.
+  const safe = safeBrief(parsedBrief);
+  const fp = parseFootprintSize(safe.spatial.footprints[0]?.size);
   const placeholderGeometry: BoothGeometry = {
     width: fp.width,
     depth: fp.depth,
@@ -953,7 +1069,12 @@ export function applyGapAnswer(
   value: unknown,
   setBrief: (next: import("@/types/brief").ParsedBrief) => void,
 ): void {
-  const next = structuredClone(brief);
+  // Apply defense-in-depth defaults so writing back works even when
+  // the source brief is missing fields the gap is trying to fill.
+  // structuredClone after safeBrief gives us a deep-mutable copy with
+  // every required field present, so the switch arms below can mutate
+  // freely without "Cannot read properties of undefined" crashes.
+  const next = structuredClone(safeBrief(brief));
   switch (field) {
     case "context.venue.name":
       if (next.events.shows.length === 0) {

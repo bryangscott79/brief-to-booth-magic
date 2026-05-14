@@ -458,26 +458,46 @@ export function PromptGenerator() {
   //      persists artifacts as heroSnapshot.
   const normalizedBrief = useMemo(() => {
     if (!brief || !currentProject) return null;
-    return normalizeBrief({
-      project: {
-        id: currentProject.id,
-        name: currentProject.name,
-        projectType: currentProject.projectType ?? "exhibition_booth",
-      },
-      parsedBrief: brief,
-      geometry,
-      elements,
-    });
+    try {
+      return normalizeBrief({
+        project: {
+          id: currentProject.id,
+          name: currentProject.name,
+          projectType: currentProject.projectType ?? "exhibition_booth",
+        },
+        parsedBrief: brief,
+        geometry,
+        elements,
+      });
+    } catch (e) {
+      // Defense-in-depth — the normalizer applies safeBrief internally,
+      // but a try/catch here means even an unexpected exception from
+      // composePrompt / validateBrief / a future change doesn't trip
+      // the app-level error boundary. Logs for diagnosis; returns null
+      // so downstream memos cleanly skip composition.
+      console.warn("[PromptGenerator] normalizeBrief failed:", e);
+      return null;
+    }
   }, [brief, currentProject, geometry, elements]);
 
   const composerOutput = useMemo(() => {
     if (!normalizedBrief) return null;
-    return composePrompt(normalizedBrief);
+    try {
+      return composePrompt(normalizedBrief);
+    } catch (e) {
+      console.warn("[PromptGenerator] composePrompt failed:", e);
+      return null;
+    }
   }, [normalizedBrief]);
 
   const briefValidation = useMemo(() => {
     if (!normalizedBrief) return { failures: [], gaps: [] };
-    return validateBrief(normalizedBrief);
+    try {
+      return validateBrief(normalizedBrief);
+    } catch (e) {
+      console.warn("[PromptGenerator] validateBrief failed:", e);
+      return { failures: [], gaps: [] };
+    }
   }, [normalizedBrief]);
 
   // Build per-angle composed view prompts once the hero has rendered.
@@ -503,11 +523,18 @@ export function PromptGenerator() {
       const zoneId = angle.id.startsWith("zone_interior_")
         ? angle.id.slice("zone_interior_".length)
         : undefined;
-      const viewOut = composeViewPrompt(snapshot, viewAngle, { zoneId });
-      out[angle.id] = {
-        renderer: viewOut.renderer,
-        negative: viewOut.negative,
-      };
+      try {
+        const viewOut = composeViewPrompt(snapshot, viewAngle, { zoneId });
+        out[angle.id] = {
+          renderer: viewOut.renderer,
+          negative: viewOut.negative,
+        };
+      } catch (e) {
+        // Defense-in-depth — a single bad angle shouldn't break the
+        // whole map. The edge function will fall back to its legacy
+        // builder for any angle missing from composedPrompts.
+        console.warn(`[PromptGenerator] composeViewPrompt(${angle.id}) failed:`, e);
+      }
     }
     return out;
   }, [composerOutput, normalizedBrief, heroImage, allAngles]);
@@ -520,9 +547,13 @@ export function PromptGenerator() {
   const handleClarificationAnswer = useCallback(
     (field: string, value: unknown) => {
       if (!brief || !currentProject) return;
-      applyGapAnswer(brief, field, value, (next) => {
-        useProjectStore.getState().setParsedBrief(next);
-      });
+      try {
+        applyGapAnswer(brief, field, value, (next) => {
+          useProjectStore.getState().setParsedBrief(next);
+        });
+      } catch (e) {
+        console.warn(`[PromptGenerator] applyGapAnswer(${field}) failed:`, e);
+      }
     },
     [brief, currentProject],
   );
@@ -530,9 +561,13 @@ export function PromptGenerator() {
     (field: string) => {
       const gap = briefValidation.gaps.find((g) => g.field === field);
       if (gap && brief && currentProject) {
-        applyGapAnswer(brief, field, gap.fallback, (next) => {
-          useProjectStore.getState().setParsedBrief(next);
-        });
+        try {
+          applyGapAnswer(brief, field, gap.fallback, (next) => {
+            useProjectStore.getState().setParsedBrief(next);
+          });
+        } catch (e) {
+          console.warn(`[PromptGenerator] applyGapAnswer skip(${field}) failed:`, e);
+        }
       }
     },
     [briefValidation.gaps, brief, currentProject],

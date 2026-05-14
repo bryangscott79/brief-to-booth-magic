@@ -925,7 +925,18 @@ function BriefClarificationContainer({
   projectId: string | null;
 }) {
   const { setParsedBrief } = useProjectStore();
-  const { gaps } = useMemo(() => validateParsedBriefForReview(brief), [brief]);
+  const { gaps } = useMemo(() => {
+    // Defense-in-depth: validateParsedBriefForReview already calls
+    // safeBrief internally, but a try/catch here means an unexpected
+    // exception (e.g. a future schema change) can't trip the app-level
+    // error boundary and blank the review page.
+    try {
+      return validateParsedBriefForReview(brief);
+    } catch (e) {
+      console.warn("[BriefClarificationContainer] validate failed:", e);
+      return { gaps: [], failures: [] };
+    }
+  }, [brief]);
 
   const writeBack = async (next: ParsedBrief) => {
     setParsedBrief(next);
@@ -939,12 +950,22 @@ function BriefClarificationContainer({
   };
 
   const handleAnswer = (field: string, value: unknown) => {
-    applyGapAnswer(brief, field, value, writeBack);
+    try {
+      applyGapAnswer(brief, field, value, writeBack);
+    } catch (e) {
+      console.warn(`[BriefClarificationContainer] applyGapAnswer(${field}) failed:`, e);
+    }
   };
 
   const handleSkip = (field: string) => {
     const gap = gaps.find((g) => g.field === field);
-    if (gap) applyGapAnswer(brief, field, gap.fallback, writeBack);
+    if (gap) {
+      try {
+        applyGapAnswer(brief, field, gap.fallback, writeBack);
+      } catch (e) {
+        console.warn(`[BriefClarificationContainer] applyGapAnswer skip(${field}) failed:`, e);
+      }
+    }
   };
 
   if (gaps.length === 0) return null;

@@ -441,9 +441,20 @@ export function PromptGenerator() {
   // generateHeroImage / generateAllViews / regenerateView pick it up.
   // The store reads it inside the async action and forwards it to the
   // edge function on the request body.
+  //
+  // CRITICAL: do NOT add `renderStore` to the dep array. `const
+  // renderStore = useRenderStore()` is a whole-store subscription, so
+  // its identity changes on every store update. Adding it to the deps
+  // creates this loop:
+  //   effect runs → setDesignContext → store update → renderStore
+  //   identity changes → deps changed → effect re-fires → setDesignContext
+  //   → ... (React #185, "Maximum update depth exceeded")
+  // The other store-writing effects in this component follow the same
+  // pattern (line 184 has the same eslint-disable for the same reason).
   useEffect(() => {
     renderStore.setDesignContext(designContext);
-  }, [designContext, renderStore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designContext]);
 
   // ── Phase 3 of refactor: normalized brief → composer pipeline ──
   // Replaces the edge-function-side structured-prompt builder. The

@@ -46,6 +46,30 @@ import {
   type GeneratePromptParams,
 } from "@/lib/promptBuilder";
 import { buildDesignContext } from "@/lib/designContextBuilder";
+import {
+  normalizeBrief,
+  validateBrief,
+  composePrompt,
+  composeViewPrompt,
+  type HeroSnapshot,
+  type ViewAngle,
+} from "@/lib/normalizedBrief";
+
+/**
+ * Map an internal angle id to the canonical ViewAngle the composer
+ * understands. Zone-interior angles use the format
+ * `zone_interior_<zoneId>`; detail_hero/detail_lounge land on "detail".
+ */
+function mapAngleIdToViewAngle(angleId: string): ViewAngle {
+  if (angleId === "front") return "front";
+  if (angleId === "left") return "side_left";
+  if (angleId === "right") return "side_right";
+  if (angleId === "back") return "back";
+  if (angleId === "top") return "top";
+  if (angleId === "detail_hero" || angleId === "detail_lounge") return "detail";
+  if (angleId.startsWith("zone_interior_")) return "interior";
+  return "front";
+}
 
 // Project units (imperial/metric) — preserved through render generation.
 import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
@@ -418,6 +442,78 @@ export function PromptGenerator() {
     renderStore.setDesignContext(designContext);
   }, [designContext, renderStore]);
 
+  // ── Phase 3 of refactor: normalized brief → composer pipeline ──
+  // Replaces the edge-function-side structured-prompt builder. The
+  // client now owns prompt composition end-to-end:
+  //   1. normalizeBrief projects parsedBrief + geometry + elements into
+  //      the canonical NormalizedBrief shape.
+  //   2. validateBrief surfaces gaps + failures for the clarification UI.
+  //   3. composePrompt produces the 5 output stages
+  //      (briefJson, geometrySummary, renderer, negative, compliance).
+  //   4. The renderer text + artifacts get forwarded via renderStore as
+  //      composedPrompt; the edge function uses renderer verbatim and
+  //      persists artifacts as heroSnapshot.
+  const normalizedBrief = useMemo(() => {
+    if (!brief || !currentProject) return null;
+    return normalizeBrief({
+      project: {
+        id: currentProject.id,
+        name: currentProject.name,
+        projectType: currentProject.projectType ?? "exhibition_booth",
+      },
+      parsedBrief: brief,
+      geometry,
+      elements,
+    });
+  }, [brief, currentProject, geometry, elements]);
+
+  const composerOutput = useMemo(() => {
+    if (!normalizedBrief) return null;
+    return composePrompt(normalizedBrief);
+  }, [normalizedBrief]);
+
+  const briefValidation = useMemo(() => {
+    if (!normalizedBrief) return { failures: [], gaps: [] };
+    return validateBrief(normalizedBrief);
+  }, [normalizedBrief]);
+
+  // Build per-angle composed view prompts once the hero has rendered.
+  // Each view is composed against the hero snapshot, so all views share
+  // the same canonical design state instead of diverging from the brief
+  // independently.
+  const composedViewPrompts = useMemo(() => {
+    if (!composerOutput || !normalizedBrief || !heroImage) return {} as Record<string, { renderer: string; negative: string }>;
+    const snapshot: HeroSnapshot = {
+      composerOutput,
+      normalizedBrief,
+      imageUrl: heroImage,
+      generatedAt: new Date().toISOString(),
+    };
+    const out: Record<string, { renderer: string; negative: string }> = {};
+    for (const angle of allAngles) {
+      if (angle.id === "hero_34") continue;
+      const viewAngle = mapAngleIdToViewAngle(angle.id);
+      // Zone-interior angles encode the zoneId in their angle.id
+      // ("zone_interior_<zoneId>"). Strip the prefix to pass to the
+      // composer. Detail angles resolve their zone by keyword inside
+      // the composer (or just render without zone focus).
+      const zoneId = angle.id.startsWith("zone_interior_")
+        ? angle.id.slice("zone_interior_".length)
+        : undefined;
+      const viewOut = composeViewPrompt(snapshot, viewAngle, { zoneId });
+      out[angle.id] = {
+        renderer: viewOut.renderer,
+        negative: viewOut.negative,
+      };
+    }
+    return out;
+  }, [composerOutput, normalizedBrief, heroImage, allAngles]);
+
+  // Suppress unused-var diagnostic on briefValidation until Phase 4
+  // mounts the clarification UI. Surface only the gap count to console
+  // so we get a passive signal during dev.
+  void briefValidation;
+
   // Hydrate from saved images (filtered to the active version).
   //
   // project_images keys by angle_id. When a version is active we save under
@@ -657,6 +753,16 @@ export function PromptGenerator() {
 
     try {
       await renderStore.generateHeroImage({
+        // Phase 3: forward the pre-composed renderer + artifacts. Edge
+        // function uses renderer verbatim and persists artifacts as
+        // heroSnapshot so view renders can derive from it.
+        composedPrompt: composerOutput
+          ? {
+              renderer: composerOutput.renderer,
+              negative: composerOutput.negative,
+              artifacts: composerOutput,
+            }
+          : undefined,
         prompt,
         feedback: heroFeedback || undefined,
         previousImageUrl: heroImage || undefined,
@@ -733,6 +839,11 @@ export function PromptGenerator() {
     renderStore.generateAllViews({
       angles: allAngles,
       prompts,
+      // Phase 3: per-angle composed renderer prompts derived from the
+      // heroSnapshot. Each view reads from the same canonical hero
+      // design state, so materials/palette/architecture stay locked
+      // across all views.
+      composedPrompts: composedViewPrompts,
       heroImageUrl: heroImage!,
       // Thread the hero prompt text through to every view. The model
       // gets both the hero pixels (palette/materials anchor) and the
@@ -782,6 +893,8 @@ export function PromptGenerator() {
       await renderStore.regenerateView({
         angle: { id: angle.id, name: angle.name, aspectRatio: angle.aspectRatio, isZoneInterior: !!(angle as any).isZoneInterior },
         prompt: generatedPrompts[angleId] || buildPrompt(angleId),
+        // Phase 3: composed view prompt for this specific angle.
+        composedPrompt: composedViewPrompts[angleId],
         heroImageUrl: heroImage,
         heroPromptText: heroPrompt || buildPrompt("hero_34"),
         projectId: projectId!,
@@ -832,6 +945,13 @@ export function PromptGenerator() {
 
       // Generate new hero
       await renderStore.generateHeroImage({
+        composedPrompt: composerOutput
+          ? {
+              renderer: composerOutput.renderer,
+              negative: composerOutput.negative,
+              artifacts: composerOutput,
+            }
+          : undefined,
         prompt: heroPromptText,
         feedback: undefined, // Fresh generation
         previousImageUrl: undefined, // Don't use previous as reference
@@ -867,6 +987,10 @@ export function PromptGenerator() {
       await renderStore.generateAllViews({
         angles: allAngles,
         prompts,
+        // Phase 3: composed view prompts derived from the new hero's
+        // snapshot. The composedViewPrompts memo recomputes when
+        // heroImage updates, so by this point it reflects the new hero.
+        composedPrompts: composedViewPrompts,
         heroImageUrl: newHeroImage,
         // Reuse the same hero prompt we just used to regenerate the
         // hero — guarantees the views' "ORIGINAL HERO DESIGN INTENT"

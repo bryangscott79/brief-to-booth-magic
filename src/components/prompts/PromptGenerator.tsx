@@ -56,6 +56,7 @@ import {
   type ViewAngle,
 } from "@/lib/normalizedBrief";
 import { BriefClarification } from "@/components/prompts/BriefClarification";
+import { PromptDebugPanel } from "@/components/prompts/PromptDebugPanel";
 
 /**
  * Map an internal angle id to the canonical ViewAngle the composer
@@ -1290,6 +1291,8 @@ export function PromptGenerator() {
                 onSkip={handleClarificationSkip}
               />
             )}
+
+            <PromptDebugPanel output={composerOutput} />
 
             <Button
               onClick={handleGenerateHeroImage}

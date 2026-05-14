@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Check, Edit2, ChevronRight, X, Save, Plus, Trash2 } from "lucide-react";
@@ -12,6 +12,8 @@ import { OriginalBrief } from "./OriginalBrief";
 import { useProject } from "@/hooks/useProjects";
 import { saveProjectField } from "@/hooks/useProjectSync";
 import type { ParsedBrief } from "@/types/brief";
+import { BriefClarification } from "@/components/prompts/BriefClarification";
+import { validateParsedBriefForReview, applyGapAnswer } from "@/lib/normalizedBrief";
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -729,6 +731,8 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
         </Button>
       </div>
 
+      <BriefClarificationContainer brief={brief} projectId={projectId} />
+
       {/* Sections Grid */}
       <div className="grid gap-4 md:grid-cols-2">
         <Section
@@ -905,5 +909,51 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
         briefFileUrl={(dbProject as any)?.brief_file_url ?? null}
       />
     </div>
+  );
+}
+
+// ── BriefClarificationContainer ──────────────────────────────────────
+// Surfaces validator-detected gaps as inline Q&A cards. On answer,
+// writes back to parsedBrief via setParsedBrief + persists to DB.
+// Re-validates on every brief change so the gap list shrinks as the
+// user fills it in.
+function BriefClarificationContainer({
+  brief,
+  projectId,
+}: {
+  brief: ParsedBrief;
+  projectId: string | null;
+}) {
+  const { setParsedBrief } = useProjectStore();
+  const { gaps } = useMemo(() => validateParsedBriefForReview(brief), [brief]);
+
+  const writeBack = async (next: ParsedBrief) => {
+    setParsedBrief(next);
+    if (projectId) {
+      try {
+        await saveProjectField(projectId, "parsed_brief", next);
+      } catch (e) {
+        console.warn("[BriefClarificationContainer] persist failed:", e);
+      }
+    }
+  };
+
+  const handleAnswer = (field: string, value: unknown) => {
+    applyGapAnswer(brief, field, value, writeBack);
+  };
+
+  const handleSkip = (field: string) => {
+    const gap = gaps.find((g) => g.field === field);
+    if (gap) applyGapAnswer(brief, field, gap.fallback, writeBack);
+  };
+
+  if (gaps.length === 0) return null;
+
+  return (
+    <BriefClarification
+      gaps={gaps}
+      onAnswer={handleAnswer}
+      onSkip={handleSkip}
+    />
   );
 }

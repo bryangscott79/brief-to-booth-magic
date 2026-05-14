@@ -51,9 +51,11 @@ import {
   validateBrief,
   composePrompt,
   composeViewPrompt,
+  applyGapAnswer,
   type HeroSnapshot,
   type ViewAngle,
 } from "@/lib/normalizedBrief";
+import { BriefClarification } from "@/components/prompts/BriefClarification";
 
 /**
  * Map an internal angle id to the canonical ViewAngle the composer
@@ -509,10 +511,31 @@ export function PromptGenerator() {
     return out;
   }, [composerOutput, normalizedBrief, heroImage, allAngles]);
 
-  // Suppress unused-var diagnostic on briefValidation until Phase 4
-  // mounts the clarification UI. Surface only the gap count to console
-  // so we get a passive signal during dev.
-  void briefValidation;
+  // Phase 4: clarification handlers for the safety-net mount on the
+  // Prompts step. Most gaps get filled at the Brief Review step
+  // (primary surface); this catches anything that emerged downstream
+  // (e.g. hero designed in elements step but missing physicalForm,
+  // new zone created without a structural form binding).
+  const handleClarificationAnswer = useCallback(
+    (field: string, value: unknown) => {
+      if (!brief || !currentProject) return;
+      applyGapAnswer(brief, field, value, (next) => {
+        useProjectStore.getState().setParsedBrief(next);
+      });
+    },
+    [brief, currentProject],
+  );
+  const handleClarificationSkip = useCallback(
+    (field: string) => {
+      const gap = briefValidation.gaps.find((g) => g.field === field);
+      if (gap && brief && currentProject) {
+        applyGapAnswer(brief, field, gap.fallback, (next) => {
+          useProjectStore.getState().setParsedBrief(next);
+        });
+      }
+    },
+    [briefValidation.gaps, brief, currentProject],
+  );
 
   // Hydrate from saved images (filtered to the active version).
   //
@@ -1259,6 +1282,14 @@ export function PromptGenerator() {
               onRemove={renderRefs.remove}
               disabled={isGeneratingHero}
             />
+
+            {briefValidation.gaps.length > 0 && (
+              <BriefClarification
+                gaps={briefValidation.gaps}
+                onAnswer={handleClarificationAnswer}
+                onSkip={handleClarificationSkip}
+              />
+            )}
 
             <Button
               onClick={handleGenerateHeroImage}

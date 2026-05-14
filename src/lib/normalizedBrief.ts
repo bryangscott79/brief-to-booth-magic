@@ -886,6 +886,54 @@ export function composeViewPrompt(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// validateParsedBriefForReview — content-only gap detection that does
+// NOT require a populated geometry/spatial canvas. Surfaced on the
+// Brief Review step (BEFORE spatial is filled out). Synthesizes a
+// minimal placeholder geometry from brief.spatial.footprints so the
+// downstream normalizer still produces a NormalizedBrief; the
+// geometry-dependent gaps (footprint_match, hero_scale_ok) collapse to
+// neutral statuses because there are no zones yet.
+// ─────────────────────────────────────────────────────────────────────
+
+function parseFootprintSize(label: string | undefined): {
+  width: number;
+  depth: number;
+  units: "metric" | "imperial";
+} {
+  if (!label) return { width: 30, depth: 30, units: "imperial" };
+  const m = label.match(
+    /(\d+(?:\.\d+)?)\s*(?:m|ft|')?\s*[x×X]\s*(\d+(?:\.\d+)?)\s*(?:m|ft|')?/i,
+  );
+  if (!m) return { width: 30, depth: 30, units: "imperial" };
+  const w = parseFloat(m[1]);
+  const d = parseFloat(m[2]);
+  const units: "metric" | "imperial" =
+    /m\b/i.test(label) && !/ft|'/.test(label) ? "metric" : "imperial";
+  return { width: w, depth: d, units };
+}
+
+export function validateParsedBriefForReview(
+  parsedBrief: ParsedBrief,
+): ValidationResult {
+  const fp = parseFootprintSize(parsedBrief.spatial.footprints[0]?.size);
+  const placeholderGeometry: BoothGeometry = {
+    width: fp.width,
+    depth: fp.depth,
+    ceilingHeightFt: fp.units === "metric" ? 13 : 14,
+    measurementSystem: fp.units,
+    zones: [],
+    materialsCatalog: [],
+  };
+  const normalized = normalizeBrief({
+    project: { id: "review-tmp", name: "review", projectType: "exhibition_booth" },
+    parsedBrief,
+    geometry: placeholderGeometry,
+    elements: null,
+  });
+  return validateBrief(normalized);
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // applyGapAnswer — writes a clarification answer back to ParsedBrief
 // ─────────────────────────────────────────────────────────────────────
 

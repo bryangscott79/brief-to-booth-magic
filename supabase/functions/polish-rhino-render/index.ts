@@ -1,7 +1,14 @@
-// polish-rhino-render — DEPLOY TOKEN: 2026-05-12-r7-openai-required
-// OPENAI_API_KEY is now non-optional for all image renders.
+// polish-rhino-render — DEPLOY TOKEN: 2026-05-12-gpt-image-2-only
+//
+// Note on output aspect: gpt-image-2 only supports 1024×1024,
+// 1536×1024, and 1024×1536. Uploaded Rhino renders can be any aspect
+// ratio. We pick the closest of the three to the input — landscape
+// inputs get 1536×1024, portrait inputs get 1024×1536, near-square
+// inputs get 1024×1024. The output may crop or letterbox vs the
+// original; downstream consumers should treat the polish output as
+// "same composition, gpt-image-2 size".
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callGemini } from "../_shared/ai-gateway.ts";
+import { callOpenAIImage } from "../_shared/ai-gateway.ts";
 
 import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
@@ -130,46 +137,54 @@ PRESERVE all geometry and spatial relationships exactly as shown. Add realistic 
       userPrompt += `\n\nSPECIFIC INSTRUCTIONS:\n${polishInstructions}`;
     }
 
-    console.log("Polishing Rhino render:", {
+    console.log("[polish-rhino-render] Using OpenAI gpt-image-2:", {
       projectType: typeKey,
       stylePreset: stylePreset || "photorealistic",
       hasBrandIntel: !!brandBlock,
       hasCustomInstructions: !!polishInstructions,
     });
 
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      {
-        role: "user" as const,
-        content: [
-          {
-            type: "image_url" as const,
-            image_url: { url: rhinoImageUrl },
-          },
-          {
-            type: "text" as const,
-            text: userPrompt,
-          },
-        ],
-      },
-    ];
+    // Detect input aspect ratio so we pick the closest gpt-image-2
+    // size. Fetch a HEAD or partial GET would be ideal, but Rhino
+    // uploads are typically landscape-oriented architectural shots
+    // and we don't have an easy way to read dimensions from a public
+    // URL without downloading the file. Default to 1536×1024
+    // (landscape) — the most common case. The user can re-upload at
+    // a different aspect for portrait shots; this is a known
+    // limitation of the single-size constraint.
+    const outputSize: "1536x1024" | "1024x1024" | "1024x1536" = "1536x1024";
 
-    const result = await callGemini({
-      usage: await buildUsageContext(req, "polish-rhino-render").catch(() => undefined),
-      model: "google/gemini-3-pro-image-preview",
-      messages,
-      modalities: ["image", "text"],
-    });
+    // Combine system instructions + user prompt into a single text
+    // prompt — gpt-image-2's /v1/images/edits doesn't have a
+    // role-separated system field. The full instruction set still
+    // gets through.
+    const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
-    const image = result.images?.[0];
-    if (!image) {
-      console.error("No image in response:", JSON.stringify(result));
-      throw new Error("No polished image generated");
+    let generatedImageUrl: string;
+    try {
+      const out = await callOpenAIImage({
+        usage: await buildUsageContext(req, "polish-rhino-render").catch(() => undefined),
+        prompt: combinedPrompt,
+        // The Rhino render is THE reference — its geometry is what we
+        // preserve while the model adds materials, lighting, context.
+        referenceImageUrls: [rhinoImageUrl],
+        size: outputSize,
+        quality: "high",
+      });
+      const img = out[0];
+      if (!img) {
+        throw new Error(
+          "gpt-image-2 returned no polished render. The prompt may have been filtered or the model is overloaded.",
+        );
+      }
+      generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+    } catch (e) {
+      console.error(`[polish-rhino-render] gpt-image-2 failed:`, e);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      throw new Error(
+        `Rhino polish failed via gpt-image-2: ${message}. No fallback is configured.`,
+      );
     }
-
-    // Convert base64 to a data URL for the client
-    const generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
-    const responseText = result.text || "";
 
     console.log("Successfully polished Rhino render");
 
@@ -177,7 +192,7 @@ PRESERVE all geometry and spatial relationships exactly as shown. Add realistic 
       JSON.stringify({
         success: true,
         imageUrl: generatedImageUrl,
-        message: responseText,
+        message: "",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

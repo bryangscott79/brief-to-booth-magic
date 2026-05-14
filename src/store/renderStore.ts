@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
+import type { DesignContext } from "@/lib/designContextBuilder";
 
 export interface GeneratedImage {
   url: string;
@@ -27,8 +28,15 @@ interface RenderState {
   /** Phase 4E: Track generation versions for cascade regeneration */
   heroVersion: number;
   viewVersions: Record<string, number>;
-  /** Phase 4: Design context and consistency tokens for enhanced rendering */
-  designContext: Record<string, unknown> | null;
+  /**
+   * Phase 4: Design context — the typed structured payload built by
+   * `buildDesignContext()` and forwarded to both generate-hero and
+   * generate-view edge functions. Each section of the markdown prompts
+   * (SCENE, STRUCTURAL APPROACH, ZONE LAYOUT, MATERIALS, etc.) reads
+   * off this object, so populating it pushes brief-driven design data
+   * to the top of the prompt where image-model attention is highest.
+   */
+  designContext: DesignContext | null;
   consistencyTokens: Record<string, unknown> | null;
 }
 
@@ -83,6 +91,14 @@ interface RenderActions {
     angles: Array<{ id: string; name: string; aspectRatio: string; isZoneInterior?: boolean }>;
     prompts: Record<string, string>;
     heroImageUrl: string;
+    /**
+     * Original hero prompt text — the full prompt that produced the hero
+     * image. Threaded through to every view so the model sees both the
+     * hero pixels AND the design intent that drove them. Without this
+     * the model only had the visual reference to extrapolate from, and
+     * downstream views drifted on materials/finishes/scale.
+     */
+    heroPromptText?: string;
     projectId: string;
     boothSize?: string;
     /** Structured booth dimensions — preferred over boothSize. */
@@ -111,6 +127,8 @@ interface RenderActions {
     angle: { id: string; name: string; aspectRatio: string; isZoneInterior?: boolean };
     prompt: string;
     heroImageUrl: string;
+    /** Original hero prompt text — see generateAllViews for rationale. */
+    heroPromptText?: string;
     projectId: string;
     boothSize?: string;
     /** Structured booth dimensions — preferred over boothSize. */
@@ -146,7 +164,7 @@ interface RenderActions {
   }) => Promise<void>;
 
   /** Phase 4: Set design context for hero generation */
-  setDesignContext: (ctx: Record<string, unknown> | null) => void;
+  setDesignContext: (ctx: DesignContext | null) => void;
   /** Phase 4: Set consistency tokens for view generation */
   setConsistencyTokens: (tokens: Record<string, unknown> | null) => void;
 }
@@ -253,7 +271,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, heroImageUrl, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateAllViews: async ({ angles, prompts, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     // Split into exterior views first, then interiors — so interiors can reference exterior images
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
@@ -295,7 +313,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
       try {
         // Phase 4: Include consistency tokens if available
-        const { consistencyTokens } = get();
+        const { consistencyTokens, designContext } = get();
         const viewBody: Record<string, unknown> = {
           referenceImageUrl: referenceUrl,
           viewPrompt: prompts[angle.id],
@@ -314,9 +332,18 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           extraReferenceUrls:
             extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
           imageModel: imageModel ?? undefined,
+          heroPromptText: heroPromptText || undefined,
         };
         if (consistencyTokens) {
           viewBody.consistencyTokens = consistencyTokens;
+        }
+        if (designContext) {
+          // Forward the same structured design context that fuels the
+          // hero prompt to the view prompt — so the STRUCTURAL APPROACH
+          // section is consistent across hero + every view. Without
+          // this, views only see the consistency tokens (palette
+          // keywords) and have no architectural signal.
+          viewBody.designContext = designContext;
         }
 
         const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
@@ -360,7 +387,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, heroImageUrl, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  regenerateView: async ({ angle, prompt, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -399,6 +426,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         extraReferenceUrls:
           extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
         imageModel: imageModel ?? undefined,
+        heroPromptText: heroPromptText || undefined,
       };
       if (consistencyTokens) {
         viewBody.consistencyTokens = consistencyTokens;

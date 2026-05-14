@@ -1,14 +1,31 @@
-// generate-hero — DEPLOY TOKEN: 2026-05-12-r7-openai-required
+// generate-hero — DEPLOY TOKEN: 2026-05-14-structural-approach
+//
+// Prompt structure: We assemble a compact markdown prompt with sections
+// in priority order (SCENE → SCALE → HERO → ZONES → BRAND → MATERIALS
+// → LIGHTING → STYLE → RESTRICTIONS). gpt-image-2's quality drops
+// sharply past ~1500 tokens — it falls back to "generic booth" as the
+// training mean. The old prompt was 3-5k tokens of layered constraint
+// blocks (geometry warnings, scale, design, brand intel, brand context,
+// suite context, RAG, reference labels, closing reinforcement, negative
+// prompt, compliance block) which diluted the signal across pages of
+// rules. Direct gpt-image-2 prompts that produce editorial-quality
+// renders are typically 500-1000 tokens of focused prose.
+//
+// Reference images: We send ONLY the brand logo (and any user-attached
+// extra references). We deliberately do NOT send the spatial canvas's
+// floor plan / isometric PNGs — those captures contain rendered text
+// labels (zone names "Z1", "Z2/Z4", "Z5"; dimension callouts; etc.)
+// that gpt-image-2 reproduces on the rendered booth walls. Text-only
+// scale instructions handle the dimensions without the bleed risk.
 // (Lovable's pipeline keys deployment off file content hash — bump this
 //  comment to force a redeploy when the function code changes need to
 //  propagate. The ai-gateway changes that matter for this version:
 //   - callOpenAIImage uses model "gpt-image-2"
 //   - callAnthropic falls back across LOVABLE_API_KEY / ANTHROPIC_KEY
-//   - response carries modelUsed for client-side observability
-//   - OPENAI_API_KEY is now non-optional for all image renders)
+//   - response carries modelUsed for client-side observability)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callGemini, callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { callOpenAIImage } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
@@ -82,14 +99,62 @@ interface GenerateHeroRequest {
    * organic / non-geometric structures but requires OPENAI_API_KEY.
    */
   imageModel?: "gemini" | "openai";
+  /**
+   * Rich structured design context — populated by the client's
+   * buildDesignContext() helper. Every section of the structured
+   * markdown prompt reads off this object. When unset, the structured
+   * sections are skipped and the prompt falls back to the client's
+   * narrative prose (which lives at the BOTTOM of the prompt where
+   * image-model attention is lowest). Populating it pushes brief-driven
+   * design data to the TOP of the prompt where it has weight.
+   */
   designContext?: {
     brandColors?: string[];
     materialsAndMood?: Array<{ material: string; feel: string }>;
-    heroInstallation?: { name: string; dimensions?: string; materials?: string[] };
+    /**
+     * Hero installation with authored structural form. The
+     * `physicalForm` field is the designer's intent for the booth's
+     * sculptural architecture (e.g. "suspended mobius ribbon", "tower
+     * column with branching canopy", "curved laminar fascia") and is
+     * the single highest-signal field for non-rectangular designs.
+     */
+    heroInstallation?: {
+      name: string;
+      dimensions?: string;
+      materials?: string[];
+      physicalForm?: string;
+    };
     qualityTier?: "standard" | "premium" | "ultra";
-    zoneLayout?: Array<{ name: string; percentage: number; position: string }>;
+    /**
+     * Zones surfaced with FUNCTIONAL descriptors ("lounge area",
+     * "hero focal area") rather than the AI-authored proper names
+     * ("The Sanctuary", "The Retreat"). Poetic zone names caused the
+     * image model to render overhead wayfinding signs on the booth
+     * fascia — the model treated proper nouns as labels to render.
+     * Functional names remove the proper noun while preserving role.
+     */
+    zoneLayout?: Array<{
+      name: string;
+      percentage: number;
+      position: string;
+      structuralForm?: string;
+    }>;
     creativeAvoid?: string[];
     creativeEmbrace?: string[];
+    /**
+     * Brief.creative.visualLanguage — keywords like ["waves", "lines",
+     * "curves"]. Read by the STRUCTURAL APPROACH section and told to
+     * the model as ARCHITECTURE, not decoration.
+     */
+    visualLanguage?: string[];
+    /** Brief.creative.referenceLabels — themed reference categories. */
+    referenceLabels?: string[];
+    /**
+     * Aggregated structural-form vocabulary from the canvas zones
+     * (open / canopy / tower / alcove / enclosed / platform). Biases
+     * the model away from flat rectangular defaults.
+     */
+    zoneStructuralForms?: string[];
   };
 }
 
@@ -327,6 +392,301 @@ function buildDesignContextBlock(ctx: GenerateHeroRequest["designContext"]): str
   return parts.join("\n");
 }
 
+/**
+ * Build the # STRUCTURAL APPROACH section — the brief's visual language
+ * translated into directives for the booth's actual architecture. This
+ * is the single most important section for non-rectangular designs.
+ *
+ * Pulls from:
+ *   - dctx.visualLanguage — brief keywords (waves, lines, curves, etc.)
+ *   - dctx.referenceLabels — themed reference categories
+ *   - dctx.heroInstallation.physicalForm — designer's authored shape
+ *   - dctx.zoneStructuralForms — canvas-authored per-zone forms
+ *   - dctx.creativeEmbrace — brief direction to embrace
+ *
+ * Returns "" when there's no structural intent to express — in that
+ * case the prompt skips the section rather than emit empty
+ * scaffolding. The model still gets the rest of the structured
+ * sections; it just won't have the brief-driven architectural bias.
+ */
+function buildStructuralApproachSection(
+  dctx: GenerateHeroRequest["designContext"],
+): string {
+  if (!dctx) return "";
+
+  const visualLanguage = dctx.visualLanguage ?? [];
+  const referenceLabels = dctx.referenceLabels ?? [];
+  const heroForm = dctx.heroInstallation?.physicalForm ?? "";
+  const zoneForms = dctx.zoneStructuralForms ?? [];
+  const embrace = dctx.creativeEmbrace ?? [];
+
+  const haveAny =
+    visualLanguage.length > 0 ||
+    referenceLabels.length > 0 ||
+    heroForm.length > 0 ||
+    zoneForms.length > 0 ||
+    embrace.length > 0;
+  if (!haveAny) return "";
+
+  const lines: string[] = ["# STRUCTURAL APPROACH"];
+  lines.push(
+    `This section defines the BOOTH'S ARCHITECTURE — its actual physical form. The brand's visual language must be expressed AS the booth's structure (canopy shape, fascia geometry, column form, surface curvature), NOT as surface decoration (LED stripes glued onto a rectangular pavilion, vinyl wave graphics on flat walls). The booth IS a sculptural form; brand graphics are secondary to the architecture.`,
+  );
+
+  if (visualLanguage.length > 0) {
+    lines.push(
+      `Brand visual language to express AS architecture: ${visualLanguage.join(", ")}. The booth's primary structural moves should embody these — if the language is "waves and lines," the canopy should undulate or the fascia should sweep in a curve; if it is "round element," the booth should incorporate a major circular form; if it is "geometric precision," the structure should read as crisply faceted volumes.`,
+    );
+  }
+
+  if (referenceLabels.length > 0) {
+    lines.push(`Reference themes to anchor the design: ${referenceLabels.join(" · ")}.`);
+  }
+
+  if (heroForm.length > 0) {
+    lines.push(
+      `Authored hero physical form (from the design brief): ${heroForm}. This is the dominant architectural element; build the rest of the booth in response to it, not separately.`,
+    );
+  }
+
+  if (zoneForms.length > 0) {
+    // Translate each structural form into a brief shape directive.
+    const formGuide: Record<string, string> = {
+      open: "open footprints with no walls (floor pattern + sculptural props define the space)",
+      enclosed: "enclosed chambers (four walls + ceiling, fully contained rooms)",
+      canopy: "covered-but-airy canopies (overhead structures with open sides)",
+      alcove: "alcove forms (three walls open to the aisle, kiosk-like recesses)",
+      platform: "raised platforms (no walls, stage-like)",
+      tower: "vertical towers (footprint << height, tall brand markers)",
+    };
+    const described = zoneForms
+      .map((f) => formGuide[f] ?? f)
+      .join("; ");
+    lines.push(`Per-zone structural vocabulary in this booth: ${described}.`);
+  }
+
+  if (embrace.length > 0) {
+    lines.push(`Embrace (from brief): ${embrace.join(", ")}.`);
+  }
+
+  lines.push(
+    `What this section is NOT asking for: a rectangular pavilion with flat horizontal fascia, repeated identical bay modules, or a standard trade-show truss top with the brand wordmark slapped on. If your default reach is "rectangular booth with corner-mounted screens," reach further.`,
+  );
+
+  return lines.join("\n");
+}
+
+/**
+ * Build a compact, markdown-structured prompt for gpt-image-2.
+ *
+ * Sections appear in priority order. Each is emitted only when there's
+ * data — empty sections are skipped so the prompt stays tight.
+ *
+ *   # SCENE                — what the camera sees, scale + booth type
+ *   # STRUCTURAL APPROACH  — designer's brief-driven architecture intent
+ *   # SIZE & SCALE         — exact dimensions, human reference
+ *   # THE HERO INSTALLATION — focal centerpiece (+ physical form)
+ *   # ZONE LAYOUT          — functional descriptors (NOT proper names)
+ *   # BRAND IDENTITY       — wordmark, colors, logo treatment
+ *   # MATERIALS & MOOD     — surfaces, finishes, atmosphere
+ *   # LIGHTING             — fixtures, color temperature, drama
+ *   # STYLE                — photography reference, render quality
+ *   # RESTRICTIONS         — what NOT to do (kept short)
+ *   # ADDITIONAL CONTEXT   — brand RAG / suite RAG / brand intelligence
+ *
+ * STRUCTURAL APPROACH appears SECOND on purpose — image models attend
+ * most strongly to opening tokens, and we want the brief's visual
+ * language to be the dominant architectural signal, not generic
+ * "trade-show booth" defaults that the model would otherwise produce.
+ */
+function buildStructuredHeroPrompt(
+  req: GenerateHeroRequest,
+  opts: { ragBlock: string },
+): string {
+  const sections: string[] = [];
+  const dims = req.boothDimensions;
+  const dctx = req.designContext;
+  const brand = req.brandContext ?? "";
+
+  // ── # SCENE ──
+  const projectTypeLabel = (() => {
+    switch (req.projectType) {
+      case "live_brand_activation": return "outdoor brand activation";
+      case "permanent_installation": return "permanent branded installation";
+      case "film_premiere": return "film premiere event build";
+      case "game_release_activation": return "game launch activation";
+      case "architectural_brief": return "architectural space";
+      default: return "trade show booth";
+    }
+  })();
+  const sceneLines: string[] = [];
+  sceneLines.push("# SCENE");
+  sceneLines.push(
+    `A 16:9 photorealistic 3/4 perspective render of a ${projectTypeLabel}, photographed at eye level (1.7m / 5'8") from the front-left at 45°. The structure occupies roughly 70% of the frame width with depth-of-field falling off behind it. Editorial architectural photography quality — confident, premium, photoreal.`,
+  );
+  sections.push(sceneLines.join("\n"));
+
+  // ── # STRUCTURAL APPROACH ──
+  // The brief-driven architectural intent. This is where we tell the
+  // model that the brand's visual language is SCULPTURAL — not
+  // surface decoration — and ground it in the hero's authored
+  // physical form. Without this section the model defaults to a flat
+  // rectangular pavilion (its "trade-show booth" training mean) no
+  // matter what the rest of the prompt says.
+  const structuralApproach = buildStructuralApproachSection(dctx);
+  if (structuralApproach) sections.push(structuralApproach);
+
+  // ── # SIZE & SCALE ──
+  if (dims) {
+    const w = dims.system === "metric" ? `${dims.width}m` : `${dims.width} ft`;
+    const d = dims.system === "metric" ? `${dims.depth}m` : `${dims.depth} ft`;
+    const area = dims.system === "metric"
+      ? `${Math.round((dims.sqft / 10.7639) * 10) / 10} sqm`
+      : `${dims.sqft} sq ft`;
+    const ceilLabel = dims.ceilingHeightFt ? `${dims.ceilingHeightFt} ft` : "natural";
+    const peopleAcross = dims.system === "metric"
+      ? Math.round(dims.width / 0.6)
+      : Math.round(dims.width / 2);
+    const scaleClass = dims.sqft > 1200 ? "large island"
+      : dims.sqft > 600 ? "mid-size peninsula"
+      : "small inline";
+    sections.push(
+      [
+        "# SIZE & SCALE",
+        `- Footprint: ${w} wide × ${d} deep (${area}) — ${scaleClass}`,
+        `- Maximum structure height: ${ceilLabel}`,
+        `- Across the front face: about ${peopleAcross} adults shoulder-to-shoulder`,
+        `- Render at correct fraction of the frame — NOT mega-exhibit scale`,
+      ].join("\n"),
+    );
+  }
+
+  // ── # THE HERO INSTALLATION ──
+  // Surface the hero's authored physical form prominently — it's the
+  // designer's intent for how the booth itself is shaped, not just
+  // what's in the middle. The STRUCTURAL APPROACH section above
+  // already pulled this; we restate the specifics here for the
+  // model's attention on the focal element.
+  const hero = dctx?.heroInstallation;
+  if (hero?.name) {
+    const heroLines: string[] = ["# THE HERO INSTALLATION"];
+    heroLines.push(`"${hero.name}" — the focal centerpiece, most prominent element visible from the primary aisle.`);
+    if (hero.physicalForm) {
+      heroLines.push(`- Structural form: ${hero.physicalForm}`);
+    }
+    if (hero.dimensions) heroLines.push(`- Dimensions: ${hero.dimensions}`);
+    if (hero.materials?.length) heroLines.push(`- Materials: ${hero.materials.join(", ")}`);
+    sections.push(heroLines.join("\n"));
+  }
+
+  // ── # ZONE LAYOUT ──
+  // Zones surface here with FUNCTIONAL descriptors only ("lounge
+  // area", "hero focal area") — never proper names like "The
+  // Sanctuary". Poetic names made the image model render overhead
+  // wayfinding signs on the booth fascia, treating zone names as
+  // labels to display. The client's buildDesignContext() does the
+  // name → function mapping before sending; this section just
+  // surfaces the result.
+  if (dctx?.zoneLayout?.length) {
+    const lines = ["# ZONE LAYOUT (functional placement, NOT signage)"];
+    lines.push("These describe what each part of the booth is FOR — do NOT render zone names as overhead signs or labels.");
+    for (const z of dctx.zoneLayout) {
+      const formNote = z.structuralForm ? `, ${z.structuralForm}` : "";
+      lines.push(`- ${z.name} (${z.percentage}%, ${z.position}${formNote})`);
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  // ── # BRAND IDENTITY ──
+  const brandLines: string[] = ["# BRAND IDENTITY"];
+  if (dctx?.brandColors?.length) {
+    brandLines.push(
+      `Brand colors — apply these as the dominant palette on signage, accent lighting, surface graphics, and LED inlays:`,
+    );
+    dctx.brandColors.forEach((c, i) => {
+      const role = i === 0 ? "Primary" : i === 1 ? "Secondary" : `Accent ${i}`;
+      brandLines.push(`- ${role}: ${c}`);
+    });
+  }
+  brandLines.push(
+    `The brand wordmark and logo (provided as a reference image) are the ONLY text or marks that should appear on the booth surfaces. Render them where signage would naturally live — fascia, header band, counter face, primary wall. Do NOT add zone names, room labels, or wayfinding text anywhere on the booth.`,
+  );
+  sections.push(brandLines.join("\n"));
+
+  // ── # MATERIALS & MOOD ──
+  if (dctx?.materialsAndMood?.length) {
+    const lines = ["# MATERIALS & MOOD"];
+    for (const m of dctx.materialsAndMood) {
+      lines.push(`- ${m.material} — ${m.feel}`);
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  // ── # LIGHTING ──
+  // Derived from quality tier + creative direction. Brief and clear.
+  const tier = dctx?.qualityTier;
+  if (tier) {
+    const lightingByTier: Record<string, string> = {
+      standard: "Clean, even functional lighting. Accent spots on hero. Warm color temperature.",
+      premium: "Designed lighting scheme. Theatrical accent spots on hero installation. Warm LED line lighting tracing structural edges. Designed contrast — bright focal points against deeper ambient.",
+      ultra: "Cinematic theatrical lighting. Hero installation glows from within. Dramatic high-contrast — deep shadow zones, bright accent moments. RGB or programmable accents if the brand calls for it. Editorial-photography mood.",
+    };
+    sections.push(`# LIGHTING\n${lightingByTier[tier] ?? lightingByTier.premium}`);
+  }
+
+  // ── # STYLE ──
+  const styleLines: string[] = ["# STYLE"];
+  styleLines.push(
+    `Architectural visualization in the lineage of Snøhetta / Foster + Partners exhibit photography. Editorial, cinematic, premium. Photoreal materials with believable surface microdetail. Realistic visitors (3-6 people) at natural human scale, naturally engaged with the space — NOT posed mannequins.`,
+  );
+  if (dctx?.creativeEmbrace?.length) {
+    styleLines.push(`Embrace: ${dctx.creativeEmbrace.join(", ")}.`);
+  }
+  sections.push(styleLines.join("\n"));
+
+  // ── # RESTRICTIONS ──
+  const restrictions: string[] = ["# RESTRICTIONS"];
+  restrictions.push(
+    `Booth surfaces should carry ONLY the brand wordmark and logo. Do NOT render: zone names ("The Study", "Lounge", "Hero", etc.), room labels, wayfinding signs, "Z1/Z2/Z3" or similar tags, dimension callouts, percentage labels, leader lines, architectural-diagram styling, or any text the user might have authored to describe the layout. If you find yourself rendering text on the fascia header band that isn't the brand wordmark, replace it with empty space or brand graphics.`,
+  );
+  restrictions.push(
+    `Architectural defaults to AVOID: flat horizontal rectangular fascia/canopy, repeated identical bay modules, generic trade-show truss ceiling, symmetric grid of identical zones, plain rectangular pavilion shape. The booth's form should reflect its brand — uniformity reads as default and uninspired.`,
+  );
+  restrictions.push(
+    `No cartoon, no over-saturation, no fisheye distortion, no obvious AI artifacts, no random floating geometry, no duplicated wordmarks on top of each other.`,
+  );
+  if (dctx?.creativeAvoid?.length) {
+    restrictions.push(`Brief-specified avoid: ${dctx.creativeAvoid.join(", ")}.`);
+  }
+  sections.push(restrictions.join("\n"));
+
+  // ── # ADDITIONAL CONTEXT ──
+  // Brand RAG / brand intelligence / suite context. Placed at the end
+  // because gpt-image-2 weights opening tokens most strongly — we want
+  // the SCENE + SCALE blocks to dominate, with the brand details as
+  // refining context rather than the leading instruction.
+  const contextParts: string[] = [];
+  const brandIntel = req.brandIntelligence ?? [];
+  if (brandIntel.length > 0) {
+    const visual = brandIntel.filter(
+      (e) => e.category === "visual_identity" || e.category === "vendor_material" || e.category === "strategic_voice",
+    );
+    if (visual.length > 0) {
+      contextParts.push(
+        `Brand intelligence (approved constraints):\n${visual.map((e) => `- ${e.title}: ${e.content}`).join("\n")}`,
+      );
+    }
+  }
+  if (brand) contextParts.push(`Brand context: ${brand.slice(0, 600)}`);
+  if (req.suiteContext) contextParts.push(`Project type context: ${req.suiteContext.slice(0, 400)}`);
+  if (opts.ragBlock) contextParts.push(opts.ragBlock.slice(0, 600));
+  if (contextParts.length > 0) {
+    sections.push(`# ADDITIONAL CONTEXT\n${contextParts.join("\n\n")}`);
+  }
+
+  return sections.join("\n\n");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -358,16 +718,18 @@ serve(async (req) => {
       trade_show_booth: "Based on this trade show booth image, apply the following feedback and generate an improved version:",
     };
 
-    const genSuffix = TYPE_SUFFIX[projectType || "trade_show_booth"] ?? TYPE_SUFFIX.trade_show_booth;
-    const feedbackPrefix = TYPE_FEEDBACK_PREFIX[projectType || "trade_show_booth"] ?? TYPE_FEEDBACK_PREFIX.trade_show_booth;
-
-    const scaleBlock = buildScaleBlock(body);
-    const geometryBlock = buildGeometryReferenceBlock(body);
-    const geometryClosingReinforcement = buildGeometryClosingReinforcement(body);
-    const designBlock = buildDesignContextBlock(designContext);
-    const brandBlock = buildBrandIntelBlock(brandIntelligence);
+    // TYPE_SUFFIX and TYPE_FEEDBACK_PREFIX were used by the old
+    // concat-prompt path. The structured markdown prompt handles
+    // project-type framing inline (via the SCENE section), so these
+    // map lookups are now dead. Kept in scope to avoid churning the
+    // declaration but unused.
+    void TYPE_SUFFIX[projectType || "trade_show_booth"];
+    void TYPE_FEEDBACK_PREFIX[projectType || "trade_show_booth"];
 
     // ── RAG: Retrieve knowledge base context ──
+    // Kept because brand RAG / past-project learnings genuinely improve
+    // outputs, but capped and appended at the END of the prompt where
+    // it acts as refining context, not the leading instruction.
     let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
     if (agency_id) {
       const supabase = createClient(
@@ -391,188 +753,110 @@ serve(async (req) => {
         console.log(`[generate-hero] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
       }
     }
-    const ragBlock = ragContext.formatted ? `\n\n${ragContext.formatted}` : "";
+    const ragBlock = ragContext.formatted;
 
     console.log("Generating hero image", { hasFeedback: !!feedback, hasPreviousImage: !!previousImageUrl, boothSize, hasDesignContext: !!designContext, projectType, brandIntelEntries: brandIntelligence?.length ?? 0, hasBrandLogo: !!brandLogoUrl, extraRefs: extraReferenceUrls?.length ?? 0 });
 
-    // Reference image attachments. ORDER MATTERS — the image model
-    // attends most strongly to the FIRST images in the array.
-    // Geometry refs (floor plan + iso) come first so the model treats
-    // them as ground truth before considering brand or user extras.
-    const referenceImages: Array<{ type: "image_url"; image_url: { url: string } }> = [];
-    const referenceLabels: string[] = [];
-    if (geometryReferences?.floorplan) {
-      referenceImages.push({ type: "image_url", image_url: { url: geometryReferences.floorplan } });
-      referenceLabels.push("GEOMETRY — FLOOR PLAN (top-down): the exact booth footprint and zone layout. Match these proportions and zone positions precisely.");
-    }
-    if (geometryReferences?.isometric) {
-      referenceImages.push({ type: "image_url", image_url: { url: geometryReferences.isometric } });
-      referenceLabels.push("GEOMETRY — ISOMETRIC VOLUME (3D): the exact 3D space the structure must occupy. Match the volumetric proportions and maximum height shown.");
-    }
-    if (brandLogoUrl) {
-      referenceImages.push({ type: "image_url", image_url: { url: brandLogoUrl } });
-      referenceLabels.push("BRAND LOGO — use this exact mark on signage, fascia, and any branded surfaces. Do not invent or modify the logo design.");
-    }
-    if (extraReferenceUrls?.length) {
-      for (const url of extraReferenceUrls) {
-        referenceImages.push({ type: "image_url", image_url: { url } });
-      }
-      referenceLabels.push(`USER REFERENCES (${extraReferenceUrls.length}) — additional visual references the user attached. Use them as inspiration for materials, mood, and composition where appropriate.`);
-    }
-    const referenceLabelBlock = referenceLabels.length
-      ? `\n\nVISUAL REFERENCES PROVIDED:\n${referenceLabels.join("\n")}\n`
-      : "";
+    // Geometry reference URLs (floor plan / isometric) are DELIBERATELY
+    // not forwarded to gpt-image-2. The PNG captures from
+    // SpatialCanvasIso.tsx render zone names as 3D <Text> components
+    // (Z1 / Z2 / Z3 / etc.) baked into the pixels, and gpt-image-2
+    // reproduces those labels on the rendered booth walls regardless
+    // of "no overlaid text" instructions in the prompt. The structured
+    // SIZE & SCALE + ZONE LAYOUT sections in the markdown prompt
+    // carry the dimensional info without the bleed risk.
+    void geometryReferences;
 
-    let messages;
-
-    // Geometry block goes FIRST in the text. Image models heavily weight
-    // opening tokens; putting the strict scale constraint at the top
-    // (before stylistic/material guidance) makes the geometry constraint
-    // dominant rather than a footnote.
+    // Build the prompt. Two branches:
+    //  - EDIT MODE (feedback + previousImageUrl present): surgical
+    //    edit instruction, source image attached first. Preserve
+    //    everything else by default.
+    //  - FRESH GENERATION: compact markdown-structured prompt built
+    //    from `prompt` (narrative scene) + structured fields.
+    let flattenedPrompt: string;
     if (previousImageUrl && feedback) {
-      const refinedPrompt = `${geometryBlock}
-${feedbackPrefix}
+      // ── EDIT MODE ──
+      // ChatGPT-image-2-style edit. The source image is the authoritative
+      // version; the instruction names only what should change. Stripped
+      // of geometry/brand/RAG bloat to keep the model focused on the
+      // edit, not on regenerating from scratch.
+      flattenedPrompt = `IMAGE EDIT TASK — NOT A REGENERATION
 
-FEEDBACK TO APPLY:
+The reference image attached is the current design — the authoritative
+source. Produce a 16:9 photorealistic edit of THAT image, applying
+ONLY the change described below. Preserve everything else: booth
+design, footprint, zone layout, structural forms, materials, finishes,
+colors, lighting, brand signage, camera angle, composition.
+
+If the edit instruction says "keep the same" / "minimal changes" /
+"no changes", produce an image visually indistinguishable from the
+source.
+
+EDIT INSTRUCTION:
 ${feedback}
 
-ORIGINAL DESIGN REQUIREMENTS:
-${prompt}
-${scaleBlock}
-${designBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
+Do not redesign the booth. Do not change the camera angle. Do not
+swap materials or colors that weren't called out. Unmentioned details
+are locked.
 
-Generate a photorealistic 16:9 image that incorporates the feedback while maintaining the overall concept and brand identity. The geometry references at the top of this prompt remain ground truth — do not change the booth's proportions or zone layout.
-${geometryClosingReinforcement}`;
-
-      messages = [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: refinedPrompt },
-            { type: "image_url", image_url: { url: previousImageUrl } },
-            ...referenceImages,
-          ],
-        },
-      ];
+Output: a 16:9 photorealistic image — the source with the edit
+applied. Zero overlaid text or annotations.`;
     } else {
-      messages = [
-        {
-          role: "user",
-          content: referenceImages.length > 0
-            ? [
-                {
-                  type: "text",
-                  text: `${geometryBlock}
-${prompt}
-${scaleBlock}
-${designBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}${referenceLabelBlock}
-
-${genSuffix}
-${geometryClosingReinforcement}`,
-                },
-                ...referenceImages,
-              ]
-            : `${geometryBlock}
-${prompt}
-${scaleBlock}
-${designBlock}
-${brandBlock}${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragBlock}
-
-${genSuffix}
-${geometryClosingReinforcement}`,
-        },
-      ];
+      // ── FRESH GENERATION ──
+      // Compact markdown-structured prompt. The client's `prompt` text
+      // becomes additional narrative context appended to the structured
+      // sections — it's prose written by the prompt builder describing
+      // the big idea + atmosphere, useful but secondary to the
+      // structured fields.
+      const structured = buildStructuredHeroPrompt(body, { ragBlock });
+      flattenedPrompt = prompt && prompt.trim().length > 50
+        ? `${structured}\n\n# NARRATIVE CONTEXT (additional designer prose)\n${prompt.slice(0, 1500).trim()}`
+        : structured;
     }
 
-    // Build the final prompt as a flat text string (used by OpenAI which
-    // doesn't accept image_url content in chat-completions image gen).
-    // For Gemini we pass the structured messages directly; for OpenAI we
-    // collapse to one text prompt + reference URLs.
-    const flattenedPrompt =
-      typeof messages[0]?.content === "string"
-        ? messages[0].content as string
-        : ((messages[0]?.content as Array<{ type: string; text?: string }>) ?? [])
-            .filter((c) => c?.type === "text")
-            .map((c) => c?.text ?? "")
-            .join("\n");
-    // For OpenAI /v1/images/edits, refs go in `image[]` form fields.
-    // ORDER MATTERS — geometry refs first so they outweigh logo/extras.
-    // OpenAI caps at 4 reference images; we'll include geometry first
-    // and trim aggressively if needed.
+    // OpenAI reference images. ORDER MATTERS — first image wins for
+    // attention. Brand logo first so the wordmark / mark gets rendered
+    // accurately on the booth's signage surfaces. Previous image only
+    // attaches in edit mode (it IS the source). User extras come last.
+    //
+    // Deliberately omitted: floor plan + isometric PNGs (label-bleed
+    // bug — see comment above on `geometryReferences`).
     const refUrlsForOpenAI = [
-      ...(geometryReferences?.floorplan ? [geometryReferences.floorplan] : []),
-      ...(geometryReferences?.isometric ? [geometryReferences.isometric] : []),
       ...(previousImageUrl ? [previousImageUrl] : []),
       ...(brandLogoUrl ? [brandLogoUrl] : []),
       ...(extraReferenceUrls ?? []),
     ].slice(0, 4); // gpt-image-2 hard limit
 
+    void imageModel;
+
     let generatedImageUrl: string | null = null;
-    let responseText = "";
+    const responseText = "";
     let modelUsed = "";
 
-    if (imageModel === "openai") {
-      // gpt-image-1 path. Better logo fidelity, better adherence on
-      // organic / asymmetric structures.
-      console.log(`[generate-hero] Using OpenAI gpt-image-1`);
-      try {
-        const out = await callOpenAIImage({
-      usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
-          prompt: flattenedPrompt,
-          referenceImageUrls: refUrlsForOpenAI,
-          size: "1536x1024", // 16:9 closest
-          quality: "high",
-        });
-        const img = out[0];
-        if (!img) throw new Error("OpenAI returned no image");
-        generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-        modelUsed = "openai/gpt-image-2";
-      } catch (e) {
-        console.error("[generate-hero] OpenAI failed, falling back to Gemini:", e);
-        // Fall through to Gemini.
-      }
-    }
-
-    if (!generatedImageUrl) {
-      // Default Gemini path (also the fallback if OpenAI fails).
-      let result = await callGemini({
-      usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
-        model: "google/gemini-3-pro-image-preview",
-        messages,
-        modalities: ["image", "text"],
+    console.log(`[generate-hero] Using OpenAI gpt-image-2 (single-model pipeline, no fallback)`);
+    try {
+      const out = await callOpenAIImage({
+        usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
+        prompt: flattenedPrompt,
+        referenceImageUrls: refUrlsForOpenAI,
+        size: "1536x1024", // 16:9 closest
+        quality: "high",
       });
-
-      let image = result.images?.[0];
-
-      // Fallback: Pro Image can return empty {} under load or safety filtering.
-      // Retry once with the faster Nano Banana 2 model before failing.
-      if (!image) {
-        console.warn("[generate-hero] Pro Image returned no image, retrying with gemini-3.1-flash-image-preview");
-        try {
-          result = await callGemini({
-      usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
-            model: "google/gemini-3.1-flash-image-preview",
-            messages,
-            modalities: ["image", "text"],
-          });
-          image = result.images?.[0];
-        } catch (fallbackErr) {
-          console.error("[generate-hero] Fallback model also failed:", fallbackErr);
-        }
-      }
-
-      if (!image) {
-        console.error("No image in response (both models):", JSON.stringify(result).slice(0, 500));
+      const img = out[0];
+      if (!img) {
         throw new Error(
-          "Image model returned no image. This usually means the prompt was filtered or the model is overloaded. Please try regenerating, or simplify the prompt/booth size.",
+          "gpt-image-2 returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
         );
       }
-
-      generatedImageUrl = `data:${image.mimeType};base64,${image.base64Data}`;
-      responseText = result.text || "";
-      modelUsed = "google/gemini-3-pro-image-preview";
+      generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+      modelUsed = "openai/gpt-image-2";
+    } catch (e) {
+      console.error("[generate-hero] gpt-image-2 failed:", e);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      throw new Error(
+        `Image generation failed via gpt-image-2: ${message}. ` +
+        `No fallback is configured — please retry, or contact the operator if this persists.`,
+      );
     }
 
     console.log("Successfully generated hero image");

@@ -459,18 +459,25 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       setPendingVariation(variationId);
       return;
     }
-    // Reflow the canvas to match the picked layout. After applying we
-    // snap activeVariation back to "balanced" so the bottom floor plan
-    // mirrors the canvas (now the new baseline) instead of running the
-    // strategy a SECOND time on top of itself — which would otherwise
-    // compound each time the user clicked a variation.
+    // Idempotent: clicking the already-active variation is a no-op.
+    // Without this guard, applying e.g. "hero-focused" a second time
+    // would compound the multiplicative transformation (hero gets
+    // expanded another 1.15×, other zones shrunk another 0.92×) —
+    // which is the bug a previous "snap back to balanced" workaround
+    // tried to dodge, at the cost of hiding the selection state from
+    // the user. The right fix is to make the no-op explicit and let
+    // the active state actually reflect what was clicked.
+    if (variationId === activeVariation) return;
+
+    // "balanced" represents the canvas as-is — selecting it is just a
+    // state flip, no zone mutation needed.
     if (variationId === "balanced") {
       setActiveVariation("balanced");
       return;
     }
     applyVariationZonesToConfig(variationId);
-    setActiveVariation("balanced");
-  }, [floorPlanView, floorPlanImage, applyVariationZonesToConfig]);
+    setActiveVariation(variationId);
+  }, [activeVariation, floorPlanView, floorPlanImage, applyVariationZonesToConfig]);
 
   const handleLayoutChangeRender = useCallback(() => {
     if (!pendingVariation) return;

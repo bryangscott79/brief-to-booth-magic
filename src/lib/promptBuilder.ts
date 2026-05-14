@@ -694,6 +694,31 @@ export function generatePrompt(angleId: string, params: GeneratePromptParams): s
     .filter(Boolean)
     .join("\n");
 
+  // ── ZONE-FOCUS ENRICHMENT FOR DETAIL ANGLES ──────────────────────
+  // detail_hero / detail_lounge are medium close-ups focused on a
+  // specific zone (the hero installation or the lounge). The base
+  // ANGLE_CONFIG path treats them as full-booth views and never threads
+  // in the zone-specific identity that's already been authored in
+  // spatial: structural form, visual brief, intent, bound materials.
+  // Without this, the model sees a booth-wide prompt + a "focus on the
+  // hero" camera direction and improvises a generic feature.
+  //
+  // For these two angles we look up the matching zone (by id/name
+  // keywords) and append a zone-focus block with all the per-zone data
+  // already on the spatial canvas. The base prompt stays so the model
+  // knows it's the same booth; the focus block tells it which zone
+  // identity to express in the medium shot.
+  const zoneFocusBlock =
+    angleId === "detail_hero" || angleId === "detail_lounge"
+      ? buildDetailAngleZoneFocusBlock(
+          angleId,
+          normalizedZones,
+          spatialData,
+          elements,
+          boothDimensions.measurementSystem,
+        )
+      : "";
+
   return `${promptOpener}
 
 ${unitsAssertion}
@@ -735,7 +760,7 @@ ${annotationsBlock}
 CAMERA FRAMING:
 ${cameraInstruction}
 ${cameraScaleHint}
-
+${zoneFocusBlock}
 STYLE:
 ${rules.styleReference}
 
@@ -744,6 +769,162 @@ ${brief.brand?.visualIdentity?.avoidImagery?.join(", ") || "generic"}, cartoon s
 ${buildBrandIntelBlock(brandIntelligence)}
 Aspect ratio: ${angle.aspectRatio}
 ${complianceBlock}`;
+}
+
+/**
+ * For detail_hero / detail_lounge, find the matching zone in the
+ * spatial canvas and return a focused enrichment block with that
+ * zone's authored identity (structural form, visual brief, intent,
+ * bound materials, anchored features). Returns "" when no plausible
+ * zone match exists, so the caller can append unconditionally.
+ *
+ * Matching is keyword-based on zone id + name so it works regardless
+ * of how the AI labelled the zone ("Apex Welcome Bar" / "Hero" /
+ * "Central Architectural Hub" all resolve to detail_hero; "Relaxed
+ * Consultation Area" / "Lounge" / "Connection Hub" all resolve to
+ * detail_lounge).
+ */
+function buildDetailAngleZoneFocusBlock(
+  angleId: "detail_hero" | "detail_lounge",
+  normalizedZones: NormalizedZone[],
+  spatialData: any,
+  elements: any,
+  measurementSystem: "imperial" | "metric",
+): string {
+  const heroKeywords = ["hero", "experience", "apex", "digital", "core", "central", "architectural"];
+  const loungeKeywords = ["lounge", "hub", "casual", "meeting", "connection", "consultation", "suite", "bd"];
+  const keywords = angleId === "detail_hero" ? heroKeywords : loungeKeywords;
+
+  const zone = normalizedZones.find((z) => {
+    const id = (z.id || "").toLowerCase();
+    const name = (z.name || "").toLowerCase();
+    return keywords.some((k) => id.includes(k) || name.includes(k));
+  });
+  if (!zone) return "";
+
+  const zoneAny = zone as any;
+  const lines: string[] = [];
+  lines.push("");
+  lines.push("═══════════════════════════════════════");
+  lines.push(`ZONE FOCUS — this detail shot frames the "${zone.name}" zone`);
+  lines.push("═══════════════════════════════════════");
+  lines.push("");
+  lines.push("Everything below is the authored identity for this zone");
+  lines.push("from the spatial canvas. The medium-shot camera lands on");
+  lines.push("THIS zone — render its specific structural form, materials,");
+  lines.push("and intent, not a generic feature.");
+  lines.push("");
+
+  const zoneSizeLabel =
+    measurementSystem === "metric"
+      ? `${(zone.sqft / 10.76391041671).toFixed(1)} sqm`
+      : `${zone.sqft} sq ft`;
+  lines.push(`Size: ${zoneSizeLabel} (${zone.percentage}% of booth)`);
+
+  if (zoneAny.structuralForm) {
+    const formGuide: Record<string, string> = {
+      open: "Open footprint with no walls — floor pattern + props define the space",
+      enclosed: "Four walls + ceiling — fully enclosed chamber",
+      canopy: "Overhead structure with open sides — covered but airy",
+      alcove: "Three walls open to the aisle — kiosk-like recess",
+      platform: "Raised floor with no walls — platform / stage",
+      tower: "Vertical sculpture, footprint << height — tall brand marker",
+    };
+    lines.push("");
+    lines.push("STRUCTURAL FORM (canvas-defined — NON-NEGOTIABLE):");
+    lines.push(`- ${zoneAny.structuralForm.toUpperCase()}: ${formGuide[zoneAny.structuralForm] ?? ""}`);
+  }
+
+  if (zoneAny.featureDescription) {
+    lines.push("");
+    lines.push("VISUAL BRIEF (canvas-defined — render exactly):");
+    lines.push(zoneAny.featureDescription);
+  }
+
+  if (zoneAny.intent) {
+    lines.push("");
+    lines.push("VISITOR EXPERIENCE (canvas-defined):");
+    lines.push(zoneAny.intent);
+  }
+
+  // Bound materials take precedence; fall back to global catalog only
+  // when no per-zone material binding exists.
+  const materialsCatalog: any[] = Array.isArray(spatialData?.materialsAndMood)
+    ? spatialData.materialsAndMood
+    : [];
+  const zoneMaterialIds: string[] = Array.isArray(zoneAny.materialIds)
+    ? zoneAny.materialIds
+    : [];
+  if (zoneMaterialIds.length > 0 && materialsCatalog.length > 0) {
+    const bound = materialsCatalog.filter((m: any) => {
+      const id = m.id ?? m.material ?? m.name;
+      return zoneMaterialIds.includes(id);
+    });
+    if (bound.length > 0) {
+      lines.push("");
+      lines.push("MATERIALS BOUND TO THIS ZONE (use only these):");
+      for (const m of bound) {
+        const name = m.name ?? m.material ?? "Material";
+        const feel = m.description ?? m.feel ?? "";
+        lines.push(feel ? `- ${name}: ${feel}` : `- ${name}`);
+      }
+    }
+  }
+
+  // Features anchored to this zone — sculptural objects placed via the
+  // canvas. Each contributes an explicit geometry callout.
+  const allFeatures: any[] = Array.isArray(spatialData?.features) ? spatialData.features : [];
+  const zoneFeatures = allFeatures.filter((f: any) => f.zoneId === zone.id);
+  if (zoneFeatures.length > 0) {
+    lines.push("");
+    lines.push("ANCHORED FEATURES (sculptural objects placed in this zone):");
+    for (const f of zoneFeatures) {
+      const desc = f.description ?? f.formType ?? "feature";
+      const form = f.formType ? ` [${f.formType}]` : "";
+      lines.push(`- ${desc}${form}`);
+    }
+  }
+
+  // For detail_hero, also pull the hero installation's authored
+  // physical-form data — this is where the interactive mechanics
+  // element stored the structure / materials / lighting that produced
+  // the booth's centerpiece.
+  if (angleId === "detail_hero") {
+    const hero = elements?.interactiveMechanics?.data?.hero;
+    if (hero?.physicalForm) {
+      lines.push("");
+      lines.push("HERO INSTALLATION (interactive mechanics, authored):");
+      lines.push(`- Name: ${hero.name}`);
+      if (hero.physicalForm.structure) lines.push(`- Structure: ${hero.physicalForm.structure}`);
+      if (hero.physicalForm.materials?.length)
+        lines.push(`- Materials: ${hero.physicalForm.materials.join(", ")}`);
+      if (hero.physicalForm.lighting) lines.push(`- Lighting: ${hero.physicalForm.lighting}`);
+      if (hero.physicalForm.dimensions) lines.push(`- Dimensions: ${hero.physicalForm.dimensions}`);
+    }
+  }
+
+  // For detail_lounge, pull human-connection zone details — this is
+  // where capacity, hospitality, and meeting-zone identity live.
+  if (angleId === "detail_lounge") {
+    const hc = elements?.humanConnection?.data;
+    const lc = hc?.configs?.[0]?.zones?.find((z: any) => {
+      const n = (z.name || "").toLowerCase();
+      return loungeKeywords.some((k) => n.includes(k));
+    });
+    if (lc) {
+      lines.push("");
+      lines.push("HUMAN CONNECTION DETAILS (authored):");
+      if (lc.capacity) lines.push(`- Capacity: ${lc.capacity}`);
+      if (lc.description) lines.push(`- Description: ${lc.description}`);
+      if (lc.atmosphere) lines.push(`- Atmosphere: ${lc.atmosphere}`);
+      if (Array.isArray(lc.designFeatures) && lc.designFeatures.length)
+        lines.push(`- Design features: ${lc.designFeatures.join(", ")}`);
+      if (lc.furniture) lines.push(`- Furniture: ${lc.furniture}`);
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n");
 }
 
 // ============================================

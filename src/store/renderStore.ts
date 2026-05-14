@@ -59,6 +59,18 @@ interface RenderActions {
 
   // Async generation actions
   generateHeroImage: (params: {
+    /**
+     * NEW (Phase 3): pre-composed renderer prompt + artifacts from the
+     * client's composePrompt(normalizedBrief). When present, the edge
+     * function uses the renderer text verbatim and persists artifacts
+     * as heroSnapshot for downstream view composition. The legacy
+     * `prompt` field is still required for backward compat.
+     */
+    composedPrompt?: {
+      renderer: string;
+      negative: string;
+      artifacts: import("@/lib/normalizedBrief").ComposerOutput;
+    };
     prompt: string;
     feedback?: string;
     previousImageUrl?: string;
@@ -90,6 +102,13 @@ interface RenderActions {
   generateAllViews: (params: {
     angles: Array<{ id: string; name: string; aspectRatio: string; isZoneInterior?: boolean }>;
     prompts: Record<string, string>;
+    /**
+     * Per-angle composed prompts. Keys are angle ids; values come from
+     * composeViewPrompt(heroSnapshot, angle). When present, the edge
+     * function uses each renderer verbatim. Falls back to legacy
+     * builder per-angle for any missing key.
+     */
+    composedPrompts?: Record<string, { renderer: string; negative: string }>;
     heroImageUrl: string;
     /**
      * Original hero prompt text — the full prompt that produced the hero
@@ -126,6 +145,8 @@ interface RenderActions {
   regenerateView: (params: {
     angle: { id: string; name: string; aspectRatio: string; isZoneInterior?: boolean };
     prompt: string;
+    /** Pre-composed renderer for this single angle (Phase 3). */
+    composedPrompt?: { renderer: string; negative: string };
     heroImageUrl: string;
     /** Original hero prompt text — see generateAllViews for rationale. */
     heroPromptText?: string;
@@ -157,6 +178,8 @@ interface RenderActions {
   cascadeRegenerateViews: (params: {
     angles: Array<{ id: string; name: string; aspectRatio: string; isZoneInterior?: boolean }>;
     prompts: Record<string, string>;
+    /** Pre-composed renderer prompts per angle (Phase 3 of refactor). */
+    composedPrompts?: Record<string, { renderer: string; negative: string }>;
     newHeroImageUrl: string;
     projectId: string;
     boothSize?: string;
@@ -219,7 +242,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
-  generateHeroImage: async ({ prompt, feedback, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateHeroImage: async ({ composedPrompt, prompt, feedback, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
@@ -243,6 +266,16 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       };
       if (designContext) {
         body.designContext = designContext;
+      }
+      if (composedPrompt) {
+        // Phase 3 of refactor: forward pre-composed renderer + artifacts.
+        // The edge function uses renderer verbatim and persists artifacts
+        // as heroSnapshot for downstream view composition.
+        body.composedPrompt = {
+          renderer: composedPrompt.renderer,
+          negative: composedPrompt.negative,
+          artifacts: composedPrompt.artifacts,
+        };
       }
 
       const { data, error } = await supabase.functions.invoke("generate-hero", { body });
@@ -271,7 +304,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateAllViews: async ({ angles, prompts, composedPrompts, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     // Split into exterior views first, then interiors — so interiors can reference exterior images
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
@@ -345,6 +378,14 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           // keywords) and have no architectural signal.
           viewBody.designContext = designContext;
         }
+        // Phase 3 of refactor: per-angle composed renderer prompts.
+        // When present, the edge function uses each verbatim.
+        if (composedPrompts?.[angle.id]) {
+          viewBody.composedPrompt = {
+            renderer: composedPrompts[angle.id].renderer,
+            negative: composedPrompts[angle.id].negative,
+          };
+        }
 
         const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
@@ -387,7 +428,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  regenerateView: async ({ angle, prompt, composedPrompt, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -431,6 +472,13 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       if (consistencyTokens) {
         viewBody.consistencyTokens = consistencyTokens;
       }
+      if (composedPrompt) {
+        // Phase 3: forward pre-composed renderer for this angle.
+        viewBody.composedPrompt = {
+          renderer: composedPrompt.renderer,
+          negative: composedPrompt.negative,
+        };
+      }
 
       const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
@@ -469,7 +517,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   },
 
   // Phase 4E: Cascade regenerate all views when hero changes
-  cascadeRegenerateViews: async ({ angles, prompts, newHeroImageUrl, projectId, boothSize, onSave }) => {
+  cascadeRegenerateViews: async ({ angles, prompts, composedPrompts, newHeroImageUrl, projectId, boothSize, onSave }) => {
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
     const viewsToRegenerate = [...exteriorViews, ...interiorViews];
@@ -516,6 +564,13 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         };
         if (consistencyTokens) {
           viewBody.consistencyTokens = consistencyTokens;
+        }
+        // Phase 3: forward pre-composed renderer for each angle if present.
+        if (composedPrompts?.[angle.id]) {
+          viewBody.composedPrompt = {
+            renderer: composedPrompts[angle.id].renderer,
+            negative: composedPrompts[angle.id].negative,
+          };
         }
 
         const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });

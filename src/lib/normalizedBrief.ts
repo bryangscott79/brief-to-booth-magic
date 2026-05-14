@@ -729,17 +729,26 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
   // # SCENE
   sections.push(`# SCENE\n${PROJECT_TYPE_SCENE[n.project.type]}`);
 
-  // # GEOMETRY
+  // # SPACE
+  // Constraints the design must operate WITHIN, not a layout blueprint.
+  // We deliberately dropped the explicit per-zone coordinate grid that
+  // used to live in `# COORDINATE LAYOUT` — placing rectangles at exact
+  // (x, y, w, d) coordinates forced the model into a layout-solver
+  // mindset and produced rectangular pavilions with formulaic zone
+  // arrangement. Now we describe the SPACE (dimensions, openings, max
+  // height, human reference) and let the model design organically
+  // within it. The zone data still lives on NormalizedBrief.zones for
+  // downstream documentation (project brief sheet, view composition);
+  // it just doesn't get printed into the image prompt as a grid.
   sections.push(
     [
-      "# GEOMETRY (ground truth — all elements must obey)",
+      "# SPACE",
       `- Footprint: ${formatNumber(n.geometry.width)} × ${formatNumber(n.geometry.depth)} ${n.geometry.units} (${formatNumber(n.geometry.area)} ${areaU})`,
       `- Maximum structure height: ${formatNumber(n.geometry.height)}${u}`,
-      `- Open sides: ${n.geometry.openSides}, must remain unobstructed and visible`,
+      `- Open sides: ${n.geometry.openSides}, unobstructed and visible`,
       `- Human scale: ${formatNumber(n.geometry.humanScale)}${u}`,
-      `- Max hero object: ${formatNumber(n.geometry.maxObjectSizePctOfFootprint * n.geometry.area)} ${areaU} (${Math.round(n.geometry.maxObjectSizePctOfFootprint * 100)}% of footprint)`,
-      `- Min circulation: ${formatNumber(n.geometry.minCirculationWidth)}${u}`,
-      "All layout, objects, and camera framing MUST obey this geometry.",
+      `- Min circulation between elements: ${formatNumber(n.geometry.minCirculationWidth)}${u}`,
+      "Design organically within this space — express the brand's structural language freely. Don't default to rectangular bays.",
     ].join("\n"),
   );
 
@@ -775,17 +784,20 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
     sections.push(sa.join("\n"));
   }
 
-  // # COORDINATE LAYOUT
-  const coordLines: string[] = [
-    "# COORDINATE LAYOUT",
-    "Origin: front-left corner. x = width axis (left→right), y = depth axis (front→back). All values in geometry units.",
-  ];
-  for (const z of n.zones) {
-    coordLines.push(
-      `- ${z.purpose}: x=${formatNumber(z.x)}, y=${formatNumber(z.y)}, w=${formatNumber(z.width)}, d=${formatNumber(z.depth)}, visibility=${z.visibilityPriority}${z.structuralForm ? `, ${z.structuralForm}` : ""}`,
-    );
+  // # ZONE PROGRAM
+  // What the booth needs to CONTAIN — not WHERE things go. The model
+  // composes the layout. This replaces the old `# COORDINATE LAYOUT`
+  // grid that was over-constraining design. Zones are listed by their
+  // functional purpose; deduplicate so the model doesn't see "lounge,
+  // lounge, lounge" when the spatial canvas has multiple lounge zones.
+  if (n.zones.length > 0) {
+    const purposes = Array.from(new Set(n.zones.map((z) => z.purpose)));
+    const programLines: string[] = ["# ZONE PROGRAM (what the booth needs to contain — let the design place them organically)"];
+    for (const purpose of purposes) {
+      programLines.push(`- ${purpose}`);
+    }
+    sections.push(programLines.join("\n"));
   }
-  sections.push(coordLines.join("\n"));
 
   // # BRAND
   const bLines: string[] = ["# BRAND"];

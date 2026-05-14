@@ -225,11 +225,11 @@ describe("composePrompt — 5 output stages", () => {
     expect(Array.isArray(out.compliance)).toBe(true);
   });
 
-  it("renderer prompt leads with # SCENE and # GEOMETRY", () => {
+  it("renderer prompt leads with # SCENE and # SPACE", () => {
     const out = composePrompt(normalized);
     const lines = out.renderer.split("\n").filter((l) => l.startsWith("#") && !l.startsWith("##"));
     expect(lines[0]).toBe("# SCENE");
-    expect(lines[1]).toBe("# GEOMETRY (ground truth — all elements must obey)");
+    expect(lines[1]).toBe("# SPACE");
   });
 
   it("renderer prompt never includes poetic zone names", () => {
@@ -246,11 +246,18 @@ describe("composePrompt — 5 output stages", () => {
     expect(out.renderer.toLowerCase()).toContain("lines");
   });
 
-  it("emits coordinate layout with x/y/w/d in geometry units", () => {
+  it("emits # ZONE PROGRAM as a list of zone purposes (no coordinates)", () => {
     const out = composePrompt(normalized);
-    expect(out.renderer).toContain("# COORDINATE LAYOUT");
-    expect(out.renderer).toContain("Origin: front-left corner");
-    expect(out.renderer).toMatch(/x=1\.75/); // hero zone x
+    // The old `# COORDINATE LAYOUT` block (with x/y/w/d per zone) was
+    // forcing the model into a rectangular-pavilion layout-solver
+    // mindset. We replaced it with `# ZONE PROGRAM` — what the booth
+    // contains, not where it goes — so the model can compose the
+    // layout organically.
+    expect(out.renderer).toContain("# ZONE PROGRAM");
+    expect(out.renderer).not.toContain("# COORDINATE LAYOUT");
+    expect(out.renderer).not.toMatch(/x=\d/);
+    expect(out.renderer).not.toMatch(/Origin: front-left/);
+    expect(out.renderer).toContain("hero focal area");
   });
 
   it("includes HARD CONSTRAINTS with footprint and signage rules", () => {

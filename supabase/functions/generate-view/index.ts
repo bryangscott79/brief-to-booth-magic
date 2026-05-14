@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-05-14-composer-driven
+// generate-view — DEPLOY TOKEN: 2026-05-14-edit-mode-views
 //
 // Same restructure as generate-hero (see that file for the full
 // rationale). Two relevant changes for view rendering:
@@ -686,24 +686,33 @@ serve(async (req) => {
 
     console.log(`[generate-view] Using OpenAI gpt-image-2 for ${viewName} (single-model pipeline, no fallback)`);
     try {
-      // Reference URL order for the OpenAI /v1/images/edits call.
+      // Reference URLs for the OpenAI /v1/images/edits call.
       //
-      // The hero/exterior reference image is the dominant visual
-      // anchor for BOTH interior and exterior views — it carries
-      // materials, palette, brand identity, and (for exteriors) the
-      // camera continuity context. It goes first.
+      // When composedPrompt is present (the new short-instruction
+      // edit-mode pipeline) we send ONLY the hero image as the
+      // reference. Multiple references confuse gpt-image-2 — instead
+      // of editing the hero, it tries to compose a new booth
+      // satisfying all the inputs, producing the cross-view drift
+      // bug the user reported (5 different booths, only the brand
+      // matched). Single-input edit-mode behaves like ChatGPT-image-2
+      // does in the UI: "show me top-down view of this" → it edits.
       //
-      // Brand logo and user extras follow. Floor plan + isometric
-      // PNGs are deliberately omitted — they bake zone-name text
-      // labels into the reference set, which gpt-image-2 reproduces
-      // on the rendered booth surfaces (the Z1/Z2/Z3 bleed bug).
+      // When composedPrompt is absent (legacy fallback) we keep the
+      // full hero + logo + extras list because the legacy prompt
+      // was a generation prompt that needed multiple anchors.
       //
-      // gpt-image-2 caps inputs at 4 references.
-      const referenceImageUrls = [
-        ...(referenceImageUrl ? [referenceImageUrl] : []),
-        ...(brandLogoUrl ? [brandLogoUrl] : []),
-        ...(extraReferenceUrls ?? []),
-      ].slice(0, 4);
+      // Floor plan + isometric PNGs are omitted in both paths — they
+      // bake zone-name text labels into the references that the
+      // model reproduces on the rendered booth.
+      const referenceImageUrls = body.composedPrompt
+        ? // Hero-only edit-mode for the new pipeline.
+          (referenceImageUrl ? [referenceImageUrl] : [])
+        : // Multi-anchor for the legacy fallback path.
+          [
+            ...(referenceImageUrl ? [referenceImageUrl] : []),
+            ...(brandLogoUrl ? [brandLogoUrl] : []),
+            ...(extraReferenceUrls ?? []),
+          ].slice(0, 4);
 
       const out = await callOpenAIImage({
         usage: await buildUsageContext(req, "generate-view").catch(() => undefined),

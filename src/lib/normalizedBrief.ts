@@ -899,22 +899,48 @@ interface ComposeViewOptions {
   zoneId?: string;
 }
 
-const CAMERA_FOR_ANGLE: Record<ViewAngle, string> = {
-  front:
-    "Camera positioned directly in front of the booth, centered on the main entrance, at eye level (1.7m / 5'8\"). The camera faces the booth head-on (front elevation). Only the front face is visible — no side walls.",
-  side_left:
-    "Camera positioned to the LEFT side of the booth, at eye level, facing the booth's left wall at exactly 90°. The front of the booth is to the viewer's right. Only the left face is prominent.",
-  side_right:
-    "Camera positioned to the RIGHT side of the booth, at eye level, facing the booth's right wall at exactly 90°. The front of the booth is to the viewer's left. Only the right face is prominent.",
-  back:
-    "Camera positioned BEHIND the booth, rotated 180° from the front. The viewer is in the back aisle. The back face is a fully finished visitor-facing entry/exit — branded panels, secondary signage, elegant lighting, same premium materials as the front. NO exposed wiring, structural supports, utility panels, or service elements.",
-  top:
-    "Camera positioned directly above the booth looking straight down (orthographic plan view). All zones visible from overhead. No perspective distortion.",
-  interior:
-    "Camera positioned INSIDE the focused zone at eye level (1.7m / 5'8\"). The viewer is surrounded by the zone's walls, ceiling, and furnishings. The booth exterior and convention hall are behind the camera or barely visible at the edges.",
-  detail:
-    "Camera positioned close to the focused zone at eye level, showing a medium close-up shot of the zone's key features with surrounding context.",
-};
+/**
+ * Single-sentence edit instructions per view angle. The hero image
+ * carries all of the visual signal (materials, palette, signage,
+ * architectural form). All the prompt needs to do is tell the model
+ * what camera move to make. Mirrors the way ChatGPT does it when you
+ * give it an image and say "top down view of this".
+ *
+ * Why so terse: a long structured "SCENE / REFERENCE / CAMERA /
+ * CONSTRAINTS" block was making gpt-image-2 treat the prompt as a
+ * fresh generation rather than an edit. The model would produce a
+ * NEW booth that loosely matched the description, ignoring the hero
+ * pixels. Short prompts + hero-as-only-reference flip it into
+ * edit-mode behavior where the hero is the source of truth and the
+ * instruction is the modification.
+ */
+function viewInstruction(
+  angle: ViewAngle,
+  zoneForFocus: NormalizedBriefZone | undefined,
+): string {
+  switch (angle) {
+    case "front":
+      return "Show me the FRONT ELEVATION (head-on, eye-level view) of THIS exact booth shown in the reference image. Camera directly in front, facing the booth straight on. Only the front face is visible — no side walls.";
+    case "side_left":
+      return "Show me the LEFT SIDE view of THIS exact booth shown in the reference image. Camera 90° to the left side, eye level, looking at the left face of the booth. The front is to the viewer's right.";
+    case "side_right":
+      return "Show me the RIGHT SIDE view of THIS exact booth shown in the reference image. Camera 90° to the right side, eye level, looking at the right face of the booth. The front is to the viewer's left.";
+    case "back":
+      return "Show me the BACK VIEW of THIS exact booth shown in the reference image. Camera behind the booth, eye level. The back face is a fully finished visitor-facing surface with the same materials, signage, and lighting as the front — NOT a service area. No exposed wiring or utility panels.";
+    case "top":
+      return "Show me the TOP-DOWN (bird's eye, orthographic) view of THIS exact booth shown in the reference image. Camera directly overhead, looking straight down. Show the full floor plan layout. No perspective distortion.";
+    case "interior":
+      if (zoneForFocus) {
+        return `Show me the INTERIOR of the ${zoneForFocus.purpose} of THIS exact booth shown in the reference image. Camera standing INSIDE that zone at eye level, surrounded by the zone's walls, ceiling, and furnishings. Same materials, finishes, palette, and lighting style as the reference. Include 3-5 visitors naturally using the space.`;
+      }
+      return "Show me an INTERIOR view of THIS exact booth shown in the reference image. Camera inside the booth at eye level, surrounded by walls, ceiling, and furnishings. Same materials, finishes, palette, and lighting style as the reference.";
+    case "detail":
+      if (zoneForFocus) {
+        return `Show me a CLOSE-UP DETAIL SHOT focused on the ${zoneForFocus.purpose} of THIS exact booth shown in the reference image. Medium framing, eye level, showing structural detail and finishes. Same materials, palette, and brand signage as the reference.`;
+      }
+      return "Show me a CLOSE-UP DETAIL SHOT of THIS exact booth shown in the reference image. Medium framing, eye level. Same materials, palette, and brand signage as the reference.";
+  }
+}
 
 export function composeViewPrompt(
   snapshot: HeroSnapshot,
@@ -922,71 +948,27 @@ export function composeViewPrompt(
   opts: ComposeViewOptions = {},
 ): ComposerOutput {
   const n = snapshot.normalizedBrief;
-  const sections: string[] = [];
-
   const zoneForFocus = opts.zoneId ? n.zones.find((z) => z.id === opts.zoneId) : undefined;
 
-  // # SCENE
-  if (angle === "interior" && zoneForFocus) {
-    sections.push(
-      `# SCENE\nA 16:9 photorealistic interior render. Camera stands INSIDE the ${zoneForFocus.purpose} of this same booth, surrounded by that zone's walls, ceiling, and furnishings. Standing inside, not outside looking in. Human room scale.`,
-    );
-  } else if (angle === "detail" && zoneForFocus) {
-    sections.push(
-      `# SCENE\nA 4:3 photorealistic medium close-up render. Camera focuses on the ${zoneForFocus.purpose} of this same booth, showing structural detail and finishes.`,
-    );
-  } else {
-    sections.push(
-      `# SCENE\nA 16:9 photorealistic render of the SAME booth shown in the hero reference, captured from a different camera angle. The booth's overall design, structure, materials, and brand identity are identical to the hero — only the camera moves.`,
-    );
-  }
+  // Single short edit instruction + minimal consistency guard +
+  // concise restriction. Total ~80-150 tokens. The model reads this as
+  // an edit, not a generation.
+  const instruction = viewInstruction(angle, zoneForFocus);
+  const consistency =
+    "Treat the reference image as the canonical source. Match its materials, palette, architectural form, brand signage placement, and lighting exactly. Only the camera angle changes.";
+  const restrictions =
+    "No overlaid text annotations, no zone names or wayfinding labels on the booth. Only brand signage that already exists on the physical booth in the reference image is allowed.";
 
-  // # REFERENCE
-  sections.push(
-    `# REFERENCE (from hero render, MUST honor)\nThe hero render at the attached reference image is the authoritative version of this booth. Materials, palette, structural form, hero installation, signage placement, and lighting all match the hero. The ONLY thing that changes between hero and this view is the camera angle.`,
-  );
+  const renderer = `${instruction}\n\n${consistency}\n\n${restrictions}`;
 
-  // # CAMERA
-  sections.push(`# CAMERA\n${CAMERA_FOR_ANGLE[angle]}`);
-
-  // # ZONE FOCUS (interiors + details)
-  if (zoneForFocus && (angle === "interior" || angle === "detail")) {
-    const zf: string[] = ["# ZONE FOCUS"];
-    zf.push(`Zone purpose: ${zoneForFocus.purpose}`);
-    if (zoneForFocus.structuralForm) zf.push(`Structural form: ${zoneForFocus.structuralForm}`);
-    if (zoneForFocus.materialIds?.length) {
-      const matched = n.materials
-        .filter((m) => zoneForFocus.materialIds!.includes(m.id))
-        .map((m) => `${m.name} (${m.feel})`)
-        .join("; ");
-      if (matched) zf.push(`Materials: ${matched}`);
-    }
-    sections.push(zf.join("\n"));
-  }
-
-  // # CONSTRAINTS
-  const u = n.geometry.units === "metric" ? "m" : "ft";
-  sections.push(
-    [
-      "# CONSTRAINTS",
-      `- Booth geometry: identical to hero (${formatNumber(n.geometry.width)} × ${formatNumber(n.geometry.depth)} ${u})`,
-      "- No new materials, no palette shifts, no architectural reinvention",
-      "- Brand signage placement matches hero",
-      `- Forbidden items: ${n.creative.forbiddenItems.join(", ") || "(none specified)"}`,
-    ].join("\n"),
-  );
-
-  // # NEGATIVE
   const negative = [
     ...n.creative.forbiddenItems,
     "no overlaid annotations",
     "no zone names or room labels on fascia",
-    "no dimension callouts",
     "no architectural reinvention from the hero reference",
-  ].join(", ");
-  if (negative) sections.push(`# NEGATIVE\n${negative}`);
-
-  const renderer = sections.join("\n\n");
+  ]
+    .filter((s) => typeof s === "string" && s.trim().length > 0)
+    .join(", ");
 
   return {
     briefJson: snapshot.normalizedBrief,

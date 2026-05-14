@@ -389,31 +389,49 @@ describe("composeViewPrompt — views derive from heroSnapshot", () => {
   it("returns ComposerOutput for an exterior angle", () => {
     const out = composeViewPrompt(heroSnapshot, "front");
     expect(typeof out.renderer).toBe("string");
-    expect(out.renderer).toContain("# SCENE");
-    expect(out.renderer).toContain("# REFERENCE (from hero render");
+    // New edit-mode format: short instruction + consistency guard +
+    // restrictions. No structured # SCENE / # REFERENCE markdown
+    // sections — that wording made the model treat the prompt as a
+    // fresh generation instead of an edit.
+    expect(out.renderer.toLowerCase()).toContain("reference image");
+    expect(out.renderer.toLowerCase()).toContain("this exact booth");
   });
 
-  it("front view scene mentions front-elevation camera", () => {
+  it("front view instruction explicitly mentions front-elevation framing", () => {
     const out = composeViewPrompt(heroSnapshot, "front");
     expect(out.renderer.toLowerCase()).toMatch(/front[- ]elevation|front face|head-on/);
   });
 
-  it("interior view scene mentions standing inside a zone", () => {
+  it("interior view instruction mentions standing inside a zone", () => {
     const out = composeViewPrompt(heroSnapshot, "interior", { zoneId: "hero" });
     expect(out.renderer.toLowerCase()).toContain("standing inside");
     expect(out.renderer.toLowerCase()).toContain("hero focal area");
   });
 
-  it("never re-emits the full # GEOMETRY block — geometry is referenced from hero", () => {
+  it("does not re-state the full # GEOMETRY ground-truth block (the hero carries geometry)", () => {
     const out = composeViewPrompt(heroSnapshot, "front");
-    // Geometry should be implied by the hero reference, not re-stated as ground truth
     const geomHeaders = out.renderer.match(/# GEOMETRY \(ground truth/g) ?? [];
     expect(geomHeaders.length).toBe(0);
   });
 
-  it("forbids architectural reinvention in CONSTRAINTS", () => {
+  it("instructs the model to treat the reference as canonical and only change camera", () => {
     const out = composeViewPrompt(heroSnapshot, "side_left");
-    expect(out.renderer).toMatch(/identical to hero/i);
-    expect(out.renderer).toMatch(/no architectural reinvention|no palette shifts/i);
+    // The minimal edit-mode prompt should say (a) match the reference
+    // exactly and (b) only the camera angle changes. The exact phrasing
+    // is asserted loosely so the prompt can be tuned without breaking
+    // the test on every word change.
+    expect(out.renderer.toLowerCase()).toMatch(/canonical|exactly|only the camera/i);
+    expect(out.renderer.toLowerCase()).toContain("only the camera angle changes");
+  });
+
+  it("renderer prompt is short (edit-style, not generation-style)", () => {
+    // The original structured composer was 400-600 tokens per view,
+    // which gpt-image-2 read as a fresh generation prompt. The new
+    // edit-style prompt should be 300-1200 chars — short enough to
+    // feel like an edit instruction, long enough to carry the
+    // consistency guard + restrictions.
+    const out = composeViewPrompt(heroSnapshot, "front");
+    expect(out.renderer.length).toBeGreaterThan(150);
+    expect(out.renderer.length).toBeLessThan(1200);
   });
 });

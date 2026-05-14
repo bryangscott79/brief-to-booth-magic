@@ -884,3 +884,70 @@ export function composeViewPrompt(
     compliance: snapshot.composerOutput.compliance,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// applyGapAnswer — writes a clarification answer back to ParsedBrief
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Apply a gap answer to a ParsedBrief by dot-path. Centralizes the
+ * field → parsedBrief mapping so the host UI doesn't have to know the
+ * parsedBrief shape. Clones the input, mutates the clone, passes it
+ * back via setBrief. Never mutates the original.
+ *
+ * Unknown fields are logged and ignored — the field map grows as the
+ * gap catalog grows. This is safe because gap.fallback is always a
+ * sensible default the validator can use even without a write-through.
+ */
+export function applyGapAnswer(
+  brief: import("@/types/brief").ParsedBrief,
+  field: string,
+  value: unknown,
+  setBrief: (next: import("@/types/brief").ParsedBrief) => void,
+): void {
+  const next = structuredClone(brief);
+  switch (field) {
+    case "context.venue.name":
+      if (next.events.shows.length === 0) {
+        next.events.shows.push({ name: "Unknown", location: String(value) });
+      } else {
+        next.events.shows[0].location = String(value);
+      }
+      break;
+    case "context.audience": {
+      const name = String(value);
+      if (next.audiences.length > 0 && next.audiences[0]) {
+        next.audiences[0].name = name;
+      } else {
+        next.audiences.push({
+          name,
+          description: "",
+          priority: 1,
+          characteristics: [],
+          engagementNeeds: "",
+        });
+      }
+      break;
+    }
+    case "hero.physicalForm":
+      // physicalForm lives on interactiveMechanics element data, not on
+      // ParsedBrief. Stash the answer on creative.designPhilosophy so
+      // it's preserved and surfaced to the model until the host
+      // separately persists it via setElementData.
+      next.creative.designPhilosophy = next.creative.designPhilosophy
+        ? `${next.creative.designPhilosophy} | hero form: ${value}`
+        : `hero form: ${value}`;
+      break;
+    case "brand.colors.hex":
+      // Hex codes don't have an exact slot — append in parens to the
+      // first color name so the normalizer can pick them up later.
+      next.brand.visualIdentity.colors = next.brand.visualIdentity.colors.map((c, i) =>
+        i === 0 ? `${c} (${value})` : c,
+      );
+      break;
+    default:
+      console.warn(`[applyGapAnswer] no mapping for field: ${field}`);
+      return;
+  }
+  setBrief(next);
+}

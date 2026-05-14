@@ -1,4 +1,4 @@
-// generate-hero — DEPLOY TOKEN: 2026-05-14-structural-approach
+// generate-hero — DEPLOY TOKEN: 2026-05-14-composer-driven
 //
 // Prompt structure: We assemble a compact markdown prompt with sections
 // in priority order (SCENE → SCALE → HERO → ZONES → BRAND → MATERIALS
@@ -42,6 +42,29 @@ interface BrandIntelEntry {
 }
 
 interface GenerateHeroRequest {
+  /**
+   * NEW (Phase 3 of prompt-engine refactor): pre-composed renderer
+   * prompt + artifacts from the client's composePrompt(). When
+   * present, the edge function uses the renderer text verbatim and
+   * skips its internal structured-prompt builder. The artifacts JSON
+   * gets persisted to project_images.prompt_artifacts so auxiliary
+   * views can read the heroSnapshot when composing.
+   *
+   * Legacy fields (prompt, designContext, etc.) remain accepted for
+   * backward compatibility with clients that haven't migrated yet.
+   */
+  composedPrompt?: {
+    renderer: string;
+    negative: string;
+    artifacts: {
+      briefJson: unknown;
+      geometrySummary: string;
+      renderer: string;
+      negative: string;
+      compliance: unknown[];
+    };
+  };
+
   prompt: string;
   feedback?: string;
   previousImageUrl?: string;
@@ -767,14 +790,21 @@ serve(async (req) => {
     // carry the dimensional info without the bleed risk.
     void geometryReferences;
 
-    // Build the prompt. Two branches:
-    //  - EDIT MODE (feedback + previousImageUrl present): surgical
-    //    edit instruction, source image attached first. Preserve
-    //    everything else by default.
-    //  - FRESH GENERATION: compact markdown-structured prompt built
-    //    from `prompt` (narrative scene) + structured fields.
+    // Build the prompt. Three branches in priority order:
+    //  - COMPOSER-DRIVEN (Phase 3 of refactor): client sent a
+    //    pre-composed renderer prompt. Use verbatim — no edge-side
+    //    assembly. This is the new pipeline.
+    //  - EDIT MODE (feedback + previousImageUrl, no composedPrompt):
+    //    surgical edit instruction, source image attached first.
+    //    Preserve everything else by default.
+    //  - LEGACY composer (no composedPrompt, no edit-mode):
+    //    edge-function-side structured-prompt builder. Kept for
+    //    clients that haven't migrated yet.
     let flattenedPrompt: string;
-    if (previousImageUrl && feedback) {
+    if (body.composedPrompt && body.composedPrompt.renderer) {
+      flattenedPrompt = body.composedPrompt.renderer;
+      console.log(`[generate-hero] Using client-composed renderer prompt (${flattenedPrompt.length} chars)`);
+    } else if (previousImageUrl && feedback) {
       // ── EDIT MODE ──
       // ChatGPT-image-2-style edit. The source image is the authoritative
       // version; the instruction names only what should change. Stripped
@@ -860,6 +890,33 @@ applied. Zero overlaid text or annotations.`;
     }
 
     console.log("Successfully generated hero image");
+
+    // Persist composer output to project_images.prompt_artifacts so
+    // auxiliary view renders can read it as heroSnapshot. This is the
+    // contract between hero and view renders — views derive from this
+    // object. Wrapped in try/catch so a missing column (pre-migration)
+    // or an RLS hiccup doesn't fail the response.
+    if (body.composedPrompt?.artifacts && project_id) {
+      try {
+        const adminClient = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const { error: persistError } = await adminClient
+          .from("project_images")
+          .update({ prompt_artifacts: body.composedPrompt.artifacts })
+          .eq("project_id", project_id)
+          .eq("angle_id", "hero_34")
+          .eq("is_current", true);
+        if (persistError) {
+          console.warn("[generate-hero] prompt_artifacts persist returned:", persistError.message);
+        } else {
+          console.log("[generate-hero] Persisted prompt_artifacts to project_images");
+        }
+      } catch (e) {
+        console.warn("[generate-hero] prompt_artifacts persistence failed:", e);
+      }
+    }
 
     return new Response(
       JSON.stringify({

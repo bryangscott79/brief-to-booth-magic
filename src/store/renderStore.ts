@@ -8,6 +8,25 @@ export interface GeneratedImage {
   error?: string;
 }
 
+/**
+ * One turn in the hero refinement thread. Each call to
+ * generateHeroImage appends a turn. The first turn (initial
+ * generation) has `userMessage: null`; subsequent turns carry the
+ * refinement instruction the user typed.
+ *
+ * The thread lets the user iterate ChatGPT-style: type → render →
+ * type → render. Each turn can be clicked to set `heroImage` back to
+ * that turn's url — branching off any point in the thread.
+ */
+export interface HeroTurn {
+  /** The refinement instruction for this turn. null on the initial generation. */
+  userMessage: string | null;
+  /** Resulting image URL after this turn's generation. */
+  imageUrl: string;
+  /** ISO timestamp of when this turn completed. */
+  generatedAt: string;
+}
+
 export type WorkflowPhase = "prompt" | "hero-generation" | "hero-review" | "all-views";
 
 interface RenderState {
@@ -18,6 +37,15 @@ interface RenderState {
   heroImage: string | null;
   heroFeedback: string;
   heroIterations: string[];
+  /**
+   * Conversation thread for hero refinement. Each successful hero
+   * render appends a turn. The latest turn's imageUrl matches
+   * heroImage. Users can click an earlier turn to branch off it
+   * (sets heroImage back to that turn's url). The first turn has
+   * userMessage: null (initial generation); subsequent turns carry
+   * the refinement instruction.
+   */
+  heroThread: HeroTurn[];
   generatedPrompts: Record<string, string>;
   generatedImages: Record<string, GeneratedImage>;
   isGeneratingHero: boolean;
@@ -47,6 +75,17 @@ interface RenderActions {
   setHeroImage: (url: string | null) => void;
   setHeroFeedback: (feedback: string) => void;
   addHeroIteration: (url: string) => void;
+  /**
+   * Append a turn to the hero refinement thread. Called from inside
+   * generateHeroImage after a successful render. Users can also call
+   * directly when seeding a thread from saved images (e.g. on
+   * project rehydration).
+   */
+  appendHeroTurn: (turn: HeroTurn) => void;
+  /**
+   * Replace the entire thread (used on project switch / hydration).
+   */
+  setHeroThread: (thread: HeroTurn[]) => void;
   setGeneratedPrompts: (prompts: Record<string, string>) => void;
   setGeneratedImage: (angleId: string, image: GeneratedImage) => void;
   setGeneratedImages: (images: Record<string, GeneratedImage>) => void;
@@ -201,6 +240,7 @@ const initialState: RenderState = {
   heroImage: null,
   heroFeedback: "",
   heroIterations: [],
+  heroThread: [],
   generatedPrompts: {},
   generatedImages: {},
   isGeneratingHero: false,
@@ -229,6 +269,8 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setHeroImage: (heroImage) => set({ heroImage }),
   setHeroFeedback: (heroFeedback) => set({ heroFeedback }),
   addHeroIteration: (url) => set((s) => ({ heroIterations: [...s.heroIterations, url] })),
+  appendHeroTurn: (turn) => set((s) => ({ heroThread: [...s.heroThread, turn] })),
+  setHeroThread: (thread) => set({ heroThread: thread }),
   setGeneratedPrompts: (generatedPrompts) => set({ generatedPrompts }),
   setGeneratedImage: (angleId, image) =>
     set((s) => ({ generatedImages: { ...s.generatedImages, [angleId]: image } })),
@@ -286,9 +328,21 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       // Only update if still on the same project
       if (get().projectId !== projectId) return;
 
+      // Append a turn to the conversation thread. The user's
+      // refinement instruction lives in `feedback` (null on the
+      // initial generation, populated when they typed something to
+      // refine). Each turn carries its own imageUrl so the user can
+      // click any thumbnail to branch off.
+      const turn: HeroTurn = {
+        userMessage: feedback && feedback.trim().length > 0 ? feedback.trim() : null,
+        imageUrl: data.imageUrl,
+        generatedAt: new Date().toISOString(),
+      };
+
       set((s) => ({
         heroImage: data.imageUrl,
         heroIterations: [...s.heroIterations, data.imageUrl],
+        heroThread: [...s.heroThread, turn],
         phase: "hero-review",
         heroFeedback: "",
         isGeneratingHero: false,

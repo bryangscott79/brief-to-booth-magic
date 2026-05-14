@@ -28,6 +28,7 @@ import {
   Layers,
   FolderOpen,
   Maximize2,
+  Send,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
@@ -148,7 +149,7 @@ export function PromptGenerator() {
   // Global render store
   const renderStore = useRenderStore();
   const {
-    phase, heroPrompt, heroImage, heroFeedback, heroIterations,
+    phase, heroPrompt, heroImage, heroFeedback, heroThread,
     generatedPrompts, generatedImages, isGeneratingHero, isGenerating,
     generationProgress, currentlyGenerating, hydratedFromDb,
   } = renderStore;
@@ -1415,53 +1416,103 @@ export function PromptGenerator() {
               />
             </button>
 
-            {heroIterations.length > 1 && (
-              <div className="space-y-2">
-                <span className="text-sm font-medium text-muted-foreground">Previous Iterations</span>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {heroIterations.slice(0, -1).map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => renderStore.setHeroImage(img)}
-                      className={cn(
-                        "flex-shrink-0 w-24 h-16 rounded border overflow-hidden transition-all",
-                        heroImage === img ? "ring-2 ring-primary" : "opacity-60 hover:opacity-100"
-                      )}
-                    >
-                      <img src={img} alt={`Iteration ${idx + 1}`} className="w-full h-full object-cover" />
-                    </button>
+            {/* ── Hero refinement thread ───────────────────────────
+               ChatGPT-style iteration: each render appends a turn,
+               user types refinements, each turn's thumbnail is
+               clickable to branch off that point. */}
+            {heroThread.length > 0 && (
+              <div className="space-y-3 pt-4 border-t">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Conversation</span>
+                  <span className="text-xs text-muted-foreground">
+                    {heroThread.length} {heroThread.length === 1 ? "turn" : "turns"}
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                  {heroThread.map((turn, idx) => (
+                    <div key={`${turn.generatedAt}-${idx}`} className="flex gap-3 items-start">
+                      <button
+                        onClick={() => renderStore.setHeroImage(turn.imageUrl)}
+                        className={cn(
+                          "flex-shrink-0 w-20 h-14 rounded border overflow-hidden transition-all",
+                          heroImage === turn.imageUrl
+                            ? "ring-2 ring-primary"
+                            : "opacity-70 hover:opacity-100",
+                        )}
+                        title="Click to set this as the current hero"
+                      >
+                        <img
+                          src={turn.imageUrl}
+                          alt={`Turn ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        {turn.userMessage ? (
+                          <p className="text-sm text-foreground leading-snug">
+                            <span className="font-medium text-muted-foreground mr-1">You:</span>
+                            {turn.userMessage}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic leading-snug">
+                            Initial generation
+                          </p>
+                        )}
+                        {heroImage === turn.imageUrl && idx === heroThread.length - 1 && (
+                          <span className="text-xs text-primary mt-0.5 inline-block">
+                            current
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
+            {/* ── Chat-style refinement input ───────────────────── */}
             <div className="space-y-3 pt-4 border-t">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Refinement Feedback</span>
-              </div>
               <Textarea
                 value={heroFeedback}
                 onChange={(e) => renderStore.setHeroFeedback(e.target.value)}
-                placeholder="Enter feedback to refine the image... (e.g., 'Make the booth more open', 'Add more blue lighting', 'Show more people interacting')"
-                className="min-h-[100px]"
+                onKeyDown={(e) => {
+                  // ⌘/Ctrl+Enter sends; plain Enter inserts newline so
+                  // multi-line refinements stay possible. Matches the
+                  // pattern most chat UIs settle on.
+                  if (
+                    e.key === "Enter" &&
+                    (e.metaKey || e.ctrlKey) &&
+                    !isGeneratingHero &&
+                    heroFeedback.trim().length > 0
+                  ) {
+                    e.preventDefault();
+                    handleRegenerateWithFeedback();
+                  }
+                }}
+                placeholder={
+                  heroThread.length === 0
+                    ? "Refinement instructions appear here once the hero is generated…"
+                    : "Type a refinement and press ⌘+Enter — e.g. 'make the canopy curvier', 'add more LED line work', 'simpler — too busy'"
+                }
+                className="min-h-[80px]"
+                disabled={heroThread.length === 0 || isGeneratingHero}
               />
               <div className="flex gap-3">
                 <Button
-                  variant="outline"
                   onClick={handleRegenerateWithFeedback}
-                  disabled={isGeneratingHero || !heroFeedback.trim()}
+                  disabled={isGeneratingHero || !heroFeedback.trim() || heroThread.length === 0}
                   className="flex-1"
                 >
                   {isGeneratingHero ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Regenerating...
+                      Refining…
                     </>
                   ) : (
                     <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Regenerate with Feedback
+                      <Send className="mr-2 h-4 w-4" />
+                      Send refinement
                     </>
                   )}
                 </Button>
@@ -1472,6 +1523,7 @@ export function PromptGenerator() {
                     handleGenerateHeroImage();
                   }}
                   disabled={isGeneratingHero}
+                  title="Generate from scratch (no refinement)"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </Button>

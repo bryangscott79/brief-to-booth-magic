@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-05-14-structural-approach
+// generate-view — DEPLOY TOKEN: 2026-05-14-composer-driven
 //
 // Same restructure as generate-hero (see that file for the full
 // rationale). Two relevant changes for view rendering:
@@ -36,6 +36,18 @@ interface BrandIntelEntry {
 }
 
 interface GenerateViewRequest {
+  /**
+   * NEW (Phase 3 of prompt-engine refactor): pre-composed renderer
+   * prompt produced by the client's composeViewPrompt(heroSnapshot,
+   * angle). When present, the edge function uses it verbatim and
+   * skips its internal builder. Legacy fields remain for backward
+   * compat.
+   */
+  composedPrompt?: {
+    renderer: string;
+    negative: string;
+  };
+
   referenceImageUrl: string;
   viewPrompt: string;
   viewName: string;
@@ -630,20 +642,25 @@ serve(async (req) => {
       ? `Camera is DEEP INSIDE the booth, positioned at eye level (5.5 feet) within the "${zoneName}" zone. The camera is surrounded by the zone's walls, ceiling, and furnishings. The booth exterior, convention hall, and outside aisles should NOT be prominently visible. The viewer feels enclosed within this specific zone.`
       : `Camera showing the ${viewName} perspective of the booth.`);
 
-    // ── Build the structured markdown prompt ──
-    // Replaces the old block-concatenation approach. The new builder
-    // produces a compact, prioritized prompt with sections in order:
-    // SCENE → CAMERA → SIZE → ZONE FOCUS (interiors) → CONSISTENCY →
-    // RESTRICTIONS → ADDITIONAL CONTEXT.
-    const editPrompt = buildStructuredViewPrompt({
-      req: body,
-      isInterior,
-      zoneName,
-      cameraDir,
-      heroPromptText,
-      ragBlock,
-      consistencyTokens,
-    });
+    // ── Build the prompt ──
+    // Composer-driven (Phase 3 of refactor): when the client sent a
+    // pre-composed renderer prompt, use it verbatim. Otherwise fall
+    // back to the legacy edge-side structured builder.
+    let editPrompt: string;
+    if (body.composedPrompt && body.composedPrompt.renderer) {
+      editPrompt = body.composedPrompt.renderer;
+      console.log(`[generate-view] Using client-composed renderer for ${viewName} (${editPrompt.length} chars)`);
+    } else {
+      editPrompt = buildStructuredViewPrompt({
+        req: body,
+        isInterior,
+        zoneName,
+        cameraDir,
+        heroPromptText,
+        ragBlock,
+        consistencyTokens,
+      });
+    }
 
     // Geometry reference URLs (floor plan / isometric) are DELIBERATELY
     // not forwarded to gpt-image-2. The PNG captures from

@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { BriefExistingSpace } from "./BriefExistingSpace";
-import type { ParsedBriefExistingSpace } from "@/types/brief";
+import type { ParsedBriefExistingSpace, Polygon } from "@/types/brief";
+
+// Hoisted mock state so tests can override invoke behavior per-case.
+const invokeMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ data: { success: true, analysis: {} }, error: null }),
+);
 
 // Mock the supabase client so the upload codepath in the empty-state
 // drop zone never tries to hit a real backend. None of the four tests
@@ -16,7 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       }),
     },
     functions: {
-      invoke: vi.fn().mockResolvedValue({ data: { success: true, analysis: {} }, error: null }),
+      invoke: invokeMock,
     },
   },
 }));
@@ -67,5 +72,86 @@ describe("BriefExistingSpace", () => {
     render(<BriefExistingSpace value={SAMPLE} onChange={onChange} projectId="p1" />);
     fireEvent.click(screen.getByRole("button", { name: /replace photo/i }));
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  // C1 regression: when the user uploads a photo, the analyze-existing-
+  // space invoke takes ~5s. If the user draws a polygon during that
+  // window the polygon lands on `value` via onChange. When analyze
+  // returns, the merge must preserve those annotations rather than
+  // spread a stale baseline that has empty arrays.
+  it("preserves user-drawn polygons that land during the analyze window", async () => {
+    // Make the invoke hang on a deferred promise we resolve manually.
+    let resolveAnalyze: (value: { data: unknown; error: unknown }) => void = () => {};
+    const pending = new Promise<{ data: unknown; error: unknown }>((res) => {
+      resolveAnalyze = res;
+    });
+    invokeMock.mockReturnValueOnce(pending);
+
+    // Controlled-component pattern: we own `current` and re-render
+    // BriefExistingSpace whenever onChange fires so the ref inside the
+    // component points at the latest committed value.
+    let current: ParsedBriefExistingSpace | null = null;
+    const onChange = vi.fn((next: ParsedBriefExistingSpace | null) => {
+      current = next;
+    });
+
+    const { rerender } = render(
+      <BriefExistingSpace value={current} onChange={onChange} projectId="p1" />,
+    );
+
+    // Trigger the drop directly via the dropzone hidden input — the
+    // empty-state renders an <input type="file" /> from react-dropzone.
+    const file = new File(["fake-bytes"], "room.jpg", { type: "image/jpeg" });
+    const dropInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(dropInput).not.toBeNull();
+    await act(async () => {
+      fireEvent.change(dropInput!, { target: { files: [file] } });
+    });
+
+    // After upload completes the optimistic commit lands with empty
+    // annotations. We can now re-render with that value so the ref
+    // inside the component picks it up.
+    expect(current).not.toBeNull();
+    expect(current!.annotations.keep).toEqual([]);
+    rerender(<BriefExistingSpace value={current} onChange={onChange} projectId="p1" />);
+
+    // Simulate the user drawing a polygon while analyze is pending —
+    // call onChange directly with the polygon in place.
+    const drawn: Polygon = {
+      points: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.4, y: 0.1 },
+        { x: 0.4, y: 0.4 },
+        { x: 0.1, y: 0.4 },
+        { x: 0.1, y: 0.1 },
+      ],
+    };
+    const withPolygon: ParsedBriefExistingSpace = {
+      ...current!,
+      annotations: { keep: [drawn], change: [] },
+    };
+    onChange(withPolygon);
+    rerender(<BriefExistingSpace value={current} onChange={onChange} projectId="p1" />);
+    expect(current!.annotations.keep).toHaveLength(1);
+
+    // Now resolve the analyze invoke. The success branch merges the
+    // returned analysis into the LATEST value (which contains the
+    // polygon) — the polygon must survive.
+    await act(async () => {
+      resolveAnalyze({
+        data: {
+          success: true,
+          analysis: { features: ["fireplace"], existingMaterials: {}, lighting: {} },
+        },
+        error: null,
+      });
+      await pending;
+    });
+
+    expect(current!.annotations.keep).toHaveLength(1);
+    expect(current!.annotations.keep[0]).toEqual(drawn);
+    expect(current!.analysis.features).toContain("fireplace");
   });
 });

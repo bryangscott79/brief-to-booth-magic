@@ -359,17 +359,30 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
   const handleExistingSpaceChange = useCallback(
     (next: ParsedBriefExistingSpace | null) => {
       if (!brief) return;
+      // Capture the most-recent in-flight hanging-elements draft (if
+      // any) BEFORE flushing — flushHangingCommit clears the ref. We
+      // need the hanging edits to be present in the snapshot we spread
+      // below, otherwise the immediate replace-photo commit would
+      // overwrite still-debounced hanging edits with their pre-edit
+      // values. The hanging-section's own flush updates the store +
+      // DB; we then re-base our updated brief on the latest hanging
+      // edits so they don't get lost in our merge.
+      const pendingHanging = hangingLatestRef.current;
+      // When the user clicks "Replace photo" we commit immediately so
+      // the empty state appears without a 400ms delay. Flush sibling
+      // sections first so their debounced edits land before ours.
+      if (next === null) {
+        flushHangingCommit();
+      }
+      const baseBrief = pendingHanging ?? brief;
       const updated: ParsedBrief = {
-        ...brief,
+        ...baseBrief,
         existingSpace: next ?? undefined,
       };
       existingSpaceLatestRef.current = updated;
       if (existingSpaceCommitTimerRef.current) {
         clearTimeout(existingSpaceCommitTimerRef.current);
       }
-      // When the user clicks "Replace photo" we want an immediate commit
-      // so the empty state appears without a 400ms delay; otherwise
-      // debounce typing edits.
       if (next === null) {
         existingSpaceCommitTimerRef.current = null;
         existingSpaceLatestRef.current = null;
@@ -378,7 +391,7 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
       }
       existingSpaceCommitTimerRef.current = setTimeout(flushExistingSpaceCommit, 400);
     },
-    [brief, commitExistingSpaceSection, flushExistingSpaceCommit],
+    [brief, commitExistingSpaceSection, flushExistingSpaceCommit, flushHangingCommit],
   );
 
   // ── Industry input-mode resolution ──────────────────────────────────
@@ -389,11 +402,10 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
   const { agency } = useAgency();
   const industryInputMode = useMemo(() => {
     // Project type doesn't carry industry yet; resolve via the agency's
-    // primary_industry — same pattern as useActivationTypes. The cast
-    // mirrors the existing usage site (Supabase Tables<"agencies"> may
-    // lag behind the migration that introduced this column).
-    const slug = (agency as { primary_industry?: string } | null)
-      ?.primary_industry;
+    // primary_industry — same pattern as useActivationTypes. The column
+    // is in the generated Supabase types (Tables<"agencies">) so no
+    // cast is needed; useAgency already returns the typed row.
+    const slug = agency?.primary_industry ?? undefined;
     if (!slug) return undefined;
     return BUILTIN_INDUSTRIES.find((i) => i.slug === slug)?.inputMode;
   }, [agency]);

@@ -13,7 +13,7 @@
 // The component is controlled — it owns no brief state itself.
 // Persistence (debounce + Supabase write) happens in BriefReview.
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Card,
@@ -65,6 +65,18 @@ export function BriefExistingSpace({ value, onChange, projectId }: BriefExisting
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // The analyze-existing-space invoke is async (~5s). During that
+  // window the user can keep editing — drawing polygons, typing into
+  // the analysis fields — which lands on the parent's `value` via
+  // onChange. If we then spread the stale `baseline` snapshot when
+  // the analyze response returns, we silently overwrite that work.
+  // Tracking the latest `value` in a ref lets the analyze callback
+  // merge `analysis` into the most recent state instead.
+  const latestValueRef = useRef<ParsedBriefExistingSpace | null>(value);
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
+
   const onDrop = useCallback(
     async (accepted: File[]) => {
       const file = accepted[0];
@@ -109,8 +121,15 @@ export function BriefExistingSpace({ value, onChange, projectId }: BriefExisting
             );
           }
           const analysis = (data.analysis ?? {}) as ParsedBriefExistingSpace["analysis"];
+          // Merge into the LATEST value so any polygons / typed-edits
+          // the user made while analyze was in flight survive. Falling
+          // back to `baseline` defends against the (impossible-in-
+          // practice) case where the parent set value to null mid-
+          // analyze; in that case re-seeding from baseline is fine
+          // because the photoUrl still exists in storage.
+          const current = latestValueRef.current ?? baseline;
           onChange({
-            ...baseline,
+            ...current,
             analysis: {
               estimatedDimensions: analysis.estimatedDimensions,
               features: analysis.features ?? [],

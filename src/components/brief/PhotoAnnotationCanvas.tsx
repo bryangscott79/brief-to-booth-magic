@@ -168,27 +168,42 @@ export function PhotoAnnotationCanvas({
             />
           ))}
           {drawing.length > 0 && (
-            <>
-              <polyline
-                points={drawing.map((pt) => `${pt.x},${pt.y}`).join(" ")}
-                fill="none"
-                stroke={tool === "keep" ? "rgb(34, 197, 94)" : "rgb(239, 68, 68)"}
-                strokeWidth={0.004}
-                vectorEffect="non-scaling-stroke"
-                strokeDasharray="0.01 0.005"
-              />
-              {drawing.map((pt, i) => (
-                <circle
-                  key={i}
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={0.006}
-                  fill={tool === "keep" ? "rgb(34, 197, 94)" : "rgb(239, 68, 68)"}
-                />
-              ))}
-            </>
+            <polyline
+              points={drawing.map((pt) => `${pt.x},${pt.y}`).join(" ")}
+              fill="none"
+              stroke={tool === "keep" ? "rgb(34, 197, 94)" : "rgb(239, 68, 68)"}
+              strokeWidth={0.004}
+              vectorEffect="non-scaling-stroke"
+              strokeDasharray="0.01 0.005"
+            />
           )}
         </svg>
+        {/* Vertex markers rendered as absolutely-positioned HTML
+            elements rather than <circle> inside the SVG. The SVG uses
+            preserveAspectRatio="none" so any <circle> would stretch
+            into an ellipse on non-square photos. Positioning HTML
+            divs by normalized (x, y) instead keeps the marker
+            perfectly circular at any photo aspect ratio. pointer-
+            events: none so clicks pass through to the SVG underneath. */}
+        {drawing.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none">
+            {drawing.map((pt, i) => (
+              <div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  left: `${pt.x * 100}%`,
+                  top: `${pt.y * 100}%`,
+                  width: 8,
+                  height: 8,
+                  transform: "translate(-50%, -50%)",
+                  background:
+                    tool === "keep" ? "rgb(34, 197, 94)" : "rgb(239, 68, 68)",
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -79,3 +79,6 @@ verify_jwt = true
 
 [functions.best-practices-suggest]
 verify_jwt = true
+
+[functions.analyze-existing-space]
+verify_jwt = true

@@ -158,7 +158,8 @@ export type HardConstraint =
   | { id: "signage_present"; status: "pass" | "fail" | "unknown" }
   | { id: "descriptor_present"; status: "pass" | "fail" | "unknown" }
   | { id: "hero_scale_ok"; status: "pass" | "fail" | "unknown"; actualPct?: number }
-  | { id: "forbidden_items_absent"; status: "pass" | "fail" | "unknown" };
+  | { id: "forbidden_items_absent"; status: "pass" | "fail" | "unknown" }
+  | { id: "hanging_elements_aloft"; status: "pass" | "fail" | "unknown"; message?: string };
 
 export interface NormalizedBriefCompliance {
   hardConstraints: HardConstraint[];
@@ -688,6 +689,22 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       )
     : [];
 
+  // Assemble hard-constraint defaults emitted at normalize-time.
+  // Most constraints are derived inside validateBrief from the
+  // composed brief, but hanging_elements_aloft is purely structural:
+  // it only matters when hanging elements exist, and there's no
+  // automated verifier yet — status is "unknown" until a future
+  // post-render CV pass evaluates it.
+  const hardConstraints: HardConstraint[] = [];
+  if (hangingElements.length > 0) {
+    hardConstraints.push({
+      id: "hanging_elements_aloft",
+      status: "unknown",
+      message:
+        "Hanging elements must appear clearly above and visually detached from the booth structure.",
+    });
+  }
+
   // _dismissedGaps round-trip: same belt-and-suspenders shape check as
   // hangingElements above. safeBrief already guarantees the field is
   // an array, but defending against a corrupted shape costs nothing.
@@ -751,7 +768,7 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       eyeLevel: geometry.measurementSystem === "metric" ? 1.7 : 5.58,
       framing: "wide",
     },
-    compliance: { hardConstraints: [] },
+    compliance: { hardConstraints },
     _dismissedGaps: dismissedGaps,
   };
 }
@@ -973,6 +990,26 @@ function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, "");
 }
 
+/**
+ * Convert a hanging element's top-down position into a natural-
+ * language phrase the renderer model can use ("centered above",
+ * "above the front-left quadrant of", etc.). The booth's
+ * front-left corner is (0, 0) and y grows toward the back.
+ */
+function positionPhraseFor(
+  el: NormalizedHangingElement,
+  geometry: NormalizedBriefGeometry,
+): string {
+  const xFrac = el.position.x / geometry.width;
+  const yFrac = el.position.y / geometry.depth;
+  const xZone = xFrac < 0.33 ? "left" : xFrac > 0.67 ? "right" : "center";
+  const yZone = yFrac < 0.33 ? "front" : yFrac > 0.67 ? "back" : "center";
+  if (xZone === "center" && yZone === "center") return "centered above";
+  if (xZone === "center") return `above the ${yZone} of`;
+  if (yZone === "center") return `above the ${xZone} side of`;
+  return `above the ${yZone}-${xZone} quadrant of`;
+}
+
 function geometrySummaryText(g: NormalizedBriefGeometry): string {
   const u = g.units === "metric" ? "m" : "ft";
   const areaU = g.units === "metric" ? "sqm" : "sq ft";
@@ -1019,6 +1056,32 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
     ].join("\n"),
   );
 
+  // # HANGING ELEMENTS — only present when elements exist. Section
+  // teaches the model that these structures hang from venue rigging
+  // and are NOT supported by the booth, so render visible separation.
+  if (n.hanging.elements.length > 0) {
+    const hu = n.geometry.units === "metric" ? "m" : "ft";
+    const heLines: string[] = [
+      "# HANGING ELEMENTS",
+      "These structures are SUSPENDED from the venue rigging/ceiling above the booth. They are NOT attached to the booth structure below — the booth does not bear their weight. Render them as truly suspended overhead with visible separation from the booth structure beneath.",
+      "",
+    ];
+    for (const el of n.hanging.elements) {
+      const phrase = positionPhraseFor(el, n.geometry);
+      heLines.push(`- ${el.name}`);
+      if (el.physicalForm) heLines.push(`  Form: ${el.physicalForm}`);
+      heLines.push(
+        `  Geometry: ${formatNumber(el.dimensions.width)} × ${formatNumber(el.dimensions.depth)} × ${formatNumber(el.dimensions.thicknessFt)} ${hu}, ${el.shape} outline, positioned ${phrase} the booth, ${formatNumber(el.suspensionDropFt)}ft below the venue ceiling.`,
+      );
+      if (el.materials.length > 0) heLines.push(`  Materials: ${el.materials.join(", ")}`);
+      if (el.surfaces.length > 0) heLines.push(`  Surfaces: ${el.surfaces.join("; ")}`);
+      if (el.lighting.length > 0) heLines.push(`  Lighting: ${el.lighting.join(", ")}`);
+      if (el.printed.length > 0) heLines.push(`  Printed: ${el.printed.join("; ")}`);
+      heLines.push("");
+    }
+    sections.push(heLines.join("\n").trimEnd());
+  }
+
   // # STRUCTURAL APPROACH (only when there's structural intent to express)
   if (
     n.creative.visualLanguage.length > 0 ||
@@ -1048,6 +1111,11 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
     sa.push(
       "What this section is NOT asking for: a rectangular pavilion with flat horizontal fascia, repeated identical bay modules, or a standard trade-show truss top.",
     );
+    if (n.hanging.elements.length > 0) {
+      sa.push(
+        "Floor-supported structures (walls, fascia, hero installation) are visually distinct from the hanging elements above — there is open air between them.",
+      );
+    }
     sections.push(sa.join("\n"));
   }
 
@@ -1118,6 +1186,11 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
   hc.push(`- Hero scale: ≤ ${Math.round(n.geometry.maxObjectSizePctOfFootprint * 100)}% of footprint`);
   if (n.creative.forbiddenItems.length > 0) {
     hc.push(`- Forbidden items: ${n.creative.forbiddenItems.join(", ")}`);
+  }
+  if (n.hanging.elements.length > 0) {
+    hc.push(
+      "- Hanging elements appear clearly above and detached from the booth structure (open air between them).",
+    );
   }
   sections.push(hc.join("\n"));
 

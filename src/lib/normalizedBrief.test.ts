@@ -307,6 +307,104 @@ describe("composePrompt — 5 output stages", () => {
   });
 });
 
+// ─── composePrompt — hanging elements section ────────────────────────
+
+describe("composePrompt — hanging elements section", () => {
+  it("omits the # HANGING ELEMENTS section when no elements exist", () => {
+    // Use existing eqvilent fixtures — no hangingElements on the parsed brief
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    expect(out.renderer).not.toMatch(/# HANGING ELEMENTS/);
+  });
+
+  it("includes the # HANGING ELEMENTS section with intro + per-element details", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [
+        {
+          name: "Primary identity ring",
+          physicalForm: "White LED-lit ring, internally backlit acrylic.",
+          shape: "ring",
+          materials: ["brushed aluminum", "backlit acrylic"],
+          surfaces: ["front-facing edge: brand wordmark"],
+          lighting: ["edge-lit perimeter glow"],
+          printed: ["front: brand logotype"],
+        },
+      ],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+
+    expect(out.renderer).toMatch(/# HANGING ELEMENTS/);
+    // Weight-bearing language
+    expect(out.renderer).toMatch(/SUSPENDED from the venue rigging/i);
+    expect(out.renderer).toMatch(/NOT attached to the booth structure/i);
+    // Per-element details
+    expect(out.renderer).toMatch(/Primary identity ring/);
+    expect(out.renderer).toMatch(/edge-lit perimeter glow/);
+    expect(out.renderer).toMatch(/front: brand logotype/);
+  });
+
+  it("appends one note to # STRUCTURAL APPROACH when hanging elements exist", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [{ name: "Ring", physicalForm: "white ring" }],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(
+      /Floor-supported structures \(walls, fascia, hero installation\) are visually distinct from the hanging elements above/i,
+    );
+  });
+
+  it("includes the hanging_elements_aloft constraint and prompt line when elements exist", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [{ name: "Ring", physicalForm: "white ring" }],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(
+      n.compliance.hardConstraints.find((c) => c.id === "hanging_elements_aloft"),
+    ).toBeDefined();
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(
+      /Hanging elements appear clearly above and detached from the booth structure/i,
+    );
+  });
+
+  it("does NOT include the hanging_elements_aloft constraint when no elements", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(
+      n.compliance.hardConstraints.find((c) => c.id === "hanging_elements_aloft"),
+    ).toBeUndefined();
+  });
+});
+
 // ─── Defensive normalization — survives partial / legacy briefs ─────
 //
 // Real-world parsedBrief data from the DB may be missing fields that

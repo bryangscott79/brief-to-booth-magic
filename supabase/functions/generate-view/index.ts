@@ -551,6 +551,45 @@ function buildStructuredViewPrompt(opts: {
   return sections.join("\n\n");
 }
 
+/**
+ * Stream a single JSON body but emit a space byte every keepAliveMs to
+ * keep the edge proxy from hitting the 150s idle timeout while
+ * gpt-image-2 renders. JSON.parse tolerates leading whitespace, so the
+ * client (supabase.functions.invoke) decodes the final body unchanged.
+ * Mirrors the helper in generate-hero/index.ts.
+ */
+function streamingJsonResponse(
+  produce: () => Promise<{ status: number; body: unknown }>,
+  keepAliveMs = 20_000,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let done = false;
+      const ping = setInterval(() => {
+        if (done) return;
+        try { controller.enqueue(encoder.encode(" ")); } catch { /* closed */ }
+      }, keepAliveMs);
+      try {
+        const { body } = await produce();
+        done = true;
+        clearInterval(ping);
+        controller.enqueue(encoder.encode(JSON.stringify(body)));
+        controller.close();
+      } catch (e) {
+        done = true;
+        clearInterval(ping);
+        const msg = e instanceof Error ? e.message : "Failed to generate image";
+        controller.enqueue(encoder.encode(JSON.stringify({ error: msg })));
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

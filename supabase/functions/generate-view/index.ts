@@ -792,23 +792,19 @@ serve(async (req) => {
 
     console.log(`Successfully generated ${viewName} view via ${modelUsed}`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        viewName,
-        imageUrl: generatedImageUrl,
-        message: responseText,
-        modelUsed,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Error generating view:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Failed to generate image" 
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+      return {
+        status: 200,
+        body: {
+          success: true,
+          viewName,
+          imageUrl: generatedImageUrl,
+          message: responseText,
+          modelUsed,
+        },
+      };
+    } catch (error) {
+      console.error("Error generating view:", error);
+      throw error instanceof Error ? error : new Error("Failed to generate image");
+    }
+  });
 });

@@ -411,27 +411,43 @@ async function fetchWithRateLimitRetry(
     throw e;
   }
 
+  // OpenAI image models often respond with 429 when the burst window
+  // is exhausted. Their Retry-After is typically 4-10s but can be
+  // longer under load. Two attempts at increasing backoff catch most
+  // of those without burning the whole edge-function budget. The
+  // outer generateImageWithFallback also retries once at the call
+  // level, so by the time we exhaust both layers a real account-side
+  // rate-limit issue has had ~3 attempts.
   if (response.status === 429) {
-    console.warn(`[ai-gateway] ${label}: rate limited (429), retrying in 2s...`);
-    await new Promise((r) => setTimeout(r, 2000));
-    let retry: Response;
-    try {
-      retry = await fetch(url, withTimeout(init.signal ?? undefined));
-    } catch (e) {
-      if (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) {
-        throw new Error(
-          `[ai-gateway] ${label}: rate-limit retry timed out after ${timeoutMs}ms`,
-        );
-      }
-      throw e;
-    }
-    if (!retry.ok) {
-      const text = await retry.text();
-      throw new Error(
-        `[ai-gateway] ${label}: rate limit retry failed (${retry.status}): ${text.substring(0, 300)}`,
+    const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfterMs = retryAfterHeader
+      ? Math.min(Math.max(Number(retryAfterHeader) * 1000, 1000), 15000)
+      : 0;
+    const waits = retryAfterMs > 0 ? [retryAfterMs, retryAfterMs * 2] : [4000, 10000];
+    let retry: Response | null = null;
+    for (let attempt = 0; attempt < waits.length; attempt++) {
+      const waitMs = waits[attempt];
+      console.warn(
+        `[ai-gateway] ${label}: rate limited (429), attempt ${attempt + 1}/${waits.length}, retrying in ${waitMs}ms…`,
       );
+      await new Promise((r) => setTimeout(r, waitMs));
+      try {
+        retry = await fetch(url, withTimeout(init.signal ?? undefined));
+      } catch (e) {
+        if (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) {
+          throw new Error(
+            `[ai-gateway] ${label}: rate-limit retry timed out after ${timeoutMs}ms`,
+          );
+        }
+        throw e;
+      }
+      if (retry.ok) return retry;
+      if (retry.status !== 429) break;
     }
-    return retry;
+    const text = retry ? await retry.text() : "no response";
+    throw new Error(
+      `[ai-gateway] ${label}: rate limit retries exhausted (${retry?.status ?? "?"}): ${text.substring(0, 300)}`,
+    );
   }
 
   if (!response.ok) {
@@ -1044,37 +1060,117 @@ export interface ImageWithFallbackResult {
 }
 
 /**
- * Primary image-gen entry point for hero + view renders. Tries
- * gpt-image-2 first (the primary "Canopy 2.0" model). On ANY failure
- * — model unavailable, content filter, quota, network — falls back to
- * Gemini's gemini-3-pro-image-preview ("nano banana pro" / Canopy Lite)
- * so the user still gets a render.
+ * Errors from gpt-image-2 that are likely transient — worth retrying
+ * the same model before giving up and dropping to the Gemini fallback.
+ * Includes rate-limit responses, gateway/server errors, network blips,
+ * and the model's own "overloaded" string. Excludes anything that
+ * looks like a real prompt/account problem (auth, model_not_found,
+ * insufficient_quota, content_policy) where a retry would be wasted.
+ */
+function isTransientImageError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  // Don't retry hard errors — they won't change on retry.
+  if (
+    m.includes("model_not_found") ||
+    m.includes("invalid_model") ||
+    m.includes("does not have access") ||
+    m.includes("invalid_api_key") ||
+    m.includes("unauthorized") ||
+    m.includes("(401)") ||
+    m.includes("insufficient_quota") ||
+    m.includes("billing") ||
+    m.includes("content_policy")
+  ) {
+    return false;
+  }
+  // Retry these — most likely to clear on a second attempt.
+  return (
+    m.includes("timed out") ||
+    m.includes("rate limit") ||
+    m.includes("rate_limit") ||
+    m.includes("(429)") ||
+    m.includes("(500)") ||
+    m.includes("(502)") ||
+    m.includes("(503)") ||
+    m.includes("(504)") ||
+    m.includes("server error") ||
+    m.includes("overloaded") ||
+    m.includes("temporarily unavailable") ||
+    m.includes("network") ||
+    m.includes("econnreset") ||
+    m.includes("etimedout") ||
+    m.includes("eai_again")
+  );
+}
+
+/**
+ * Primary image-gen entry point for hero + view renders.
  *
- * User direction was explicit: never fall back to gpt-image-1. Both
- * fallback rungs are documented above each path so the next person
- * reading this doesn't reintroduce a deleted model.
+ * Strategy:
+ *   1. Try gpt-image-2 (Canopy 2.0). If it succeeds, done.
+ *   2. If it fails with a TRANSIENT error (rate limit, timeout,
+ *      5xx, overloaded, network), wait briefly and retry once.
+ *      OpenAI's image API has bursty rate limiting; the first call
+ *      in a serial batch usually succeeds and subsequent ones can
+ *      get throttled into queues that exceed our timeout. A second
+ *      attempt after a backoff catches most of these without
+ *      degrading to a different model.
+ *   3. If it still fails (or fails with a HARD error like auth,
+ *      model_not_found, content_policy), fall back to Gemini's
+ *      gemini-3-pro-image-preview (Canopy Lite) so the user gets
+ *      something rather than a hard failure.
+ *
+ * User direction was explicit: gpt-image-2 must remain the primary,
+ * and the Gemini fallback exists only as a last-resort safety net.
+ * Never fall back to gpt-image-1.
  */
 export async function generateImageWithFallback(
   options: OpenAIImageOptions,
 ): Promise<ImageWithFallbackResult> {
   const started = Date.now();
-  // ── Rung 1: gpt-image-2 (primary) ──
-  try {
-    const images = await _callOpenAIImageInner(options, "gpt-image-2");
-    if (options.usage) {
-      logUsageEvent({
-        context: options.usage,
-        model: "openai/gpt-image-2",
-        imageCount: images.length,
-        durationMs: Date.now() - started,
-        status: "success",
-      });
+  // ── Rung 1: gpt-image-2 (primary), with one retry on transient errors ──
+  let primaryErr: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const images = await _callOpenAIImageInner(options, "gpt-image-2");
+      if (options.usage) {
+        logUsageEvent({
+          context: options.usage,
+          model: "openai/gpt-image-2",
+          imageCount: images.length,
+          durationMs: Date.now() - started,
+          status: "success",
+        });
+      }
+      if (attempt > 1) {
+        console.log(`[ai-gateway] gpt-image-2 succeeded on attempt ${attempt}`);
+      }
+      return { images, modelUsed: "openai/gpt-image-2" };
+    } catch (e) {
+      primaryErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      const transient = isTransientImageError(msg);
+      if (attempt === 1 && transient) {
+        // Backoff scales with the kind of failure:
+        //   - Rate-limit / overloaded → 8s (OpenAI's burst windows are
+        //     ~10s-class for image models)
+        //   - Everything else (timeout, 5xx, network) → 3s
+        const backoffMs = msg.toLowerCase().match(/(rate.?limit|429|overloaded)/) ? 8_000 : 3_000;
+        console.warn(
+          `[ai-gateway] gpt-image-2 attempt 1 failed (transient: ${msg.slice(0, 160)}). Retrying in ${backoffMs}ms…`,
+        );
+        await new Promise((r) => setTimeout(r, backoffMs));
+        continue;
+      }
+      // Either non-transient (don't retry) or already on attempt 2 →
+      // drop out of the loop and proceed to the Gemini fallback below.
+      break;
     }
-    return { images, modelUsed: "openai/gpt-image-2" };
-  } catch (primaryErr) {
+  }
+  {
     const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
     console.warn(
-      `[ai-gateway] gpt-image-2 failed — falling back to Gemini nano-banana pro. Reason: ${msg.slice(0, 240)}`,
+      `[ai-gateway] gpt-image-2 exhausted retries — falling back to Gemini nano-banana pro. Reason: ${msg.slice(0, 240)}`,
     );
     if (options.usage) {
       // Log primary failure so observability shows BOTH the failed

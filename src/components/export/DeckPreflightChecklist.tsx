@@ -33,7 +33,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { BrandLogo } from "@/hooks/useBrandLogo";
-import type { VisualReference } from "@/hooks/useProjectVisualReferences";
+import type { ProjectImage } from "@/hooks/useProjectImages";
+import { ModelBadge } from "@/components/prompts/ModelBadge";
+import { Check } from "lucide-react";
 
 interface DeckPreflightChecklistProps {
   projectId: string | null | undefined;
@@ -46,8 +48,20 @@ interface DeckPreflightChecklistProps {
   /** Brand color the deck will use (resolved hex). */
   brandColor?: string;
   secondaryColor?: string;
-  /** All non-logo visual references that will be sent to the model. */
-  visualReferences: VisualReference[];
+  /**
+   * Current rendered images for the project — what was previously
+   * mis-labeled as "Featured renders" used `visualReferences` (the
+   * uploaded mood-board / inspiration images), which is the wrong
+   * data: those don't appear on the rendered slides at all. The
+   * deck designer features the ACTUAL renders the user generated
+   * (hero + each view), so the preflight needs to show those plus
+   * a selection UI for which to feature.
+   */
+  renderImages: ProjectImage[];
+  /** Set of angle_ids that the user has marked as "featured" for this deck. */
+  featuredAngleIds: Set<string>;
+  /** Toggle a specific render's featured state. */
+  onToggleFeatured: (angleId: string) => void;
   /** Style preset selected on the empty state (Pitch, Executive, etc.). */
   stylePreset: string;
 }
@@ -89,7 +103,9 @@ export function DeckPreflightChecklist({
   agencyLogoUrl,
   brandColor,
   secondaryColor,
-  visualReferences,
+  renderImages,
+  featuredAngleIds,
+  onToggleFeatured,
   stylePreset,
 }: DeckPreflightChecklistProps) {
   const [open, setOpen] = useState(true);
@@ -264,36 +280,81 @@ export function DeckPreflightChecklist({
     },
 
     // ── Render references ──────────────────────────────────────────────
-    {
-      id: "renders",
-      label: "Featured renders",
-      icon: ImageIcon,
-      status: visualReferences.length > 0 ? "ok" : "info",
-      summary:
-        visualReferences.length > 0
-          ? `${visualReferences.length} reference${visualReferences.length === 1 ? "" : "s"} will appear on hero / image-feature slides.`
-          : "No render images yet. Image-feature slides will fall back to typography-driven layouts.",
-      detail:
-        visualReferences.length > 0 ? (
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {visualReferences.slice(0, 6).map((ref) => (
-              <div key={ref.documentId} className="h-12 w-16 rounded-md bg-muted border border-border overflow-hidden">
-                <img
-                  src={ref.url}
-                  alt={ref.filename}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ))}
-            {visualReferences.length > 6 && (
-              <span className="text-[10px] text-muted-foreground">
-                +{visualReferences.length - 6} more
-              </span>
-            )}
-          </div>
-        ) : null,
-      edit: { path: `/prompts${projectQuery}`, label: "Generate renders" },
-    },
+    // Show every CURRENT rendered image (hero + each view) with a
+    // selection toggle so the user can pick which to feature on the
+    // hero / image-feature slides. Previously this section showed the
+    // uploaded mood-board / inspiration images, which was wrong: those
+    // are pre-design references the model never displays as featured
+    // imagery. The deck designer features the actual booth renders.
+    (() => {
+      const currentRenders = renderImages.filter((r) => r.is_current && r.public_url);
+      const selectedCount = currentRenders.filter((r) => featuredAngleIds.has(r.angle_id)).length;
+      let status: SectionStatus["status"];
+      let summary: string;
+      if (currentRenders.length === 0) {
+        status = "info";
+        summary = "No renders generated yet. Image-feature slides will fall back to typography-driven layouts.";
+      } else if (selectedCount === 0) {
+        status = "warn";
+        summary = `${currentRenders.length} render${currentRenders.length === 1 ? "" : "s"} available — none selected to feature. The deck will fall back to typography-only.`;
+      } else {
+        status = "ok";
+        summary = `${selectedCount} of ${currentRenders.length} render${currentRenders.length === 1 ? "" : "s"} selected — will appear on hero / image-feature slides.`;
+      }
+      return {
+        id: "renders",
+        label: "Featured renders",
+        icon: ImageIcon,
+        status,
+        summary,
+        detail:
+          currentRenders.length > 0 ? (
+            <div className="flex items-start gap-2 mt-2 flex-wrap">
+              {currentRenders.map((img) => {
+                const isSelected = featuredAngleIds.has(img.angle_id);
+                const modelUsed =
+                  img.prompt_artifacts && typeof img.prompt_artifacts.modelUsed === "string"
+                    ? img.prompt_artifacts.modelUsed
+                    : undefined;
+                const primaryError =
+                  img.prompt_artifacts && typeof img.prompt_artifacts.primaryError === "string"
+                    ? img.prompt_artifacts.primaryError
+                    : undefined;
+                return (
+                  <div key={img.id} className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onToggleFeatured(img.angle_id)}
+                      title={`${isSelected ? "Unselect" : "Select"} ${img.angle_name}`}
+                      className={cn(
+                        "relative h-16 w-24 rounded-md bg-muted border-2 overflow-hidden transition-all",
+                        isSelected
+                          ? "border-primary ring-1 ring-primary/40"
+                          : "border-border opacity-60 hover:opacity-100 hover:border-border/70",
+                      )}
+                    >
+                      <img
+                        src={img.public_url}
+                        alt={img.angle_name}
+                        className="h-full w-full object-cover"
+                      />
+                      {isSelected && (
+                        <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                    </button>
+                    {modelUsed && (
+                      <ModelBadge model={modelUsed} primaryError={primaryError} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null,
+        edit: { path: `/prompts${projectQuery}`, label: "Generate renders" },
+      };
+    })(),
   ];
 
   const okCount = sections.filter((s) => s.status === "ok").length;

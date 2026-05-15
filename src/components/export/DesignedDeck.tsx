@@ -10,7 +10,7 @@
 // Empty-state CTA is the primary entry. After generation, the deck stays
 // in localStorage so refreshes don't re-spend tokens.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Sparkles,
   RefreshCw,
@@ -54,7 +54,6 @@ import {
   type ExportProgress,
 } from "@/lib/exportDesignedDeck";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
-import { useProjectVisualReferences } from "@/hooks/useProjectVisualReferences";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { DeckPreflightChecklist } from "@/components/export/DeckPreflightChecklist";
 
@@ -110,8 +109,11 @@ export function DesignedDeck({
   // keeps DesignedDeck self-contained vs. requiring the parent to thread
   // every field as a prop.
   const { activeLogo: brandLogo } = useBrandLogo(projectId);
-  const { selected: visualRefsSelected } = useProjectVisualReferences(projectId);
-  const visualReferencesNonLogo = visualRefsSelected.filter((r) => r.role !== "brand-logo");
+  // (Uploaded mood-board / inspiration "visualReferences" used to feed
+  // the deck preflight here. They're not what the deck actually
+  // features on slides — Claude features the rendered booth images —
+  // so the preflight now reads from projectImages instead, and the
+  // visual-references hook is unneeded in this surface.)
   const { profile: companyProfile } = useCompanyProfile();
   const agencyLogoUrl = companyProfile?.logo_url ?? null;
   const resolvedAgencyName = agencyName ?? companyProfile?.company_name ?? undefined;
@@ -139,6 +141,48 @@ export function DesignedDeck({
         })),
     [projectImages],
   );
+
+  // Which current renders the user wants Claude to "feature" on hero /
+  // image-feature slides. The preflight panel surfaces every current
+  // render with a selection toggle; this Set is the source of truth.
+  // Defaults to ALL current renders selected so the dominant case is
+  // "use everything that's already rendered." Re-syncs whenever the
+  // underlying render set changes (e.g. a new view lands) so the user
+  // doesn't lose new renders to a stale selection.
+  const [featuredAngleIds, setFeaturedAngleIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const currentAngleIds = projectImages
+      .filter((img) => img.is_current && img.public_url)
+      .map((img) => img.angle_id);
+    setFeaturedAngleIds((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      // Auto-add freshly-rendered angles (never opt them out by default).
+      for (const id of currentAngleIds) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      // Prune angles that no longer have a current render so the
+      // generator doesn't try to feature a deleted image.
+      for (const id of Array.from(next)) {
+        if (!currentAngleIds.includes(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [projectImages]);
+  const handleToggleFeatured = (angleId: string) => {
+    setFeaturedAngleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(angleId)) next.delete(angleId);
+      else next.add(angleId);
+      return next;
+    });
+  };
   const [draftHtml, setDraftHtml] = useState<string>("");
   const [pingState, setPingState] = useState<
     | { status: "idle" }
@@ -171,8 +215,12 @@ export function DesignedDeck({
     }
   };
 
+  // Filter the rendered-image set by the user's featured-selection
+  // before sending to the deck designer. The deck only features what
+  // the user picked in the preflight; unselected renders stay in the
+  // project but don't appear on hero / image-feature slides.
   const imageUrls = images
-    .filter((i) => i.is_current)
+    .filter((i) => i.is_current && featuredAngleIds.has(i.angle_id))
     .map((i) => ({ angle: i.angle_id, url: i.public_url }));
 
   const handleGenerate = async () => {
@@ -322,7 +370,9 @@ export function DesignedDeck({
             agencyLogoUrl={agencyLogoUrl}
             brandColor={brandColor}
             secondaryColor={secondaryColor}
-            visualReferences={visualReferencesNonLogo}
+            renderImages={projectImages}
+            featuredAngleIds={featuredAngleIds}
+            onToggleFeatured={handleToggleFeatured}
             stylePreset={stylePreset}
           />
 

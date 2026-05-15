@@ -531,14 +531,43 @@ describe("normalizeBrief — hanging elements", () => {
     });
     expect(n.hanging.elements).toHaveLength(1);
     const el = n.hanging.elements[0];
-    expect(el.id).toMatch(/^hang_/);
+    expect(el.id).toBe("hang_0");
     expect(el.name).toBe("Primary identity ring");
     expect(el.shape).toBe("ring");
-    expect(el.dimensions.width).toBeGreaterThan(0);
-    expect(el.dimensions.depth).toBeGreaterThan(0);
-    expect(el.suspensionDropFt).toBeGreaterThan(0);
+    // eqvilentGeometry.width === 6 (metric), so defaultDim = 6/3 = 2.
+    // Lock in the documented defaults so a regression in
+    // normalizeHangingElement (e.g. changing the divisor or dropping
+    // the default position) is caught by the test instead of slipping
+    // through with a tautological "> 0" assertion.
+    expect(el.dimensions.width).toBeCloseTo(2);
+    expect(el.dimensions.depth).toBeCloseTo(2);
+    expect(el.dimensions.thicknessFt).toBe(1);
+    expect(el.suspensionDropFt).toBe(3);
+    expect(el.position).toEqual({ x: 3, y: 3 });
     expect(el.materials).toContain("brushed aluminum");
     expect(el.printed).toContain("front: brand logotype");
+  });
+
+  it("produces stable IDs across repeated normalize calls", () => {
+    // Deterministic ids matter for downstream tasks 2-6: the canvas
+    // drag-edit + prompt anchoring use the id as a stable handle into
+    // local state. A clock-stamped id (the old Date.now() form)
+    // regenerated on every normalize call and silently broke any
+    // state that keyed off element id.
+    const briefWithHanging = {
+      ...eqvilentParsedBrief,
+      hangingElements: [{ name: "Ring" }, { name: "Banner" }],
+    };
+    const input = {
+      project: eqvilentProjectMeta,
+      parsedBrief: briefWithHanging as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"],
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    };
+    const a = normalizeBrief(input);
+    const b = normalizeBrief(input);
+    expect(a.hanging.elements.map((e) => e.id)).toEqual(b.hanging.elements.map((e) => e.id));
+    expect(a.hanging.elements.map((e) => e.id)).toEqual(["hang_0", "hang_1"]);
   });
 
   it("defaults hanging.elements to [] when parsedBrief.hangingElements is omitted", () => {

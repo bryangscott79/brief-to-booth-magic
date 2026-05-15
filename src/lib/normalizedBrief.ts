@@ -164,6 +164,15 @@ export interface NormalizedBriefCompliance {
   hardConstraints: HardConstraint[];
 }
 
+/**
+ * Single source of truth for the five hanging-element shape names.
+ * Used both as a type-level union (HangingShape) and as a runtime
+ * guard in normalizeHangingElement — keeping the list in one place
+ * means future shape additions only need to touch one literal.
+ */
+const HANGING_SHAPES = ["rect", "circle", "oval", "ring", "custom"] as const;
+export type HangingShape = (typeof HANGING_SHAPES)[number];
+
 export interface NormalizedHangingElement {
   /** Stable identifier; used for canvas drag-edit and prompt anchoring. */
   id: string;
@@ -180,7 +189,7 @@ export interface NormalizedHangingElement {
    * because it's the dominant hanging form and benefits from explicit
    * geometry.
    */
-  shape: "rect" | "circle" | "oval" | "ring" | "custom";
+  shape: HangingShape;
   /**
    * Top-down dimensions. `width` and `depth` are in the same units
    * as NormalizedBriefGeometry. `thicknessFt` is the element's own
@@ -493,6 +502,19 @@ interface ParsedHangingElement {
  * Parser gives us free-text dimensions and positional hints; this is
  * where we coerce to numeric coordinates with sensible defaults.
  *
+ * IDs are deterministic from source ordering — same parsed brief
+ * produces the same ids across normalize calls, which is what canvas
+ * drag-edit and prompt anchoring rely on. A clock-stamped id (the
+ * old Date.now() form) regenerated on every normalize call and
+ * silently broke any downstream state that keyed off element id.
+ *
+ * Note: `raw.estimatedDimensions` and `raw.suspensionHint` are
+ * intentionally ignored at this stage — the v1 normalizer uses pure
+ * geometric defaults so downstream tasks can reason about a stable
+ * shape. Free-text interpretation is a future task; the parser
+ * captures the strings so we don't lose data, but they don't
+ * influence the numeric output here.
+ *
  * Defaults when fields are missing:
  *   - shape: "ring" (most common authored form)
  *   - position: booth center
@@ -504,7 +526,7 @@ function normalizeHangingElement(
   geometry: BoothGeometry,
   idx: number,
 ): NormalizedHangingElement {
-  const id = `hang_${Date.now().toString(36)}_${idx}`;
+  const id = `hang_${idx}`;
   const defaultDim = geometry.width / 3;
   return {
     id,
@@ -512,8 +534,8 @@ function normalizeHangingElement(
       ? raw.name.trim()
       : `Hanging element ${idx + 1}`,
     physicalForm: typeof raw.physicalForm === "string" ? raw.physicalForm.trim() : "",
-    shape: ["rect", "circle", "oval", "ring", "custom"].includes(raw.shape as string)
-      ? (raw.shape as NormalizedHangingElement["shape"])
+    shape: (HANGING_SHAPES as readonly string[]).includes(raw.shape as string)
+      ? (raw.shape as HangingShape)
       : "ring",
     dimensions: {
       width: defaultDim,
@@ -631,8 +653,13 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       }
     : undefined;
 
-  const rawHanging = (input.parsedBrief as unknown as { hangingElements?: unknown } | null | undefined)
-    ?.hangingElements;
+  // Read from the post-safeBrief() parsedBrief — safeBrief() already
+  // guarantees `hangingElements: []` when the upstream brief omitted
+  // the field, so null-handling lives in one place (safeBrief) and
+  // not at every call site. The inline Array.isArray check below is
+  // belt-and-suspenders against a corrupted shape (e.g. a string
+  // somehow landing in the field).
+  const rawHanging = (parsedBrief as unknown as { hangingElements?: unknown }).hangingElements;
   const hangingElements: NormalizedHangingElement[] = Array.isArray(rawHanging)
     ? (rawHanging as ParsedHangingElement[]).map((raw, idx) =>
         normalizeHangingElement(raw, geometry, idx),

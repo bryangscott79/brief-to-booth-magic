@@ -596,6 +596,113 @@ describe("normalizeBrief — hanging elements", () => {
   });
 });
 
+// ─── validateBrief — hanging-elements gap (Task 2) ───────────────────
+//
+// When the booth has no hanging element authored, the validator emits
+// a non-blocking "helpful" gap so the clarification UI can offer a
+// one-click "add a default ring" path. Three suppression rules:
+//
+//   1. Don't emit when the brief already has hanging elements.
+//   2. Don't emit when the user previously said "No — floor-only
+//      booth" (the answer is persisted on the brief via a sentinel
+//      so the gap doesn't re-fire on the same project).
+//
+// The codebase has no separate skipMap — gap suppression is always
+// data-driven (the same shape as brand.colors.hex: write a value to
+// the brief, validator sees the value, gap doesn't fire). For
+// hanging.elements the "filled" state and the "initial" state are
+// both `length === 0`, so we need an explicit sentinel: a
+// `_dismissedGaps` array attached to the brief.
+
+describe("validateBrief — hanging-elements gap", () => {
+  it("emits helpful gap when hanging.elements is empty and not dismissed", () => {
+    const normalized = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief, // no hangingElements key
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const { gaps } = validateBrief(normalized);
+    const gap = gaps.find((g) => g.field === "hanging.elements");
+    expect(gap).toBeDefined();
+    expect(gap?.severity).toBe("helpful");
+    expect(gap?.question).toMatch(/hanging/i);
+    expect(gap?.options).toEqual(["Yes — add one", "No — floor-only booth"]);
+  });
+
+  it("does NOT emit when hanging.elements is non-empty", () => {
+    const briefWithHanging = {
+      ...eqvilentParsedBrief,
+      hangingElements: [
+        { name: "Primary ring", physicalForm: "white ring" },
+      ],
+    };
+    const normalized = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: briefWithHanging as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"],
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const { gaps } = validateBrief(normalized);
+    expect(gaps.some((g) => g.field === "hanging.elements")).toBe(false);
+  });
+
+  it("does NOT emit when user previously dismissed the gap", () => {
+    // applyGapAnswer with "No — floor-only booth" writes a sentinel
+    // into the brief; on the next normalize+validate pass, the gap
+    // should not re-fire.
+    const dismissedBrief = {
+      ...eqvilentParsedBrief,
+      _dismissedGaps: ["hanging.elements"],
+    };
+    const normalized = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: dismissedBrief as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"],
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const { gaps } = validateBrief(normalized);
+    expect(gaps.some((g) => g.field === "hanging.elements")).toBe(false);
+  });
+});
+
+// ─── applyGapAnswer — hanging.elements branch (Task 2) ───────────────
+
+describe("applyGapAnswer — hanging.elements", () => {
+  it('"Yes — add one" seeds a default hanging element', async () => {
+    const { applyGapAnswer } = await import("./normalizedBrief");
+    const initial = structuredClone(eqvilentParsedBrief);
+    let after = initial;
+    applyGapAnswer(initial, "hanging.elements", "Yes — add one", (next) => {
+      after = next;
+    });
+    const updated = after as unknown as {
+      hangingElements?: Array<{ name?: string }>;
+    };
+    expect(updated.hangingElements).toBeDefined();
+    expect(updated.hangingElements).toHaveLength(1);
+    expect(updated.hangingElements?.[0].name).toMatch(/identity|hanging/i);
+  });
+
+  it('"No — floor-only booth" dismisses the gap so it does not re-emit', async () => {
+    const { applyGapAnswer } = await import("./normalizedBrief");
+    const initial = structuredClone(eqvilentParsedBrief);
+    let after = initial;
+    applyGapAnswer(initial, "hanging.elements", "No — floor-only booth", (next) => {
+      after = next;
+    });
+    // Verify round-trip: validate sees the dismissal and skips the gap.
+    const normalized = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: after,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const { gaps } = validateBrief(normalized);
+    expect(gaps.some((g) => g.field === "hanging.elements")).toBe(false);
+  });
+});
+
 // ─── composeViewPrompt — hero-derived views ──────────────────────────
 
 describe("composeViewPrompt — views derive from heroSnapshot", () => {

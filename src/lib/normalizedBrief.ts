@@ -245,6 +245,17 @@ export interface NormalizedBrief {
   context: NormalizedBriefContext;
   camera: NormalizedBriefCamera;
   compliance: NormalizedBriefCompliance;
+  /**
+   * UI-state passthrough — the set of gap field paths the user has
+   * explicitly dismissed (clicked the "No / not applicable" option
+   * on). Validator consults this to suppress helpful gaps that would
+   * otherwise re-fire because their "filled" state and "initial"
+   * state look identical (e.g. hanging.elements with length 0 means
+   * both "we haven't asked yet" AND "user said no"). Underscored to
+   * mark it as out-of-band metadata, not part of the canonical
+   * brief shape used by the composer.
+   */
+  _dismissedGaps?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -375,6 +386,17 @@ function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief 
     ...(Array.isArray((b as { hangingElements?: unknown }).hangingElements)
       ? { hangingElements: (b as { hangingElements: unknown[] }).hangingElements }
       : { hangingElements: [] }),
+    // _dismissedGaps is the sentinel set used to suppress helpful
+    // gaps when the user has already answered "No" / dismissed the
+    // prompt. Without this, gaps whose "filled" state is identical
+    // to their "initial" state (e.g. hanging.elements with length 0
+    // meaning both "we haven't asked yet" AND "the user said no")
+    // would re-fire on every validation pass. Carrying it through
+    // safeBrief means the validator can read it safely on any
+    // partial/legacy brief.
+    ...(Array.isArray((b as { _dismissedGaps?: unknown })._dismissedGaps)
+      ? { _dismissedGaps: (b as { _dismissedGaps: unknown[] })._dismissedGaps }
+      : { _dismissedGaps: [] }),
   } as ParsedBrief;
 }
 
@@ -666,6 +688,14 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       )
     : [];
 
+  // _dismissedGaps round-trip: same belt-and-suspenders shape check as
+  // hangingElements above. safeBrief already guarantees the field is
+  // an array, but defending against a corrupted shape costs nothing.
+  const rawDismissed = (parsedBrief as unknown as { _dismissedGaps?: unknown })._dismissedGaps;
+  const dismissedGaps: string[] = Array.isArray(rawDismissed)
+    ? rawDismissed.filter((v): v is string => typeof v === "string")
+    : [];
+
   return {
     project: {
       id: project.id,
@@ -722,6 +752,7 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       framing: "wide",
     },
     compliance: { hardConstraints: [] },
+    _dismissedGaps: dismissedGaps,
   };
 }
 
@@ -859,6 +890,32 @@ export function validateBrief(normalized: NormalizedBrief): ValidationResult {
       question:
         "Briefly describe the hero installation's structural form (one sentence — e.g. 'suspended mobius ribbon').",
       fallback: "central sculptural feature",
+      source: "schema",
+    });
+  }
+
+  // Hanging element — helpful, non-blocking. Island/peninsula booths
+  // almost always carry a hanging overhead identifier (ring, banner,
+  // truss-mounted halo); island visibility across a hall is the main
+  // reason it exists. Surface a one-click "add a default ring" path
+  // when the brief doesn't mention one. Suppressed by either
+  //   - the brief already having a hanging element authored, or
+  //   - the user previously answering "No — floor-only booth", which
+  //     applyGapAnswer records in `_dismissedGaps`. Without the
+  //     dismissal sentinel the gap re-fires forever (empty array is
+  //     both the "we haven't asked" and the "no thanks" state).
+  const dismissed = normalized._dismissedGaps ?? [];
+  if (
+    normalized.hanging.elements.length === 0 &&
+    !dismissed.includes("hanging.elements")
+  ) {
+    gaps.push({
+      field: "hanging.elements",
+      severity: "helpful",
+      question:
+        "Will this booth have a hanging overhead structure visible from across the hall? It's a common identifier on island booths.",
+      options: ["Yes — add one", "No — floor-only booth"],
+      fallback: [],
       source: "schema",
     });
   }
@@ -1316,6 +1373,58 @@ export function applyGapAnswer(
       // open and the user could click Save infinitely.
       next.experience.hero.description = String(value);
       break;
+    case "hanging.elements": {
+      // The clarification UI offers two options:
+      //   - "Yes — add one" → seed a default hanging element (a ring
+      //     with brand-wordmark surfaces + edge-lit perimeter). The
+      //     user refines materials, dimensions, and position in the
+      //     Brief Review step and on the spatial canvas (later tasks).
+      //   - anything else (typically "No — floor-only booth") → record
+      //     the dismissal so the gap doesn't re-fire on the next
+      //     validation pass. Without this, "No" looks identical to
+      //     "we never asked" because both leave hangingElements empty.
+      //
+      // hangingElements isn't on the ParsedBrief TS type yet — same
+      // pattern as Task 1's normalizer reads through an `as unknown as`
+      // cast; the parser writes free-form JSON ahead of the type
+      // addition.
+      const nextLoose = next as unknown as {
+        hangingElements?: Array<Record<string, unknown>>;
+        _dismissedGaps?: string[];
+      };
+      if (typeof value === "string" && value.startsWith("Yes")) {
+        nextLoose.hangingElements = [
+          {
+            name: "Primary identity sign",
+            physicalForm:
+              "Overhead branded structure visible from across the hall — typically a ring or halo silhouette with internal lighting.",
+            shape: "ring",
+            materials: [
+              "brushed aluminum frame",
+              "internally backlit white acrylic",
+            ],
+            surfaces: ["front-facing edge: brand wordmark"],
+            lighting: ["edge-lit perimeter glow"],
+            printed: ["front: brand logotype"],
+          },
+        ];
+        // If the user previously dismissed and then changed their
+        // mind, clear the dismissal so the brief view doesn't show
+        // a stale "skipped" marker.
+        if (Array.isArray(nextLoose._dismissedGaps)) {
+          nextLoose._dismissedGaps = nextLoose._dismissedGaps.filter(
+            (f) => f !== "hanging.elements",
+          );
+        }
+      } else {
+        const list = Array.isArray(nextLoose._dismissedGaps)
+          ? nextLoose._dismissedGaps
+          : [];
+        if (!list.includes("hanging.elements")) list.push("hanging.elements");
+        nextLoose._dismissedGaps = list;
+      }
+      break;
+    }
     case "brand.colors.hex":
       // Encode the hex in the color name string so the normalizer can
       // parse it back out into c.hex on the NormalizedBriefBrandColor.

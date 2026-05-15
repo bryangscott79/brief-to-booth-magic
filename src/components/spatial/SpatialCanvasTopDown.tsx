@@ -32,6 +32,7 @@ import {
   zonesOverlap,
   effectiveShape,
   resolveLNotch,
+  moveHangingElement,
 } from "@/lib/geometryModel";
 
 const CANVAS_PADDING = 32; // px on each side, leaves room for dimension rulers
@@ -825,6 +826,27 @@ export const SpatialCanvasTopDown = forwardRef<
                   onMouseDown={(e) => {
                     e.cancelBubble = true;
                   }}
+                  onDragMove={(e) => {
+                    // Snap on each frame so the user sees live grid
+                    // snapping and bounds clamping as they drag —
+                    // matches the zone drag pattern above. We only
+                    // update the visual node position here; the actual
+                    // state commit happens in onDragEnd to avoid
+                    // per-frame React renders.
+                    const node = e.target;
+                    const newX = snapToGrid(
+                      toUnitsX(node.x()),
+                      geometry.measurementSystem,
+                    );
+                    const newY = snapToGrid(
+                      toUnitsY(node.y()),
+                      geometry.measurementSystem,
+                    );
+                    const clampedX = Math.max(0, Math.min(geometry.width, newX));
+                    const clampedY = Math.max(0, Math.min(geometry.depth, newY));
+                    node.x(toPxX(clampedX));
+                    node.y(toPxY(clampedY));
+                  }}
                   onDragEnd={(e) => {
                     if (!onHangingElementsChange) return;
                     const node = e.target;
@@ -845,16 +867,10 @@ export const SpatialCanvasTopDown = forwardRef<
                     // only constrain the anchor point itself.
                     const clampedX = Math.max(0, Math.min(geometry.width, newX));
                     const clampedY = Math.max(0, Math.min(geometry.depth, newY));
-                    // Equivalent to moveHangingElement(el, {dx, dy}) —
-                    // inlined to avoid a circular import back to
-                    // SpatialCanvas.tsx (which already imports this
-                    // file). The pure helper still lives in
-                    // SpatialCanvas.tsx for unit-test consumption.
-                    const moved: AbsoluteHangingElement = {
-                      ...el,
-                      x: clampedX,
-                      y: clampedY,
-                    };
+                    const moved = moveHangingElement(el, {
+                      dx: clampedX - el.x,
+                      dy: clampedY - el.y,
+                    });
                     onHangingElementsChange(
                       hangingElements.map((h) => (h.id === el.id ? moved : h)),
                     );

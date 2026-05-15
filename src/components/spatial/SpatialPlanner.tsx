@@ -685,8 +685,13 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
   // outline is visible without dominating. User refines size, shape,
   // and drop in Brief Review (task 4) or by dragging on the canvas.
   const addHangingElement = useCallback(() => {
-    const id = `hang_${Date.now().toString(36)}`;
     const existing = canvasGeometry.hangingElements ?? [];
+    // Index-based ID matches the Task 1 normalizer's `hang_${idx}` and
+    // Brief Review's makeDefaultElement, and avoids the sub-millisecond
+    // collision risk of `hang_${Date.now()}` when two clicks land in
+    // the same tick. hangingElements is rebuilt from scratch on each
+    // normalize pass, so renumbering after removals stays consistent.
+    const id = `hang_${existing.length}`;
     const newEl: AbsoluteHangingElement = {
       id,
       name: `Hanging element ${existing.length + 1}`,

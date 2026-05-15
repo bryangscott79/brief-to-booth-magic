@@ -52,51 +52,11 @@ import {
   effectiveShape,
 } from "@/lib/geometryModel";
 
-// ─── Hanging-element drag math (pure, exported for unit tests) ───────────
-//
-// These helpers are pure functions so they can be tested without
-// spinning up the full Konva canvas. The canvas component uses them
-// inside its drag handlers; tests import them directly.
-//
-// Coordinate convention: AbsoluteHangingElement.{x, y} is the CENTER
-// of the element's top-down footprint (NOT the front-left corner as
-// with zones). Hit-testing therefore checks ±width/2 and ±depth/2
-// around the center.
-
-/**
- * Return the topmost hanging element whose top-down footprint contains
- * the given booth-local point, or null if the point hits empty space.
- * Iterates in reverse so later-drawn (z-top) elements win ties.
- */
-export function hangingElementAtPoint(
-  elements: AbsoluteHangingElement[],
-  point: { x: number; y: number },
-): AbsoluteHangingElement | null {
-  for (let i = elements.length - 1; i >= 0; i--) {
-    const el = elements[i];
-    if (
-      point.x >= el.x - el.width / 2 &&
-      point.x <= el.x + el.width / 2 &&
-      point.y >= el.y - el.depth / 2 &&
-      point.y <= el.y + el.depth / 2
-    ) {
-      return el;
-    }
-  }
-  return null;
-}
-
-/**
- * Apply a drag delta (booth-unit dx/dy) to a hanging element's center
- * coordinates. Returns a NEW element — never mutates the input — so
- * React state updates remain immutable.
- */
-export function moveHangingElement(
-  el: AbsoluteHangingElement,
-  delta: { dx: number; dy: number },
-): AbsoluteHangingElement {
-  return { ...el, x: el.x + delta.dx, y: el.y + delta.dy };
-}
+// Pure hanging-element drag math lives in geometryModel.ts (alongside
+// the AbsoluteHangingElement type + the other pure geometric helpers).
+// Re-exported here so any external caller that imports from
+// `@/components/spatial/SpatialCanvas` keeps working.
+export { hangingElementAtPoint, moveHangingElement } from "@/lib/geometryModel";
 
 export interface CapturedRefs {
   floorplan: string | null;

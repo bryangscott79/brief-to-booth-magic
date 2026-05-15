@@ -1,25 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-
-// jsdom can't load Konva (no native `canvas` module), and SpatialCanvas
-// transitively imports react-konva via SpatialCanvasTopDown. The math
-// helpers under test are pure and don't touch Konva — mock the modules
-// out with empty exports so the import chain resolves.
-vi.mock("konva", () => ({}));
-vi.mock("react-konva", () => ({
-  Stage: () => null,
-  Layer: () => null,
-  Rect: () => null,
-  Text: () => null,
-  Line: () => null,
-  Group: () => null,
-  Ellipse: () => null,
-  Transformer: () => null,
-}));
+import { describe, it, expect } from "vitest";
 
 import {
   hangingElementAtPoint,
   moveHangingElement,
-} from "./SpatialCanvas";
+} from "@/lib/geometryModel";
 import type { AbsoluteHangingElement } from "@/lib/geometryModel";
 
 describe("SpatialCanvas hanging-element math", () => {

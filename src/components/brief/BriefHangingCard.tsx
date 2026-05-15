@@ -44,11 +44,20 @@ const SHAPES: { value: HangingShape; label: string }[] = [
 
 function ChipList({
   label,
+  itemLabel,
   values,
   placeholder,
   onChange,
 }: {
   label: string;
+  /**
+   * Singular form of the item type (e.g. "material", "surface"). Used
+   * only for the chip remove button's aria-label so a screen reader
+   * reads "Remove material brushed aluminum" rather than the awkward
+   * "Remove materials brushed aluminum". Defaults to `label`
+   * lowercased with a trailing `s` stripped.
+   */
+  itemLabel?: string;
   values: string[];
   placeholder: string;
   onChange: (next: string[]) => void;
@@ -73,6 +82,8 @@ function ChipList({
     }
   };
 
+  const removeNoun = itemLabel ?? label.toLowerCase().replace(/s$/, "");
+
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
@@ -88,7 +99,7 @@ function ChipList({
               type="button"
               onClick={() => remove(i)}
               className="hover:text-destructive"
-              aria-label={`Delete chip ${v}`}
+              aria-label={`Remove ${removeNoun} ${v}`}
             >
               <X className="h-3 w-3" />
             </button>
@@ -280,6 +291,11 @@ function ElementSubCard({
 
 // ─── Default factory for a new element ────────────────────────────────────────
 
+// makeDefaultElement intentionally seeds a BARE element — the user
+// clicked Add to author from scratch and doesn't need example content
+// to delete. Contrast with the seed in
+// normalizedBrief.ts::applyGapAnswer ("Yes — add one"), which is
+// richer because that flow is "show me an example to edit."
 function makeDefaultElement(count: number): NormalizedHangingElement {
   return {
     id: `hang_${count}`,
@@ -288,6 +304,11 @@ function makeDefaultElement(count: number): NormalizedHangingElement {
     shape: "ring",
     dimensions: { width: 3, depth: 3, thicknessFt: 1 },
     suspensionDropFt: 3,
+    // position is a placeholder here — the user positions hanging
+    // elements on the spatial canvas in Task 5. The normalizer's
+    // default of booth-center is what matters at render time; this
+    // synthesized value is just to satisfy the NormalizedHangingElement
+    // type contract for the authoring UI.
     position: { x: 0, y: 0 },
     materials: [],
     surfaces: [],

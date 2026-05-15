@@ -1488,6 +1488,12 @@ export function applyGapAnswer(
         _dismissedGaps?: string[];
       };
       if (typeof value === "string" && value.startsWith("Yes")) {
+        // This seed is intentionally RICH (populated physicalForm,
+        // materials, surfaces, lighting, printed) — the clarification
+        // flow is "show me an example I can refine." Contrast with
+        // BriefHangingCard.tsx::makeDefaultElement, the Add-button
+        // default, which is intentionally BARE because that flow is
+        // "give me a blank canvas to author from scratch."
         nextLoose.hangingElements = [
           {
             name: "Primary identity sign",

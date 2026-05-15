@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { cn } from "@/lib/utils";
 import { Check, Edit2, ChevronRight, X, Save, Plus, Trash2 } from "lucide-react";
@@ -144,6 +144,11 @@ function deriveHangingElements(brief: ParsedBrief): NormalizedHangingElement[] {
       shape,
       dimensions: { width: 3, depth: 3, thicknessFt: 1 },
       suspensionDropFt: 3,
+      // position is a placeholder here — the user positions hanging
+      // elements on the spatial canvas in Task 5. The normalizer's
+      // default of booth-center is what matters at render time; this
+      // synthesized value is just to satisfy the NormalizedHangingElement
+      // type contract for the authoring UI.
       position: { x: 0, y: 0 },
       materials: Array.isArray(e.materials) ? (e.materials as unknown[]).map(String) : [],
       surfaces: Array.isArray(e.surfaces) ? (e.surfaces as unknown[]).map(String) : [],
@@ -255,6 +260,82 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
 
   // local draft state — only mutated while editing a section
   const [draft, setDraft] = useState<ParsedBrief | null>(null);
+
+  // ── Hanging-element commit path ──────────────────────────────────────
+  // BriefHangingCard fires onChange on every keystroke inside its text
+  // inputs (physicalForm Textarea, name Input, etc.). Routing those
+  // through commitSection would (a) clobber any other section's
+  // in-progress edit draft via setDraft(null), and (b) hit Supabase
+  // per keystroke. So we debounce ~400ms here and write through a
+  // sibling path that updates the store + DB but never touches
+  // `draft`. The debounced timer is flushed on unmount so navigating
+  // away doesn't lose in-progress edits.
+  //
+  // NOTE: these hooks must be declared above the `if (!brief)` early
+  // return so they run unconditionally on every render (Rules of Hooks).
+  const hangingCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hangingLatestRef = useRef<ParsedBrief | null>(null);
+
+  /**
+   * Sibling of commitSection that updates the store + DB but does NOT
+   * touch the `draft` state. This is the only safe path while another
+   * section may be in the middle of an edit (e.g. user is editing Brand
+   * in the inline-edit form and types into a hanging element — the
+   * hanging commit must not null out the Brand draft).
+   */
+  const commitHangingSection = useCallback(
+    async (partialDraft: ParsedBrief) => {
+      setParsedBrief(partialDraft);
+      if (projectId) {
+        await saveProjectField(projectId, "parsed_brief", partialDraft);
+      }
+    },
+    [projectId, setParsedBrief],
+  );
+
+  const flushHangingCommit = useCallback(() => {
+    if (hangingCommitTimerRef.current) {
+      clearTimeout(hangingCommitTimerRef.current);
+      hangingCommitTimerRef.current = null;
+    }
+    if (hangingLatestRef.current) {
+      const pending = hangingLatestRef.current;
+      hangingLatestRef.current = null;
+      void commitHangingSection(pending);
+    }
+  }, [commitHangingSection]);
+
+  useEffect(() => {
+    // Flush any pending commit on unmount so the user doesn't lose
+    // in-progress edits when navigating away.
+    return () => flushHangingCommit();
+  }, [flushHangingCommit]);
+
+  const handleHangingChange = useCallback(
+    (next: NormalizedHangingElement[]) => {
+      if (!brief) return;
+      // Only the authoring fields round-trip to parsedBrief.
+      // Position / dimensions / id / suspensionDropFt are
+      // normalize-time-only — Task 5's canvas layer will edit those
+      // via BoothGeometry, not via parsedBrief.
+      const updated = {
+        ...brief,
+        hangingElements: next.map((el) => ({
+          name: el.name,
+          physicalForm: el.physicalForm,
+          shape: el.shape,
+          materials: el.materials,
+          surfaces: el.surfaces,
+          lighting: el.lighting,
+          printed: el.printed,
+        })),
+      } as ParsedBrief;
+      hangingLatestRef.current = updated;
+      if (hangingCommitTimerRef.current) clearTimeout(hangingCommitTimerRef.current);
+      hangingCommitTimerRef.current = setTimeout(flushHangingCommit, 400);
+    },
+    [brief, flushHangingCommit],
+  );
 
   const getDraft = () => draft ?? brief!;
   const patchDraft = (patch: Partial<ParsedBrief>) =>
@@ -831,28 +912,13 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
         </Section>
       </div>
 
-      {/* Hanging Elements */}
+      {/* Hanging Elements
+          NOTE: handleHangingChange debounces ~400ms and writes through
+          commitHangingSection (which does NOT clear `draft`). See the
+          rationale block above next to the hook declarations. */}
       <BriefHangingCard
         elements={deriveHangingElements(brief)}
-        onChange={async (next) => {
-          // Only the authoring fields round-trip to parsedBrief.
-          // Position / dimensions / id / suspensionDropFt are
-          // normalize-time-only — Task 5's canvas layer will edit
-          // those via BoothGeometry, not via parsedBrief.
-          const updated = {
-            ...brief,
-            hangingElements: next.map((el) => ({
-              name: el.name,
-              physicalForm: el.physicalForm,
-              shape: el.shape,
-              materials: el.materials,
-              surfaces: el.surfaces,
-              lighting: el.lighting,
-              printed: el.printed,
-            })),
-          } as typeof brief;
-          await commitSection(updated);
-        }}
+        onChange={handleHangingChange}
       />
 
       {/* Creative Direction */}

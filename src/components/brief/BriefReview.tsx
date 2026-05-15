@@ -10,9 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { OriginalBrief } from "./OriginalBrief";
 import { BriefHangingCard } from "./BriefHangingCard";
+import { BriefExistingSpace } from "./BriefExistingSpace";
 import { useProject } from "@/hooks/useProjects";
 import { saveProjectField } from "@/hooks/useProjectSync";
-import type { ParsedBrief } from "@/types/brief";
+import { useAgency } from "@/hooks/useAgency";
+import { BUILTIN_INDUSTRIES } from "@/lib/builtinIndustries";
+import type { ParsedBrief, ParsedBriefExistingSpace } from "@/types/brief";
 import { BriefClarification } from "@/components/prompts/BriefClarification";
 import {
   validateParsedBriefForReview,
@@ -317,6 +320,83 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
     // in-progress edits when navigating away.
     return () => flushHangingCommit();
   }, [flushHangingCommit]);
+
+  // ── Existing-space commit path ───────────────────────────────────────
+  // Same shape as the hanging-elements path: debounce ~400ms and write
+  // through commitExistingSpaceSection (which does NOT clear `draft`).
+  // The user is typing into numeric / textarea inputs inside the
+  // BriefExistingSpace card and we don't want every keystroke to hit
+  // Supabase or clobber other in-progress edits.
+  const existingSpaceCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const existingSpaceLatestRef = useRef<ParsedBrief | null>(null);
+
+  const commitExistingSpaceSection = useCallback(
+    async (partialDraft: ParsedBrief) => {
+      setParsedBrief(partialDraft);
+      if (projectId) {
+        await saveProjectField(projectId, "parsed_brief", partialDraft);
+      }
+    },
+    [projectId, setParsedBrief],
+  );
+
+  const flushExistingSpaceCommit = useCallback(() => {
+    if (existingSpaceCommitTimerRef.current) {
+      clearTimeout(existingSpaceCommitTimerRef.current);
+      existingSpaceCommitTimerRef.current = null;
+    }
+    if (existingSpaceLatestRef.current) {
+      const pending = existingSpaceLatestRef.current;
+      existingSpaceLatestRef.current = null;
+      void commitExistingSpaceSection(pending);
+    }
+  }, [commitExistingSpaceSection]);
+
+  useEffect(() => {
+    return () => flushExistingSpaceCommit();
+  }, [flushExistingSpaceCommit]);
+
+  const handleExistingSpaceChange = useCallback(
+    (next: ParsedBriefExistingSpace | null) => {
+      if (!brief) return;
+      const updated: ParsedBrief = {
+        ...brief,
+        existingSpace: next ?? undefined,
+      };
+      existingSpaceLatestRef.current = updated;
+      if (existingSpaceCommitTimerRef.current) {
+        clearTimeout(existingSpaceCommitTimerRef.current);
+      }
+      // When the user clicks "Replace photo" we want an immediate commit
+      // so the empty state appears without a 400ms delay; otherwise
+      // debounce typing edits.
+      if (next === null) {
+        existingSpaceCommitTimerRef.current = null;
+        existingSpaceLatestRef.current = null;
+        void commitExistingSpaceSection(updated);
+        return;
+      }
+      existingSpaceCommitTimerRef.current = setTimeout(flushExistingSpaceCommit, 400);
+    },
+    [brief, commitExistingSpaceSection, flushExistingSpaceCommit],
+  );
+
+  // ── Industry input-mode resolution ──────────────────────────────────
+  // The Project type doesn't carry industry yet; we resolve via the
+  // agency's primary_industry (matches the existing pattern in
+  // useActivationTypes). Future: when projects get their own
+  // industry_slug, prefer that over the agency-level value.
+  const { agency } = useAgency();
+  const industryInputMode = useMemo(() => {
+    // Project type doesn't carry industry yet; resolve via the agency's
+    // primary_industry — same pattern as useActivationTypes. The cast
+    // mirrors the existing usage site (Supabase Tables<"agencies"> may
+    // lag behind the migration that introduced this column).
+    const slug = (agency as { primary_industry?: string } | null)
+      ?.primary_industry;
+    if (!slug) return undefined;
+    return BUILTIN_INDUSTRIES.find((i) => i.slug === slug)?.inputMode;
+  }, [agency]);
 
   const handleHangingChange = useCallback(
     (next: NormalizedHangingElement[]) => {
@@ -923,6 +1003,20 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
           {budgetView}
         </Section>
       </div>
+
+      {/* Existing-space card — only for industries whose inputMode is
+          "existing-space-photo" (interior_design today; hybrid
+          industries may also surface it once Task 5 ships the picker).
+          Uses the same debounce+sibling-commit pattern as
+          BriefHangingCard so typing edits don't clobber other-section
+          drafts or hit Supabase per keystroke. */}
+      {industryInputMode === "existing-space-photo" && projectId && (
+        <BriefExistingSpace
+          value={brief.existingSpace ?? null}
+          onChange={handleExistingSpaceChange}
+          projectId={projectId}
+        />
+      )}
 
       {/* Hanging Elements
           NOTE: handleHangingChange debounces ~400ms and writes through

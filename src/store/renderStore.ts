@@ -15,6 +15,12 @@ export interface GeneratedImage {
    * renders saved before the badge existed.
    */
   modelUsed?: string;
+  /**
+   * When the render fell back to Canopy Lite, the gpt-image-2 error
+   * chain that caused it. Surfaced on hover in the UI so the user
+   * can see WHY the primary model didn't run for this render.
+   */
+  primaryError?: string;
 }
 
 /**
@@ -53,6 +59,11 @@ interface RenderState {
    * badge.
    */
   heroModelUsed: string | null;
+  /**
+   * When the hero fell back to Canopy Lite, the gpt-image-2 error
+   * chain that caused it. Surfaced on hover in the UI.
+   */
+  heroPrimaryError: string | null;
   heroFeedback: string;
   heroIterations: string[];
   /**
@@ -257,6 +268,7 @@ const initialState: RenderState = {
   heroPrompt: "",
   heroImage: null,
   heroModelUsed: null,
+  heroPrimaryError: null,
   heroFeedback: "",
   heroIterations: [],
   heroThread: [],
@@ -369,6 +381,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       set((s) => ({
         heroImage: data.imageUrl,
         heroModelUsed: typeof data.modelUsed === "string" ? data.modelUsed : null,
+        heroPrimaryError: typeof data.primaryError === "string" ? data.primaryError : null,
         heroIterations: [...s.heroIterations, data.imageUrl],
         heroThread: [...s.heroThread, turn],
         phase: "hero-review",
@@ -488,6 +501,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
               url: imageUrl || "",
               status: imageUrl ? "complete" : "error",
               modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+              primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
             },
           },
           generationProgress: ((i + 1) / viewsToGenerate.length) * 100,
@@ -588,6 +602,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
             url: imageUrl || "",
             status: imageUrl ? "complete" : "error",
             modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+            primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
           },
         },
         viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
@@ -688,6 +703,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
               url: imageUrl || "",
               status: imageUrl ? "complete" : "error",
               modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+              primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
             },
           },
           generationProgress: ((i + 1) / viewsToRegenerate.length) * 100,

@@ -907,6 +907,7 @@ serve(async (req) => {
       let generatedImageUrl: string | null = null;
       const responseText = "";
       let modelUsed = "";
+      let primaryError: string | undefined = undefined;
 
       // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
       // and falls back to Gemini's nano-banana pro (Canopy Lite) on
@@ -961,7 +962,12 @@ serve(async (req) => {
         }
         generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
         modelUsed = out.modelUsed;
-        console.log(`[generate-view] ${viewName} produced by ${modelUsed}`);
+        if (out.primaryError) {
+          primaryError = out.primaryError;
+          console.warn(`[generate-view] ${viewName} fell back to ${modelUsed}; gpt-image-2 reason: ${out.primaryError}`);
+        } else {
+          console.log(`[generate-view] ${viewName} produced by ${modelUsed}`);
+        }
       } catch (e) {
         console.error(
           `[generate-view] Image generation failed for ${viewName} (both primary and fallback):`,
@@ -984,6 +990,10 @@ serve(async (req) => {
           imageUrl: generatedImageUrl,
           message: responseText,
           modelUsed,
+          // Only set when the Gemini fallback fired — surfaced in
+          // the UI tooltip so the user can see exactly why
+          // gpt-image-2 didn't produce this render.
+          ...(primaryError ? { primaryError } : {}),
         },
       };
     } catch (error) {

@@ -23,10 +23,17 @@ export interface ModelBadgeProps {
    * case the component renders nothing.
    */
   model?: string | null;
+  /**
+   * When the render fell back to Canopy Lite, the gpt-image-2 error
+   * chain that caused it. Shown as the badge's hover-title so the user
+   * can see WHY the primary model didn't run for this render — without
+   * this they'd just see "Canopy Lite" and have no diagnostic path.
+   */
+  primaryError?: string | null;
   className?: string;
 }
 
-export function ModelBadge({ model, className }: ModelBadgeProps) {
+export function ModelBadge({ model, primaryError, className }: ModelBadgeProps) {
   if (!model) return null;
   const lower = model.toLowerCase();
   // Substring match — keeps the badge resilient to future model
@@ -52,14 +59,21 @@ export function ModelBadge({ model, className }: ModelBadgeProps) {
     );
   }
 
+  // Canopy Lite — augment the tooltip with the actual gpt-image-2
+  // failure reason when we have it. Gives the user (or operator) an
+  // immediate diagnostic on hover instead of having to dig into edge-
+  // function logs.
+  const liteTitle = primaryError
+    ? `Rendered with Canopy Lite — gpt-image-2 said: ${primaryError}`
+    : "Rendered with Canopy Lite (fallback engine)";
   return (
     <Badge
       variant="outline"
       className={cn(
-        "text-[10px] gap-1 border-muted-foreground/30 bg-muted/40 text-muted-foreground",
+        "text-[10px] gap-1 border-muted-foreground/30 bg-muted/40 text-muted-foreground cursor-help",
         className,
       )}
-      title="Rendered with Canopy Lite (fallback engine)"
+      title={liteTitle}
     >
       <Wind className="h-2.5 w-2.5" />
       Canopy Lite

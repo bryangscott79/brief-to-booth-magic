@@ -1057,6 +1057,14 @@ export async function callOpenAIImage(
 export interface ImageWithFallbackResult {
   images: OpenAIImageResult[];
   modelUsed: "openai/gpt-image-2" | "google/gemini-3-pro-image-preview";
+  /**
+   * When the fallback fires, the primary (gpt-image-2) error chain
+   * that triggered it. Surfaced to the client so the UI can show
+   * WHY the render fell back — otherwise the user just sees "Canopy
+   * Lite" with no insight into what gpt-image-2 actually returned.
+   * Undefined when gpt-image-2 succeeded.
+   */
+  primaryError?: string;
 }
 
 /**
@@ -1197,7 +1205,14 @@ export async function generateImageWithFallback(
           status: "success",
         });
       }
-      return { images, modelUsed: "google/gemini-3-pro-image-preview" };
+      return {
+        images,
+        modelUsed: "google/gemini-3-pro-image-preview",
+        // Surface gpt-image-2's actual failure reason so the UI can
+        // show it on hover. Trimmed to a manageable length — the
+        // first ~300 chars usually have the model's actual response.
+        primaryError: msg.slice(0, 320),
+      };
     } catch (fallbackErr) {
       const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
       if (options.usage) {

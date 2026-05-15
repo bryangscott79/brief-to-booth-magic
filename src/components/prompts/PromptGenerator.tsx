@@ -1396,7 +1396,7 @@ export function PromptGenerator() {
               * unknown (older renders pre-dating the badge). */}
             {heroModelUsed && (
               <div className="flex justify-end -mt-1">
-                <ModelBadge model={heroModelUsed} />
+                <ModelBadge model={heroModelUsed} primaryError={renderStore.heroPrimaryError} />
               </div>
             )}
 
@@ -1859,7 +1859,7 @@ export function PromptGenerator() {
                   * as the hero, scoped to this view's render. */}
                 {imageData?.status === "complete" && imageData.modelUsed && (
                   <div className="flex justify-end -mt-1">
-                    <ModelBadge model={imageData.modelUsed} />
+                    <ModelBadge model={imageData.modelUsed} primaryError={imageData.primaryError} />
                   </div>
                 )}
 
@@ -2000,7 +2000,7 @@ export function PromptGenerator() {
                     {/* Engine badge for this zone interior. */}
                     {imageData?.status === "complete" && imageData.modelUsed && (
                       <div className="flex justify-end -mt-1">
-                        <ModelBadge model={imageData.modelUsed} />
+                        <ModelBadge model={imageData.modelUsed} primaryError={imageData.primaryError} />
                       </div>
                     )}
 

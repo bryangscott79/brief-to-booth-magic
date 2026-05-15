@@ -913,6 +913,7 @@ serve(async (req) => {
       let generatedImageUrl: string | null = null;
       const responseText = "";
       let modelUsed = "";
+      let primaryError: string | undefined = undefined;
   
       // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
       // and falls back to Gemini's gemini-3-pro-image-preview (Canopy
@@ -935,7 +936,15 @@ serve(async (req) => {
         }
         generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
         modelUsed = out.modelUsed;
-        console.log(`[generate-hero] Image produced by ${modelUsed}`);
+        if (out.primaryError) {
+          // Stash so we can surface it to the client below. When set
+          // it means the Gemini fallback fired and the user should
+          // see WHY in the model badge tooltip.
+          primaryError = out.primaryError;
+          console.warn(`[generate-hero] Fell back to ${modelUsed}; gpt-image-2 reason: ${out.primaryError}`);
+        } else {
+          console.log(`[generate-hero] Image produced by ${modelUsed}`);
+        }
       } catch (e) {
         console.error("[generate-hero] Image generation failed (both primary and fallback):", e);
         const message = e instanceof Error ? e.message : "Unknown error";
@@ -981,6 +990,11 @@ serve(async (req) => {
           imageUrl: generatedImageUrl,
           message: responseText,
           modelUsed,
+          // Present only when the Gemini fallback fired — lets the
+          // client show "Canopy Lite (gpt-image-2 said: <reason>)" on
+          // hover so the user can see what went wrong with the
+          // primary model instead of just seeing a degraded render.
+          ...(primaryError ? { primaryError } : {}),
         },
       };
     } catch (error) {

@@ -1082,3 +1082,92 @@ describe("existingSpace block (interior design)", () => {
     expect(n.existingSpace?.annotations.keep[0]?.points.length).toBe(4); // unchanged, not 5
   });
 });
+
+// ─── composePrompt — interior-design path (Task 5) ───────────────────
+//
+// When the project's industry inputMode is "existing-space-photo" (or
+// "hybrid" with an existingSpace block present), the composer must
+// emit an interior-design-shaped prompt: # EXISTING SPACE, #
+// REGIONS TO PRESERVE, # REGIONS TO REDESIGN, # REDESIGN INTENT.
+// The spatial-canvas-specific blocks (# SPACE, # ZONE PROGRAM) must
+// NOT appear — those describe a void-to-design booth, which is the
+// wrong mental model for redesigning an existing room.
+
+describe("composePrompt — interior design path", () => {
+  function buildIdBrief() {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      existingSpace: {
+        photoUrl: "https://example.com/room.jpg",
+        annotations: {
+          keep: [
+            {
+              points: [
+                { x: 0.1, y: 0.1 },
+                { x: 0.3, y: 0.1 },
+                { x: 0.3, y: 0.3 },
+                { x: 0.1, y: 0.3 },
+                { x: 0.1, y: 0.1 },
+              ],
+              label: "fireplace",
+            },
+          ],
+          change: [
+            {
+              points: [
+                { x: 0.5, y: 0.5 },
+                { x: 0.9, y: 0.5 },
+                { x: 0.9, y: 0.9 },
+                { x: 0.5, y: 0.9 },
+                { x: 0.5, y: 0.5 },
+              ],
+              label: "flooring",
+            },
+          ],
+        },
+        analysis: {
+          features: ["stone fireplace on east wall", "double-hung windows on north wall"],
+          existingMaterials: { floors: "oak hardwood, original", walls: "off-white drywall" },
+          lighting: { naturalLightDirection: "north" as const },
+          summary: "Bright north-facing living room.",
+        },
+      },
+    } as unknown as typeof eqvilentParsedBrief;
+    return normalizeBrief({
+      project: { ...eqvilentProjectMeta, industrySlug: "interior_design" },
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+  }
+
+  it("emits # EXISTING SPACE section with photo reference + summary", () => {
+    const n = buildIdBrief();
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(/# EXISTING SPACE/);
+    expect(out.renderer).toMatch(/Bright north-facing living room/);
+    expect(out.renderer).toMatch(/oak hardwood/);
+  });
+
+  it("lists labeled keep regions and labeled change regions", () => {
+    const n = buildIdBrief();
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(/# PRESERVED REGIONS|# REGIONS TO PRESERVE/i);
+    expect(out.renderer).toMatch(/# REDESIGN REGIONS|# REGIONS TO REDESIGN/i);
+    expect(out.renderer).toMatch(/fireplace/);
+    expect(out.renderer).toMatch(/flooring/);
+  });
+
+  it("does NOT emit # SPACE or # ZONE PROGRAM on the ID path", () => {
+    const n = buildIdBrief();
+    const out = composePrompt(n);
+    expect(out.renderer).not.toMatch(/# SPACE\n/);
+    expect(out.renderer).not.toMatch(/# ZONE PROGRAM/);
+  });
+
+  it("emits # REDESIGN INTENT pulling from creative/palette/finishes", () => {
+    const n = buildIdBrief();
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(/# REDESIGN INTENT/);
+  });
+});

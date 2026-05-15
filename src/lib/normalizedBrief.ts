@@ -21,6 +21,16 @@ export interface NormalizedBriefProject {
   id: string;
   name: string;
   type: ProjectType;
+  /**
+   * Slug of the industry vertical this project belongs to (from
+   * BUILTIN_INDUSTRIES or the admin-managed industries table). Drives
+   * which composer path runs at render time — e.g. "interior_design"
+   * dispatches the existing-space photo flow instead of the spatial-
+   * canvas zone-layout flow. Optional because legacy projects (created
+   * before industries v2) don't have one; absence defaults to the
+   * spatial-canvas path.
+   */
+  industrySlug?: string;
 }
 
 export interface NormalizedBriefBrandColor {
@@ -283,9 +293,16 @@ export interface NormalizedBrief {
 
 import type { ParsedBrief, ParsedBriefExistingSpace, Polygon } from "@/types/brief";
 import type { BoothGeometry } from "@/lib/geometryModel";
+import { BUILTIN_INDUSTRIES } from "@/lib/builtinIndustries";
 
 interface NormalizeBriefInput {
-  project: { id: string; name: string; projectType: ProjectType | string };
+  project: {
+    id: string;
+    name: string;
+    projectType: ProjectType | string;
+    /** Industry vertical slug; carried through to normalized.project.industrySlug. */
+    industrySlug?: string;
+  };
   parsedBrief: ParsedBrief;
   geometry: BoothGeometry;
   elements: { interactiveMechanics?: { data?: { hero?: any } } } | null | undefined;
@@ -811,6 +828,7 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       id: project.id,
       name: project.name,
       type: projectTypeOrDefault(project.projectType),
+      industrySlug: project.industrySlug,
     },
     brand: {
       name: parsedBrief.brand.name,
@@ -1300,6 +1318,137 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
   return sections.join("\n\n");
 }
 
+/**
+ * Build the renderer prompt for interior-design / existing-space
+ * projects. Returns the markdown-structured prompt with sections
+ * tailored to the photo-and-mask input pattern.
+ *
+ * The mental model is fundamentally different from the spatial-canvas
+ * path: instead of "design a booth in this empty rectangle", it's
+ * "redesign these regions of this room while preserving these other
+ * regions". So # SPACE (carpet allocation) and # ZONE PROGRAM (what
+ * the booth contains) are deliberately omitted — they describe a
+ * void-to-design space, which is the wrong frame.
+ *
+ * Reuses the existing # SCENE for the project type so the camera /
+ * photographic framing stays consistent across both composer paths.
+ */
+function composeExistingSpacePrompt(n: NormalizedBrief, neg: string): string {
+  const es = n.existingSpace;
+  if (!es) throw new Error("composeExistingSpacePrompt called without existingSpace");
+
+  const sections: string[] = [];
+
+  // # SCENE — reuse the project-type SCENE so framing stays
+  // consistent across composer paths. The interior-design industry's
+  // project type maps to "permanent_interior" via the default flow
+  // when no projectType is supplied, but real ID projects may carry
+  // a more specific type — either way, PROJECT_TYPE_SCENE has a
+  // sensible default for every type.
+  sections.push(`# SCENE\n${PROJECT_TYPE_SCENE[n.project.type]}`);
+
+  // # EXISTING SPACE — anchors the model in the source photo.
+  const esLines: string[] = ["# EXISTING SPACE"];
+  if (es.analysis.summary) esLines.push(es.analysis.summary);
+  if (es.analysis.estimatedDimensions) {
+    const d = es.analysis.estimatedDimensions;
+    esLines.push(
+      `- Approximate dimensions: ${formatNumber(d.width)}ft × ${formatNumber(d.depth)}ft, ceiling ${formatNumber(d.ceilingHeightFt)}ft`,
+    );
+  }
+  if (es.analysis.features.length > 0) {
+    esLines.push(`- Existing features: ${es.analysis.features.join("; ")}`);
+  }
+  const mats = es.analysis.existingMaterials;
+  const matLines: string[] = [];
+  if (mats.floors) matLines.push(`floors: ${mats.floors}`);
+  if (mats.walls) matLines.push(`walls: ${mats.walls}`);
+  if (mats.ceiling) matLines.push(`ceiling: ${mats.ceiling}`);
+  if (mats.trim) matLines.push(`trim: ${mats.trim}`);
+  if (matLines.length > 0) {
+    esLines.push(`- Existing materials: ${matLines.join("; ")}`);
+  }
+  if (es.analysis.lighting.naturalLightDirection) {
+    esLines.push(`- Natural light: from the ${es.analysis.lighting.naturalLightDirection}`);
+  }
+  sections.push(esLines.join("\n"));
+
+  // # REGIONS TO PRESERVE — these polygons in the source photo must
+  // remain visually identifiable in the output.
+  if (es.annotations.keep.length > 0) {
+    const lines = ["# REGIONS TO PRESERVE"];
+    lines.push(
+      "These regions of the existing space must remain visually identifiable in the redesign. Match position, scale, and material.",
+    );
+    for (const p of es.annotations.keep) {
+      lines.push(`- ${p.label ?? "preserved region"}`);
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  // # REGIONS TO REDESIGN — these polygons are open to transformation.
+  if (es.annotations.change.length > 0) {
+    const lines = ["# REGIONS TO REDESIGN"];
+    lines.push(
+      "These regions are open to transformation per the redesign intent below. Replace materials, furniture, surfaces, and lighting fixtures as the brief calls for.",
+    );
+    for (const p of es.annotations.change) {
+      lines.push(`- ${p.label ?? "region to redesign"}`);
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  // # REDESIGN INTENT — pulls from creative vocabulary and brand palette
+  // so the model knows WHAT direction the redesign should take.
+  const intent: string[] = ["# REDESIGN INTENT"];
+  intent.push(
+    "Apply the redesign vocabulary to the regions marked for change while preserving the regions marked to keep.",
+  );
+  if (n.creative.visualLanguage.length > 0) {
+    intent.push(`Visual language: ${n.creative.visualLanguage.join(", ")}.`);
+  }
+  if (n.creative.embrace.length > 0) {
+    intent.push(`Embrace: ${n.creative.embrace.join(", ")}.`);
+  }
+  if (n.creative.avoid.length > 0) {
+    intent.push(`Avoid: ${n.creative.avoid.join(", ")}.`);
+  }
+  if (n.brand.colors.length > 0) {
+    intent.push(
+      `Palette anchor: ${n.brand.colors.map((c) => `${c.name}${c.hex ? ` (${c.hex})` : ""}`).join(", ")}.`,
+    );
+  }
+  if (n.creative.designIntent.trim().length > 0) {
+    intent.push(n.creative.designIntent.slice(0, 300));
+  }
+  sections.push(intent.join("\n"));
+
+  // # HARD CONSTRAINTS — the rules the redesign must satisfy.
+  const hc: string[] = ["# HARD CONSTRAINTS (output MUST satisfy)"];
+  if (es.annotations.keep.length > 0) {
+    hc.push("- Preserved regions appear unchanged in pose, scale, and material.");
+  }
+  hc.push(
+    "- Room proportions, ceiling height, and window/door openings stay identical to the existing space.",
+  );
+  hc.push(
+    "- The redesigned space is recognizably the SAME ROOM as the source photo, transformed per the brief.",
+  );
+  if (n.creative.forbiddenItems.length > 0) {
+    hc.push(`- Forbidden items: ${n.creative.forbiddenItems.join(", ")}`);
+  }
+  sections.push(hc.join("\n"));
+
+  // # NEGATIVE — appended at end (gpt-image-2 has no separate negative input).
+  // Reuse the same negative string the spatial-canvas path builds so we
+  // don't drift two parallel forbidden-items lists.
+  if (neg.trim().length > 0) {
+    sections.push(`# NEGATIVE\n${neg}`);
+  }
+
+  return sections.join("\n\n");
+}
+
 export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
   const { failures } = validateBrief(normalized);
   // validateBrief rebuilds `failures` from scratch and never reads
@@ -1324,7 +1473,27 @@ export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
     .filter((s) => typeof s === "string" && s.trim().length > 0)
     .join(", ");
 
-  const renderer = rendererPrompt(normalized, negative);
+  // Dispatch on the project's industry inputMode. Three cases:
+  //   - "spatial-canvas" → existing renderer (the void-to-design path).
+  //   - "existing-space-photo" → existing-space prompt (always; the
+  //     industry IS interior-design and the photo is required upstream).
+  //   - "hybrid" → look at whether normalized.existingSpace is present.
+  //     If it is, the user uploaded a photo (renovation path); if not,
+  //     they chose to design from scratch (new-build path).
+  // Unknown / missing industries fall through to the spatial-canvas
+  // path — legacy projects (pre-industries-v2) live there.
+  const industry = BUILTIN_INDUSTRIES.find(
+    (i) => i.slug === normalized.project.industrySlug,
+  );
+  const inputMode = industry?.inputMode ?? "spatial-canvas";
+  const useExistingSpacePath =
+    (inputMode === "existing-space-photo" ||
+      (inputMode === "hybrid" && normalized.existingSpace !== undefined)) &&
+    normalized.existingSpace !== undefined;
+
+  const renderer = useExistingSpacePath
+    ? composeExistingSpacePrompt(normalized, negative)
+    : rendererPrompt(normalized, negative);
 
   // Strip _dismissedGaps before emitting briefJson — it's a UX sentinel
   // for "user already answered this clarification", not part of the

@@ -117,6 +117,24 @@ interface GenerateHeroRequest {
    */
   extraReferenceUrls?: string[];
   /**
+   * Interior-design / existing-space-photo path: when present, the photo
+   * of the user's existing space is the ONLY reference image sent to
+   * gpt-image-2's /v1/images/edits. The hero/logo/extras chain is
+   * skipped — those make sense for fresh booth renders, not for
+   * editing a real-world photograph. Required for `industry.inputMode
+   * === "existing-space-photo"` projects (and `hybrid` when the user
+   * supplied a photo); ignored when absent.
+   */
+  existingSpacePhotoUrl?: string;
+  /**
+   * Optional alpha-mask PNG (data URL, transparent = editable, opaque
+   * = preserved) for the existing-space path. Rasterized on the
+   * client from the user's "change" polygons. When absent and
+   * existingSpacePhotoUrl IS present, the model edits the whole
+   * photo per the prompt — appropriate for full-room redesigns.
+   */
+  maskDataUrl?: string;
+  /**
    * Image model. Defaults to "gemini" (gemini-3-pro-image-preview). Set to
    * "openai" to use gpt-image-1, which is better at logo fidelity and
    * organic / non-geometric structures but requires OPENAI_API_KEY.
@@ -772,7 +790,7 @@ serve(async (req) => {
 
   return streamingJsonResponse(async () => {
     try {
-      const { prompt, feedback, previousImageUrl, boothSize, boothDimensions, geometryReferences, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
+      const { prompt, feedback, previousImageUrl, boothSize, boothDimensions, geometryReferences, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini", existingSpacePhotoUrl, maskDataUrl } = body;
   
       // Project-type-aware suffix and feedback prefix
       const TYPE_SUFFIX: Record<string, string> = {
@@ -895,19 +913,39 @@ serve(async (req) => {
           : structured;
       }
   
-      // OpenAI reference images. ORDER MATTERS — first image wins for
-      // attention. Brand logo first so the wordmark / mark gets rendered
-      // accurately on the booth's signage surfaces. Previous image only
-      // attaches in edit mode (it IS the source). User extras come last.
+      // OpenAI reference images. Two paths:
       //
-      // Deliberately omitted: floor plan + isometric PNGs (label-bleed
-      // bug — see comment above on `geometryReferences`).
-      const refUrlsForOpenAI = [
-        ...(previousImageUrl ? [previousImageUrl] : []),
-        ...(brandLogoUrl ? [brandLogoUrl] : []),
-        ...(extraReferenceUrls ?? []),
-      ].slice(0, 4); // gpt-image-2 hard limit
-  
+      //   - Interior-design / existing-space-photo path: the photo of
+      //     the user's existing room is the ONLY reference. The
+      //     hero/logo/extras chain doesn't make sense here — we're
+      //     editing a real photograph, not generating a fresh booth.
+      //     An optional alpha mask constrains gpt-image-2's edits to
+      //     the user's "change" polygons.
+      //
+      //   - Spatial-canvas path (default): brand logo + previous-image
+      //     edit-mode anchor + user extras as multi-reference inputs.
+      //     ORDER MATTERS — first image wins for attention. Previous
+      //     image only attaches in edit mode (it IS the source).
+      //
+      // Deliberately omitted from BOTH paths: floor plan + isometric
+      // PNGs (label-bleed bug — see comment above on `geometryReferences`).
+      let refUrlsForOpenAI: string[];
+      let maskUrlForOpenAI: string | undefined;
+      if (existingSpacePhotoUrl) {
+        refUrlsForOpenAI = [existingSpacePhotoUrl];
+        maskUrlForOpenAI = maskDataUrl || undefined;
+        console.log(
+          `[generate-hero] Existing-space path: photo=${existingSpacePhotoUrl.slice(0, 80)}, mask=${maskUrlForOpenAI ? "present" : "absent"}`,
+        );
+      } else {
+        refUrlsForOpenAI = [
+          ...(previousImageUrl ? [previousImageUrl] : []),
+          ...(brandLogoUrl ? [brandLogoUrl] : []),
+          ...(extraReferenceUrls ?? []),
+        ].slice(0, 4); // gpt-image-2 hard limit
+        maskUrlForOpenAI = undefined;
+      }
+
       void imageModel;
   
       let generatedImageUrl: string | null = null;
@@ -925,6 +963,7 @@ serve(async (req) => {
           usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
           prompt: flattenedPrompt,
           referenceImageUrls: refUrlsForOpenAI,
+          maskUrl: maskUrlForOpenAI,
           size: "1536x1024", // 16:9 closest
           quality: "high",
         });

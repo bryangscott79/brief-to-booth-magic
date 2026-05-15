@@ -88,6 +88,23 @@ interface GenerateViewRequest {
   brandLogoUrl?: string;
   /** Optional one-off references attached at regen time. */
   extraReferenceUrls?: string[];
+  /**
+   * Interior-design / existing-space-photo path: when present, the photo
+   * of the user's existing space is the ONLY reference image sent to
+   * gpt-image-2's /v1/images/edits. The hero/logo/extras chain is
+   * skipped — same semantics as generate-hero. Every view in an
+   * existing-space project is rendered as an edit of THIS photo
+   * (constrained by maskDataUrl when present), with the camera
+   * direction baked into the prompt rather than re-rendered from
+   * scratch.
+   */
+  existingSpacePhotoUrl?: string;
+  /**
+   * Optional alpha-mask PNG (data URL, transparent = editable, opaque
+   * = preserved) for the existing-space path. Applied to every view
+   * in the batch.
+   */
+  maskDataUrl?: string;
   /** "gemini" (default) or "openai" gpt-image-2. */
   imageModel?: "gemini" | "openai";
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
@@ -777,6 +794,8 @@ serve(async (req) => {
         brandLogoUrl,
         extraReferenceUrls,
         imageModel = "gemini",
+        existingSpacePhotoUrl,
+        maskDataUrl,
       } = body;
 
       // The old block builders (scaleBlock, geometryBlock,
@@ -917,33 +936,54 @@ serve(async (req) => {
         `[generate-view] Calling image gateway for ${viewName} (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / nano-banana pro)`,
       );
       try {
-        // Reference URLs for the OpenAI /v1/images/edits call.
+        // Reference URLs for the OpenAI /v1/images/edits call. Three
+        // branches in priority order:
         //
-        // When composedPrompt is present (the new short-instruction
-        // edit-mode pipeline) we send ONLY the hero image as the
-        // reference. Multiple references confuse gpt-image-2 — instead
-        // of editing the hero, it tries to compose a new booth
-        // satisfying all the inputs, producing the cross-view drift
-        // bug the user reported (5 different booths, only the brand
-        // matched). Single-input edit-mode behaves like ChatGPT-image-2
-        // does in the UI: "show me top-down view of this" → it edits.
+        //   1. Interior-design / existing-space-photo path: when the
+        //      client passed existingSpacePhotoUrl, we render every
+        //      view as an edit of THAT photo. The hero reference
+        //      chain (referenceImageUrl / brandLogo / extras) is
+        //      skipped — we're editing a real photograph, not
+        //      transforming a previous render. The optional alpha
+        //      mask constrains gpt-image-2's edits to the user's
+        //      "change" polygons.
         //
-        // When composedPrompt is absent (legacy fallback) we keep the
-        // full hero + logo + extras list because the legacy prompt
-        // was a generation prompt that needed multiple anchors.
+        //   2. Composer-driven edit mode (no existing-space photo):
+        //      hero image is the SINGLE reference. Multiple references
+        //      confused gpt-image-2 — instead of editing the hero, it
+        //      tried to compose a new booth satisfying all the inputs,
+        //      producing the cross-view drift bug (5 different booths,
+        //      only the brand matched). Single-input edit-mode behaves
+        //      like ChatGPT-image-2's UI: "show me top-down view of
+        //      this" → it edits.
         //
-        // Floor plan + isometric PNGs are omitted in both paths — they
-        // bake zone-name text labels into the references that the
-        // model reproduces on the rendered booth.
-        const referenceImageUrls = body.composedPrompt
+        //   3. Legacy fallback (no composedPrompt): full hero + logo
+        //      + extras list, because the legacy prompt was a
+        //      generation prompt that needed multiple anchors.
+        //
+        // Floor plan + isometric PNGs are omitted from all paths —
+        // their zone-name text labels bleed into rendered booth walls.
+        let referenceImageUrls: string[];
+        let maskUrlForOpenAI: string | undefined;
+        if (existingSpacePhotoUrl) {
+          referenceImageUrls = [existingSpacePhotoUrl];
+          maskUrlForOpenAI = maskDataUrl || undefined;
+          console.log(
+            `[generate-view] ${viewName}: existing-space path, photo=${existingSpacePhotoUrl.slice(0, 80)}, mask=${maskUrlForOpenAI ? "present" : "absent"}`,
+          );
+        } else if (body.composedPrompt) {
           // Hero-only edit-mode for the new pipeline.
-          ? (referenceImageUrl ? [referenceImageUrl] : [])
+          referenceImageUrls = referenceImageUrl ? [referenceImageUrl] : [];
+          maskUrlForOpenAI = undefined;
+        } else {
           // Multi-anchor for the legacy fallback path.
-          : [
+          referenceImageUrls = [
             ...(referenceImageUrl ? [referenceImageUrl] : []),
             ...(brandLogoUrl ? [brandLogoUrl] : []),
             ...(extraReferenceUrls ?? []),
           ].slice(0, 4);
+          maskUrlForOpenAI = undefined;
+        }
 
         const out = await generateImageWithFallback({
           usage: await buildUsageContext(req, "generate-view").catch(() =>
@@ -951,6 +991,7 @@ serve(async (req) => {
           ),
           prompt: editPrompt,
           referenceImageUrls,
+          maskUrl: maskUrlForOpenAI,
           size: "1536x1024",
           quality: "high",
         });

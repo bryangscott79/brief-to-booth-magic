@@ -961,6 +961,17 @@ export interface OpenAIImageOptions {
    * Number of images to generate. Defaults to 1. >1 increases cost linearly.
    */
   n?: number;
+  /**
+   * Optional alpha-mask PNG (data URL or public URL) for /v1/images/edits.
+   * When supplied, gpt-image-2 only modifies the masked regions.
+   * OpenAI mask convention: TRANSPARENT pixels are editable,
+   * OPAQUE pixels are preserved.
+   *
+   * Used by the interior-design pipeline to constrain edits to
+   * user-marked "change" polygons. Best-effort: if mask fetch fails,
+   * render proceeds without it (whole photo edited per prompt).
+   */
+  maskUrl?: string;
   /** Optional usage logging context. */
   usage?: UsageContext;
 }
@@ -1358,6 +1369,55 @@ async function _callGeminiImageInner(
 const REF_FETCH_TIMEOUT_MS = 10_000;
 const OPENAI_TIMEOUT_MS = 220_000;
 
+/**
+ * Resolve a mask URL to a Blob suitable for attaching to the OpenAI
+ * /v1/images/edits form. Handles both data: URIs (decoded manually
+ * with atob — Deno's fetch() support for data URLs is version-
+ * dependent and unreliable) and ordinary HTTP(S) URLs.
+ *
+ * Returns null on any failure — callers proceed without the mask
+ * rather than failing the whole render. The interior-design path
+ * degrades gracefully to "edit everywhere per prompt" when the mask
+ * can't be loaded.
+ */
+async function fetchMaskBlob(maskUrl: string): Promise<Blob | null> {
+  try {
+    if (maskUrl.startsWith("data:")) {
+      const match = maskUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) {
+        console.warn(
+          `[ai-gateway] Mask data URL has unsupported format; proceeding without mask.`,
+        );
+        return null;
+      }
+      const mimeType = match[1] || "image/png";
+      const binary = atob(match[2]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new Blob([bytes], { type: mimeType });
+    }
+
+    const fetched = await fetch(maskUrl, {
+      signal: AbortSignal.timeout(REF_FETCH_TIMEOUT_MS),
+    });
+    if (!fetched.ok) {
+      console.warn(
+        `[ai-gateway] Could not fetch mask (${fetched.status}); proceeding without it.`,
+      );
+      return null;
+    }
+    return await fetched.blob();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[ai-gateway] Mask fetch threw (${msg}); proceeding without it.`,
+    );
+    return null;
+  }
+}
+
 async function _callOpenAIImageInner(
   options: OpenAIImageOptions,
   model: string = "gpt-image-2",
@@ -1463,6 +1523,22 @@ async function _callOpenAIImageInner(
     console.log(
       `[ai-gateway] Attached ${attached}/${refs.length} references for ${model} edit call`,
     );
+
+    // Optional alpha mask for /v1/images/edits. Interior-design path
+    // sends a PNG where TRANSPARENT pixels mark editable regions and
+    // OPAQUE pixels mark preserved regions. Best-effort: if the fetch
+    // fails (or the data-URL decode throws) we proceed without the
+    // mask and the model edits everywhere per the prompt.
+    if (options.maskUrl) {
+      const maskBlob = await fetchMaskBlob(options.maskUrl);
+      if (maskBlob) {
+        form.append("mask", maskBlob, "mask.png");
+        console.log(
+          `[ai-gateway] Attached mask (${maskBlob.size} bytes) for ${model} edit call`,
+        );
+      }
+    }
+
     response = await fetchWithRateLimitRetry(
       "https://api.openai.com/v1/images/edits",
       {

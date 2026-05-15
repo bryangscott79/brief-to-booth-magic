@@ -45,6 +45,7 @@ import {
   type GeneratePromptParams,
 } from "@/lib/promptBuilder";
 import { buildDesignContext } from "@/lib/designContextBuilder";
+import { rasterizePolygonMask } from "@/lib/rasterizePolygonMask";
 import {
   normalizeBrief,
   validateBrief,
@@ -864,6 +865,46 @@ export function PromptGenerator() {
     });
   };
 
+  /**
+   * For the interior-design / existing-space-photo pipeline (Task 6 of
+   * the Industries v2 + Interior Design feature) every render call
+   * needs:
+   *   - the photo URL (becomes the ONLY OpenAI reference image)
+   *   - an optional alpha-mask PNG rasterized from the user's "change"
+   *     polygons (constrains gpt-image-2's edits)
+   *
+   * Returns `{ existingSpacePhotoUrl: undefined, maskDataUrl: null }`
+   * for spatial-canvas projects so call sites can spread this into
+   * the store action params unconditionally — the store and the edge
+   * functions both treat undefined/null as "skip this path".
+   *
+   * Mask rasterization is async (HTMLImageElement.load + canvas draw)
+   * so callers must await this before invoking the store action.
+   */
+  const buildExistingSpaceParams = useCallback(async (): Promise<{
+    existingSpacePhotoUrl: string | undefined;
+    maskDataUrl: string | null;
+  }> => {
+    const existingSpace = brief?.existingSpace;
+    if (!existingSpace?.photoUrl) {
+      return { existingSpacePhotoUrl: undefined, maskDataUrl: null };
+    }
+    let maskDataUrl: string | null = null;
+    try {
+      maskDataUrl = await rasterizePolygonMask(
+        existingSpace.photoUrl,
+        existingSpace.annotations?.change ?? [],
+      );
+    } catch (e) {
+      // Mask rasterization failing should never block the render —
+      // worst case the model edits the whole photo per the prompt,
+      // which is the correct fallback for a full-room redesign.
+      console.warn("[PromptGenerator] Mask rasterization failed; rendering without mask:", e);
+      maskDataUrl = null;
+    }
+    return { existingSpacePhotoUrl: existingSpace.photoUrl, maskDataUrl };
+  }, [brief?.existingSpace]);
+
   const handleGenerateHeroImage = async () => {
     const prompt = heroPrompt || buildPrompt("hero_34");
     if (!heroPrompt) renderStore.setHeroPrompt(prompt);
@@ -883,6 +924,13 @@ export function PromptGenerator() {
     // training-data mean for "trade show booth" regardless of stated
     // dimensions.
     const geomRefs = await captureGeometryRefs();
+
+    // Interior-design / existing-space-photo path (Task 6): when the
+    // brief carries a photo, compute the alpha mask from the user's
+    // "change" polygons and forward both to the store. For spatial-
+    // canvas projects these come back undefined/null and the store
+    // and edge function fall through to the normal spatial path.
+    const existingSpaceParams = await buildExistingSpaceParams();
 
     try {
       await renderStore.generateHeroImage({
@@ -910,6 +958,7 @@ export function PromptGenerator() {
         brandLogoUrl,
         imageModel: activeImageModel,
         extraReferenceUrls: combinedRefs.length > 0 ? combinedRefs : undefined,
+        ...existingSpaceParams,
         onSave: doSave,
       });
 
@@ -958,6 +1007,10 @@ export function PromptGenerator() {
     // hasn't changed since the hero render.
     const geomRefs = await captureGeometryRefs();
 
+    // Interior-design path: compute mask once and reuse across every
+    // view (the user's "change" polygons don't vary per camera angle).
+    const existingSpaceParams = await buildExistingSpaceParams();
+
     renderStore.generateAllViews({
       angles: allAngles,
       prompts,
@@ -985,6 +1038,7 @@ export function PromptGenerator() {
       // Project-wide visual references — applied on every view so the
       // model has consistent brand/material/mood context across angles.
       extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
+      ...existingSpaceParams,
       onSave: doSave,
     }).then(() => {
       toast({
@@ -1010,6 +1064,7 @@ export function PromptGenerator() {
     );
 
     const geomRefs = await captureGeometryRefs();
+    const existingSpaceParams = await buildExistingSpaceParams();
 
     try {
       await renderStore.regenerateView({
@@ -1029,6 +1084,7 @@ export function PromptGenerator() {
         brandLogoUrl,
         imageModel: activeImageModel,
         extraReferenceUrls: extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
+        ...existingSpaceParams,
         onSave: doSave,
       });
 
@@ -1064,6 +1120,9 @@ export function PromptGenerator() {
 
       // Capture geometry refs once for the whole regen-all sweep.
       const geomRefs = await captureGeometryRefs();
+      // Interior-design path: mask is the same for every render in
+      // this sweep — compute once.
+      const existingSpaceParams = await buildExistingSpaceParams();
 
       // Generate new hero
       await renderStore.generateHeroImage({
@@ -1087,6 +1146,7 @@ export function PromptGenerator() {
         brandLogoUrl,
         imageModel: activeImageModel,
         extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
+        ...existingSpaceParams,
         onSave: doSave,
       });
 
@@ -1128,6 +1188,7 @@ export function PromptGenerator() {
         brandLogoUrl,
         imageModel: activeImageModel,
         extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
+        ...existingSpaceParams,
         onSave: doSave,
       });
 

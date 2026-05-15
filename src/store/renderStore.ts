@@ -168,6 +168,21 @@ interface RenderActions {
     extraReferenceUrls?: string[];
     /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
+    /**
+     * Interior-design / existing-space-photo path: when present, the
+     * edge function uses THIS as the only reference image for gpt-
+     * image-2's /v1/images/edits and ignores the spatial-canvas
+     * reference list. Combined with maskDataUrl below to constrain
+     * which regions of the photo get edited.
+     */
+    existingSpacePhotoUrl?: string;
+    /**
+     * Optional alpha-mask PNG data URL (transparent = editable,
+     * opaque = preserved) for the existing-space path. Pass null
+     * when the user has no change polygons — the whole photo is
+     * editable per the prompt.
+     */
+    maskDataUrl?: string | null;
     onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
@@ -211,6 +226,20 @@ interface RenderActions {
     extraReferenceUrls?: string[];
     /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
+    /**
+     * Interior-design / existing-space-photo path: when present, every
+     * view render uses this as its only reference image for gpt-
+     * image-2's /v1/images/edits and ignores the hero/exterior
+     * reference fallback chain. Combined with maskDataUrl to
+     * constrain which regions get edited.
+     */
+    existingSpacePhotoUrl?: string;
+    /**
+     * Optional alpha-mask PNG data URL (transparent = editable,
+     * opaque = preserved) applied to every view in the batch.
+     * Pass null when the user has no change polygons.
+     */
+    maskDataUrl?: string | null;
     onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
@@ -243,6 +272,16 @@ interface RenderActions {
     extraReferenceUrls?: string[];
     /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
+    /**
+     * Interior-design / existing-space-photo path — see
+     * generateHeroImage for full semantics. When present, the view
+     * is rendered as an edit of THIS photo (constrained by
+     * maskDataUrl if provided) rather than a transform of the
+     * hero/exterior reference.
+     */
+    existingSpacePhotoUrl?: string;
+    /** Optional alpha-mask PNG data URL for the existing-space path. */
+    maskDataUrl?: string | null;
     onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
@@ -321,7 +360,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
 
-  generateHeroImage: async ({ composedPrompt, prompt, feedback, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateHeroImage: async ({ composedPrompt, prompt, feedback, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, existingSpacePhotoUrl, maskDataUrl, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
@@ -342,6 +381,13 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         brandLogoUrl: brandLogoUrl || undefined,
         extraReferenceUrls: extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
         imageModel: imageModel ?? undefined,
+        // Interior-design path: existing-space photo + optional mask.
+        // When existingSpacePhotoUrl is set, the edge function uses
+        // THIS as the only reference image and ignores the
+        // hero/logo/extras chain. The mask (when set) constrains
+        // gpt-image-2's edits to the change regions.
+        existingSpacePhotoUrl: existingSpacePhotoUrl || undefined,
+        maskDataUrl: maskDataUrl ?? undefined,
       };
       if (designContext) {
         body.designContext = designContext;
@@ -411,7 +457,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     }
   },
 
-  generateAllViews: async ({ angles, prompts, composedPrompts, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  generateAllViews: async ({ angles, prompts, composedPrompts, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, existingSpacePhotoUrl, maskDataUrl, onSave }) => {
     // Split into exterior views first, then interiors — interiors can
     // reference a finished exterior render as their visual anchor.
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
@@ -491,6 +537,12 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
             extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
           imageModel: imageModel ?? undefined,
           heroPromptText: heroPromptText || undefined,
+          // Interior-design path — same semantics as generateHeroImage.
+          // When set, the view is rendered as an edit of THIS photo
+          // (masked to change regions) rather than transforming the
+          // hero reference.
+          existingSpacePhotoUrl: existingSpacePhotoUrl || undefined,
+          maskDataUrl: maskDataUrl ?? undefined,
         };
         if (consistencyTokens) viewBody.consistencyTokens = consistencyTokens;
         if (designContext) viewBody.designContext = designContext;
@@ -572,7 +624,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
     set({ isGenerating: false, currentlyGenerating: null });
   },
 
-  regenerateView: async ({ angle, prompt, composedPrompt, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
+  regenerateView: async ({ angle, prompt, composedPrompt, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, existingSpacePhotoUrl, maskDataUrl, onSave }) => {
     set((s) => ({
       generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
     }));
@@ -612,6 +664,9 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
         imageModel: imageModel ?? undefined,
         heroPromptText: heroPromptText || undefined,
+        // Interior-design path — see generateHeroImage for semantics.
+        existingSpacePhotoUrl: existingSpacePhotoUrl || undefined,
+        maskDataUrl: maskDataUrl ?? undefined,
       };
       if (consistencyTokens) {
         viewBody.consistencyTokens = consistencyTokens;

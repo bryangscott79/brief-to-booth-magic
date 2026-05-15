@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { BUILTIN_INDUSTRIES } from "./builtinIndustries";
+import type { BriefSectionId } from "./industryFields";
+
+const REQUIRED_SECTIONS: Record<string, BriefSectionId[]> = {
+  experiential: ["spatial-zones", "hero-installation", "hanging-elements", "signage"],
+  architecture: ["existing-space", "spatial-zones"],
+  landscape: ["spatial-zones"],
+  interior_design: ["existing-space"],
+  entertainment: ["spatial-zones", "hero-installation"],
+  audio_visual: ["spatial-zones"],
+};
 
 describe("BUILTIN_INDUSTRIES", () => {
   it("has exactly 6 industries", () => {
@@ -13,12 +23,14 @@ describe("BUILTIN_INDUSTRIES", () => {
   });
 
   it.each(BUILTIN_INDUSTRIES.map((i) => i.slug))(
-    "industry %s declares briefSections / inputMode / defaultRenderAngles",
+    "industry %s declares the required briefSections / inputMode / defaultRenderAngles",
     (slug) => {
       const i = BUILTIN_INDUSTRIES.find((x) => x.slug === slug)!;
-      expect(i.briefSections.length).toBeGreaterThan(0);
       expect(["spatial-canvas", "existing-space-photo", "hybrid"]).toContain(i.inputMode);
       expect(i.defaultRenderAngles.length).toBeGreaterThan(0);
+      for (const required of REQUIRED_SECTIONS[slug] ?? []) {
+        expect(i.briefSections).toContain(required);
+      }
     },
   );
 

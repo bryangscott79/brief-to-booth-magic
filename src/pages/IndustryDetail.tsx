@@ -19,6 +19,7 @@ import {
   Building2,
   TreePine,
   Film,
+  Sofa,
   Speaker,
   Layers,
   CheckCircle2,
@@ -52,6 +53,7 @@ const ICON_MAP: Record<string, typeof Sparkles> = {
   Building2,
   TreePine,
   Film,
+  Sofa,
   Speaker,
   Layers,
 };

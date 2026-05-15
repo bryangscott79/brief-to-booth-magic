@@ -580,15 +580,41 @@ export function PromptGenerator() {
       );
       if (savedHero) {
         renderStore.setHeroImage(savedHero.img.public_url);
+        // Restore hero's model badge from the persisted artifacts so
+        // the Canopy 2.0 / Canopy Lite chip survives a page reload.
+        const heroArtifacts = savedHero.img.prompt_artifacts;
+        if (heroArtifacts && typeof heroArtifacts.modelUsed === "string") {
+          renderStore.setHeroModelUsed(heroArtifacts.modelUsed);
+        }
+        if (heroArtifacts && typeof heroArtifacts.primaryError === "string") {
+          renderStore.setHeroPrimaryError(heroArtifacts.primaryError);
+        }
         versionScopedImages
           .filter((x) => x.baseAngleId === "hero_34")
           .forEach((x) => renderStore.addHeroIteration(x.img.public_url));
 
-        const restoredImages: Record<string, { url: string; status: "complete" }> = {};
+        const restoredImages: Record<string, {
+          url: string;
+          status: "complete";
+          modelUsed?: string;
+          primaryError?: string;
+        }> = {};
         versionScopedImages
           .filter((x) => x.img.is_current)
           .forEach((x) => {
-            restoredImages[x.baseAngleId] = { url: x.img.public_url, status: "complete" };
+            const artifacts = x.img.prompt_artifacts;
+            restoredImages[x.baseAngleId] = {
+              url: x.img.public_url,
+              status: "complete",
+              modelUsed:
+                artifacts && typeof artifacts.modelUsed === "string"
+                  ? artifacts.modelUsed
+                  : undefined,
+              primaryError:
+                artifacts && typeof artifacts.primaryError === "string"
+                  ? artifacts.primaryError
+                  : undefined,
+            };
           });
         renderStore.setGeneratedImages(restoredImages);
 
@@ -627,14 +653,31 @@ export function PromptGenerator() {
   // (legacy) renders, in which case we save without a suffix so it stays
   // attached to the same legacy bucket.
   const doSave = useCallback(
-    (angleId: string, angleName: string, imageDataUrl: string) => {
+    (
+      angleId: string,
+      angleName: string,
+      imageDataUrl: string,
+      // modelUsed + primaryError ride along so save-render-image can
+      // persist them in project_images.prompt_artifacts. That's what
+      // makes the Canopy 2.0 / Canopy Lite badge (and its hover-
+      // tooltip with the gpt-image-2 failure reason) survive page
+      // reload — without persistence the badge vanishes the first
+      // time the user navigates away.
+      meta?: { modelUsed?: string; primaryError?: string },
+    ) => {
       const versionId = ensureActiveVersion();
       const active = promptVersions.activeVersion;
       const isLegacyVersion =
         active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
       const finalAngleId = isLegacyVersion ? angleId : makeVersionedAngleId(angleId, versionId);
       saveImage.mutate(
-        { angleId: finalAngleId, angleName, imageDataUrl },
+        {
+          angleId: finalAngleId,
+          angleName,
+          imageDataUrl,
+          modelUsed: meta?.modelUsed,
+          primaryError: meta?.primaryError,
+        },
         {
           onSuccess: () => {
             promptVersions.touchActiveVersion();

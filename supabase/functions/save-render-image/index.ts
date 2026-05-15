@@ -11,6 +11,20 @@ interface SaveImageRequest {
   angleId: string;
   angleName: string;
   imageDataUrl: string; // data:image/png;base64,...
+  /**
+   * Canonical model id that produced the image (e.g.
+   * "openai/gpt-image-2", "google/gemini-3-pro-image-preview").
+   * Persisted into project_images.prompt_artifacts so the
+   * "Canopy 2.0" / "Canopy Lite" badge survives reload — without
+   * this, the badge only shows for renders generated in the
+   * current session.
+   */
+  modelUsed?: string;
+  /**
+   * When the render fell back to Gemini, gpt-image-2's actual error
+   * chain. Persisted so the hover-tooltip survives reload too.
+   */
+  primaryError?: string;
 }
 
 serve(async (req) => {
@@ -44,7 +58,7 @@ serve(async (req) => {
       });
     }
 
-    const { projectId, angleId, angleName, imageDataUrl }: SaveImageRequest = await req.json();
+    const { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError }: SaveImageRequest = await req.json();
 
     if (!projectId || !angleId || !angleName || !imageDataUrl) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -113,7 +127,21 @@ serve(async (req) => {
       .eq("angle_id", angleId)
       .eq("user_id", user.id);
 
-    // Insert record
+    // Insert record. modelUsed + primaryError go into
+    // prompt_artifacts so the badge + hover tooltip survive a
+    // page reload (the column already exists; no migration needed).
+    // generate-hero may later overwrite prompt_artifacts with its
+    // own composer artifacts JSON; that's fine — we merge here only
+    // if the caller supplied at least one of the fields. When
+    // generate-hero overwrites, it includes its own modelUsed too.
+    const promptArtifacts: Record<string, unknown> | null =
+      (modelUsed || primaryError)
+        ? {
+            ...(modelUsed ? { modelUsed } : {}),
+            ...(primaryError ? { primaryError } : {}),
+          }
+        : null;
+
     const { data: record, error: insertError } = await adminClient
       .from("project_images")
       .insert({
@@ -124,6 +152,7 @@ serve(async (req) => {
         storage_path: storagePath,
         public_url: publicUrl,
         is_current: true,
+        ...(promptArtifacts ? { prompt_artifacts: promptArtifacts } : {}),
       })
       .select()
       .single();

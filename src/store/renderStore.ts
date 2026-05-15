@@ -102,6 +102,10 @@ interface RenderActions {
   setPhase: (phase: WorkflowPhase) => void;
   setHeroPrompt: (prompt: string) => void;
   setHeroImage: (url: string | null) => void;
+  /** Set the model id badge shown under the hero (Canopy 2.0 / Canopy Lite). */
+  setHeroModelUsed: (model: string | null) => void;
+  /** Set the gpt-image-2 failure reason shown in the hero badge tooltip. */
+  setHeroPrimaryError: (msg: string | null) => void;
   setHeroFeedback: (feedback: string) => void;
   addHeroIteration: (url: string) => void;
   /**
@@ -164,7 +168,7 @@ interface RenderActions {
     extraReferenceUrls?: string[];
     /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
-    onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
+    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
   generateAllViews: (params: {
@@ -207,7 +211,7 @@ interface RenderActions {
     extraReferenceUrls?: string[];
     /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
-    onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
+    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
   regenerateView: (params: {
@@ -239,7 +243,7 @@ interface RenderActions {
     extraReferenceUrls?: string[];
     /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
     imageModel?: "gemini" | "openai";
-    onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
+    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
   /** Phase 4E: Cascade regenerate all views after hero change */
@@ -251,7 +255,7 @@ interface RenderActions {
     newHeroImageUrl: string;
     projectId: string;
     boothSize?: string;
-    onSave: (angleId: string, angleName: string, imageDataUrl: string) => void;
+    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
   }) => Promise<void>;
 
   /** Phase 4: Set design context for hero generation */
@@ -298,6 +302,8 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   setPhase: (phase) => set({ phase }),
   setHeroPrompt: (heroPrompt) => set({ heroPrompt }),
   setHeroImage: (heroImage) => set({ heroImage }),
+  setHeroModelUsed: (heroModelUsed) => set({ heroModelUsed }),
+  setHeroPrimaryError: (heroPrimaryError) => set({ heroPrimaryError }),
   setHeroFeedback: (heroFeedback) => set({ heroFeedback }),
   addHeroIteration: (url) => set((s) => ({ heroIterations: [...s.heroIterations, url] })),
   appendHeroTurn: (turn) => set((s) => ({ heroThread: [...s.heroThread, turn] })),
@@ -390,8 +396,14 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         heroVersion: s.heroVersion + 1,
       }));
 
-      // Save to storage
-      onSave("hero_34", "3/4 Hero View", data.imageUrl);
+      // Save to storage. modelUsed + primaryError ride along so the
+      // edge function can persist them into project_images.prompt_
+      // artifacts — that's what makes the "Canopy 2.0" / "Canopy
+      // Lite" badge survive a page reload.
+      onSave("hero_34", "3/4 Hero View", data.imageUrl, {
+        modelUsed: typeof data.modelUsed === "string" ? data.modelUsed : undefined,
+        primaryError: typeof data.primaryError === "string" ? data.primaryError : undefined,
+      });
     } catch (error) {
       if (get().projectId !== projectId) return;
       set({ phase: "prompt", isGeneratingHero: false });
@@ -400,10 +412,12 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   },
 
   generateAllViews: async ({ angles, prompts, composedPrompts, heroImageUrl, heroPromptText, projectId, boothSize, boothDimensions, geometryReferences, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, onSave }) => {
-    // Split into exterior views first, then interiors — so interiors can reference exterior images
+    // Split into exterior views first, then interiors — interiors can
+    // reference a finished exterior render as their visual anchor.
     const exteriorViews = angles.filter((a) => a.id !== "hero_34" && !a.isZoneInterior);
     const interiorViews = angles.filter((a) => a.isZoneInterior);
     const viewsToGenerate = [...exteriorViews, ...interiorViews];
+    const total = viewsToGenerate.length;
 
     set({
       phase: "all-views",
@@ -416,20 +430,37 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       },
     });
 
-    for (let i = 0; i < viewsToGenerate.length; i++) {
-      const angle = viewsToGenerate[i];
+    // Concurrency cap. We previously ran one view at a time (≈21min
+    // for 7 views at ~180s each). Three concurrent calls drops that
+    // to ≈9min. We don't go higher because gpt-image-2 already
+    // shows rate-limit symptoms at concurrency=1 — pushing past 3
+    // would trade speed for more 429s and more Lite-fallback drift.
+    // The 429-retry logic in ai-gateway absorbs the burst we DO emit.
+    const BATCH_SIZE = 3;
+    let completedCount = 0;
+
+    // Generate ONE view (used by both the exterior and interior
+    // phases below). Extracted from the old for-loop body so it can
+    // be invoked concurrently via Promise.allSettled. All store
+    // updates use the functional `set` form so concurrent updates
+    // don't clobber each other.
+    const runOne = async (angle: { id: string; name: string; aspectRatio: string; isZoneInterior?: boolean }) => {
       if (get().projectId !== projectId) return;
 
       set((s) => ({
+        // Note: currentlyGenerating is the "last-started" angle; with
+        // parallel batches it doesn't reflect a single in-flight call,
+        // but the per-card "Generating…" overlay reads from each
+        // angle's own status field anyway, so this is just a hint.
         currentlyGenerating: angle.id,
         generatedImages: { ...s.generatedImages, [angle.id]: { url: "", status: "generating" } },
       }));
 
-      // For interior views, use the best available exterior view as reference
+      // For interior views, pick the best already-finished exterior
+      // as visual reference. Falls back to the hero.
       let referenceUrl = heroImageUrl;
       if (angle.isZoneInterior) {
         const currentImages = get().generatedImages;
-        // Try front, then left, then right as better references for interiors
         const preferredRefs = ["front", "left", "right", "hero_34"];
         for (const refId of preferredRefs) {
           if (currentImages[refId]?.status === "complete" && currentImages[refId]?.url) {
@@ -440,7 +471,6 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       }
 
       try {
-        // Phase 4: Include consistency tokens if available
         const { consistencyTokens, designContext } = get();
         const viewBody: Record<string, unknown> = {
           referenceImageUrl: referenceUrl,
@@ -462,19 +492,8 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           imageModel: imageModel ?? undefined,
           heroPromptText: heroPromptText || undefined,
         };
-        if (consistencyTokens) {
-          viewBody.consistencyTokens = consistencyTokens;
-        }
-        if (designContext) {
-          // Forward the same structured design context that fuels the
-          // hero prompt to the view prompt — so the STRUCTURAL APPROACH
-          // section is consistent across hero + every view. Without
-          // this, views only see the consistency tokens (palette
-          // keywords) and have no architectural signal.
-          viewBody.designContext = designContext;
-        }
-        // Phase 3 of refactor: per-angle composed renderer prompts.
-        // When present, the edge function uses each verbatim.
+        if (consistencyTokens) viewBody.consistencyTokens = consistencyTokens;
+        if (designContext) viewBody.designContext = designContext;
         if (composedPrompts?.[angle.id]) {
           viewBody.composedPrompt = {
             renderer: composedPrompts[angle.id].renderer,
@@ -494,6 +513,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
         const imageUrl = data.imageUrl;
         const currentHeroVersion = get().heroVersion;
+        completedCount++;
         set((s) => ({
           generatedImages: {
             ...s.generatedImages,
@@ -504,15 +524,19 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
               primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
             },
           },
-          generationProgress: ((i + 1) / viewsToGenerate.length) * 100,
+          generationProgress: (completedCount / total) * 100,
           viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
         }));
 
         if (imageUrl) {
-          onSave(angle.id, angle.name, imageUrl);
+          onSave(angle.id, angle.name, imageUrl, {
+            modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+            primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
+          });
         }
       } catch (error) {
         if (get().projectId !== projectId) return;
+        completedCount++;
         set((s) => ({
           generatedImages: {
             ...s.generatedImages,
@@ -522,10 +546,27 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
               error: error instanceof Error ? error.message : "Failed to generate",
             },
           },
-          generationProgress: ((i + 1) / viewsToGenerate.length) * 100,
+          generationProgress: (completedCount / total) * 100,
         }));
       }
-    }
+    };
+
+    // Run a list of views in concurrent batches of BATCH_SIZE.
+    // Promise.allSettled means one view's failure doesn't abort the
+    // batch — the failing view's card shows its error and we move on.
+    const runBatched = async (views: typeof exteriorViews) => {
+      for (let i = 0; i < views.length; i += BATCH_SIZE) {
+        if (get().projectId !== projectId) return;
+        await Promise.allSettled(views.slice(i, i + BATCH_SIZE).map(runOne));
+      }
+    };
+
+    // Phase 1: exteriors in parallel batches. Phase 2: interiors,
+    // also in parallel batches but only after ALL exteriors are
+    // done so interior reference selection has a finished exterior
+    // to pick from.
+    await runBatched(exteriorViews);
+    await runBatched(interiorViews);
 
     if (get().projectId !== projectId) return;
     set({ isGenerating: false, currentlyGenerating: null });
@@ -609,7 +650,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       }));
 
       if (imageUrl) {
-        onSave(angle.id, angle.name, imageUrl);
+        onSave(angle.id, angle.name, imageUrl, {
+          modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+          primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
+        });
       }
     } catch (error) {
       if (get().projectId !== projectId) return;
@@ -711,7 +755,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         }));
 
         if (imageUrl) {
-          onSave(angle.id, angle.name, imageUrl);
+          onSave(angle.id, angle.name, imageUrl, {
+            modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+            primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
+          });
         }
       } catch (_err) {
         if (get().projectId !== projectId) return;

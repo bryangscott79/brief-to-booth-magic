@@ -11,6 +11,19 @@ export interface ProjectImage {
   public_url: string;
   is_current: boolean;
   created_at: string;
+  /**
+   * JSON blob of render metadata. Currently holds modelUsed
+   * ("openai/gpt-image-2" or "google/gemini-3-pro-image-preview")
+   * and primaryError (gpt-image-2's failure reason when the Gemini
+   * fallback fired). Populated by save-render-image so the
+   * "Canopy 2.0" / "Canopy Lite" badge survives page reloads.
+   * May also carry hero composer artifacts written by generate-hero.
+   */
+  prompt_artifacts?: {
+    modelUsed?: string;
+    primaryError?: string;
+    [key: string]: unknown;
+  } | null;
 }
 
 export function useProjectImages(projectId: string | null | undefined) {
@@ -38,10 +51,16 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       angleId,
       angleName,
       imageDataUrl,
+      modelUsed,
+      primaryError,
     }: {
       angleId: string;
       angleName: string;
       imageDataUrl: string;
+      // Persisted into project_images.prompt_artifacts so the
+      // Canopy 2.0 / Canopy Lite badge survives page reload.
+      modelUsed?: string;
+      primaryError?: string;
     }) => {
       if (!projectId) throw new Error("No project ID");
 
@@ -53,7 +72,7 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const { data, error } = await supabase.functions.invoke("save-render-image", {
-            body: { projectId, angleId, angleName, imageDataUrl },
+            body: { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError },
           });
           if (error) throw error;
           if (data?.error) throw new Error(data.error);

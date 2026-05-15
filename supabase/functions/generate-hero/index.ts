@@ -967,9 +967,20 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL")!,
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
           );
+          // Merge composer artifacts (used by view renders for
+          // heroSnapshot) with the model-badge metadata (used by the
+          // client UI). Both live in the same prompt_artifacts JSON
+          // column; we write them together so save-render-image's
+          // earlier insert with modelUsed isn't clobbered by this
+          // update.
+          const mergedArtifacts: Record<string, unknown> = {
+            ...body.composedPrompt.artifacts,
+            ...(modelUsed ? { modelUsed } : {}),
+            ...(primaryError ? { primaryError } : {}),
+          };
           const { error: persistError } = await adminClient
             .from("project_images")
-            .update({ prompt_artifacts: body.composedPrompt.artifacts })
+            .update({ prompt_artifacts: mergedArtifacts })
             .eq("project_id", project_id)
             .eq("angle_id", "hero_34")
             .eq("is_current", true);

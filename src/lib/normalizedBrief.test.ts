@@ -268,18 +268,22 @@ describe("composePrompt — 5 output stages", () => {
     expect(out.renderer).toContain("Quantitative trading");
   });
 
-  it("renderer prompt geometry footprint stated once in # GEOMETRY (not in SCENE/STRUCTURAL/etc.)", () => {
+  it("renderer prompt geometry footprint stated once in # SPACE (not in SCENE/STRUCTURAL/etc.)", () => {
     const out = composePrompt(normalized);
     // The HARD CONSTRAINTS section restates the rule intentionally
     // ("Footprint: exactly N × M …"). What we want to prevent is the
-    // GEOMETRY footprint line ("- Footprint: 6 × 6 metric (36 sqm)")
-    // appearing in multiple sections like the old prompt did.
-    // Strip the HARD CONSTRAINTS section before counting.
+    // SPACE floor-footprint line ("- Floor footprint: 6 × 6 metric
+    // (36 sqm) — a RECTANGULAR …") appearing in multiple sections
+    // like the old prompt did. Strip HARD CONSTRAINTS first, then
+    // count remaining footprint declarations. The label was renamed
+    // from "Footprint" → "Floor footprint" when we tightened the
+    // rectangular-floor rule (client feedback: keep the carpet
+    // rectangular, the structures above can be organic).
     const trimmed = out.renderer.replace(
       /# HARD CONSTRAINTS[\s\S]*?(?=\n# |$)/,
       "",
     );
-    const footprintGeom = trimmed.match(/^- Footprint:/gm) ?? [];
+    const footprintGeom = trimmed.match(/^- Floor footprint:/gm) ?? [];
     expect(footprintGeom.length).toBe(1);
   });
 

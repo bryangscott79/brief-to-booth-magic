@@ -783,12 +783,20 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
   sections.push(
     [
       "# SPACE",
-      `- Footprint: ${formatNumber(n.geometry.width)} × ${formatNumber(n.geometry.depth)} ${n.geometry.units} (${formatNumber(n.geometry.area)} ${areaU})`,
+      // Floor footprint is the venue's allocated rectangle — the
+      // carpet/platform/base outline on the convention floor. This
+      // is ALWAYS rectangular because that's what venues sell.
+      // Calling it out explicitly stopped the model from rendering
+      // organic ovular floors (the Eqvilent oval-carpet bug).
+      `- Floor footprint: ${formatNumber(n.geometry.width)} × ${formatNumber(n.geometry.depth)} ${n.geometry.units} (${formatNumber(n.geometry.area)} ${areaU}) — a RECTANGULAR carpet/platform allocation on the convention floor. The base outline of the booth is always a rectangle matching these dimensions.`,
       `- Maximum structure height: ${formatNumber(n.geometry.height)}${u}`,
       `- Open sides: ${n.geometry.openSides}, unobstructed and visible`,
       `- Human scale: ${formatNumber(n.geometry.humanScale)}${u}`,
       `- Min circulation between elements: ${formatNumber(n.geometry.minCirculationWidth)}${u}`,
-      "Design organically within this space — express the brand's structural language freely. Don't default to rectangular bays.",
+      // The "design organically" instruction now scopes to STRUCTURES
+      // ABOVE the floor, not the floor itself. Without this scope the
+      // model interpreted "organic" as "make the carpet curvy too".
+      "Above the floor, design organically — walls, ceilings, fascia, hero installations, and any hanging features express the brand's structural language freely. Don't default to rectangular bays or repeated identical modules for structures. The FLOOR/CARPET OUTLINE stays rectangular regardless.",
     ].join("\n"),
   );
 

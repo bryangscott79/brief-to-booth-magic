@@ -25,7 +25,7 @@
 //   - response carries modelUsed for client-side observability)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
@@ -863,34 +863,34 @@ applied. Zero overlaid text or annotations.`;
     const responseText = "";
     let modelUsed = "";
 
-    // callOpenAIImage tries gpt-image-2 first and silently falls
-    // back to gpt-image-1 when OpenAI says the newer model isn't
-    // available (rolled-back release, tier-gated access, etc.). The
-    // edge function doesn't need to know which one ran — the gateway
-    // logs it on the server side.
-    console.log(`[generate-hero] Calling OpenAI image gateway (primary: gpt-image-2, fallback: gpt-image-1)`);
+    // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
+    // and falls back to Gemini's gemini-3-pro-image-preview (Canopy
+    // Lite / "nano banana pro") on any failure. The caller gets back
+    // which model produced the image so we can surface it in the UI.
+    console.log(`[generate-hero] Calling image gateway (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / gemini-3-pro-image-preview)`);
     try {
-      const out = await callOpenAIImage({
+      const out = await generateImageWithFallback({
         usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
         prompt: flattenedPrompt,
         referenceImageUrls: refUrlsForOpenAI,
         size: "1536x1024", // 16:9 closest
         quality: "high",
       });
-      const img = out[0];
+      const img = out.images[0];
       if (!img) {
         throw new Error(
-          "OpenAI returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
+          "Image gateway returned no image. The prompt may have been filtered by content policy or both models are overloaded. Try regenerating or simplifying the prompt.",
         );
       }
       generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-      modelUsed = "openai/gpt-image";
+      modelUsed = out.modelUsed;
+      console.log(`[generate-hero] Image produced by ${modelUsed}`);
     } catch (e) {
-      console.error("[generate-hero] OpenAI image generation failed:", e);
+      console.error("[generate-hero] Image generation failed (both primary and fallback):", e);
       const message = e instanceof Error ? e.message : "Unknown error";
       throw new Error(
         `Image generation failed: ${message}. ` +
-        `Verify OPENAI_API_KEY in Supabase Edge Function Secrets and that the key has access to gpt-image-2 or gpt-image-1.`,
+        `Verify OPENAI_API_KEY (for gpt-image-2) and GOOGLE_AI_API_KEY or LOVABLE_API_KEY (for nano-banana fallback) in Supabase Edge Function Secrets.`,
       );
     }
 

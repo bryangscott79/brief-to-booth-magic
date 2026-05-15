@@ -57,6 +57,7 @@ import {
 import { BriefClarification } from "@/components/prompts/BriefClarification";
 import { PromptDebugPanel } from "@/components/prompts/PromptDebugPanel";
 import { PromptInspector } from "@/components/prompts/PromptInspector";
+import { ModelBadge } from "@/components/prompts/ModelBadge";
 
 /**
  * Map an internal angle id to the canonical ViewAngle the composer
@@ -148,7 +149,7 @@ export function PromptGenerator() {
   // Global render store
   const renderStore = useRenderStore();
   const {
-    phase, heroPrompt, heroImage, heroFeedback, heroThread,
+    phase, heroPrompt, heroImage, heroModelUsed, heroFeedback, heroThread,
     generatedPrompts, generatedImages, isGeneratingHero, isGenerating,
     generationProgress, currentlyGenerating, hydratedFromDb,
   } = renderStore;
@@ -1389,6 +1390,16 @@ export function PromptGenerator() {
               />
             </button>
 
+            {/* "Which engine produced this image" — Canopy 2.0 vs Canopy
+              * Lite. Tiny inline chip so the user can tell at a glance
+              * which model rendered the hero. Hidden when modelUsed is
+              * unknown (older renders pre-dating the badge). */}
+            {heroModelUsed && (
+              <div className="flex justify-end -mt-1">
+                <ModelBadge model={heroModelUsed} />
+              </div>
+            )}
+
             {/* The exact prompt that produced the visible hero — always
               * accessible for review, copy (take to another model), or
               * edit + re-render. The chat input below is for
@@ -1844,6 +1855,14 @@ export function PromptGenerator() {
                   )}
                 </div>
 
+                {/* Engine badge — same Canopy 2.0 / Canopy Lite chip
+                  * as the hero, scoped to this view's render. */}
+                {imageData?.status === "complete" && imageData.modelUsed && (
+                  <div className="flex justify-end -mt-1">
+                    <ModelBadge model={imageData.modelUsed} />
+                  </div>
+                )}
+
                 {/* Always-accessible prompt: review, edit + re-render,
                   * copy to another model, or reset to default. Hidden
                   * until the angle has a prompt to show (no image
@@ -1977,6 +1996,14 @@ export function PromptGenerator() {
                         </div>
                       )}
                     </div>
+
+                    {/* Engine badge for this zone interior. */}
+                    {imageData?.status === "complete" && imageData.modelUsed && (
+                      <div className="flex justify-end -mt-1">
+                        <ModelBadge model={imageData.modelUsed} />
+                      </div>
+                    )}
+
                     {/* Always-accessible prompt for this zone interior:
                       * review, edit + re-render, copy to another model,
                       * or reset to the auto-composed default. Same UX

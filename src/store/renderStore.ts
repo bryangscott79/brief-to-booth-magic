@@ -7,6 +7,14 @@ export interface GeneratedImage {
   url: string;
   status: "pending" | "generating" | "complete" | "error";
   error?: string;
+  /**
+   * Canonical model id that produced the image (e.g.
+   * "openai/gpt-image-2", "google/gemini-3-pro-image-preview"). Set
+   * from the edge function response so the UI can show a "Canopy 2.0"
+   * or "Canopy Lite" badge under each render. Undefined for legacy
+   * renders saved before the badge existed.
+   */
+  modelUsed?: string;
 }
 
 /**
@@ -36,6 +44,15 @@ interface RenderState {
   phase: WorkflowPhase;
   heroPrompt: string;
   heroImage: string | null;
+  /**
+   * Canonical model id that produced the current heroImage (e.g.
+   * "openai/gpt-image-2", "google/gemini-3-pro-image-preview"). Powers
+   * the "Canopy 2.0" / "Canopy Lite" badge under the hero. Set from
+   * the edge function response on each successful generation; null
+   * when no render exists yet OR when an older render predates the
+   * badge.
+   */
+  heroModelUsed: string | null;
   heroFeedback: string;
   heroIterations: string[];
   /**
@@ -239,6 +256,7 @@ const initialState: RenderState = {
   phase: "prompt",
   heroPrompt: "",
   heroImage: null,
+  heroModelUsed: null,
   heroFeedback: "",
   heroIterations: [],
   heroThread: [],
@@ -350,6 +368,7 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
       set((s) => ({
         heroImage: data.imageUrl,
+        heroModelUsed: typeof data.modelUsed === "string" ? data.modelUsed : null,
         heroIterations: [...s.heroIterations, data.imageUrl],
         heroThread: [...s.heroThread, turn],
         phase: "hero-review",
@@ -465,7 +484,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         set((s) => ({
           generatedImages: {
             ...s.generatedImages,
-            [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
+            [angle.id]: {
+              url: imageUrl || "",
+              status: imageUrl ? "complete" : "error",
+              modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+            },
           },
           generationProgress: ((i + 1) / viewsToGenerate.length) * 100,
           viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
@@ -561,7 +584,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       set((s) => ({
         generatedImages: {
           ...s.generatedImages,
-          [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
+          [angle.id]: {
+            url: imageUrl || "",
+            status: imageUrl ? "complete" : "error",
+            modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+          },
         },
         viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },
       }));
@@ -657,7 +684,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         set((s) => ({
           generatedImages: {
             ...s.generatedImages,
-            [angle.id]: { url: imageUrl || "", status: imageUrl ? "complete" : "error" },
+            [angle.id]: {
+              url: imageUrl || "",
+              status: imageUrl ? "complete" : "error",
+              modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
+            },
           },
           generationProgress: ((i + 1) / viewsToRegenerate.length) * 100,
           viewVersions: { ...s.viewVersions, [angle.id]: currentHeroVersion },

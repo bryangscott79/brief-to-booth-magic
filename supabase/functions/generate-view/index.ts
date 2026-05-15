@@ -19,7 +19,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
@@ -684,11 +684,11 @@ serve(async (req) => {
     const responseText = "";
     let modelUsed = "";
 
-    // callOpenAIImage tries gpt-image-2 first and falls back to
-    // gpt-image-1 if the newer model isn't available — same safety
-    // net as generate-hero. Logs which model actually ran on the
-    // gateway side.
-    console.log(`[generate-view] Calling OpenAI image gateway for ${viewName} (primary: gpt-image-2, fallback: gpt-image-1)`);
+    // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
+    // and falls back to Gemini's nano-banana pro (Canopy Lite) on
+    // any failure — same safety net as generate-hero. The returned
+    // modelUsed flows back to the client for the per-image badge.
+    console.log(`[generate-view] Calling image gateway for ${viewName} (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / nano-banana pro)`);
     try {
       // Reference URLs for the OpenAI /v1/images/edits call.
       //
@@ -718,27 +718,28 @@ serve(async (req) => {
             ...(extraReferenceUrls ?? []),
           ].slice(0, 4);
 
-      const out = await callOpenAIImage({
+      const out = await generateImageWithFallback({
         usage: await buildUsageContext(req, "generate-view").catch(() => undefined),
         prompt: editPrompt,
         referenceImageUrls,
         size: "1536x1024",
         quality: "high",
       });
-      const img = out[0];
+      const img = out.images[0];
       if (!img) {
         throw new Error(
-          "OpenAI returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
+          "Image gateway returned no image. The prompt may have been filtered by content policy or both models are overloaded. Try regenerating or simplifying the prompt.",
         );
       }
       generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-      modelUsed = "openai/gpt-image";
+      modelUsed = out.modelUsed;
+      console.log(`[generate-view] ${viewName} produced by ${modelUsed}`);
     } catch (e) {
-      console.error(`[generate-view] OpenAI image generation failed for ${viewName}:`, e);
+      console.error(`[generate-view] Image generation failed for ${viewName} (both primary and fallback):`, e);
       const message = e instanceof Error ? e.message : "Unknown error";
       throw new Error(
         `Image generation failed for ${viewName}: ${message}. ` +
-        `Verify OPENAI_API_KEY in Supabase Edge Function Secrets and that the key has access to gpt-image-2 or gpt-image-1.`,
+        `Verify OPENAI_API_KEY (for gpt-image-2) and GOOGLE_AI_API_KEY or LOVABLE_API_KEY (for nano-banana fallback) in Supabase Edge Function Secrets.`,
       );
     }
 

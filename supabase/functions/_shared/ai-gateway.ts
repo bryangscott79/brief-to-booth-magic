@@ -958,59 +958,18 @@ function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1
  * sent as image[] entries. (gpt-image-2 supports a small number of
  * references; we cap at 4.)
  */
-/**
- * Errors from OpenAI that mean "this model isn't available to you right
- * now" — distinct from "your prompt was bad" or "you're out of credits".
- * If we see one of these on gpt-image-2 we silently fall back to
- * gpt-image-1 so the user still gets an image. The user's directive is
- * "use gpt-image-2"; this fallback only fires when gpt-image-2 itself
- * refuses (rolled-back release, tier-gated access, model rename, etc.).
- */
-function isModelUnavailableError(msg: string): boolean {
-  const m = msg.toLowerCase();
-  return (
-    m.includes("model_not_found") ||
-    m.includes("does not have access to model") ||
-    m.includes("invalid_model") ||
-    m.includes("model not found") ||
-    m.includes("the model `") ||
-    m.includes("model `gpt-image-2`") ||
-    // Generic 400 with "model" in the message — covers the case where
-    // OpenAI hasn't normalised their error code yet for a newly-renamed
-    // model. Tight enough that other 400s (prompt filter, malformed
-    // body) won't get caught.
-    (m.includes("(400)") && m.includes("model"))
-  );
-}
-
 export async function callOpenAIImage(
   options: OpenAIImageOptions,
 ): Promise<OpenAIImageResult[]> {
   const started = Date.now();
-  // Try the user's preferred model first (gpt-image-2). If OpenAI
-  // says it's unavailable, drop back to gpt-image-1 so the render
-  // still lands. Log loudly so the operator can see which model
-  // actually produced the image.
-  const primary = "gpt-image-2";
-  const fallback = "gpt-image-1";
-  let modelUsed = primary;
+  // OpenAI-only callers. No fallback here — use generateImageWithFallback
+  // for the hero/view pipelines that want a Gemini safety net.
   try {
-    let result: OpenAIImageResult[];
-    try {
-      result = await _callOpenAIImageInner(options, primary);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (!isModelUnavailableError(msg)) throw e;
-      console.warn(
-        `[ai-gateway] gpt-image-2 unavailable — falling back to gpt-image-1. Reason: ${msg.slice(0, 200)}`,
-      );
-      modelUsed = fallback;
-      result = await _callOpenAIImageInner(options, fallback);
-    }
+    const result = await _callOpenAIImageInner(options, "gpt-image-2");
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: `openai/${modelUsed}`,
+        model: "openai/gpt-image-2",
         imageCount: result.length,
         durationMs: Date.now() - started,
         status: "success",
@@ -1021,7 +980,7 @@ export async function callOpenAIImage(
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: `openai/${modelUsed}`,
+        model: "openai/gpt-image-2",
         durationMs: Date.now() - started,
         status: "error",
         errorMessage: e instanceof Error ? e.message : String(e),
@@ -1029,6 +988,168 @@ export async function callOpenAIImage(
     }
     throw e;
   }
+}
+
+/**
+ * Result of a fallback-capable image generation call. `modelUsed` is the
+ * canonical model id that produced the image — callers stash this in
+ * the response so the client can render a "which model did this?" badge.
+ *
+ * Canonical ids: `openai/gpt-image-2` (Canopy 2.0) or
+ * `google/gemini-3-pro-image-preview` (Canopy Lite, aka nano-banana pro).
+ */
+export interface ImageWithFallbackResult {
+  images: OpenAIImageResult[];
+  modelUsed: "openai/gpt-image-2" | "google/gemini-3-pro-image-preview";
+}
+
+/**
+ * Primary image-gen entry point for hero + view renders. Tries
+ * gpt-image-2 first (the primary "Canopy 2.0" model). On ANY failure
+ * — model unavailable, content filter, quota, network — falls back to
+ * Gemini's gemini-3-pro-image-preview ("nano banana pro" / Canopy Lite)
+ * so the user still gets a render.
+ *
+ * User direction was explicit: never fall back to gpt-image-1. Both
+ * fallback rungs are documented above each path so the next person
+ * reading this doesn't reintroduce a deleted model.
+ */
+export async function generateImageWithFallback(
+  options: OpenAIImageOptions,
+): Promise<ImageWithFallbackResult> {
+  const started = Date.now();
+  // ── Rung 1: gpt-image-2 (primary) ──
+  try {
+    const images = await _callOpenAIImageInner(options, "gpt-image-2");
+    if (options.usage) {
+      logUsageEvent({
+        context: options.usage,
+        model: "openai/gpt-image-2",
+        imageCount: images.length,
+        durationMs: Date.now() - started,
+        status: "success",
+      });
+    }
+    return { images, modelUsed: "openai/gpt-image-2" };
+  } catch (primaryErr) {
+    const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+    console.warn(
+      `[ai-gateway] gpt-image-2 failed — falling back to Gemini nano-banana pro. Reason: ${msg.slice(0, 240)}`,
+    );
+    if (options.usage) {
+      // Log primary failure so observability shows BOTH the failed
+      // attempt and the successful fallback — don't lose the signal
+      // that gpt-image-2 keeps misbehaving.
+      logUsageEvent({
+        context: options.usage,
+        model: "openai/gpt-image-2",
+        durationMs: Date.now() - started,
+        status: "error",
+        errorMessage: msg.slice(0, 500),
+      });
+    }
+    // ── Rung 2: Gemini gemini-3-pro-image-preview (fallback) ──
+    const fallbackStarted = Date.now();
+    try {
+      const images = await _callGeminiImageInner(options);
+      if (options.usage) {
+        logUsageEvent({
+          context: options.usage,
+          model: "google/gemini-3-pro-image-preview",
+          imageCount: images.length,
+          durationMs: Date.now() - fallbackStarted,
+          status: "success",
+        });
+      }
+      return { images, modelUsed: "google/gemini-3-pro-image-preview" };
+    } catch (fallbackErr) {
+      const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      if (options.usage) {
+        logUsageEvent({
+          context: options.usage,
+          model: "google/gemini-3-pro-image-preview",
+          durationMs: Date.now() - fallbackStarted,
+          status: "error",
+          errorMessage: fbMsg.slice(0, 500),
+        });
+      }
+      // Both rungs failed. Surface both error messages so the caller
+      // can show the operator what actually went wrong.
+      throw new Error(
+        `Both image models failed. ` +
+        `gpt-image-2: ${msg.slice(0, 200)} | ` +
+        `gemini-3-pro-image-preview: ${fbMsg.slice(0, 200)}`,
+      );
+    }
+  }
+}
+
+/**
+ * Gemini image-gen path. Builds a Gemini-shaped messages array from the
+ * OpenAI-shape `options`, calls callGemini with image+text modalities,
+ * and returns the result mapped to OpenAIImageResult shape so the
+ * caller doesn't have to branch on which model produced the bytes.
+ *
+ * Mirrors the pre-swap (pre-gpt-image-2) implementation that lived in
+ * generate-hero/index.ts so behaviour is known-good rather than newly
+ * written.
+ */
+async function _callGeminiImageInner(
+  options: OpenAIImageOptions,
+): Promise<OpenAIImageResult[]> {
+  // Build a Gemini multimodal user message. Reference images go in as
+  // image_url parts — Gemini accepts them inline alongside the text
+  // and treats them as visual context, same as gpt-image-2's
+  // /v1/images/edits but via a different transport.
+  const refs = (options.referenceImageUrls ?? []).slice(0, 4);
+  const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+    { type: "text", text: options.prompt },
+    ...refs.map((url) => ({ type: "image_url", image_url: { url } })),
+  ];
+  const messages = [
+    {
+      role: "user",
+      content: refs.length > 0 ? contentParts : options.prompt,
+    },
+  ];
+
+  // Primary Gemini model is "nano banana pro" / gemini-3-pro-image-preview.
+  // On empty response (Pro Image can return {} under safety filtering or
+  // load), retry once with the flash variant — proven pattern from the
+  // pre-swap implementation.
+  let result = await callGemini({
+    // deno-lint-ignore no-explicit-any
+    model: "google/gemini-3-pro-image-preview" as any,
+    // deno-lint-ignore no-explicit-any
+    messages: messages as any,
+    modalities: ["image", "text"],
+  });
+  let image = result.images?.[0];
+  if (!image) {
+    console.warn("[ai-gateway] Gemini pro image returned no image, retrying with flash");
+    try {
+      result = await callGemini({
+        // deno-lint-ignore no-explicit-any
+        model: "google/gemini-3.1-flash-image-preview" as any,
+        // deno-lint-ignore no-explicit-any
+        messages: messages as any,
+        modalities: ["image", "text"],
+      });
+      image = result.images?.[0];
+    } catch (e) {
+      console.error("[ai-gateway] Gemini flash fallback also threw:", e);
+    }
+  }
+  if (!image) {
+    throw new Error(
+      "Gemini returned no image. The prompt may have been filtered or the model is overloaded.",
+    );
+  }
+  return [{
+    base64Data: image.base64Data,
+    mimeType: image.mimeType,
+    index: 0,
+  }];
 }
 
 async function _callOpenAIImageInner(

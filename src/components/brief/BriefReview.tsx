@@ -9,11 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { OriginalBrief } from "./OriginalBrief";
+import { BriefHangingCard } from "./BriefHangingCard";
 import { useProject } from "@/hooks/useProjects";
 import { saveProjectField } from "@/hooks/useProjectSync";
 import type { ParsedBrief } from "@/types/brief";
 import { BriefClarification } from "@/components/prompts/BriefClarification";
-import { validateParsedBriefForReview, applyGapAnswer } from "@/lib/normalizedBrief";
+import {
+  validateParsedBriefForReview,
+  applyGapAnswer,
+  type NormalizedHangingElement,
+  type HangingShape,
+} from "@/lib/normalizedBrief";
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -105,6 +111,46 @@ function TagList({
       )}
     </div>
   );
+}
+
+// ─── hanging-element derivation ───────────────────────────────────────────────
+// The parser stores hanging entries with a small authoring subset
+// (name / physicalForm / shape / materials / surfaces / lighting /
+// printed). The BriefHangingCard wants the full NormalizedHangingElement
+// shape so the same record can flow back through the normalizer
+// untouched. Position / dimensions / id / suspensionDropFt are filled
+// with reasonable defaults — Task 5's canvas layer is the source of
+// truth for those, not parsedBrief.
+
+const HANGING_SHAPES = ["rect", "circle", "oval", "ring", "custom"] as const;
+
+function deriveHangingElements(brief: ParsedBrief): NormalizedHangingElement[] {
+  const raw = (brief as unknown as { hangingElements?: unknown }).hangingElements;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry, idx) => {
+    const e = (entry ?? {}) as Record<string, unknown>;
+    const shape: HangingShape = (HANGING_SHAPES as readonly string[]).includes(
+      e.shape as string,
+    )
+      ? (e.shape as HangingShape)
+      : "ring";
+    return {
+      id: `hang_${idx}`,
+      name:
+        typeof e.name === "string" && e.name.trim().length > 0
+          ? e.name
+          : `Hanging element ${idx + 1}`,
+      physicalForm: typeof e.physicalForm === "string" ? e.physicalForm : "",
+      shape,
+      dimensions: { width: 3, depth: 3, thicknessFt: 1 },
+      suspensionDropFt: 3,
+      position: { x: 0, y: 0 },
+      materials: Array.isArray(e.materials) ? (e.materials as unknown[]).map(String) : [],
+      surfaces: Array.isArray(e.surfaces) ? (e.surfaces as unknown[]).map(String) : [],
+      lighting: Array.isArray(e.lighting) ? (e.lighting as unknown[]).map(String) : [],
+      printed: Array.isArray(e.printed) ? (e.printed as unknown[]).map(String) : [],
+    };
+  });
 }
 
 // ─── section wrapper ──────────────────────────────────────────────────────────
@@ -784,6 +830,30 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
           {budgetView}
         </Section>
       </div>
+
+      {/* Hanging Elements */}
+      <BriefHangingCard
+        elements={deriveHangingElements(brief)}
+        onChange={async (next) => {
+          // Only the authoring fields round-trip to parsedBrief.
+          // Position / dimensions / id / suspensionDropFt are
+          // normalize-time-only — Task 5's canvas layer will edit
+          // those via BoothGeometry, not via parsedBrief.
+          const updated = {
+            ...brief,
+            hangingElements: next.map((el) => ({
+              name: el.name,
+              physicalForm: el.physicalForm,
+              shape: el.shape,
+              materials: el.materials,
+              surfaces: el.surfaces,
+              lighting: el.lighting,
+              printed: el.printed,
+            })),
+          } as typeof brief;
+          await commitSection(updated);
+        }}
+      />
 
       {/* Creative Direction */}
       <Card className="element-card">

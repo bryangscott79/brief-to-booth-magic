@@ -996,3 +996,67 @@ describe("composeViewPrompt — views derive from heroSnapshot", () => {
     expect(out.renderer.length).toBeLessThan(1200);
   });
 });
+
+describe("existingSpace block (interior design)", () => {
+  const samplePhoto = "https://example.com/photo.jpg";
+  const sampleExistingSpace = {
+    photoUrl: samplePhoto,
+    annotations: {
+      keep: [{ points: [{ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.1 }, { x: 0.3, y: 0.3 }, { x: 0.1, y: 0.3 }] }],
+      change: [{ points: [{ x: 0.5, y: 0.5 }, { x: 0.9, y: 0.5 }, { x: 0.9, y: 0.9 }, { x: 0.5, y: 0.9 }] }],
+    },
+    analysis: {
+      estimatedDimensions: { width: 12, depth: 16, ceilingHeightFt: 9 },
+      features: ["double-hung windows on north wall", "stone fireplace on east wall"],
+      existingMaterials: { floors: "oak hardwood, original", walls: "off-white painted drywall" },
+      lighting: { naturalLightDirection: "north" as const, timeOfDayInferred: "midday" as const },
+      summary: "Bright 12' × 16' living room with original hardwood and a stone fireplace.",
+    },
+  };
+
+  it("normalizes a parsed brief with an existingSpace block", () => {
+    const parsed = { ...eqvilentParsedBrief, existingSpace: sampleExistingSpace } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.existingSpace).toBeDefined();
+    expect(n.existingSpace?.photoUrl).toBe(samplePhoto);
+    expect(n.existingSpace?.annotations.keep).toHaveLength(1);
+    expect(n.existingSpace?.annotations.change).toHaveLength(1);
+    expect(n.existingSpace?.analysis.features).toContain("stone fireplace on east wall");
+  });
+
+  it("returns existingSpace undefined when not in parsed brief", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.existingSpace).toBeUndefined();
+  });
+
+  it("auto-closes annotation polygons (last point ≠ first)", () => {
+    const openPolygon = {
+      photoUrl: samplePhoto,
+      annotations: {
+        keep: [{ points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] }],
+        change: [],
+      },
+      analysis: { features: [], existingMaterials: {}, lighting: {} },
+    };
+    const parsed = { ...eqvilentParsedBrief, existingSpace: openPolygon } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const poly = n.existingSpace?.annotations.keep[0];
+    expect(poly?.points.length).toBe(4); // 3 + 1 closing duplicate
+    expect(poly?.points[3]).toEqual(poly?.points[0]);
+  });
+});

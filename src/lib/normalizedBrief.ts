@@ -233,6 +233,13 @@ export interface NormalizedBriefHanging {
   elements: NormalizedHangingElement[];
 }
 
+// Pass-through interface — reserved for future normalized-only derived
+// fields (e.g. rasterized mask URL, photo aspect ratio). The explicit
+// `extends` (rather than a type alias) lets future fields be added
+// without touching every downstream type reference.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface NormalizedBriefExistingSpace extends ParsedBriefExistingSpace {}
+
 export interface NormalizedBrief {
   project: NormalizedBriefProject;
   brand: NormalizedBriefBrand;
@@ -242,6 +249,15 @@ export interface NormalizedBrief {
   hero: NormalizedBriefHero;
   signage: NormalizedBriefSignage;
   hanging: NormalizedBriefHanging;
+  /**
+   * Optional existing-space block for interior-design projects.
+   * Presence/absence is semantically meaningful: presence means
+   * "this is an existing-space project (photo + annotations)";
+   * absence means "this is a spatial-canvas project". The normalizer
+   * intentionally does not fabricate an empty default — see
+   * safeBrief() for the why.
+   */
+  existingSpace?: NormalizedBriefExistingSpace;
   creative: NormalizedBriefCreative;
   context: NormalizedBriefContext;
   camera: NormalizedBriefCamera;
@@ -264,7 +280,7 @@ export interface NormalizedBrief {
 // + elements into the canonical NormalizedBrief shape.
 // ─────────────────────────────────────────────────────────────────────
 
-import type { ParsedBrief } from "@/types/brief";
+import type { ParsedBrief, ParsedBriefExistingSpace, Polygon } from "@/types/brief";
 import type { BoothGeometry } from "@/lib/geometryModel";
 
 interface NormalizeBriefInput {
@@ -386,6 +402,11 @@ function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief 
     hangingElements: Array.isArray(b.hangingElements)
       ? (b.hangingElements as ParsedHangingElement[])
       : [],
+    // existingSpace is INTENTIONALLY not defaulted — its presence/
+    // absence has semantic meaning (existing-space vs spatial-canvas
+    // project). An empty-shell default would erase that distinction.
+    // Preserve when present, leave undefined when absent.
+    existingSpace: b.existingSpace as ParsedBriefExistingSpace | undefined,
     // _dismissedGaps is the sentinel set used to suppress helpful
     // gaps when the user has already answered "No" / dismissed the
     // prompt. Without this, gaps whose "filled" state is identical
@@ -596,6 +617,46 @@ function normalizeHangingElement(
   };
 }
 
+/**
+ * Close a polygon's point list if the last point isn't equal to the
+ * first. Downstream consumers (mask rasterization, SVG <polygon>)
+ * either tolerate open paths or silently misbehave; explicit closure
+ * removes the ambiguity.
+ */
+function closePolygon(poly: Polygon): Polygon {
+  if (poly.points.length === 0) return poly;
+  const first = poly.points[0];
+  const last = poly.points[poly.points.length - 1];
+  if (first.x === last.x && first.y === last.y) return poly;
+  return { ...poly, points: [...poly.points, { ...first }] };
+}
+
+/**
+ * Convert a parsed-brief existingSpace block to the normalized shape.
+ * Currently mostly pass-through, but with two real normalizations:
+ *   1. Auto-close any open polygons.
+ *   2. Defensive array/object defaults so a sparse parsed block
+ *      doesn't produce undefined downstream.
+ */
+function normalizeExistingSpace(
+  raw: ParsedBriefExistingSpace,
+): NormalizedBriefExistingSpace {
+  return {
+    photoUrl: raw.photoUrl,
+    annotations: {
+      keep: Array.isArray(raw.annotations?.keep) ? raw.annotations.keep.map(closePolygon) : [],
+      change: Array.isArray(raw.annotations?.change) ? raw.annotations.change.map(closePolygon) : [],
+    },
+    analysis: {
+      estimatedDimensions: raw.analysis?.estimatedDimensions,
+      features: Array.isArray(raw.analysis?.features) ? raw.analysis.features.map(String) : [],
+      existingMaterials: raw.analysis?.existingMaterials ?? {},
+      lighting: raw.analysis?.lighting ?? {},
+      summary: raw.analysis?.summary,
+    },
+  };
+}
+
 export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
   const { project, geometry, elements } = input;
   // Apply defense-in-depth defaults so partial / legacy / corrupted
@@ -733,6 +794,17 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
     ? rawDismissed.filter((v): v is string => typeof v === "string")
     : [];
 
+  // existingSpace is INTENTIONALLY left undefined when absent.
+  // Presence on the normalized brief signals "this is an existing-space
+  // (interior-design) project"; absence signals "this is a spatial-
+  // canvas project". An empty-shell default would erase that
+  // distinction and force every downstream consumer to disambiguate
+  // by sniffing nested fields.
+  const existingSpace: NormalizedBriefExistingSpace | undefined =
+    parsedBrief.existingSpace && typeof parsedBrief.existingSpace.photoUrl === "string"
+      ? normalizeExistingSpace(parsedBrief.existingSpace)
+      : undefined;
+
   return {
     project: {
       id: project.id,
@@ -765,6 +837,7 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
     hero,
     signage: { required: signageRequired },
     hanging: { elements: hangingElements },
+    existingSpace,
     creative: {
       visualLanguage: parsedBrief.creative.visualLanguage ?? [],
       referenceLabels: parsedBrief.creative.referenceLabels ?? [],

@@ -4,6 +4,56 @@
 
 import type { ParsedHangingElement } from "@/lib/normalizedBrief";
 
+export interface Polygon {
+  /**
+   * Closed polygon in NORMALIZED PHOTO COORDS (0..1 on each axis).
+   * Normalization survives photo resizing; the same mask renders
+   * correctly at any display size or for full-resolution mask
+   * rasterization at render time.
+   */
+  points: Array<{ x: number; y: number }>;
+  /** Optional user-typed label ("fireplace", "old flooring"). */
+  label?: string;
+}
+
+export interface ParsedBriefExistingSpace {
+  /**
+   * Single canonical photo URL of the existing space. Stored in the
+   * project-images bucket under existing-space/<projectId>/<ts>.<ext>.
+   * Re-uploads replace; the previous URL is dropped from the brief
+   * (storage cleanup happens via a separate sweep).
+   */
+  photoUrl: string;
+  /** User-drawn keep/change annotations. */
+  annotations: {
+    /** Regions to preserve in the redesign (fixtures, windows, etc.). */
+    keep: Polygon[];
+    /** Regions the redesign should transform (flooring, paint, furniture). */
+    change: Polygon[];
+  };
+  /**
+   * Vision-model output. Auto-populated by analyze-existing-space on
+   * photo upload; user-editable via BriefExistingSpace card.
+   */
+  analysis: {
+    estimatedDimensions?: { width: number; depth: number; ceilingHeightFt: number };
+    features: string[];
+    existingMaterials: {
+      floors?: string;
+      walls?: string;
+      ceiling?: string;
+      trim?: string;
+      [zone: string]: string | undefined;
+    };
+    lighting: {
+      naturalLightDirection?: "north" | "south" | "east" | "west" | "skylight" | "none";
+      existingFixtures?: string[];
+      timeOfDayInferred?: "morning" | "midday" | "evening" | "night" | "controlled";
+    };
+    summary?: string;
+  };
+}
+
 export interface ParsedBrief {
   brand: {
     name: string;
@@ -120,6 +170,13 @@ export interface ParsedBrief {
    *  floor-supported booth structure. The normalizer reads this field
    *  through to NormalizedBrief.hanging.elements. */
   hangingElements?: ParsedHangingElement[];
+
+  /** Existing-space block for interior-design projects. Photo URL +
+   *  keep/change polygon annotations + vision-model analysis. Presence
+   *  signals "existing-space" input mode (user uploads a photo of a
+   *  real space rather than authoring a fresh footprint on the
+   *  spatial canvas). Absence means a spatial-canvas project. */
+  existingSpace?: ParsedBriefExistingSpace;
 
   /** Field paths of clarification gaps the user has explicitly
    *  dismissed (e.g. "hanging.elements" when they answer

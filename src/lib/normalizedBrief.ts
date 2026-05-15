@@ -380,6 +380,18 @@ function inferBudgetTier(parsed: ParsedBrief, area: number): "standard" | "premi
   return "standard";
 }
 
+/**
+ * Strip a trailing "(#hex)" suffix from a color name string. The
+ * clarification UI writes hex codes in this format ("orange
+ * (#E67E22)") because parsedBrief.brand.visualIdentity.colors is a
+ * string[] without a dedicated hex slot. The normalizer parses the
+ * hex back out into NormalizedBriefBrandColor.hex; this helper
+ * returns just the readable name without the parenthesized hex.
+ */
+function stripHexSuffix(name: string): string {
+  return name.replace(/\s*\(#[0-9a-fA-F]{3,8}\)\s*$/, "").trim();
+}
+
 function visibilityFromPosition(
   z: { x: number; y: number; depth: number },
   depth: number,
@@ -400,15 +412,24 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
 
   const area = geometry.width * geometry.depth;
 
+  // Parse colors from parsedBrief. Each entry can carry an embedded
+  // hex code in the form "orange (#E67E22)" — written by the
+  // clarification UI's hex gap. We split that out into the c.hex
+  // field so the validator's "missing hex" gap can detect resolution.
   const colors: NormalizedBriefBrandColor[] = (parsedBrief.brand.visualIdentity.colors ?? [])
     .filter((c) => typeof c === "string" && c.trim().length > 0)
-    .map((c, i) => ({
-      name: c,
-      role: (i === 0 ? "primary" : i === 1 ? "secondary" : "accent") as
-        | "primary"
-        | "secondary"
-        | "accent",
-    }));
+    .map((c, i) => {
+      const hexMatch = c.match(/\(#([0-9a-fA-F]{3,8})\)/);
+      const name = stripHexSuffix(c);
+      return {
+        name,
+        hex: hexMatch ? `#${hexMatch[1]}` : undefined,
+        role: (i === 0 ? "primary" : i === 1 ? "secondary" : "accent") as
+          | "primary"
+          | "secondary"
+          | "accent",
+      };
+    });
 
   const zones: NormalizedBriefZone[] = geometry.zones.map((z) => ({
     id: z.id,
@@ -431,9 +452,24 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
 
   const heroFromElements = elements?.interactiveMechanics?.data?.hero;
   const heroZone = zones.find((z) => z.purpose === "hero focal area");
+  // Hero physicalForm precedence:
+  //   1. The authored interactiveMechanics element (rich physical form
+  //      from the element generation step)
+  //   2. parsedBrief.experience.hero.description (where the
+  //      BriefClarification UI writes the user's answer when they
+  //      describe the hero's form before element generation)
+  // This dual-source pattern lets the gap-clarification answer actually
+  // resolve the validator's gap, instead of getting stuck in an
+  // infinite-save state where the user types but the gap persists
+  // because the write target doesn't feed the read target.
+  const heroPhysicalFormFromElements = heroFromElements?.physicalForm?.structure ?? "";
+  const heroPhysicalFormFromBrief = parsedBrief.experience.hero.description ?? "";
   const hero: NormalizedBriefHero = {
     name: heroFromElements?.name ?? "Hero installation",
-    physicalForm: heroFromElements?.physicalForm?.structure ?? "",
+    physicalForm:
+      heroPhysicalFormFromElements.trim().length > 0
+        ? heroPhysicalFormFromElements
+        : heroPhysicalFormFromBrief,
     materials: heroFromElements?.physicalForm?.materials ?? [],
     placementZoneId: heroZone?.id ?? zones[0]?.id ?? "",
   };
@@ -607,15 +643,19 @@ export function validateBrief(normalized: NormalizedBrief): ValidationResult {
 
   // ── Gaps ──
 
-  // Brand colors missing hex codes
-  const colorsMissingHex = normalized.brand.colors.filter((c) => !c.hex);
-  if (colorsMissingHex.length > 0) {
+  // Brand colors missing hex codes. We fire the gap when the PRIMARY
+  // color has no hex — that's the one that matters most for render
+  // fidelity. Secondaries/accents are nice-to-have but shouldn't keep
+  // the gap open after the user provides the primary. (Without this,
+  // the user types orange's hex, color[0].hex fills, but color[1]
+  // still has no hex, so the gap fires forever — the infinite-save
+  // UX problem in a different costume.)
+  const primary = normalized.brand.colors[0];
+  if (primary && !primary.hex) {
     gaps.push({
       field: "brand.colors.hex",
       severity: "helpful",
-      question: `Do you have hex codes for ${colorsMissingHex
-        .map((c) => c.name)
-        .join(", ")}? Adding them produces more brand-accurate renders.`,
+      question: `Do you have a hex code for the primary brand color (${primary.name})? Adding it produces a more brand-accurate render.`,
       fallback: null,
       source: "schema",
     });
@@ -1093,19 +1133,28 @@ export function applyGapAnswer(
       break;
     }
     case "hero.physicalForm":
-      // physicalForm lives on interactiveMechanics element data, not on
-      // ParsedBrief. Stash the answer on creative.designPhilosophy so
-      // it's preserved and surfaced to the model until the host
-      // separately persists it via setElementData.
-      next.creative.designPhilosophy = next.creative.designPhilosophy
-        ? `${next.creative.designPhilosophy} | hero form: ${value}`
-        : `hero form: ${value}`;
+      // Write the answer to parsedBrief.experience.hero.description.
+      // normalizeBrief uses this as the fallback for hero.physicalForm
+      // when interactiveMechanics element data hasn't been generated
+      // yet (or hasn't been re-generated since the answer). This
+      // closes the round trip: the validator's gap check reads
+      // hero.physicalForm, the normalizer fills it from this brief
+      // field, the gap resolves, the clarification card disappears.
+      //
+      // Previously this wrote to creative.designPhilosophy, which the
+      // normalizer never read for physicalForm — so the gap stayed
+      // open and the user could click Save infinitely.
+      next.experience.hero.description = String(value);
       break;
     case "brand.colors.hex":
-      // Hex codes don't have an exact slot — append in parens to the
-      // first color name so the normalizer can pick them up later.
+      // Encode the hex in the color name string so the normalizer can
+      // parse it back out into c.hex on the NormalizedBriefBrandColor.
+      // Format: "orange (#E67E22)" — the normalizer's color split
+      // routine reads this back. Writing only the first color for
+      // simplicity; a richer multi-color UX would address each
+      // color individually with separate gap fields.
       next.brand.visualIdentity.colors = next.brand.visualIdentity.colors.map((c, i) =>
-        i === 0 ? `${c} (${value})` : c,
+        i === 0 ? `${stripHexSuffix(c)} (${value})` : c,
       );
       break;
     default:

@@ -376,6 +376,106 @@ describe("normalizeBrief — defensive against partial briefs", () => {
   });
 });
 
+// ─── Gap-resolution round trip ───────────────────────────────────────
+//
+// When the user answers a gap, the answer must actually CLEAR the
+// gap in the next validation pass. Without this round-trip the UI
+// shows a "Save" that does nothing — the user can keep saving and
+// the card never disappears, which is what was happening for the
+// hero.physicalForm and brand.colors.hex gaps before the data fix.
+
+describe("applyGapAnswer + validate round trip", () => {
+  it("hero.physicalForm answer clears the hero physicalForm gap", async () => {
+    const { applyGapAnswer } = await import("./normalizedBrief");
+    // Start: brief with no hero physicalForm anywhere. Gap should fire.
+    const initial = structuredClone(eqvilentParsedBrief);
+    initial.experience.hero.description = ""; // ensure the brief side is empty
+    const beforeNorm = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: initial,
+      geometry: eqvilentGeometry,
+      elements: null, // no element-data fallback either
+    });
+    const beforeGaps = validateBrief(beforeNorm).gaps;
+    expect(beforeGaps.some((g) => g.field === "hero.physicalForm")).toBe(true);
+
+    // Apply the user's answer.
+    let after = initial;
+    applyGapAnswer(
+      initial,
+      "hero.physicalForm",
+      "An inline 20ft x 20ft booth with curved lines and a hanging round element",
+      (next) => {
+        after = next;
+      },
+    );
+
+    // After: gap should be gone.
+    const afterNorm = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: after,
+      geometry: eqvilentGeometry,
+      elements: null,
+    });
+    const afterGaps = validateBrief(afterNorm).gaps;
+    expect(afterGaps.some((g) => g.field === "hero.physicalForm")).toBe(false);
+    // And the answer should be readable on the normalized hero:
+    expect(afterNorm.hero.physicalForm.toLowerCase()).toContain("curved lines");
+  });
+
+  it("brand.colors.hex answer clears the hex gap and surfaces hex on the normalized color", async () => {
+    const { applyGapAnswer } = await import("./normalizedBrief");
+    const initial = structuredClone(eqvilentParsedBrief);
+    // Brief has color names but no hex codes.
+    initial.brand.visualIdentity.colors = ["orange", "black"];
+    const beforeNorm = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: initial,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const beforeGaps = validateBrief(beforeNorm).gaps;
+    expect(beforeGaps.some((g) => g.field === "brand.colors.hex")).toBe(true);
+    expect(beforeNorm.brand.colors[0]?.hex).toBeUndefined();
+
+    let after = initial;
+    applyGapAnswer(initial, "brand.colors.hex", "#E67E22", (next) => {
+      after = next;
+    });
+
+    const afterNorm = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: after,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(afterNorm.brand.colors[0]?.hex).toBe("#E67E22");
+    // The name should NOT include the parenthesized hex anymore — the
+    // suffix is parsed out into the dedicated hex field.
+    expect(afterNorm.brand.colors[0]?.name).toBe("orange");
+    // And the gap is gone.
+    const afterGaps = validateBrief(afterNorm).gaps;
+    expect(afterGaps.some((g) => g.field === "brand.colors.hex")).toBe(false);
+  });
+
+  it("re-applying the hex answer doesn't double-suffix the color name", async () => {
+    // Edge case: user saves, then edits, then saves again. The "(hex)"
+    // suffix should be replaced, not appended a second time.
+    const { applyGapAnswer } = await import("./normalizedBrief");
+    const initial = structuredClone(eqvilentParsedBrief);
+    initial.brand.visualIdentity.colors = ["orange", "black"];
+    let mid = initial;
+    applyGapAnswer(initial, "brand.colors.hex", "#E67E22", (next) => {
+      mid = next;
+    });
+    let after = mid;
+    applyGapAnswer(mid, "brand.colors.hex", "#FF6B1A", (next) => {
+      after = next;
+    });
+    expect(after.brand.visualIdentity.colors[0]).toBe("orange (#FF6B1A)");
+  });
+});
+
 // ─── composeViewPrompt — hero-derived views ──────────────────────────
 
 describe("composeViewPrompt — views derive from heroSnapshot", () => {

@@ -60,7 +60,7 @@ describe("BriefHangingCard", () => {
     expect(latest[0].name).toBe("Renamed ring");
   });
 
-  it("Add called twice creates two elements with distinct hang_ ids", () => {
+  it("Add called twice creates two elements with distinct ids", () => {
     const onChange = vi.fn();
     // Simulate the controlled-component pattern: start with [], add one, then add another
     let current: NormalizedHangingElement[] = [];
@@ -86,8 +86,11 @@ describe("BriefHangingCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
     const final = onChange.mock.calls[onChange.mock.calls.length - 1][0] as NormalizedHangingElement[];
     expect(final).toHaveLength(2);
+    // Distinct, non-empty, uuid-shaped (the prefix is no longer
+    // `hang_` — every creation site now stamps a crypto.randomUUID()
+    // so delete-then-add can't collide).
     expect(final[0].id).not.toBe(final[1].id);
-    expect(final.every((e) => e.id.startsWith("hang_"))).toBe(true);
+    expect(final.every((e) => typeof e.id === "string" && e.id.length > 0)).toBe(true);
   });
 
   it("adding a chip via Enter calls onChange with the new chip appended", () => {

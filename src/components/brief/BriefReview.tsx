@@ -125,7 +125,7 @@ function TagList({
 const HANGING_SHAPES = ["rect", "circle", "oval", "ring", "custom"] as const;
 
 function deriveHangingElements(brief: ParsedBrief): NormalizedHangingElement[] {
-  const raw = (brief as unknown as { hangingElements?: unknown }).hangingElements;
+  const raw = brief.hangingElements;
   if (!Array.isArray(raw)) return [];
   return raw.map((entry, idx) => {
     const e = (entry ?? {}) as Record<string, unknown>;
@@ -134,8 +134,15 @@ function deriveHangingElements(brief: ParsedBrief): NormalizedHangingElement[] {
     )
       ? (e.shape as HangingShape)
       : "ring";
+    // Preserve incoming id when present (same contract as
+    // normalizeHangingElement); otherwise generate a uuid so React
+    // keys stay collision-free across delete-then-add cycles.
+    const id =
+      typeof e.id === "string" && e.id.trim().length > 0
+        ? e.id
+        : crypto.randomUUID();
     return {
-      id: `hang_${idx}`,
+      id,
       name:
         typeof e.name === "string" && e.name.trim().length > 0
           ? e.name
@@ -314,13 +321,18 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
   const handleHangingChange = useCallback(
     (next: NormalizedHangingElement[]) => {
       if (!brief) return;
-      // Only the authoring fields round-trip to parsedBrief.
-      // Position / dimensions / id / suspensionDropFt are
-      // normalize-time-only — Task 5's canvas layer will edit those
-      // via BoothGeometry, not via parsedBrief.
-      const updated = {
+      // Authoring fields round-trip to parsedBrief. We also persist
+      // `id` so the same element keeps a stable handle across
+      // normalize/derive cycles — without it, deriveHangingElements
+      // would generate a fresh uuid on every read and break React
+      // keys mid-edit.
+      // Position / dimensions / suspensionDropFt remain
+      // normalize-time-only — Task 5's canvas layer edits those via
+      // BoothGeometry, not via parsedBrief.
+      const updated: ParsedBrief = {
         ...brief,
         hangingElements: next.map((el) => ({
+          id: el.id,
           name: el.name,
           physicalForm: el.physicalForm,
           shape: el.shape,
@@ -329,7 +341,7 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
           lighting: el.lighting,
           printed: el.printed,
         })),
-      } as ParsedBrief;
+      };
       hangingLatestRef.current = updated;
       if (hangingCommitTimerRef.current) clearTimeout(hangingCommitTimerRef.current);
       hangingCommitTimerRef.current = setTimeout(flushHangingCommit, 400);

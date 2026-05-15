@@ -379,14 +379,13 @@ function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief 
     },
     requiredDeliverables: Array.isArray(b.requiredDeliverables) ? b.requiredDeliverables : [],
     winningCriteria: Array.isArray(b.winningCriteria) ? b.winningCriteria : [],
-    // hangingElements is not yet on the ParsedBrief type (the parser
-    // writes free-form JSON ahead of the type addition), so we attach
-    // via the spread + cast. Defense-in-depth: any caller that
-    // accesses safeBrief(...).hangingElements gets [] when the
-    // upstream brief omitted the field entirely.
-    ...(Array.isArray((b as { hangingElements?: unknown }).hangingElements)
-      ? { hangingElements: (b as { hangingElements: unknown[] }).hangingElements }
-      : { hangingElements: [] }),
+    // hangingElements is on the ParsedBrief type now, but legacy DB
+    // rows + the parser's free-form JSON output may omit it. Default
+    // to [] so any caller that accesses safeBrief(...).hangingElements
+    // never has to null-check.
+    hangingElements: Array.isArray(b.hangingElements)
+      ? (b.hangingElements as ParsedHangingElement[])
+      : [],
     // _dismissedGaps is the sentinel set used to suppress helpful
     // gaps when the user has already answered "No" / dismissed the
     // prompt. Without this, gaps whose "filled" state is identical
@@ -395,10 +394,10 @@ function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief 
     // would re-fire on every validation pass. Carrying it through
     // safeBrief means the validator can read it safely on any
     // partial/legacy brief.
-    ...(Array.isArray((b as { _dismissedGaps?: unknown })._dismissedGaps)
-      ? { _dismissedGaps: (b as { _dismissedGaps: unknown[] })._dismissedGaps }
-      : { _dismissedGaps: [] }),
-  } as ParsedBrief;
+    _dismissedGaps: Array.isArray(b._dismissedGaps)
+      ? (b._dismissedGaps as string[])
+      : [],
+  };
 }
 
 const HERO_KEYWORDS = [
@@ -507,8 +506,16 @@ function visibilityFromPosition(
  * Shape of a single hanging element as it arrives from the parse-brief
  * edge function. Free-text dimensions and positional hints; numeric
  * coercion happens in normalizeHangingElement.
+ *
+ * `id` is optional on the parsed input: when the loose ParsedBrief
+ * already carries an id (e.g. an element created via the Brief Review
+ * "Add" button or seeded via applyGapAnswer), the normalizer
+ * preserves it. When the field is absent, the normalizer generates a
+ * fresh uuid. See `normalizeHangingElement` for the preservation
+ * contract.
  */
-interface ParsedHangingElement {
+export interface ParsedHangingElement {
+  id?: string;
   name?: string;
   physicalForm?: string;
   shape?: string;
@@ -525,11 +532,20 @@ interface ParsedHangingElement {
  * Parser gives us free-text dimensions and positional hints; this is
  * where we coerce to numeric coordinates with sensible defaults.
  *
- * IDs are deterministic from source ordering — same parsed brief
- * produces the same ids across normalize calls, which is what canvas
- * drag-edit and prompt anchoring rely on. A clock-stamped id (the
- * old Date.now() form) regenerated on every normalize call and
- * silently broke any downstream state that keyed off element id.
+ * ID contract: the normalizer **preserves** `raw.id` when it's a
+ * non-empty string and **generates** a fresh `crypto.randomUUID()`
+ * when missing. This is what canvas drag-edit and prompt anchoring
+ * rely on — once an id is assigned (by the Add button on the Brief
+ * Review card, by SpatialPlanner.addHangingElement, or by
+ * applyGapAnswer's "Yes" seed), it stays stable across every
+ * subsequent normalize call.
+ *
+ * Earlier versions used index-based ids (`hang_${idx}`). That was
+ * deterministic on the same input array, but on delete-then-add it
+ * could hand a newly-added element the same id as a previously-deleted
+ * one — colliding React keys downstream. UUIDs make every creation
+ * site collision-free; preservation keeps the stability property the
+ * canvas needs.
  *
  * Note: `raw.estimatedDimensions` and `raw.suspensionHint` are
  * intentionally ignored at this stage — the v1 normalizer uses pure
@@ -549,7 +565,13 @@ function normalizeHangingElement(
   geometry: BoothGeometry,
   idx: number,
 ): NormalizedHangingElement {
-  const id = `hang_${idx}`;
+  // Preserve incoming id when present; generate a uuid otherwise. The
+  // `idx` parameter is retained only for the default human-readable
+  // name ("Hanging element N") — it no longer drives the id.
+  const id =
+    typeof raw.id === "string" && raw.id.trim().length > 0
+      ? raw.id
+      : crypto.randomUUID();
   const defaultDim = geometry.width / 3;
   return {
     id,
@@ -682,11 +704,9 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
   // not at every call site. The inline Array.isArray check below is
   // belt-and-suspenders against a corrupted shape (e.g. a string
   // somehow landing in the field).
-  const rawHanging = (parsedBrief as unknown as { hangingElements?: unknown }).hangingElements;
+  const rawHanging = parsedBrief.hangingElements;
   const hangingElements: NormalizedHangingElement[] = Array.isArray(rawHanging)
-    ? (rawHanging as ParsedHangingElement[]).map((raw, idx) =>
-        normalizeHangingElement(raw, geometry, idx),
-      )
+    ? rawHanging.map((raw, idx) => normalizeHangingElement(raw, geometry, idx))
     : [];
 
   // Assemble hard-constraint defaults emitted at normalize-time.
@@ -708,7 +728,7 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
   // _dismissedGaps round-trip: same belt-and-suspenders shape check as
   // hangingElements above. safeBrief already guarantees the field is
   // an array, but defending against a corrupted shape costs nothing.
-  const rawDismissed = (parsedBrief as unknown as { _dismissedGaps?: unknown })._dismissedGaps;
+  const rawDismissed = parsedBrief._dismissedGaps;
   const dismissedGaps: string[] = Array.isArray(rawDismissed)
     ? rawDismissed.filter((v): v is string => typeof v === "string")
     : [];
@@ -1479,14 +1499,10 @@ export function applyGapAnswer(
       //     validation pass. Without this, "No" looks identical to
       //     "we never asked" because both leave hangingElements empty.
       //
-      // hangingElements isn't on the ParsedBrief TS type yet — same
-      // pattern as Task 1's normalizer reads through an `as unknown as`
-      // cast; the parser writes free-form JSON ahead of the type
-      // addition.
-      const nextLoose = next as unknown as {
-        hangingElements?: Array<Record<string, unknown>>;
-        _dismissedGaps?: string[];
-      };
+      // hangingElements + _dismissedGaps are now first-class fields on
+      // ParsedBrief; we alias `next` to a local for readability but no
+      // longer cast through `as unknown as`.
+      const nextLoose = next;
       if (typeof value === "string" && value.startsWith("Yes")) {
         // This seed is intentionally RICH (populated physicalForm,
         // materials, surfaces, lighting, printed) — the clarification
@@ -1496,6 +1512,7 @@ export function applyGapAnswer(
         // "give me a blank canvas to author from scratch."
         nextLoose.hangingElements = [
           {
+            id: crypto.randomUUID(),
             name: "Primary identity sign",
             physicalForm:
               "Overhead branded structure visible from across the hall — typically a ring or halo silhouette with internal lighting.",

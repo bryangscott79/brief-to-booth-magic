@@ -2,6 +2,8 @@
 // CREATIVE BRIEF RESPONSE ENGINE - TYPE DEFINITIONS
 // ============================================
 
+import type { ParsedHangingElement } from "@/lib/normalizedBrief";
+
 export interface ParsedBrief {
   brand: {
     name: string;
@@ -111,6 +113,21 @@ export interface ParsedBrief {
 
   requiredDeliverables: string[];
   winningCriteria: string[];
+
+  /** Overhead/suspended branded structures (rings, halos, fly-rigged
+   *  banners, suspended LED installations) authored via the Brief
+   *  Review card or the parse-brief edge function. Distinct from
+   *  floor-supported booth structure. The normalizer reads this field
+   *  through to NormalizedBrief.hanging.elements. */
+  hangingElements?: ParsedHangingElement[];
+
+  /** Field paths of clarification gaps the user has explicitly
+   *  dismissed (e.g. "hanging.elements" when they answer
+   *  "No — floor-only booth"). The validator uses this sentinel to
+   *  suppress gaps whose filled state is indistinguishable from
+   *  their initial state. Stripped before normalization is emitted
+   *  as briefJson. */
+  _dismissedGaps?: string[];
 }
 
 export interface BigIdea {

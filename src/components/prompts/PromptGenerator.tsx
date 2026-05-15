@@ -302,6 +302,28 @@ export function PromptGenerator() {
     }));
   }, [spatialData]);
 
+  // ⚠️  KNOWN GAP — TASK 5/I3 FOLLOW-UP
+  // ───────────────────────────────────────────────────────────────
+  // Hanging elements drawn on the spatial canvas (SpatialPlanner)
+  // land on `spatialData.hangingElements` and have x/y/width/depth/
+  // thicknessFt/suspensionDropFt. Hanging elements authored on the
+  // Brief Review card land on `parsedBrief.hangingElements` and have
+  // name/physicalForm/materials/surfaces/lighting/printed.
+  //
+  // Neither flows into the renderer prompt unless they go through
+  // `parsedBrief.hangingElements` — `composePrompt` reads from the
+  // normalized brief, and the normalizer reads from
+  // `parsedBrief.hangingElements` only. The geometry's hanging
+  // elements are NOT plumbed into the extras bag below, so a user
+  // who only adds elements on the spatial canvas will see them on
+  // the top-down and iso but the prompt will not mention them.
+  //
+  // Next step: merge the two stores at this site (or earlier in the
+  // pipeline). TODO — track as a future task (no follow-ups doc
+  // exists yet for hanging-elements specifically; see
+  // `docs/superpowers/plans/2026-05-15-hanging-elements.md` for the
+  // overall feature plan).
+  // ───────────────────────────────────────────────────────────────
   const initialGeometry = useMemo<BoothGeometry>(
     () =>
       boothGeometryFromLegacy(boothDimensions, normalizedZones, 12, {

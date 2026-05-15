@@ -296,9 +296,13 @@ function ElementSubCard({
 // to delete. Contrast with the seed in
 // normalizedBrief.ts::applyGapAnswer ("Yes — add one"), which is
 // richer because that flow is "show me an example to edit."
+//
+// id is a fresh crypto.randomUUID() rather than an index-derived
+// `hang_${count}` — that older form collided after delete-then-add
+// (delete element 0, add a new one, both end up with id "hang_0").
 function makeDefaultElement(count: number): NormalizedHangingElement {
   return {
-    id: `hang_${count}`,
+    id: crypto.randomUUID(),
     name: `Hanging element ${count + 1}`,
     physicalForm: "",
     shape: "ring",

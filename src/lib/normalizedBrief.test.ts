@@ -677,7 +677,11 @@ describe("normalizeBrief — hanging elements", () => {
     });
     expect(n.hanging.elements).toHaveLength(1);
     const el = n.hanging.elements[0];
-    expect(el.id).toBe("hang_0");
+    // When the parsed input omits `id`, the normalizer generates a
+    // uuid. Assert shape (non-empty string), not value — the previous
+    // `hang_0` form collided after delete+add and is gone.
+    expect(typeof el.id).toBe("string");
+    expect(el.id.length).toBeGreaterThan(0);
     expect(el.name).toBe("Primary identity ring");
     expect(el.shape).toBe("ring");
     // eqvilentGeometry.width === 6 (metric), so defaultDim = 6/3 = 2.
@@ -694,12 +698,43 @@ describe("normalizeBrief — hanging elements", () => {
     expect(el.printed).toContain("front: brand logotype");
   });
 
-  it("produces stable IDs across repeated normalize calls", () => {
-    // Deterministic ids matter for downstream tasks 2-6: the canvas
+  it("preserves ids supplied on the parsed input across repeated normalize calls", () => {
+    // Stable ids matter for downstream tasks 2-6: the canvas
     // drag-edit + prompt anchoring use the id as a stable handle into
-    // local state. A clock-stamped id (the old Date.now() form)
-    // regenerated on every normalize call and silently broke any
-    // state that keyed off element id.
+    // local state. The contract is now "preserve when present" — every
+    // creation site (Brief Review Add button, SpatialPlanner
+    // addHangingElement, applyGapAnswer Yes-seed) stamps a uuid up
+    // front, and the normalizer carries it through unchanged on every
+    // subsequent pass.
+    const briefWithHanging = {
+      ...eqvilentParsedBrief,
+      hangingElements: [
+        { id: "supplied-ring-1", name: "Ring" },
+        { id: "supplied-banner-2", name: "Banner" },
+      ],
+    };
+    const input = {
+      project: eqvilentProjectMeta,
+      parsedBrief: briefWithHanging as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"],
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    };
+    const a = normalizeBrief(input);
+    const b = normalizeBrief(input);
+    expect(a.hanging.elements.map((e) => e.id)).toEqual([
+      "supplied-ring-1",
+      "supplied-banner-2",
+    ]);
+    expect(a.hanging.elements.map((e) => e.id)).toEqual(b.hanging.elements.map((e) => e.id));
+  });
+
+  it("generates fresh uuids when the parsed input omits ids", () => {
+    // Companion to the preservation test above. When the upstream
+    // brief has no `id` on a hanging entry (e.g. a legacy DB row that
+    // pre-dates the uuid contract), the normalizer must mint a new
+    // uuid — non-empty string, distinct from any sibling, and a
+    // different value on a separate normalize call (since no input
+    // id was supplied to anchor against).
     const briefWithHanging = {
       ...eqvilentParsedBrief,
       hangingElements: [{ name: "Ring" }, { name: "Banner" }],
@@ -712,8 +747,18 @@ describe("normalizeBrief — hanging elements", () => {
     };
     const a = normalizeBrief(input);
     const b = normalizeBrief(input);
-    expect(a.hanging.elements.map((e) => e.id)).toEqual(b.hanging.elements.map((e) => e.id));
-    expect(a.hanging.elements.map((e) => e.id)).toEqual(["hang_0", "hang_1"]);
+    const aIds = a.hanging.elements.map((e) => e.id);
+    const bIds = b.hanging.elements.map((e) => e.id);
+    // Each id is a non-empty string.
+    for (const id of [...aIds, ...bIds]) {
+      expect(typeof id).toBe("string");
+      expect(id.length).toBeGreaterThan(0);
+    }
+    // Siblings within the same normalize call must differ.
+    expect(aIds[0]).not.toBe(aIds[1]);
+    // No anchor → ids on separate normalize calls differ (uuid v4
+    // collision probability is negligible).
+    expect(aIds).not.toEqual(bIds);
   });
 
   it("defaults hanging.elements to [] when parsedBrief.hangingElements is omitted", () => {
@@ -827,15 +872,7 @@ describe("applyGapAnswer — hanging.elements", () => {
     applyGapAnswer(initial, "hanging.elements", "Yes — add one", (next) => {
       after = next;
     });
-    const updated = after as unknown as {
-      hangingElements?: Array<{
-        name?: string;
-        shape?: string;
-        materials?: string[];
-        lighting?: string[];
-        printed?: string[];
-      }>;
-    };
+    const updated = after;
     expect(updated.hangingElements).toBeDefined();
     expect(updated.hangingElements).toHaveLength(1);
     expect(updated.hangingElements?.[0].name).toMatch(/identity|hanging/i);
@@ -881,20 +918,15 @@ describe("applyGapAnswer — hanging.elements", () => {
     applyGapAnswer(initial, "hanging.elements", "Yes — add one", (next) => {
       afterYes = next;
     });
-    const yesLoose = afterYes as unknown as { hangingElements?: unknown[] };
-    expect((yesLoose.hangingElements ?? []).length).toBe(1);
+    expect((afterYes.hangingElements ?? []).length).toBe(1);
 
     // Step 2: No clears it and records the dismissal.
     let afterNo = afterYes;
     applyGapAnswer(afterYes, "hanging.elements", "No — floor-only booth", (next) => {
       afterNo = next;
     });
-    const noLoose = afterNo as unknown as {
-      hangingElements?: unknown[];
-      _dismissedGaps?: string[];
-    };
-    expect(noLoose.hangingElements ?? []).toEqual([]);
-    expect(noLoose._dismissedGaps).toContain("hanging.elements");
+    expect(afterNo.hangingElements ?? []).toEqual([]);
+    expect(afterNo._dismissedGaps).toContain("hanging.elements");
   });
 });
 

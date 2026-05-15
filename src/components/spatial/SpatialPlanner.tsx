@@ -686,12 +686,13 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
   // and drop in Brief Review (task 4) or by dragging on the canvas.
   const addHangingElement = useCallback(() => {
     const existing = canvasGeometry.hangingElements ?? [];
-    // Index-based ID matches the Task 1 normalizer's `hang_${idx}` and
-    // Brief Review's makeDefaultElement, and avoids the sub-millisecond
-    // collision risk of `hang_${Date.now()}` when two clicks land in
-    // the same tick. hangingElements is rebuilt from scratch on each
-    // normalize pass, so renumbering after removals stays consistent.
-    const id = `hang_${existing.length}`;
+    // crypto.randomUUID() at every creation site (here, the Brief
+    // Review Add button, and the applyGapAnswer "Yes" seed) so
+    // delete-then-add can never hand a new element the same id as a
+    // deleted one. The normalizer preserves these ids across normalize
+    // calls (see normalizeHangingElement), so React keys stay stable
+    // for the lifetime of the element.
+    const id = crypto.randomUUID();
     const newEl: AbsoluteHangingElement = {
       id,
       name: `Hanging element ${existing.length + 1}`,

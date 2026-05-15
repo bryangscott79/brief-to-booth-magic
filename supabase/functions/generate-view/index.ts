@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-05-14-edit-mode-views
+// generate-view — DEPLOY TOKEN: 2026-05-15-stream-flush-padding
 //
 // Same restructure as generate-hero (see that file for the full
 // rationale). Two relevant changes for view rendering:
@@ -563,12 +563,20 @@ function streamingJsonResponse(
   keepAliveMs = 20_000,
 ): Response {
   const encoder = new TextEncoder();
+  const keepAliveChunk = `${" ".repeat(2048)}\n`;
   const stream = new ReadableStream({
     async start(controller) {
       let done = false;
-      const ping = setInterval(() => {
+      const sendKeepAlive = () => {
         if (done) return;
-        try { controller.enqueue(encoder.encode(" ")); } catch { /* closed */ }
+        try { controller.enqueue(encoder.encode(keepAliveChunk)); } catch { /* closed */ }
+      };
+      // Send immediately, then periodically. Some edge proxies buffer tiny
+      // chunks, so use >1KB JSON-whitespace padding to force a flush while
+      // keeping the final response parseable by supabase.functions.invoke().
+      sendKeepAlive();
+      const ping = setInterval(() => {
+        sendKeepAlive();
       }, keepAliveMs);
       try {
         const { body } = await produce();
@@ -586,7 +594,13 @@ function streamingJsonResponse(
     },
   });
   return new Response(stream, {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
   });
 }
 

@@ -373,18 +373,58 @@ export class PaymentRequiredError extends Error {
 /**
  * Retry wrapper: retries once after a 2-second wait on HTTP 429 (rate limit).
  * Throws on all other errors.
+ *
+ * The optional `timeoutMs` budget aborts the fetch if the upstream
+ * hasn't responded by then — critical for image-gen calls inside the
+ * Supabase 150s edge-function window, where a hung primary call would
+ * blow the budget before fallback gets a chance to run.
  */
 async function fetchWithRateLimitRetry(
   url: string,
   init: RequestInit,
   label: string,
+  timeoutMs?: number,
 ): Promise<Response> {
-  const response = await fetch(url, init);
+  // Compose any caller-supplied signal with our timeout signal so abort
+  // works for either trigger. Deno supports AbortSignal.timeout natively.
+  const withTimeout = (base?: AbortSignal): RequestInit => {
+    if (!timeoutMs) return init;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = base
+      // deno-lint-ignore no-explicit-any
+      ? (AbortSignal as any).any?.([base, timeoutSignal]) ?? timeoutSignal
+      : timeoutSignal;
+    return { ...init, signal };
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(url, withTimeout(init.signal ?? undefined));
+  } catch (e) {
+    // Convert AbortError → a labelled timeout error so the caller can
+    // log/fall back cleanly. Otherwise re-throw.
+    if (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) {
+      throw new Error(
+        `[ai-gateway] ${label}: request timed out after ${timeoutMs}ms`,
+      );
+    }
+    throw e;
+  }
 
   if (response.status === 429) {
     console.warn(`[ai-gateway] ${label}: rate limited (429), retrying in 2s...`);
     await new Promise((r) => setTimeout(r, 2000));
-    const retry = await fetch(url, init);
+    let retry: Response;
+    try {
+      retry = await fetch(url, withTimeout(init.signal ?? undefined));
+    } catch (e) {
+      if (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) {
+        throw new Error(
+          `[ai-gateway] ${label}: rate-limit retry timed out after ${timeoutMs}ms`,
+        );
+      }
+      throw e;
+    }
     if (!retry.ok) {
       const text = await retry.text();
       throw new Error(
@@ -1094,6 +1134,13 @@ export async function generateImageWithFallback(
  * generate-hero/index.ts so behaviour is known-good rather than newly
  * written.
  */
+// Gemini fallback gets the remaining budget under the 150s Supabase
+// edge-function cap (80s for primary + 50s here = 130s; pad for
+// response parsing and persistence). callGemini itself doesn't take a
+// signal so we race the call against a manual timeout — the upstream
+// fetch continues but the caller stops waiting.
+const GEMINI_TIMEOUT_MS = 50_000;
+
 async function _callGeminiImageInner(
   options: OpenAIImageOptions,
 ): Promise<OpenAIImageResult[]> {
@@ -1113,28 +1160,55 @@ async function _callGeminiImageInner(
     },
   ];
 
+  const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const t = setTimeout(
+        () => reject(new Error(`[ai-gateway] ${label} timed out after ${ms}ms`)),
+        ms,
+      );
+      p.then((v) => {
+        clearTimeout(t);
+        resolve(v);
+      }).catch((e) => {
+        clearTimeout(t);
+        reject(e);
+      });
+    });
+  };
+
   // Primary Gemini model is "nano banana pro" / gemini-3-pro-image-preview.
   // On empty response (Pro Image can return {} under safety filtering or
   // load), retry once with the flash variant — proven pattern from the
   // pre-swap implementation.
-  let result = await callGemini({
-    // deno-lint-ignore no-explicit-any
-    model: "google/gemini-3-pro-image-preview" as any,
-    // deno-lint-ignore no-explicit-any
-    messages: messages as any,
-    modalities: ["image", "text"],
-  });
+  let result = await withTimeout(
+    callGemini({
+      // deno-lint-ignore no-explicit-any
+      model: "google/gemini-3-pro-image-preview" as any,
+      // deno-lint-ignore no-explicit-any
+      messages: messages as any,
+      modalities: ["image", "text"],
+    }),
+    GEMINI_TIMEOUT_MS,
+    "Gemini/gemini-3-pro-image-preview",
+  );
   let image = result.images?.[0];
   if (!image) {
     console.warn("[ai-gateway] Gemini pro image returned no image, retrying with flash");
     try {
-      result = await callGemini({
-        // deno-lint-ignore no-explicit-any
-        model: "google/gemini-3.1-flash-image-preview" as any,
-        // deno-lint-ignore no-explicit-any
-        messages: messages as any,
-        modalities: ["image", "text"],
-      });
+      result = await withTimeout(
+        callGemini({
+          // deno-lint-ignore no-explicit-any
+          model: "google/gemini-3.1-flash-image-preview" as any,
+          // deno-lint-ignore no-explicit-any
+          messages: messages as any,
+          modalities: ["image", "text"],
+        }),
+        // Tighter budget on the retry since we've already spent time
+        // on the primary attempt — we'd rather fail cleanly than blow
+        // the Supabase wall clock.
+        Math.min(GEMINI_TIMEOUT_MS, 30_000),
+        "Gemini/gemini-3.1-flash-image-preview",
+      );
       image = result.images?.[0];
     } catch (e) {
       console.error("[ai-gateway] Gemini flash fallback also threw:", e);
@@ -1151,6 +1225,14 @@ async function _callGeminiImageInner(
     index: 0,
   }];
 }
+
+// Per-call timeout budgets. Supabase edge functions have a 150s wall
+// clock; we slice that into: parallel reference fetches (≤10s), the
+// primary OpenAI call (80s), and the Gemini fallback (50s). Worst case
+// 140s — comfortably under the cap, leaving headroom for response
+// streaming + persistence work in the calling function.
+const REF_FETCH_TIMEOUT_MS = 10_000;
+const OPENAI_TIMEOUT_MS = 80_000;
 
 async function _callOpenAIImageInner(
   options: OpenAIImageOptions,
@@ -1199,6 +1281,7 @@ async function _callOpenAIImageInner(
         }),
       },
       `OpenAI/${model}`,
+      OPENAI_TIMEOUT_MS,
     );
   } else {
     // With references → /v1/images/edits (multipart form data).
@@ -1212,27 +1295,50 @@ async function _callOpenAIImageInner(
     if (options.background && options.background !== "auto") {
       form.append("background", options.background);
     }
-    // Fetch each reference, attach as a Blob. OpenAI's /v1/images/edits
-    // expects:
+    // Fetch each reference IN PARALLEL with a per-fetch timeout. The
+    // old serial loop was a silent latency sink: 4 refs × 5s each =
+    // 20s of dead time before OpenAI even saw the request. The new
+    // pattern races the fetches and skips refs whose URLs are slow
+    // or broken rather than blocking the whole render on one bad URL.
+    //
+    // OpenAI's /v1/images/edits expects:
     //   - single image: field name "image"
     //   - multiple images: field name "image[]" for EACH file (array form)
     // Sending "image" + "image[]" mixed makes the API only see the first.
-    // So decide field name once based on count, then attach all.
+    // So decide field name once based on count, then attach all that
+    // resolved successfully.
     const fieldName = refs.length === 1 ? "image" : "image[]";
-    for (let i = 0; i < refs.length; i++) {
-      const url = refs[i]!;
-      try {
-        const fetched = await fetch(url);
-        if (!fetched.ok) {
-          console.warn(`[ai-gateway] Could not fetch reference ${i}: ${fetched.status}`);
-          continue;
+    const fetchedBlobs = await Promise.all(
+      refs.map(async (url, i) => {
+        try {
+          const fetched = await fetch(url, {
+            signal: AbortSignal.timeout(REF_FETCH_TIMEOUT_MS),
+          });
+          if (!fetched.ok) {
+            console.warn(
+              `[ai-gateway] Could not fetch reference ${i} (${url.slice(0, 80)}): ${fetched.status}`,
+            );
+            return null;
+          }
+          return { i, blob: await fetched.blob() };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(
+            `[ai-gateway] Reference fetch ${i} threw / timed out (${msg}). Skipping.`,
+          );
+          return null;
         }
-        const blob = await fetched.blob();
-        form.append(fieldName, blob, `ref-${i}.png`);
-      } catch (e) {
-        console.warn(`[ai-gateway] Reference fetch threw at ${i}:`, e);
-      }
+      }),
+    );
+    let attached = 0;
+    for (const result of fetchedBlobs) {
+      if (!result) continue;
+      form.append(fieldName, result.blob, `ref-${result.i}.png`);
+      attached++;
     }
+    console.log(
+      `[ai-gateway] Attached ${attached}/${refs.length} references for ${model} edit call`,
+    );
     response = await fetchWithRateLimitRetry(
       "https://api.openai.com/v1/images/edits",
       {
@@ -1241,6 +1347,7 @@ async function _callOpenAIImageInner(
         body: form,
       },
       `OpenAI/${model}`,
+      OPENAI_TIMEOUT_MS,
     );
   }
 

@@ -1230,13 +1230,11 @@ async function _callGeminiImageInner(
   }];
 }
 
-// Per-call timeout budgets. Supabase edge functions have a 150s wall
-// clock; we slice that into: parallel reference fetches (≤10s), the
-// primary OpenAI call (80s), and the Gemini fallback (50s). Worst case
-// 140s — comfortably under the cap, leaving headroom for response
-// streaming + persistence work in the calling function.
+// Per-call timeout budgets. Callers stream keep-alive bytes so we're
+// no longer bound by the 150s idle cap — only the longer wall-clock
+// budget. gpt-image-2 commonly takes 90–120s for edits with refs.
 const REF_FETCH_TIMEOUT_MS = 10_000;
-const OPENAI_TIMEOUT_MS = 80_000;
+const OPENAI_TIMEOUT_MS = 130_000;
 
 async function _callOpenAIImageInner(
   options: OpenAIImageOptions,

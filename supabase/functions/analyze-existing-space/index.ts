@@ -59,6 +59,21 @@ Return ONLY a JSON object matching this exact shape. NO markdown fences, NO pros
   "summary": string | null
 }`;
 
+// Sentinel for upstream-model JSON parse failures. Thrown from the
+// parse-failure path so the outer catch can map it to a 502 (Bad
+// Gateway) — the third-party model misbehaved, not our function —
+// while other thrown errors stay at 500.
+class UpstreamParseError extends Error {
+  readonly statusOverride = 502;
+}
+
+const coerceString = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim().length > 0 ? v : undefined;
+const coerceNumber = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? v : undefined;
+const coerceStringArray = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -85,6 +100,7 @@ serve(async (req) => {
           ] as any,
         },
       ],
+      temperature: 0.3,
       usage: await buildUsageContext(req, "analyze-existing-space").catch(() => undefined),
     });
 
@@ -101,23 +117,57 @@ serve(async (req) => {
       analysis = JSON.parse(raw);
     } catch (e) {
       console.error("[analyze-existing-space] failed to parse model output:", e, "raw:", raw.slice(0, 500));
-      throw new Error("Vision model returned unparseable JSON. Try regenerating.");
+      throw new UpstreamParseError("Vision model returned unparseable JSON. Try regenerating.");
     }
 
-    // Coerce nulls back to undefined for the optional fields so the
-    // client can spread the response directly into the brief without
-    // any nullable handling. Also defensively coerce the required
-    // array/object fields to safe defaults if the model returned
-    // null or wrong-typed values.
-    const a = (analysis ?? {}) as Record<string, unknown>;
+    // Field-by-field coercion: each leaf is type-checked individually
+    // so a number returned where a string is expected (or vice-versa)
+    // becomes undefined rather than riding through to the UI. The
+    // shape mirrors the contract the BriefExistingSpace card consumes.
+    const rawObj = (analysis ?? {}) as Record<string, unknown>;
+
+    const rawMat = (rawObj.existingMaterials && typeof rawObj.existingMaterials === "object"
+      ? rawObj.existingMaterials
+      : {}) as Record<string, unknown>;
+    const existingMaterials = {
+      floors: coerceString(rawMat.floors),
+      walls: coerceString(rawMat.walls),
+      ceiling: coerceString(rawMat.ceiling),
+      trim: coerceString(rawMat.trim),
+    };
+
+    const rawLight = (rawObj.lighting && typeof rawObj.lighting === "object"
+      ? rawObj.lighting
+      : {}) as Record<string, unknown>;
+    const lighting = {
+      naturalLightDirection: coerceString(rawLight.naturalLightDirection),
+      existingFixtures: coerceStringArray(rawLight.existingFixtures),
+      timeOfDayInferred: coerceString(rawLight.timeOfDayInferred),
+    };
+
+    // estimatedDimensions only emits when ALL three numeric fields
+    // parse cleanly — partial estimates (e.g. width but no ceiling)
+    // drop to undefined rather than passing a half-shaped object the
+    // UI would have to guard against.
+    const rawDim = rawObj.estimatedDimensions;
+    const estimatedDimensions =
+      rawDim && typeof rawDim === "object"
+        ? (() => {
+            const d = rawDim as Record<string, unknown>;
+            const w = coerceNumber(d.width);
+            const dep = coerceNumber(d.depth);
+            const ch = coerceNumber(d.ceilingHeightFt);
+            if (w === undefined || dep === undefined || ch === undefined) return undefined;
+            return { width: w, depth: dep, ceilingHeightFt: ch };
+          })()
+        : undefined;
+
     const clean = {
-      estimatedDimensions: a.estimatedDimensions ?? undefined,
-      features: Array.isArray(a.features) ? a.features.map(String) : [],
-      existingMaterials: (a.existingMaterials && typeof a.existingMaterials === "object")
-        ? a.existingMaterials
-        : {},
-      lighting: (a.lighting && typeof a.lighting === "object") ? a.lighting : {},
-      summary: typeof a.summary === "string" ? a.summary : undefined,
+      estimatedDimensions,
+      features: coerceStringArray(rawObj.features),
+      existingMaterials,
+      lighting,
+      summary: coerceString(rawObj.summary),
     };
 
     return new Response(JSON.stringify({ success: true, analysis: clean }), {
@@ -125,9 +175,10 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("[analyze-existing-space] error:", e);
+    const status = e instanceof UpstreamParseError ? e.statusOverride : 500;
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Failed to analyze photo" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

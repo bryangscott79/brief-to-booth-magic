@@ -57,6 +57,95 @@ function getActiveJob(projectId: string): GenerationJob | null {
   return null;
 }
 
+/**
+ * Per-element generation timeout. Browser fetch has no default
+ * timeout, so without this, a hung edge function (e.g. Gemini taking
+ * 5+ minutes on a heavy schema like budgetLogic) leaves the UI stuck
+ * on "Generating…" indefinitely. 90s is generous — most elements
+ * land in 10-30s; structured-heavy ones (budgetLogic, spatialStrategy)
+ * can take 60-80s on a cold cache. 90s gives them headroom and
+ * surfaces a clear error for genuine hangs.
+ */
+const ELEMENT_GENERATION_TIMEOUT_MS = 90_000;
+
+/**
+ * Wrap a promise with a hard timeout. Rejects with a clear error if
+ * the underlying promise hasn't resolved in time. The underlying
+ * promise still runs to completion (we can't abort fetch in the
+ * Supabase SDK), but we stop waiting on it so the caller can move on.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+  });
+  return Promise.race([p, timeoutPromise]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  });
+}
+
+/**
+ * Sleep helper for retry backoff.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Generate one element with a hard timeout and a single retry on
+ * transient failure (timeout, network error, empty/malformed AI
+ * response). Each individual attempt gets the full timeout — total
+ * wall-clock can be 2× timeout in the worst case.
+ *
+ * Returns the parsed element `data` on success. Throws the final
+ * error after both attempts fail.
+ */
+async function invokeGenerateElementWithRetry(
+  body: Record<string, unknown>,
+  elementType: ElementType,
+): Promise<unknown> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const invokePromise = supabase.functions
+        .invoke("generate-element", { body })
+        .then(({ data, error }) => {
+          if (error) throw error;
+          if (data?.error) throw new Error(String(data.error));
+          if (!data?.data) {
+            // Edge function returned 200 but body is empty/malformed —
+            // treat as a retryable failure rather than silently
+            // storing undefined and showing "Complete" with garbage.
+            throw new Error(`Empty response for ${elementType}`);
+          }
+          return data.data;
+        });
+      return await withTimeout(
+        invokePromise,
+        ELEMENT_GENERATION_TIMEOUT_MS,
+        `${elementType} generation`,
+      );
+    } catch (e) {
+      lastError = e;
+      console.warn(
+        `[generate-element] attempt ${attempt}/2 failed for ${elementType}:`,
+        e instanceof Error ? e.message : e,
+      );
+      if (attempt < 2) {
+        // Brief backoff before the retry — gives a transient
+        // upstream blip (rate limit, cold model) a moment to clear.
+        await sleep(2000);
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Generation failed for ${elementType}`);
+}
+
 async function runGenerationJob(
   projectId: string,
   elementsToGenerate: ElementType[],
@@ -96,34 +185,42 @@ async function runGenerationJob(
       try {
         const existingData = isRegenerate ? existingElements[elementType]?.data : undefined;
 
-        const { data, error } = await supabase.functions.invoke("generate-element", {
-          body: {
+        // Timeout + retry-once wrapper. Without this, a hung Gemini
+        // call (especially budgetLogic with its heavy structured
+        // schema) leaves the UI stuck on "Generating…" indefinitely
+        // because browser fetch has no default timeout. Now the
+        // worst-case wall-clock is 2 × ELEMENT_GENERATION_TIMEOUT_MS
+        // (one timeout + one retry timeout), after which we surface
+        // an "error" status the user can retry from.
+        const elementData = await invokeGenerateElementWithRetry(
+          {
             elementType,
             briefData,
             existingData,
-            knowledgeBaseContent: knowledgeBaseContent && knowledgeBaseContent.length > 0 ? knowledgeBaseContent : undefined,
+            knowledgeBaseContent:
+              knowledgeBaseContent && knowledgeBaseContent.length > 0 ? knowledgeBaseContent : undefined,
             companyProfile,
             showCosts: showCosts && showCosts.length > 0 ? showCosts : undefined,
-            brandIntelligence: brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
+            brandIntelligence:
+              brandIntelligence && brandIntelligence.length > 0 ? brandIntelligence : undefined,
             clientData,
             projectType,
             brandContext: brandContext || undefined,
             suiteContext: suiteContext || undefined,
           },
-        });
+          elementType,
+        );
 
         if (job.aborted) break;
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
 
         // Save to store
-        useProjectStore.getState().setElementData(elementType, data.data);
+        useProjectStore.getState().setElementData(elementType, elementData);
         // Persist to DB immediately so navigation doesn't lose progress
         const dbKey = ELEMENT_DB_KEYS[elementType];
-        await saveProjectField(projectId, dbKey, data.data);
+        await saveProjectField(projectId, dbKey, elementData);
 
         job.completedElements.add(elementType);
-      } catch (e: any) {
+      } catch (e) {
         console.error(`Error generating ${elementType}:`, e);
         if (!job.aborted) {
           useProjectStore.getState().setElementStatus(elementType, "error");
@@ -301,8 +398,11 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
     try {
       const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc } = getContextPayloads();
 
-      const { data, error } = await supabase.functions.invoke("generate-element", {
-        body: {
+      // Same timeout + retry-once wrapper as the batch loop. Without
+      // this, a hung edge function leaves the user stuck on
+      // "Generating…" with no recovery.
+      const elementData = await invokeGenerateElementWithRetry(
+        {
           elementType,
           briefData: currentProject.parsedBrief,
           existingData: feedback ? elements![elementType].data : undefined,
@@ -316,23 +416,21 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           brandContext: bc || undefined,
           suiteContext: sc || undefined,
         },
-      });
+        elementType,
+      );
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      setElementData(elementType, data.data);
+      setElementData(elementType, elementData);
       if (projectId) {
         const dbKey = ELEMENT_DB_KEYS[elementType];
-        await saveProjectField(projectId, dbKey, data.data);
+        await saveProjectField(projectId, dbKey, elementData);
       }
       toast({ title: `${ELEMENT_META[elementType].title} generated` });
-    } catch (e: any) {
+    } catch (e) {
       console.error(`Error generating ${elementType}:`, e);
       setElementStatus(elementType, "error");
       toast({
         title: "Generation failed",
-        description: e.message || "Please try again.",
+        description: e instanceof Error ? e.message : "Please try again.",
         variant: "destructive",
       });
     }

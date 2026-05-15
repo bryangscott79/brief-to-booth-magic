@@ -1,3 +1,14 @@
+// generate-element — DEPLOY TOKEN: 2026-05-15-budget-reliability
+//
+// Bump this comment to force Lovable to redeploy. Changes that need
+// this version of the function to be live:
+//   - Per-element temperature tuning (structured-heavy elements drop
+//     to 0.4 to avoid malformed tool-call output)
+//   - budgetLogic schema simplified: only totalPerShow + allocation
+//     are required; amortization/riskFactors are now optional so
+//     Gemini doesn't have to produce 60+ nested required fields
+//     in a single call. The system prompt still nudges toward
+//     filling them when the brief supports it.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
@@ -394,10 +405,27 @@ END UPSTREAM CONTEXT
 
     console.log("Calling AI for element:", elementType);
 
+    // Per-element temperature tuning. The default 0.9 / 1.2 (on
+    // regenerate) is fine for creative elements like bigIdea and
+    // experienceFramework where variation is desirable. But for
+    // structured-heavy elements (budgetLogic, spatialStrategy) high
+    // temperature increases the chance of malformed tool-call output —
+    // missing required fields, truncated arrays, etc. — which the
+    // user perceives as "stuck on Generating" because the client
+    // either gets garbage data or the edge function falls through to
+    // its empty-response error path. Drop the temperature for these
+    // structured elements so Gemini sticks closer to the schema.
+    const isStructuredHeavy = elementType === "budgetLogic" || elementType === "spatialStrategy";
+    const temperature = isStructuredHeavy
+      ? 0.4
+      : existingData || feedback
+        ? 1.2
+        : 0.9;
+
     const result = await callGemini({
       usage: await buildUsageContext(req, "generate-element").catch(() => undefined),
       model: "google/gemini-2.5-pro",
-      temperature: existingData || feedback ? 1.2 : 0.9,
+      temperature,
       messages: [
         { role: "system", content: systemPrompt + `${brandContext ? `\n\n## BRAND CONTEXT\n${brandContext}` : ""}${suiteContext ? `\n\n## SUITE CONTEXT\n${suiteContext}` : ""}${ragContext.formatted ? `\n\n${ragContext.formatted}` : ""}` + "\n\nIMPORTANT: You MUST call the provided function tool to return your response. Do not return plain text." },
         { role: "user", content: userPrompt },
@@ -735,21 +763,30 @@ RULES:
       type: "function",
       function: {
         name: "generate_budgetLogic",
-        description: "Generate Budget Logic and financial analysis",
+        description: "Generate Budget Logic and financial analysis. Aim for 6-8 allocation categories, 3-4 amortization entries, and 4-5 risk factors. Include the optional sections when relevant; skip them when the brief doesn't support a strong answer.",
         parameters: {
           type: "object",
           properties: {
             totalPerShow: { type: "number" },
-            allocation: { type: "array", items: { type: "object", properties: { category: { type: "string" }, percentage: { type: "number" }, amount: { type: "number" }, description: { type: "string" } }, required: ["category", "percentage", "amount", "description"] } },
-            amortization: { type: "array", items: { type: "object", properties: { showNumber: { type: "number" }, estimatedCost: { type: "number" }, savings: { type: "string" } }, required: ["showNumber", "estimatedCost", "savings"] } },
-            riskFactors: { type: "array", items: { type: "object", properties: { factor: { type: "string" }, impact: { type: "string" }, level: { type: "string", enum: ["high", "medium", "low"] } }, required: ["factor", "impact", "level"] } },
+            allocation: { type: "array", items: { type: "object", properties: { category: { type: "string" }, percentage: { type: "number" }, amount: { type: "number" }, description: { type: "string" } }, required: ["category", "percentage", "amount"] } },
+            amortization: { type: "array", items: { type: "object", properties: { showNumber: { type: "number" }, estimatedCost: { type: "number" }, savings: { type: "string" } }, required: ["showNumber", "estimatedCost"] } },
+            riskFactors: { type: "array", items: { type: "object", properties: { factor: { type: "string" }, impact: { type: "string" }, level: { type: "string", enum: ["high", "medium", "low"] } }, required: ["factor", "level"] } },
             roiFramework: { type: "object", properties: { costPerLead: { type: "string" }, costPerMeeting: { type: "string" }, brandImpressionValue: { type: "string" } } },
             valueEngineering: { type: "array", items: { type: "string" } },
             vendorStrategy: { type: "string" },
-            paymentMilestones: { type: "array", items: { type: "object", properties: { milestone: { type: "string" }, percentage: { type: "number" }, timing: { type: "string" } }, required: ["milestone", "percentage", "timing"] } },
+            paymentMilestones: { type: "array", items: { type: "object", properties: { milestone: { type: "string" }, percentage: { type: "number" }, timing: { type: "string" } }, required: ["milestone"] } },
             industryBenchmarks: { type: "string" },
           },
-          required: ["totalPerShow", "allocation", "amortization", "riskFactors"],
+          // Only `totalPerShow` and `allocation` are truly required.
+          // The other big arrays (amortization, riskFactors) used to
+          // be required, which Gemini struggled with — producing 60+
+          // nested required fields in a single tool call frequently
+          // truncated or returned malformed output, which the client
+          // perceived as "Budget Logic stalled." Now Gemini can
+          // skip them when the brief is thin and still return valid
+          // structured data. The system prompt's description nudges
+          // toward filling them; we just don't HARD require them.
+          required: ["totalPerShow", "allocation"],
         },
       },
     },

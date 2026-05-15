@@ -611,16 +611,24 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
+  // Parse body before opening the stream so a malformed payload still
+  // returns a clean 400 instead of a 200-with-error-body.
+  let body: GenerateViewRequest;
   try {
-    const body: GenerateViewRequest = await req.json();
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, heroPromptText, boothSize, boothDimensions, geometryReferences, consistencyTokens, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (!body?.viewPrompt || typeof body.viewPrompt !== "string") {
+    return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (!body?.viewName || typeof body.viewName !== "string") {
+    return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
 
-    if (!viewPrompt || typeof viewPrompt !== "string") {
-      return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (!viewName || typeof viewName !== "string") {
-      return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+  return streamingJsonResponse(async () => {
+    try {
+      const { referenceImageUrl, viewPrompt, viewName, aspectRatio, heroPromptText, boothSize, boothDimensions, geometryReferences, consistencyTokens, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
 
     // The old block builders (scaleBlock, geometryBlock,
     // geometryClosingReinforcement, consistencyBlock, brandBlock) are

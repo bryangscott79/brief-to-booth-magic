@@ -1060,7 +1060,6 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
   // teaches the model that these structures hang from venue rigging
   // and are NOT supported by the booth, so render visible separation.
   if (n.hanging.elements.length > 0) {
-    const hu = n.geometry.units === "metric" ? "m" : "ft";
     const heLines: string[] = [
       "# HANGING ELEMENTS",
       "These structures are SUSPENDED from the venue rigging/ceiling above the booth. They are NOT attached to the booth structure below — the booth does not bear their weight. Render them as truly suspended overhead with visible separation from the booth structure beneath.",
@@ -1070,8 +1069,13 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
       const phrase = positionPhraseFor(el, n.geometry);
       heLines.push(`- ${el.name}`);
       if (el.physicalForm) heLines.push(`  Form: ${el.physicalForm}`);
+      // Width × depth carry the geometry units (`u`), but thickness
+      // is committed in feet by the schema field name (thicknessFt) —
+      // hardcode `ft` to avoid a 3.28× scale error on metric briefs.
+      // Suspension drop on the same line is already hardcoded `ft`;
+      // match that pattern.
       heLines.push(
-        `  Geometry: ${formatNumber(el.dimensions.width)} × ${formatNumber(el.dimensions.depth)} × ${formatNumber(el.dimensions.thicknessFt)} ${hu}, ${el.shape} outline, positioned ${phrase} the booth, ${formatNumber(el.suspensionDropFt)}ft below the venue ceiling.`,
+        `  Geometry: ${formatNumber(el.dimensions.width)} × ${formatNumber(el.dimensions.depth)} ${u} × ${formatNumber(el.dimensions.thicknessFt)} ft, ${el.shape} outline, positioned ${phrase} the booth, ${formatNumber(el.suspensionDropFt)}ft below the venue ceiling.`,
       );
       if (el.materials.length > 0) heLines.push(`  Materials: ${el.materials.join(", ")}`);
       if (el.surfaces.length > 0) heLines.push(`  Surfaces: ${el.surfaces.join("; ")}`);
@@ -1204,6 +1208,17 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
 
 export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
   const { failures } = validateBrief(normalized);
+  // validateBrief rebuilds `failures` from scratch and never reads
+  // normalized.compliance.hardConstraints, so normalize-time
+  // constraints (e.g. hanging_elements_aloft) would be silently
+  // dropped at compose time. Merge them in here so the structured
+  // compliance object stays consistent with the in-memory
+  // NormalizedBrief and so downstream consumers (PromptDebugPanel,
+  // composeViewPrompt, future post-render CV checks) see the rule.
+  const composedFailures: HardConstraint[] = [
+    ...failures,
+    ...normalized.compliance.hardConstraints,
+  ];
   const negative = [
     ...normalized.creative.forbiddenItems,
     "no overlaid annotations",
@@ -1225,11 +1240,11 @@ export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
     NormalizedBrief & { _dismissedGaps?: string[] };
 
   return {
-    briefJson: { ...canonicalNormalized, compliance: { hardConstraints: failures } },
+    briefJson: { ...canonicalNormalized, compliance: { hardConstraints: composedFailures } },
     geometrySummary: geometrySummaryText(normalized.geometry),
     renderer,
     negative,
-    compliance: failures,
+    compliance: composedFailures,
   };
 }
 

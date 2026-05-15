@@ -403,6 +403,54 @@ describe("composePrompt — hanging elements section", () => {
       n.compliance.hardConstraints.find((c) => c.id === "hanging_elements_aloft"),
     ).toBeUndefined();
   });
+
+  // Regression for the unit-mismatch bug: thicknessFt is committed in
+  // feet by the schema field name, but the geometry line was previously
+  // rendering it with the metric-brief units suffix ("m") — a 3.28×
+  // scale error gpt-image-2 would faithfully reproduce. Width × depth
+  // do live in geometry units, so they should remain metric here.
+  it("emits thickness in ft and width/depth in geometry units for metric briefs", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [{ name: "Ring", physicalForm: "white ring" }],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry, // metric, width=6 → default hanging width = 2
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    // Thickness hardcoded to "ft" regardless of geometry units.
+    expect(out.renderer).toMatch(/× 1 ft,/);
+    // Width × depth use metric "m" because the booth is metric.
+    expect(out.renderer).toMatch(/2 × 2 m ×/);
+  });
+
+  // Regression for the compliance-propagation bug: validateBrief rebuilds
+  // failures from scratch and never reads normalized.compliance
+  // .hardConstraints, so the new hanging_elements_aloft constraint was
+  // silently dropped at compose time even though it lived on the
+  // NormalizedBrief. composePrompt now merges them — both consumers
+  // (top-level `compliance` and `briefJson.compliance.hardConstraints`)
+  // should see the constraint.
+  it("propagates hanging_elements_aloft from normalize-time into composer.compliance + briefJson", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [{ name: "Ring", physicalForm: "white ring" }],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    expect(out.compliance.some((c) => c.id === "hanging_elements_aloft")).toBe(true);
+    expect(
+      out.briefJson.compliance.hardConstraints.some((c) => c.id === "hanging_elements_aloft"),
+    ).toBe(true);
+  });
 });
 
 // ─── Defensive normalization — survives partial / legacy briefs ─────

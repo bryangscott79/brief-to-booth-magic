@@ -15,9 +15,14 @@
 
 import { useMemo, forwardRef, useImperativeHandle, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrthographicCamera, Edges, Text, GizmoHelper, GizmoViewport } from "@react-three/drei";
+import { OrthographicCamera, Edges, Text, GizmoHelper, GizmoViewport, Line } from "@react-three/drei";
 import * as THREE from "three";
-import type { BoothGeometry, AbsoluteZone, BoothFeature } from "@/lib/geometryModel";
+import type {
+  BoothGeometry,
+  AbsoluteZone,
+  BoothFeature,
+  AbsoluteHangingElement,
+} from "@/lib/geometryModel";
 import { effectiveShape, resolveLNotch } from "@/lib/geometryModel";
 
 /** 1 meter in feet. */
@@ -324,6 +329,93 @@ function FeatureBox({
   );
 }
 
+/**
+ * Wireframe box for one suspended/hanging element. Mirrors the
+ * top-down dashed-outline layer (same #6366f1 indigo) so the same
+ * rigging element reads consistently across the 2D top-down and the
+ * 3D iso preview.
+ *
+ * Position semantics:
+ *   • `el.x`, `el.y` are the CENTER of the top-down footprint, in
+ *     real units (meters for metric briefs, feet for imperial). We
+ *     convert to feet via `toFt()` so the scene math stays in the
+ *     canonical feet space.
+ *   • Vertical placement: the bottom of the box sits at
+ *     `ceilingHeightFt - suspensionDropFt` off the floor (clamped to
+ *     ≥ 0 so a malformed payload with drop > ceiling doesn't push the
+ *     element underground).
+ *   • Data-y → world-z flip: same convention as zones/features so
+ *     the "front" of the booth (data y = 0) sits CLOSER to the camera.
+ *
+ * A thin solid drop line connects the bottom face's center down to
+ * the floor — a visual anchor so the box doesn't read as floating in
+ * unrelated 3D space. We use a SOLID line (drei `<Line>` with no
+ * `dashed` flag) instead of dashed: dashed lines in three.js need
+ * `computeLineDistances()` on the geometry and we have no existing
+ * dashed-line pattern in this codebase to copy. A solid thin indigo
+ * line at low opacity reads the same visually.
+ */
+function HangingElementBox({
+  el,
+  system,
+  ceilingHeightFt,
+  boothDepthFt,
+}: {
+  el: AbsoluteHangingElement;
+  system: "imperial" | "metric";
+  ceilingHeightFt: number;
+  boothDepthFt: number;
+}) {
+  const w = toFt(el.width, system);
+  const d = toFt(el.depth, system);
+  const cx = toFt(el.x, system);
+  const cyData = toFt(el.y, system);
+  // Same flip as zones/features: data y=0 (booth front) → world z=boothDepthFt.
+  const cz = boothDepthFt - cyData;
+  // suspensionDropFt and thicknessFt are ALWAYS feet (per the data
+  // model), so no unit conversion is needed for vertical placement.
+  const bottomY = Math.max(ceilingHeightFt - el.suspensionDropFt, 0);
+  const boxCenterY = bottomY + el.thicknessFt / 2;
+  const indigo = "#6366f1";
+
+  return (
+    <group>
+      {/* Wireframe volume — boxGeometry sized to the element's true
+          footprint × thickness. Wireframe (no fill) keeps the iso
+          view legible; zones underneath stay visible. */}
+      <mesh position={[cx, boxCenterY, cz]}>
+        <boxGeometry args={[w, el.thicknessFt, d]} />
+        <meshBasicMaterial color={indigo} wireframe transparent opacity={0.8} />
+      </mesh>
+      {/* Drop line from the element's bottom-center down to the
+          floor directly below. Anchors the element in 3D space. */}
+      <Line
+        points={[
+          [cx, bottomY, cz],
+          [cx, 0, cz],
+        ]}
+        color={indigo}
+        lineWidth={1}
+        transparent
+        opacity={0.5}
+      />
+      {/* Floating label above the element — small so it doesn't
+          compete with zone labels for visual weight. */}
+      <Text
+        position={[cx, boxCenterY + el.thicknessFt / 2 + 0.5, cz]}
+        fontSize={0.7}
+        color={indigo}
+        anchorX="center"
+        anchorY="bottom"
+        outlineWidth={0.04}
+        outlineColor="#000000"
+      >
+        {el.name}
+      </Text>
+    </group>
+  );
+}
+
 /** A simple stick-figure silhouette for human-scale calibration. */
 function HumanSilhouette({ x, z }: { x: number; z: number }) {
   return (
@@ -471,6 +563,24 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
               shares one coordinate convention. */}
           {(geometry.features ?? []).map((f) => (
             <FeatureBox key={f.id} feature={f} boothDepthFt={dFt} />
+          ))}
+
+          {/* Hanging / suspended elements — rings, halos, fabric
+              arrays, LED canopies. Rendered as indigo wireframe boxes
+              at their true suspension height (ceilingHeightFt -
+              suspensionDropFt), with a thin drop line to the floor so
+              the element has a visual anchor instead of floating
+              disconnected. Always shown on the iso preview (which is
+              read-only); the `showHanging` toggle on the top-down is
+              an editing convenience, not a visibility policy. */}
+          {(geometry.hangingElements ?? []).map((el) => (
+            <HangingElementBox
+              key={el.id}
+              el={el}
+              system={geometry.measurementSystem}
+              ceilingHeightFt={ceiling}
+              boothDepthFt={dFt}
+            />
           ))}
 
           {/* 5'8" silhouette in the front-left corner — visual scale

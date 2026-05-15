@@ -154,6 +154,15 @@ E. creative.referenceImages — When the brief includes "References" or "Inspira
    reference set (e.g. "Emphasis on lines", "A round element"). These are the visual
    themes the brand is anchoring to.
 
+F. hangingElements — Extract hangingElements when the brief mentions overhead signs,
+   hanging structures, or suspended/fly-rigged elements above the booth (rings, halos,
+   hanging banners with LED wordmarks, suspended LED installations). Look for phrases
+   like "hanging sign", "overhead sign", "suspended from", "ring above", "halo",
+   "fly-rigged", "rigging-supported". Each entry is a small architectural object,
+   not just signage — capture its name, physicalForm, shape, materials, surfaces,
+   lighting, and any printed graphics. Return an empty array if the brief doesn't
+   mention any.
+
 TABLE HANDLING: Documents often store critical data (budgets, booth sizes, dates) in tables formatted as tab-separated text. Parse these carefully.
 
 You MUST call the provided function tool to return your response. Return ALL fields populated as completely as possible.`;
@@ -292,6 +301,24 @@ const toolSchema = {
             },
           },
           required: ["avoid", "embrace", "coreStrategy", "thinkingFramework", "designPhilosophy"],
+        },
+        hangingElements: {
+          type: "array",
+          description: "Overhead structures suspended from venue rigging above the booth. Each is a small architectural object — not just a sign. Examples: 'overhead identity ring', 'hanging sign with white LED wordmark', 'suspended halo above lounge'. Look for phrases like 'hanging sign', 'overhead sign', 'suspended from', 'ring above', 'halo', 'fly-rigged', 'rigging-supported'. Empty array if the brief doesn't mention any.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Short label, e.g. 'Primary identity ring'." },
+              physicalForm: { type: "string", description: "1-2 sentence sculptural description of the structure." },
+              shape: { type: "string", enum: ["rect", "circle", "oval", "ring", "custom"] },
+              estimatedDimensions: { type: "string", description: "Free-text, e.g. '3m diameter x 0.3m thick'." },
+              suspensionHint: { type: "string", description: "Free-text positional hint, e.g. 'centered over hero zone'." },
+              materials: { type: "array", items: { type: "string" } },
+              surfaces: { type: "array", items: { type: "string" }, description: "Per-face descriptions, e.g. ['front face: white LED wordmark']." },
+              lighting: { type: "array", items: { type: "string" } },
+              printed: { type: "array", items: { type: "string" }, description: "Printed graphics, e.g. ['front: brand logotype']." },
+            },
+          },
         },
         experience: {
           type: "object",

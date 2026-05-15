@@ -164,6 +164,65 @@ export interface NormalizedBriefCompliance {
   hardConstraints: HardConstraint[];
 }
 
+export interface NormalizedHangingElement {
+  /** Stable identifier; used for canvas drag-edit and prompt anchoring. */
+  id: string;
+  /** Short label, e.g. "Primary identity ring". */
+  name: string;
+  /**
+   * 1-2 sentence sculptural description. Same role as
+   * NormalizedBriefHero.physicalForm — drives the model's mental
+   * image of the form.
+   */
+  physicalForm: string;
+  /**
+   * Top-down outline shape. `ring` is a top-level enum (not "custom")
+   * because it's the dominant hanging form and benefits from explicit
+   * geometry.
+   */
+  shape: "rect" | "circle" | "oval" | "ring" | "custom";
+  /**
+   * Top-down dimensions. `width` and `depth` are in the same units
+   * as NormalizedBriefGeometry. `thicknessFt` is the element's own
+   * vertical thickness (flat banner ≈ 0.1ft, ring/truss ≈ 1-3ft).
+   */
+  dimensions: { width: number; depth: number; thicknessFt: number };
+  /**
+   * Distance from venue ceiling DOWN to the bottom of the element,
+   * in feet. The element's bottom face sits at
+   * (ceilingHeightFt - suspensionDropFt) from the floor.
+   */
+  suspensionDropFt: number;
+  /**
+   * Top-down center position in booth-local coords (same space as
+   * NormalizedBriefZone.x/y — feet/meters from booth front-left).
+   */
+  position: { x: number; y: number };
+  /** Materials list, e.g. ["brushed aluminum", "tensioned white fabric"]. */
+  materials: string[];
+  /**
+   * Surface descriptions per face, e.g. ["front face: white LED
+   * wordmark", "underside: matte black", "back: brushed aluminum"].
+   * Free-form strings.
+   */
+  surfaces: string[];
+  /**
+   * Lighting attributes, e.g. ["edge-lit perimeter glow",
+   * "internally backlit", "downcast 4000K wash on booth"].
+   */
+  lighting: string[];
+  /**
+   * Printed graphics, e.g. ["front: brand logotype", "back: hashtag"].
+   * Separate from `surfaces` because printed content must be rendered
+   * accurately by the image model.
+   */
+  printed: string[];
+}
+
+export interface NormalizedBriefHanging {
+  elements: NormalizedHangingElement[];
+}
+
 export interface NormalizedBrief {
   project: NormalizedBriefProject;
   brand: NormalizedBriefBrand;
@@ -172,6 +231,7 @@ export interface NormalizedBrief {
   materials: NormalizedBriefMaterial[];
   hero: NormalizedBriefHero;
   signage: NormalizedBriefSignage;
+  hanging: NormalizedBriefHanging;
   creative: NormalizedBriefCreative;
   context: NormalizedBriefContext;
   camera: NormalizedBriefCamera;
@@ -298,7 +358,15 @@ function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief 
     },
     requiredDeliverables: Array.isArray(b.requiredDeliverables) ? b.requiredDeliverables : [],
     winningCriteria: Array.isArray(b.winningCriteria) ? b.winningCriteria : [],
-  };
+    // hangingElements is not yet on the ParsedBrief type (the parser
+    // writes free-form JSON ahead of the type addition), so we attach
+    // via the spread + cast. Defense-in-depth: any caller that
+    // accesses safeBrief(...).hangingElements gets [] when the
+    // upstream brief omitted the field entirely.
+    ...(Array.isArray((b as { hangingElements?: unknown }).hangingElements)
+      ? { hangingElements: (b as { hangingElements: unknown[] }).hangingElements }
+      : { hangingElements: [] }),
+  } as ParsedBrief;
 }
 
 const HERO_KEYWORDS = [
@@ -403,6 +471,64 @@ function visibilityFromPosition(
   return 3;
 }
 
+/**
+ * Shape of a single hanging element as it arrives from the parse-brief
+ * edge function. Free-text dimensions and positional hints; numeric
+ * coercion happens in normalizeHangingElement.
+ */
+interface ParsedHangingElement {
+  name?: string;
+  physicalForm?: string;
+  shape?: string;
+  estimatedDimensions?: string;
+  suspensionHint?: string;
+  materials?: string[];
+  surfaces?: string[];
+  lighting?: string[];
+  printed?: string[];
+}
+
+/**
+ * Convert a parsed-brief hanging entry into a NormalizedHangingElement.
+ * Parser gives us free-text dimensions and positional hints; this is
+ * where we coerce to numeric coordinates with sensible defaults.
+ *
+ * Defaults when fields are missing:
+ *   - shape: "ring" (most common authored form)
+ *   - position: booth center
+ *   - dimensions: width = 1/3 of booth width, depth = same, thickness 1ft
+ *   - suspensionDropFt: 3 (typical clearance for visibility from across hall)
+ */
+function normalizeHangingElement(
+  raw: ParsedHangingElement,
+  geometry: BoothGeometry,
+  idx: number,
+): NormalizedHangingElement {
+  const id = `hang_${Date.now().toString(36)}_${idx}`;
+  const defaultDim = geometry.width / 3;
+  return {
+    id,
+    name: typeof raw.name === "string" && raw.name.trim().length > 0
+      ? raw.name.trim()
+      : `Hanging element ${idx + 1}`,
+    physicalForm: typeof raw.physicalForm === "string" ? raw.physicalForm.trim() : "",
+    shape: ["rect", "circle", "oval", "ring", "custom"].includes(raw.shape as string)
+      ? (raw.shape as NormalizedHangingElement["shape"])
+      : "ring",
+    dimensions: {
+      width: defaultDim,
+      depth: defaultDim,
+      thicknessFt: 1,
+    },
+    suspensionDropFt: 3,
+    position: { x: geometry.width / 2, y: geometry.depth / 2 },
+    materials: Array.isArray(raw.materials) ? raw.materials.map(String) : [],
+    surfaces: Array.isArray(raw.surfaces) ? raw.surfaces.map(String) : [],
+    lighting: Array.isArray(raw.lighting) ? raw.lighting.map(String) : [],
+    printed: Array.isArray(raw.printed) ? raw.printed.map(String) : [],
+  };
+}
+
 export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
   const { project, geometry, elements } = input;
   // Apply defense-in-depth defaults so partial / legacy / corrupted
@@ -505,6 +631,14 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       }
     : undefined;
 
+  const rawHanging = (input.parsedBrief as unknown as { hangingElements?: unknown } | null | undefined)
+    ?.hangingElements;
+  const hangingElements: NormalizedHangingElement[] = Array.isArray(rawHanging)
+    ? (rawHanging as ParsedHangingElement[]).map((raw, idx) =>
+        normalizeHangingElement(raw, geometry, idx),
+      )
+    : [];
+
   return {
     project: {
       id: project.id,
@@ -536,6 +670,7 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
     materials,
     hero,
     signage: { required: signageRequired },
+    hanging: { elements: hangingElements },
     creative: {
       visualLanguage: parsedBrief.creative.visualLanguage ?? [],
       referenceLabels: parsedBrief.creative.referenceLabels ?? [],

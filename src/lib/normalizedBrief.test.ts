@@ -480,6 +480,93 @@ describe("applyGapAnswer + validate round trip", () => {
   });
 });
 
+// ─── normalizeBrief — hanging elements ───────────────────────────────
+//
+// Task 1 of the hanging-elements feature. The normalizer must:
+//   1. Carry parsedBrief.hangingElements through into
+//      NormalizedBrief.hanging.elements with stable ids and sensible
+//      numeric defaults (parser gives free-text dimensions / positional
+//      hints; the normalizer coerces).
+//   2. Default to an empty array when the field is absent (legacy
+//      briefs in the DB don't have it).
+//   3. Survive a brief object that lacks the `hangingElements` key
+//      entirely — the safeBrief defense-in-depth path.
+//
+// We don't yet have a `minimalParsedBrief` helper; build the input
+// inline by cloning eqvilentParsedBrief (which already gives us a
+// fully-shaped ParsedBrief) and adding hangingElements to a typed-loose
+// copy so we can attach the new field before it lives on the ParsedBrief
+// type (Task 1 only adds the normalizer side; the type addition is
+// outside the scope of this slice — the parser writes free-form JSON
+// that normalizeBrief reads through `(b as ...).hangingElements`).
+
+describe("normalizeBrief — hanging elements", () => {
+  it("normalizes a parsed brief with one hanging element", () => {
+    const briefWithHanging = {
+      ...eqvilentParsedBrief,
+      hangingElements: [
+        {
+          name: "Primary identity ring",
+          physicalForm:
+            "Suspended ring framing the hero zone, carrying the brand wordmark on its front face.",
+          shape: "ring",
+          estimatedDimensions: "3m diameter x 0.3m thick",
+          suspensionHint: "centered over hero zone",
+          materials: ["brushed aluminum", "tensioned white fabric"],
+          surfaces: [
+            "front face: white LED wordmark",
+            "underside: matte black",
+            "back: brushed aluminum",
+          ],
+          lighting: ["edge-lit perimeter glow", "downcast 4000K wash on booth"],
+          printed: ["front: brand logotype", "back: hashtag"],
+        },
+      ],
+    };
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: briefWithHanging as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"],
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.hanging.elements).toHaveLength(1);
+    const el = n.hanging.elements[0];
+    expect(el.id).toMatch(/^hang_/);
+    expect(el.name).toBe("Primary identity ring");
+    expect(el.shape).toBe("ring");
+    expect(el.dimensions.width).toBeGreaterThan(0);
+    expect(el.dimensions.depth).toBeGreaterThan(0);
+    expect(el.suspensionDropFt).toBeGreaterThan(0);
+    expect(el.materials).toContain("brushed aluminum");
+    expect(el.printed).toContain("front: brand logotype");
+  });
+
+  it("defaults hanging.elements to [] when parsedBrief.hangingElements is omitted", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief, // no hangingElements key at all
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.hanging.elements).toEqual([]);
+  });
+
+  it("survives a legacy parsedBrief copy whose hangingElements key was deleted", () => {
+    // Simulate the older-DB-row case where hangingElements never
+    // existed. Going through safeBrief, the field should normalize
+    // to [].
+    const legacy = structuredClone(eqvilentParsedBrief) as unknown as Record<string, unknown>;
+    delete legacy.hangingElements;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: legacy as unknown as Parameters<typeof normalizeBrief>[0]["parsedBrief"],
+      geometry: eqvilentGeometry,
+      elements: null,
+    });
+    expect(n.hanging.elements).toEqual([]);
+  });
+});
+
 // ─── composeViewPrompt — hero-derived views ──────────────────────────
 
 describe("composeViewPrompt — views derive from heroSnapshot", () => {

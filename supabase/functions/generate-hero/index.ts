@@ -710,6 +710,49 @@ function buildStructuredHeroPrompt(
   return sections.join("\n\n");
 }
 
+/**
+ * Wrap an async producer in a streamed Response that emits a single
+ * whitespace byte every `keepAliveMs` to defeat the platform's 150s
+ * idle-timeout. The final payload (JSON) is written at the end.
+ *
+ * JSON.parse tolerates leading whitespace, so callers using
+ * `supabase.functions.invoke` (which JSON-parses the body) keep
+ * working without any client change. gpt-image-2 routinely takes
+ * 150-180s for high-quality 1536x1024 renders — without keep-alive
+ * the connection dies before the image lands.
+ */
+function streamingJsonResponse(
+  produce: () => Promise<{ status: number; body: unknown }>,
+  keepAliveMs = 20_000,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let done = false;
+      const ping = setInterval(() => {
+        if (done) return;
+        try { controller.enqueue(encoder.encode(" ")); } catch { /* closed */ }
+      }, keepAliveMs);
+      try {
+        const { body } = await produce();
+        done = true;
+        clearInterval(ping);
+        controller.enqueue(encoder.encode(JSON.stringify(body)));
+        controller.close();
+      } catch (e) {
+        done = true;
+        clearInterval(ping);
+        const msg = e instanceof Error ? e.message : "Failed to generate image";
+        controller.enqueue(encoder.encode(JSON.stringify({ error: msg })));
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

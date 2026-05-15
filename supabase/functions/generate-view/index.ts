@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-05-14-edit-mode-views
+// generate-view — DEPLOY TOKEN: 2026-05-15-stream-flush-padding
 //
 // Same restructure as generate-hero (see that file for the full
 // rationale). Two relevant changes for view rendering:
@@ -25,7 +25,8 @@ import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface BrandIntelEntry {
@@ -133,23 +134,35 @@ interface GenerateViewRequest {
 }
 
 /** Phase 4: Build consistency enforcement block from structured tokens */
-function buildConsistencyBlock(tokens?: GenerateViewRequest["consistencyTokens"]): string {
+function buildConsistencyBlock(
+  tokens?: GenerateViewRequest["consistencyTokens"],
+): string {
   if (!tokens) return "";
   const parts: string[] = [];
 
   parts.push("\n═══════════════════════════════════════");
   parts.push("CONSISTENCY ENFORCEMENT TOKENS");
   parts.push("═══════════════════════════════════════\n");
-  parts.push("These tokens MUST be applied to ensure visual coherence across all views.\n");
+  parts.push(
+    "These tokens MUST be applied to ensure visual coherence across all views.\n",
+  );
 
   if (tokens.brandColors?.length) {
     parts.push(`BRAND COLORS (match EXACTLY from reference image):`);
-    tokens.brandColors.forEach((c, i) => parts.push(`  ${i === 0 ? "Primary" : i === 1 ? "Secondary" : `Accent ${i}`}: ${c}`));
+    tokens.brandColors.forEach((c, i) =>
+      parts.push(
+        `  ${
+          i === 0 ? "Primary" : i === 1 ? "Secondary" : `Accent ${i}`
+        }: ${c}`,
+      )
+    );
     parts.push("");
   }
 
   if (tokens.materialKeywords?.length) {
-    parts.push(`MATERIALS (same as reference): ${tokens.materialKeywords.join(", ")}`);
+    parts.push(
+      `MATERIALS (same as reference): ${tokens.materialKeywords.join(", ")}`,
+    );
   }
 
   if (tokens.lightingKeywords?.length) {
@@ -163,18 +176,28 @@ function buildConsistencyBlock(tokens?: GenerateViewRequest["consistencyTokens"]
   if (tokens.qualityTier) {
     const complexity: Record<string, string> = {
       standard: "Clean and functional — simple forms, standard materials",
-      premium: "Refined and polished — custom millwork, integrated AV, quality finishes",
-      ultra: "Dramatic and immersive — sculptural architecture, premium materials, theatrical lighting",
+      premium:
+        "Refined and polished — custom millwork, integrated AV, quality finishes",
+      ultra:
+        "Dramatic and immersive — sculptural architecture, premium materials, theatrical lighting",
     };
-    parts.push(`DESIGN COMPLEXITY (${tokens.qualityTier}): ${complexity[tokens.qualityTier] || ""}`);
+    parts.push(
+      `DESIGN COMPLEXITY (${tokens.qualityTier}): ${
+        complexity[tokens.qualityTier] || ""
+      }`,
+    );
   }
 
   if (tokens.heroInstallationName) {
-    parts.push(`HERO INSTALLATION: "${tokens.heroInstallationName}" — maintain as focal point if visible from this angle`);
+    parts.push(
+      `HERO INSTALLATION: "${tokens.heroInstallationName}" — maintain as focal point if visible from this angle`,
+    );
   }
 
   if (tokens.visibleZones?.length) {
-    parts.push(`ZONES VISIBLE FROM THIS ANGLE: ${tokens.visibleZones.join(", ")}`);
+    parts.push(
+      `ZONES VISIBLE FROM THIS ANGLE: ${tokens.visibleZones.join(", ")}`,
+    );
   }
 
   if (tokens.avoidKeywords?.length) {
@@ -188,7 +211,7 @@ function buildConsistencyBlock(tokens?: GenerateViewRequest["consistencyTokens"]
 /** Build brand intelligence block for view generation */
 function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
   if (!entries || entries.length === 0) return "";
-  const relevant = entries.filter(e =>
+  const relevant = entries.filter((e) =>
     e.category === "visual_identity" || e.category === "vendor_material"
   );
   if (relevant.length === 0) return "";
@@ -210,14 +233,19 @@ function buildBrandIntelBlock(entries?: BrandIntelEntry[]): string {
  */
 function buildScaleBlock(req: GenerateViewRequest): string {
   const dims = req.boothDimensions;
-  let w: number, d: number, sqft: number, system: "imperial" | "metric", ceilingFt: number;
+  let w: number,
+    d: number,
+    sqft: number,
+    system: "imperial" | "metric",
+    ceilingFt: number;
 
   if (dims) {
     w = dims.width;
     d = dims.depth;
     sqft = dims.sqft;
     system = dims.system;
-    ceilingFt = dims.ceilingHeightFt ?? (sqft > 1200 ? 18 : sqft > 600 ? 14 : 10);
+    ceilingFt = dims.ceilingHeightFt ??
+      (sqft > 1200 ? 18 : sqft > 600 ? 14 : 10);
   } else if (req.boothSize) {
     const m = req.boothSize.match(
       /(\d+(?:\.\d+)?)\s*(?:m|ft|')?\s*[x×X]\s*(\d+(?:\.\d+)?)\s*(?:m|ft|')?/i,
@@ -225,8 +253,12 @@ function buildScaleBlock(req: GenerateViewRequest): string {
     if (!m) return "";
     w = parseFloat(m[1]);
     d = parseFloat(m[2]);
-    system = /m\b/i.test(req.boothSize) && !/ft|'/.test(req.boothSize) ? "metric" : "imperial";
-    sqft = system === "metric" ? Math.round(w * d * 10.7639) : Math.round(w * d);
+    system = /m\b/i.test(req.boothSize) && !/ft|'/.test(req.boothSize)
+      ? "metric"
+      : "imperial";
+    sqft = system === "metric"
+      ? Math.round(w * d * 10.7639)
+      : Math.round(w * d);
     ceilingFt = sqft > 1200 ? 18 : sqft > 600 ? 14 : 10;
   } else {
     return "";
@@ -234,7 +266,9 @@ function buildScaleBlock(req: GenerateViewRequest): string {
 
   const widthLabel = system === "metric" ? `${w}m` : `${w} ft`;
   const depthLabel = system === "metric" ? `${d}m` : `${d} ft`;
-  const peopleAcross = system === "metric" ? Math.round(w / 0.6) : Math.round(w / 2);
+  const peopleAcross = system === "metric"
+    ? Math.round(w / 0.6)
+    : Math.round(w / 2);
 
   return `\nPHYSICAL SCALE (CRITICAL — exact dimensions):
 - Footprint: ${widthLabel} wide × ${depthLabel} deep (${sqft} sq ft)
@@ -252,24 +286,46 @@ function buildGeometryReferenceBlock(req: GenerateViewRequest): string {
   const refs = req.geometryReferences;
   if (!refs || (!refs.floorplan && !refs.isometric)) return "";
   const has = (k: "floorplan" | "isometric") => !!refs[k];
-  const parts: string[] = ["\n╔══════════════════════════════════════════════════╗"];
+  const parts: string[] = [
+    "\n╔══════════════════════════════════════════════════╗",
+  ];
   parts.push("║   GEOMETRY REFERENCE — STRICT SCALE CONSTRAINT   ║");
   parts.push("╚══════════════════════════════════════════════════╝");
   parts.push("");
-  if (has("floorplan")) parts.push("  • FLOOR PLAN: exact booth footprint + zone layout (top-down).");
-  if (has("isometric")) parts.push("  • ISOMETRIC: exact 3D volume the structure must occupy.");
+  if (has("floorplan")) {
+    parts.push(
+      "  • FLOOR PLAN: exact booth footprint + zone layout (top-down).",
+    );
+  }
+  if (has("isometric")) {
+    parts.push("  • ISOMETRIC: exact 3D volume the structure must occupy.");
+  }
   parts.push("");
   parts.push("THIS VIEW must match the same booth shown in the floor plan and");
-  parts.push("isometric references — same proportions, same zone positions, same");
-  parts.push("maximum height. The hero reference image shows finishes/style; the");
+  parts.push(
+    "isometric references — same proportions, same zone positions, same",
+  );
+  parts.push(
+    "maximum height. The hero reference image shows finishes/style; the",
+  );
   parts.push("geometry references show physical size and layout. Both apply.");
   parts.push("");
-  parts.push("⚠️ NO OVERLAID TEXT. The geometry references contain zone names,");
-  parts.push("dimensions, percentages, structural-form tags, material lists, and");
+  parts.push(
+    "⚠️ NO OVERLAID TEXT. The geometry references contain zone names,",
+  );
+  parts.push(
+    "dimensions, percentages, structural-form tags, material lists, and",
+  );
   parts.push("ft-tall callouts for YOUR consumption only. Do NOT transcribe,");
-  parts.push("recreate, or include any of those labels in the rendered output.");
-  parts.push("The output must look like a photograph — zero overlay annotations,");
-  parts.push("no leader lines, no captions, no architectural-diagram styling.\n");
+  parts.push(
+    "recreate, or include any of those labels in the rendered output.",
+  );
+  parts.push(
+    "The output must look like a photograph — zero overlay annotations,",
+  );
+  parts.push(
+    "no leader lines, no captions, no architectural-diagram styling.\n",
+  );
   return parts.join("\n");
 }
 
@@ -326,8 +382,7 @@ function buildStructuralApproachSection(
   const zoneForms = dctx.zoneStructuralForms ?? [];
   const embrace = dctx.creativeEmbrace ?? [];
 
-  const haveAny =
-    visualLanguage.length > 0 ||
+  const haveAny = visualLanguage.length > 0 ||
     referenceLabels.length > 0 ||
     heroForm.length > 0 ||
     zoneForms.length > 0 ||
@@ -340,11 +395,15 @@ function buildStructuralApproachSection(
   );
   if (visualLanguage.length > 0) {
     lines.push(
-      `Brand visual language to express AS architecture: ${visualLanguage.join(", ")}.`,
+      `Brand visual language to express AS architecture: ${
+        visualLanguage.join(", ")
+      }.`,
     );
   }
   if (referenceLabels.length > 0) {
-    lines.push(`Reference themes to anchor the design: ${referenceLabels.join(" · ")}.`);
+    lines.push(
+      `Reference themes to anchor the design: ${referenceLabels.join(" · ")}.`,
+    );
   }
   if (heroForm.length > 0) {
     lines.push(
@@ -402,7 +461,15 @@ function buildStructuredViewPrompt(opts: {
   ragBlock: string;
   consistencyTokens?: GenerateViewRequest["consistencyTokens"];
 }): string {
-  const { req, isInterior, zoneName, cameraDir, heroPromptText, ragBlock, consistencyTokens } = opts;
+  const {
+    req,
+    isInterior,
+    zoneName,
+    cameraDir,
+    heroPromptText,
+    ragBlock,
+    consistencyTokens,
+  } = opts;
   const sections: string[] = [];
   const dims = req.boothDimensions;
   const dctx = req.designContext;
@@ -436,7 +503,9 @@ function buildStructuredViewPrompt(opts: {
   if (!isInterior && dims) {
     const w = dims.system === "metric" ? `${dims.width}m` : `${dims.width} ft`;
     const d = dims.system === "metric" ? `${dims.depth}m` : `${dims.depth} ft`;
-    const ceilLabel = dims.ceilingHeightFt ? `${dims.ceilingHeightFt} ft` : "natural";
+    const ceilLabel = dims.ceilingHeightFt
+      ? `${dims.ceilingHeightFt} ft`
+      : "natural";
     const peopleAcross = dims.system === "metric"
       ? Math.round(dims.width / 0.6)
       : Math.round(dims.width / 2);
@@ -453,7 +522,9 @@ function buildStructuredViewPrompt(opts: {
 
   // ── # SIZE & SCALE (interiors get a zone-scoped variant) ──
   if (isInterior && dims) {
-    const maxCeilLabel = dims.ceilingHeightFt ? `${dims.ceilingHeightFt} ft` : "the booth's max fascia height";
+    const maxCeilLabel = dims.ceilingHeightFt
+      ? `${dims.ceilingHeightFt} ft`
+      : "the booth's max fascia height";
     sections.push(
       [
         "# SIZE & SCALE (zone-scoped)",
@@ -476,7 +547,9 @@ function buildStructuredViewPrompt(opts: {
     // For exteriors we include the viewPrompt as additional view detail
     // (smaller cap — the camera direction already carries most of what
     // matters; viewPrompt adds atmosphere + specific elements).
-    sections.push(`# ADDITIONAL VIEW DETAILS\n${req.viewPrompt.trim().slice(0, 1200)}`);
+    sections.push(
+      `# ADDITIONAL VIEW DETAILS\n${req.viewPrompt.trim().slice(0, 1200)}`,
+    );
   }
 
   // ── # CONSISTENCY WITH HERO REFERENCE ──
@@ -492,13 +565,21 @@ function buildStructuredViewPrompt(opts: {
   }
   // Optional consistency tokens (brand colors, materials, etc.)
   if (consistencyTokens?.brandColors?.length) {
-    consistencyLines.push(`Brand colors (apply prominently): ${consistencyTokens.brandColors.join(", ")}.`);
+    consistencyLines.push(
+      `Brand colors (apply prominently): ${
+        consistencyTokens.brandColors.join(", ")
+      }.`,
+    );
   }
   if (consistencyTokens?.materialKeywords?.length) {
-    consistencyLines.push(`Materials: ${consistencyTokens.materialKeywords.join(", ")}.`);
+    consistencyLines.push(
+      `Materials: ${consistencyTokens.materialKeywords.join(", ")}.`,
+    );
   }
   if (consistencyTokens?.heroInstallationName && !isInterior) {
-    consistencyLines.push(`Hero installation: "${consistencyTokens.heroInstallationName}" — maintain as the focal point.`);
+    consistencyLines.push(
+      `Hero installation: "${consistencyTokens.heroInstallationName}" — maintain as the focal point.`,
+    );
   }
   sections.push(consistencyLines.join("\n"));
 
@@ -513,10 +594,14 @@ function buildStructuredViewPrompt(opts: {
     );
   }
   if (consistencyTokens?.avoidKeywords?.length) {
-    restrictionLines.push(`Avoid: ${consistencyTokens.avoidKeywords.join(", ")}.`);
+    restrictionLines.push(
+      `Avoid: ${consistencyTokens.avoidKeywords.join(", ")}.`,
+    );
   }
   if (dctx?.creativeAvoid?.length) {
-    restrictionLines.push(`Brief-specified avoid: ${dctx.creativeAvoid.join(", ")}.`);
+    restrictionLines.push(
+      `Brief-specified avoid: ${dctx.creativeAvoid.join(", ")}.`,
+    );
   }
   sections.push(restrictionLines.join("\n"));
 
@@ -527,22 +612,33 @@ function buildStructuredViewPrompt(opts: {
   const contextParts: string[] = [];
   if (heroPromptText && heroPromptText.trim().length > 0) {
     contextParts.push(
-      `Original hero design intent (the prompt that produced the reference image, for grounding):\n${heroPromptText.slice(0, 1500).trim()}`,
+      `Original hero design intent (the prompt that produced the reference image, for grounding):\n${
+        heroPromptText.slice(0, 1500).trim()
+      }`,
     );
   }
   const brandIntel = req.brandIntelligence ?? [];
   if (brandIntel.length > 0) {
     const visual = brandIntel.filter(
-      (e) => e.category === "visual_identity" || e.category === "vendor_material",
+      (e) =>
+        e.category === "visual_identity" || e.category === "vendor_material",
     );
     if (visual.length > 0) {
       contextParts.push(
-        `Brand intelligence:\n${visual.map((e) => `- ${e.title}: ${e.content}`).join("\n")}`,
+        `Brand intelligence:\n${
+          visual.map((e) => `- ${e.title}: ${e.content}`).join("\n")
+        }`,
       );
     }
   }
-  if (req.brandContext) contextParts.push(`Brand context: ${req.brandContext.slice(0, 500)}`);
-  if (req.suiteContext) contextParts.push(`Project type context: ${req.suiteContext.slice(0, 300)}`);
+  if (req.brandContext) {
+    contextParts.push(`Brand context: ${req.brandContext.slice(0, 500)}`);
+  }
+  if (req.suiteContext) {
+    contextParts.push(
+      `Project type context: ${req.suiteContext.slice(0, 300)}`,
+    );
+  }
   if (ragBlock) contextParts.push(ragBlock.slice(0, 500));
   if (contextParts.length > 0) {
     sections.push(`# ADDITIONAL CONTEXT\n${contextParts.join("\n\n")}`);
@@ -563,12 +659,22 @@ function streamingJsonResponse(
   keepAliveMs = 20_000,
 ): Response {
   const encoder = new TextEncoder();
+  const keepAliveChunk = `${" ".repeat(2048)}\n`;
   const stream = new ReadableStream({
     async start(controller) {
       let done = false;
-      const ping = setInterval(() => {
+      const sendKeepAlive = () => {
         if (done) return;
-        try { controller.enqueue(encoder.encode(" ")); } catch { /* closed */ }
+        try {
+          controller.enqueue(encoder.encode(keepAliveChunk));
+        } catch { /* closed */ }
+      };
+      // Send immediately, then periodically. Some edge proxies buffer tiny
+      // chunks, so use >1KB JSON-whitespace padding to force a flush while
+      // keeping the final response parseable by supabase.functions.invoke().
+      sendKeepAlive();
+      const ping = setInterval(() => {
+        sendKeepAlive();
       }, keepAliveMs);
       try {
         const { body } = await produce();
@@ -586,7 +692,13 @@ function streamingJsonResponse(
     },
   });
   return new Response(stream, {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
   });
 }
 
@@ -597,18 +709,25 @@ serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
+    { global: { headers: { Authorization: authHeader } } },
   );
 
-  const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+  const { data: { user }, error: userError } = await supabaseClient.auth
+    .getUser();
   if (userError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   // Parse body before opening the stream so a malformed payload still
@@ -617,180 +736,245 @@ serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "invalid JSON body" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
   if (!body?.viewPrompt || typeof body.viewPrompt !== "string") {
-    return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "viewPrompt is required" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
   if (!body?.viewName || typeof body.viewName !== "string") {
-    return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "viewName is required" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   return streamingJsonResponse(async () => {
     try {
-      const { referenceImageUrl, viewPrompt, viewName, aspectRatio, heroPromptText, boothSize, boothDimensions, geometryReferences, consistencyTokens, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
-
-    // The old block builders (scaleBlock, geometryBlock,
-    // geometryClosingReinforcement, consistencyBlock, brandBlock) are
-    // no longer used — buildStructuredViewPrompt assembles a tighter
-    // markdown prompt directly from the inputs. The helpers stay
-    // defined for type-checking but the calls are gone.
-    void buildScaleBlock;
-    void buildGeometryReferenceBlock;
-    void buildGeometryClosingReinforcement;
-    void buildConsistencyBlock;
-    void buildBrandIntelBlock;
-
-    // ── RAG: Retrieve knowledge base context ──
-    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
-    if (agency_id) {
-      const serviceSupabase = createServiceClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
-      const ragQuery = [
-        viewName,
+      const {
+        referenceImageUrl,
         viewPrompt,
-        consistencyTokens?.heroInstallationName,
-        consistencyTokens?.styleKeywords?.join(", "),
-        consistencyTokens?.materialKeywords?.join(", "),
-      ].filter(Boolean).join(" — ").slice(0, 4000);
-      ragContext = await buildRagContext(serviceSupabase, {
-        query: ragQuery,
-        agencyId: agency_id,
-        clientId: client_id,
-        activationTypeId: activation_type_id,
-        projectId: project_id,
-      });
-      if (ragContext.chunks.length > 0) {
-        console.log(`[generate-view] RAG: ${ragContext.chunks.length} chunks from scopes: ${Object.entries(ragContext.byScope || {}).filter(([, v]: any) => (v as any[]).length).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")}`);
-      }
-    }
-    const ragBlock = ragContext.formatted ? `\n\n${ragContext.formatted}` : "";
-
-    console.log(`Generating ${viewName} view with aspect ratio ${aspectRatio}`, { hasConsistencyTokens: !!consistencyTokens, brandIntelEntries: brandIntelligence?.length ?? 0 });
-
-    // Camera direction mapping for strong angle differentiation
-    const cameraDirections: Record<string, string> = {
-      "3/4 Hero View": "Camera positioned at 45 degrees front-left of the booth, at eye level (5.5 feet), looking toward the booth's center. This is a diagonal perspective showing both the front face and the left side of the booth.",
-      "Top-Down View": "Camera positioned directly above the booth looking straight down (bird's eye / plan view). Show the full floor plan layout with all zones visible from overhead. No perspective distortion — orthographic top-down.",
-      "Front Elevation": "Camera positioned directly in front of the booth, centered on the main entrance/aisle, at eye level (5.5 feet). The camera faces the booth head-on. Only the front face of the booth is visible — no side walls.",
-      "Left Side": "Camera positioned to the LEFT side of the booth, at eye level (5.5 feet), facing the booth's left wall at exactly 90 degrees. The viewer is standing in the left aisle. The front of the booth is to the viewer's right. Only the left side face is prominent.",
-      "Right Side": "Camera positioned to the RIGHT side of the booth, at eye level (5.5 feet), facing the booth's right wall at exactly 90 degrees. The viewer is standing in the right aisle. The front of the booth is to the viewer's left. Only the right side face is prominent. This is the OPPOSITE side from the left view.",
-      "Back View": "Camera is BEHIND the booth, rotated 180 degrees from the front. The viewer is standing in the BACK aisle looking at the rear face of the booth. The back side is a FULLY FINISHED, polished, visitor-facing entry/exit point — just as inviting and designed as the front. Show branded rear panels with graphics, secondary signage, welcoming entry points, elegant lighting, and the same premium materials and finishes as the front. DO NOT show exposed wiring, structural supports, utility panels, cable management, or any utilitarian/service elements. The back should look like a secondary front entrance that visitors walk through. Include 2-3 visitors entering or exiting from this side.",
-      "Hero Detail": "Camera positioned close to the hero/centerpiece installation, at eye level, showing a medium close-up shot of the main interactive element with surrounding context.",
-      "Lounge Detail": "Camera positioned inside or near the lounge/meeting area, at eye level, showing a medium shot of the seating, conversation space, and hospitality zone.",
-    };
-
-    // For zone interiors, check if viewName ends with "Interior"
-    const isInterior = viewName.endsWith("Interior");
-    const zoneName = viewName.replace(' Interior', '');
-    const cameraDir = cameraDirections[viewName] || (isInterior 
-      ? `Camera is DEEP INSIDE the booth, positioned at eye level (5.5 feet) within the "${zoneName}" zone. The camera is surrounded by the zone's walls, ceiling, and furnishings. The booth exterior, convention hall, and outside aisles should NOT be prominently visible. The viewer feels enclosed within this specific zone.`
-      : `Camera showing the ${viewName} perspective of the booth.`);
-
-    // ── Build the prompt ──
-    // Composer-driven (Phase 3 of refactor): when the client sent a
-    // pre-composed renderer prompt, use it verbatim. Otherwise fall
-    // back to the legacy edge-side structured builder.
-    let editPrompt: string;
-    if (body.composedPrompt && body.composedPrompt.renderer) {
-      editPrompt = body.composedPrompt.renderer;
-      console.log(`[generate-view] Using client-composed renderer for ${viewName} (${editPrompt.length} chars)`);
-    } else {
-      editPrompt = buildStructuredViewPrompt({
-        req: body,
-        isInterior,
-        zoneName,
-        cameraDir,
+        viewName,
+        aspectRatio,
         heroPromptText,
-        ragBlock,
+        boothSize,
+        boothDimensions,
+        geometryReferences,
         consistencyTokens,
-      });
-    }
+        designContext,
+        brandIntelligence,
+        brandContext = "",
+        suiteContext = "",
+        agency_id,
+        client_id,
+        activation_type_id,
+        project_id,
+        brandLogoUrl,
+        extraReferenceUrls,
+        imageModel = "gemini",
+      } = body;
 
-    // Geometry reference URLs (floor plan / isometric) are DELIBERATELY
-    // not forwarded to gpt-image-2. The PNG captures from
-    // SpatialCanvasIso.tsx render zone names as 3D <Text> components
-    // baked into the pixels, and gpt-image-2 reproduces those labels
-    // on the rendered booth walls regardless of "no overlaid text"
-    // instructions. The structured SIZE & SCALE section carries the
-    // dimensional info without the bleed risk.
-    void geometryReferences;
+      // The old block builders (scaleBlock, geometryBlock,
+      // geometryClosingReinforcement, consistencyBlock, brandBlock) are
+      // no longer used — buildStructuredViewPrompt assembles a tighter
+      // markdown prompt directly from the inputs. The helpers stay
+      // defined for type-checking but the calls are gone.
+      void buildScaleBlock;
+      void buildGeometryReferenceBlock;
+      void buildGeometryClosingReinforcement;
+      void buildConsistencyBlock;
+      void buildBrandIntelBlock;
 
-    // Unused: extraLabelBlock was emitted alongside the old
-    // multimodal Gemini path. With the structured markdown prompt,
-    // reference labels are described inline in the CONSISTENCY
-    // section rather than as a separate trailing block.
-    const extraLabelBlock = "";
-    void extraLabelBlock;
+      // ── RAG: Retrieve knowledge base context ──
+      let ragContext: { formatted: string; chunks: any[]; byScope?: any } = {
+        formatted: "",
+        chunks: [],
+      };
+      if (agency_id) {
+        const serviceSupabase = createServiceClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const ragQuery = [
+          viewName,
+          viewPrompt,
+          consistencyTokens?.heroInstallationName,
+          consistencyTokens?.styleKeywords?.join(", "),
+          consistencyTokens?.materialKeywords?.join(", "),
+        ].filter(Boolean).join(" — ").slice(0, 4000);
+        ragContext = await buildRagContext(serviceSupabase, {
+          query: ragQuery,
+          agencyId: agency_id,
+          clientId: client_id,
+          activationTypeId: activation_type_id,
+          projectId: project_id,
+        });
+        if (ragContext.chunks.length > 0) {
+          console.log(
+            `[generate-view] RAG: ${ragContext.chunks.length} chunks from scopes: ${
+              Object.entries(ragContext.byScope || {}).filter(([, v]: any) =>
+                (v as any[]).length
+              ).map(([k, v]: any) => `${k}(${(v as any[]).length})`).join(", ")
+            }`,
+          );
+        }
+      }
+      const ragBlock = ragContext.formatted
+        ? `\n\n${ragContext.formatted}`
+        : "";
 
-    void imageModel;
+      console.log(
+        `Generating ${viewName} view with aspect ratio ${aspectRatio}`,
+        {
+          hasConsistencyTokens: !!consistencyTokens,
+          brandIntelEntries: brandIntelligence?.length ?? 0,
+        },
+      );
 
-    let generatedImageUrl: string | null = null;
-    const responseText = "";
-    let modelUsed = "";
+      // Camera direction mapping for strong angle differentiation
+      const cameraDirections: Record<string, string> = {
+        "3/4 Hero View":
+          "Camera positioned at 45 degrees front-left of the booth, at eye level (5.5 feet), looking toward the booth's center. This is a diagonal perspective showing both the front face and the left side of the booth.",
+        "Top-Down View":
+          "Camera positioned directly above the booth looking straight down (bird's eye / plan view). Show the full floor plan layout with all zones visible from overhead. No perspective distortion — orthographic top-down.",
+        "Front Elevation":
+          "Camera positioned directly in front of the booth, centered on the main entrance/aisle, at eye level (5.5 feet). The camera faces the booth head-on. Only the front face of the booth is visible — no side walls.",
+        "Left Side":
+          "Camera positioned to the LEFT side of the booth, at eye level (5.5 feet), facing the booth's left wall at exactly 90 degrees. The viewer is standing in the left aisle. The front of the booth is to the viewer's right. Only the left side face is prominent.",
+        "Right Side":
+          "Camera positioned to the RIGHT side of the booth, at eye level (5.5 feet), facing the booth's right wall at exactly 90 degrees. The viewer is standing in the right aisle. The front of the booth is to the viewer's left. Only the right side face is prominent. This is the OPPOSITE side from the left view.",
+        "Back View":
+          "Camera is BEHIND the booth, rotated 180 degrees from the front. The viewer is standing in the BACK aisle looking at the rear face of the booth. The back side is a FULLY FINISHED, polished, visitor-facing entry/exit point — just as inviting and designed as the front. Show branded rear panels with graphics, secondary signage, welcoming entry points, elegant lighting, and the same premium materials and finishes as the front. DO NOT show exposed wiring, structural supports, utility panels, cable management, or any utilitarian/service elements. The back should look like a secondary front entrance that visitors walk through. Include 2-3 visitors entering or exiting from this side.",
+        "Hero Detail":
+          "Camera positioned close to the hero/centerpiece installation, at eye level, showing a medium close-up shot of the main interactive element with surrounding context.",
+        "Lounge Detail":
+          "Camera positioned inside or near the lounge/meeting area, at eye level, showing a medium shot of the seating, conversation space, and hospitality zone.",
+      };
 
-    // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
-    // and falls back to Gemini's nano-banana pro (Canopy Lite) on
-    // any failure — same safety net as generate-hero. The returned
-    // modelUsed flows back to the client for the per-image badge.
-    console.log(`[generate-view] Calling image gateway for ${viewName} (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / nano-banana pro)`);
-    try {
-      // Reference URLs for the OpenAI /v1/images/edits call.
-      //
-      // When composedPrompt is present (the new short-instruction
-      // edit-mode pipeline) we send ONLY the hero image as the
-      // reference. Multiple references confuse gpt-image-2 — instead
-      // of editing the hero, it tries to compose a new booth
-      // satisfying all the inputs, producing the cross-view drift
-      // bug the user reported (5 different booths, only the brand
-      // matched). Single-input edit-mode behaves like ChatGPT-image-2
-      // does in the UI: "show me top-down view of this" → it edits.
-      //
-      // When composedPrompt is absent (legacy fallback) we keep the
-      // full hero + logo + extras list because the legacy prompt
-      // was a generation prompt that needed multiple anchors.
-      //
-      // Floor plan + isometric PNGs are omitted in both paths — they
-      // bake zone-name text labels into the references that the
-      // model reproduces on the rendered booth.
-      const referenceImageUrls = body.composedPrompt
-        ? // Hero-only edit-mode for the new pipeline.
-          (referenceImageUrl ? [referenceImageUrl] : [])
-        : // Multi-anchor for the legacy fallback path.
-          [
+      // For zone interiors, check if viewName ends with "Interior"
+      const isInterior = viewName.endsWith("Interior");
+      const zoneName = viewName.replace(" Interior", "");
+      const cameraDir = cameraDirections[viewName] ||
+        (isInterior
+          ? `Camera is DEEP INSIDE the booth, positioned at eye level (5.5 feet) within the "${zoneName}" zone. The camera is surrounded by the zone's walls, ceiling, and furnishings. The booth exterior, convention hall, and outside aisles should NOT be prominently visible. The viewer feels enclosed within this specific zone.`
+          : `Camera showing the ${viewName} perspective of the booth.`);
+
+      // ── Build the prompt ──
+      // Composer-driven (Phase 3 of refactor): when the client sent a
+      // pre-composed renderer prompt, use it verbatim. Otherwise fall
+      // back to the legacy edge-side structured builder.
+      let editPrompt: string;
+      if (body.composedPrompt && body.composedPrompt.renderer) {
+        editPrompt = body.composedPrompt.renderer;
+        console.log(
+          `[generate-view] Using client-composed renderer for ${viewName} (${editPrompt.length} chars)`,
+        );
+      } else {
+        editPrompt = buildStructuredViewPrompt({
+          req: body,
+          isInterior,
+          zoneName,
+          cameraDir,
+          heroPromptText,
+          ragBlock,
+          consistencyTokens,
+        });
+      }
+
+      // Geometry reference URLs (floor plan / isometric) are DELIBERATELY
+      // not forwarded to gpt-image-2. The PNG captures from
+      // SpatialCanvasIso.tsx render zone names as 3D <Text> components
+      // baked into the pixels, and gpt-image-2 reproduces those labels
+      // on the rendered booth walls regardless of "no overlaid text"
+      // instructions. The structured SIZE & SCALE section carries the
+      // dimensional info without the bleed risk.
+      void geometryReferences;
+
+      // Unused: extraLabelBlock was emitted alongside the old
+      // multimodal Gemini path. With the structured markdown prompt,
+      // reference labels are described inline in the CONSISTENCY
+      // section rather than as a separate trailing block.
+      const extraLabelBlock = "";
+      void extraLabelBlock;
+
+      void imageModel;
+
+      let generatedImageUrl: string | null = null;
+      const responseText = "";
+      let modelUsed = "";
+
+      // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
+      // and falls back to Gemini's nano-banana pro (Canopy Lite) on
+      // any failure — same safety net as generate-hero. The returned
+      // modelUsed flows back to the client for the per-image badge.
+      console.log(
+        `[generate-view] Calling image gateway for ${viewName} (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / nano-banana pro)`,
+      );
+      try {
+        // Reference URLs for the OpenAI /v1/images/edits call.
+        //
+        // When composedPrompt is present (the new short-instruction
+        // edit-mode pipeline) we send ONLY the hero image as the
+        // reference. Multiple references confuse gpt-image-2 — instead
+        // of editing the hero, it tries to compose a new booth
+        // satisfying all the inputs, producing the cross-view drift
+        // bug the user reported (5 different booths, only the brand
+        // matched). Single-input edit-mode behaves like ChatGPT-image-2
+        // does in the UI: "show me top-down view of this" → it edits.
+        //
+        // When composedPrompt is absent (legacy fallback) we keep the
+        // full hero + logo + extras list because the legacy prompt
+        // was a generation prompt that needed multiple anchors.
+        //
+        // Floor plan + isometric PNGs are omitted in both paths — they
+        // bake zone-name text labels into the references that the
+        // model reproduces on the rendered booth.
+        const referenceImageUrls = body.composedPrompt
+          // Hero-only edit-mode for the new pipeline.
+          ? (referenceImageUrl ? [referenceImageUrl] : [])
+          // Multi-anchor for the legacy fallback path.
+          : [
             ...(referenceImageUrl ? [referenceImageUrl] : []),
             ...(brandLogoUrl ? [brandLogoUrl] : []),
             ...(extraReferenceUrls ?? []),
           ].slice(0, 4);
 
-      const out = await generateImageWithFallback({
-        usage: await buildUsageContext(req, "generate-view").catch(() => undefined),
-        prompt: editPrompt,
-        referenceImageUrls,
-        size: "1536x1024",
-        quality: "high",
-      });
-      const img = out.images[0];
-      if (!img) {
+        const out = await generateImageWithFallback({
+          usage: await buildUsageContext(req, "generate-view").catch(() =>
+            undefined
+          ),
+          prompt: editPrompt,
+          referenceImageUrls,
+          size: "1536x1024",
+          quality: "high",
+        });
+        const img = out.images[0];
+        if (!img) {
+          throw new Error(
+            "Image gateway returned no image. The prompt may have been filtered by content policy or both models are overloaded. Try regenerating or simplifying the prompt.",
+          );
+        }
+        generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+        modelUsed = out.modelUsed;
+        console.log(`[generate-view] ${viewName} produced by ${modelUsed}`);
+      } catch (e) {
+        console.error(
+          `[generate-view] Image generation failed for ${viewName} (both primary and fallback):`,
+          e,
+        );
+        const message = e instanceof Error ? e.message : "Unknown error";
         throw new Error(
-          "Image gateway returned no image. The prompt may have been filtered by content policy or both models are overloaded. Try regenerating or simplifying the prompt.",
+          `Image generation failed for ${viewName}: ${message}. ` +
+            `Verify OPENAI_API_KEY (for gpt-image-2) and GOOGLE_AI_API_KEY or LOVABLE_API_KEY (for nano-banana fallback) in Supabase Edge Function Secrets.`,
         );
       }
-      generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-      modelUsed = out.modelUsed;
-      console.log(`[generate-view] ${viewName} produced by ${modelUsed}`);
-    } catch (e) {
-      console.error(`[generate-view] Image generation failed for ${viewName} (both primary and fallback):`, e);
-      const message = e instanceof Error ? e.message : "Unknown error";
-      throw new Error(
-        `Image generation failed for ${viewName}: ${message}. ` +
-        `Verify OPENAI_API_KEY (for gpt-image-2) and GOOGLE_AI_API_KEY or LOVABLE_API_KEY (for nano-banana fallback) in Supabase Edge Function Secrets.`,
-      );
-    }
 
-    console.log(`Successfully generated ${viewName} view via ${modelUsed}`);
+      console.log(`Successfully generated ${viewName} view via ${modelUsed}`);
 
       return {
         status: 200,
@@ -804,7 +988,9 @@ serve(async (req) => {
       };
     } catch (error) {
       console.error("Error generating view:", error);
-      throw error instanceof Error ? error : new Error("Failed to generate image");
+      throw error instanceof Error
+        ? error
+        : new Error("Failed to generate image");
     }
   });
 });

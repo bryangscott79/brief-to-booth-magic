@@ -508,21 +508,37 @@ async function _callGeminiInner(options: GeminiOptions): Promise<AIResponse> {
           "google/gemini-3.1-flash-image-preview",
           "google/gemini-2.5-flash-image",
         ]
-      : [options.model];
+      : options.model === "google/gemini-2.5-pro"
+        ? [options.model, "google/gemini-2.5-flash"]
+        : [options.model];
     const tried = new Set<string>();
     let lastErr: unknown;
     for (const model of fallbackChain) {
       if (tried.has(model)) continue;
       tried.add(model);
-      try {
-        return await callGeminiViaLovable({ ...options, model }, lovableKey);
-      } catch (e) {
-        lastErr = e;
-        if (e instanceof PaymentRequiredError && isImage) {
-          console.warn(`[ai-gateway] ${model} returned 402, trying cheaper image model...`);
-          continue;
+      // Retry once on transient empty-body responses before falling back.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await callGeminiViaLovable({ ...options, model }, lovableKey);
+        } catch (e) {
+          lastErr = e;
+          const msg = e instanceof Error ? e.message : String(e);
+          const isEmptyBody = msg.includes("upstream returned empty body");
+          if (isEmptyBody && attempt === 0) {
+            console.warn(`[ai-gateway] ${model} empty body, retrying in 1.5s...`);
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          if (e instanceof PaymentRequiredError && isImage) {
+            console.warn(`[ai-gateway] ${model} returned 402, trying cheaper image model...`);
+            break;
+          }
+          if (isEmptyBody && fallbackChain.length > 1) {
+            console.warn(`[ai-gateway] ${model} still empty after retry, falling back to next model...`);
+            break;
+          }
+          throw e;
         }
-        throw e;
       }
     }
     throw lastErr;

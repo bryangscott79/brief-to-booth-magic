@@ -232,6 +232,37 @@ export interface BoothFeature {
   customPromptOverride?: string;
 }
 
+// ─── Hanging elements (overhead, suspended-from-ceiling objects) ──────────
+
+/**
+ * A hanging / suspended element placed above the booth floor —
+ * identity rings, halos, fabric arrays, LED canopies. Unlike zones
+ * and features, these don't sit on the floor; they hang from rigging
+ * at `suspensionDropFt` below the ceiling.
+ *
+ * Coordinates note: `x` and `y` are the CENTER of the element's
+ * top-down footprint (not the front-left corner as with zones). This
+ * matches how rigging is usually specified ("ring centered 3' from
+ * the back wall") and makes drag math trivially symmetric.
+ */
+export interface AbsoluteHangingElement {
+  id: string;
+  name: string;
+  /** Booth-local x coordinate of the element's CENTER, in real units. */
+  x: number;
+  /** Booth-local y coordinate of the element's CENTER, in real units. */
+  y: number;
+  /** Footprint width (along x), real units. */
+  width: number;
+  /** Footprint depth (along y), real units. */
+  depth: number;
+  /** Vertical thickness of the element, in feet (regardless of measurement system). */
+  thicknessFt: number;
+  shape: "rect" | "circle" | "oval" | "ring" | "custom";
+  /** Distance in feet below the ceiling at which the element hangs. */
+  suspensionDropFt: number;
+}
+
 /**
  * Full booth geometry: outer footprint + ceiling height + an array of
  * zones. This is the single source of truth the canvas edits and the
@@ -261,6 +292,13 @@ export interface BoothGeometry {
    * round-tripping through the parent component every time.
    */
   materialsCatalog?: MaterialEntry[];
+  /**
+   * Overhead / suspended elements (rings, halos, fabric arrays, LED
+   * canopies). Optional for backward compat — legacy geometry has no
+   * hanging concept. Rendered above zones on the top-down canvas as
+   * dashed outlines.
+   */
+  hangingElements?: AbsoluteHangingElement[];
 }
 
 /**
@@ -392,6 +430,7 @@ export function boothGeometryFromLegacy(
   extra: {
     features?: BoothFeature[];
     materialsCatalog?: MaterialEntry[];
+    hangingElements?: AbsoluteHangingElement[];
   } = {},
 ): BoothGeometry {
   return {
@@ -404,6 +443,7 @@ export function boothGeometryFromLegacy(
     ...(extra.materialsCatalog
       ? { materialsCatalog: extra.materialsCatalog }
       : {}),
+    ...(extra.hangingElements ? { hangingElements: extra.hangingElements } : {}),
   };
 }
 

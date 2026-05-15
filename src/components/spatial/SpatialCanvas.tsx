@@ -44,12 +44,59 @@ import {
   type StructuralForm,
   type ZoneShape,
   type LCorner,
+  type AbsoluteHangingElement,
   autoLayoutZones,
   boothArea,
   totalZoneArea,
   zonesOverlap,
   effectiveShape,
 } from "@/lib/geometryModel";
+
+// ─── Hanging-element drag math (pure, exported for unit tests) ───────────
+//
+// These helpers are pure functions so they can be tested without
+// spinning up the full Konva canvas. The canvas component uses them
+// inside its drag handlers; tests import them directly.
+//
+// Coordinate convention: AbsoluteHangingElement.{x, y} is the CENTER
+// of the element's top-down footprint (NOT the front-left corner as
+// with zones). Hit-testing therefore checks ±width/2 and ±depth/2
+// around the center.
+
+/**
+ * Return the topmost hanging element whose top-down footprint contains
+ * the given booth-local point, or null if the point hits empty space.
+ * Iterates in reverse so later-drawn (z-top) elements win ties.
+ */
+export function hangingElementAtPoint(
+  elements: AbsoluteHangingElement[],
+  point: { x: number; y: number },
+): AbsoluteHangingElement | null {
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    if (
+      point.x >= el.x - el.width / 2 &&
+      point.x <= el.x + el.width / 2 &&
+      point.y >= el.y - el.depth / 2 &&
+      point.y <= el.y + el.depth / 2
+    ) {
+      return el;
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply a drag delta (booth-unit dx/dy) to a hanging element's center
+ * coordinates. Returns a NEW element — never mutates the input — so
+ * React state updates remain immutable.
+ */
+export function moveHangingElement(
+  el: AbsoluteHangingElement,
+  delta: { dx: number; dy: number },
+): AbsoluteHangingElement {
+  return { ...el, x: el.x + delta.dx, y: el.y + delta.dy };
+}
 
 export interface CapturedRefs {
   floorplan: string | null;
@@ -87,6 +134,12 @@ export interface SpatialCanvasProps {
    */
   onEnrichSpatial?: () => void | Promise<void>;
   isEnriching?: boolean;
+  /**
+   * Controls visibility of the overhead hanging-element layer. Local
+   * UI toggle owned by the parent (SpatialPlanner) so users can hide
+   * overhead shapes while editing the floor. Defaults to true (visible).
+   */
+  showHanging?: boolean;
 }
 
 export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>(
@@ -98,6 +151,7 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
       getZoneDefaultPrompt,
       onEnrichSpatial,
       isEnriching = false,
+      showHanging = true,
     },
     ref,
   ) {
@@ -165,6 +219,13 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
     const handleFeaturesChange = useCallback(
       (features: BoothFeature[]) => {
         onGeometryChange({ ...geometry, features });
+      },
+      [geometry, onGeometryChange],
+    );
+
+    const handleHangingElementsChange = useCallback(
+      (hangingElements: AbsoluteHangingElement[]) => {
+        onGeometryChange({ ...geometry, hangingElements });
       },
       [geometry, onGeometryChange],
     );
@@ -384,6 +445,9 @@ export const SpatialCanvas = forwardRef<SpatialCanvasHandle, SpatialCanvasProps>
               if (id) setSelectedZoneId(null);
             }}
             onFeaturesChange={handleFeaturesChange}
+            hangingElements={geometry.hangingElements ?? []}
+            showHanging={showHanging}
+            onHangingElementsChange={handleHangingElementsChange}
           />
         </div>
         {showIso && (

@@ -14,6 +14,9 @@ import {
   AlertTriangle,
   AlertCircle,
   CheckCircle2,
+  Wind,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useState, useMemo, useCallback } from "react";
@@ -31,6 +34,7 @@ import {
   type BoothGeometry,
   type BoothFeature,
   type MaterialEntry,
+  type AbsoluteHangingElement,
   boothGeometryFromLegacy,
   normalizedFromAbsoluteZone,
   fixLayoutAutomatically,
@@ -156,6 +160,10 @@ export function SpatialPlanner() {
   const [qualityTier, setQualityTier] = useState<QualityTier>("premium");
   const [showIngredientsEditor, setShowIngredientsEditor] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
+  // Local visibility toggle for the overhead hanging-element layer. Pure
+  // UI state — does NOT affect persisted geometry. Lets users hide
+  // overhead shapes while editing the floor so the canvas reads cleanly.
+  const [showHanging, setShowHanging] = useState(true);
   const [pendingFeedback, setPendingFeedback] = useState("");
   const [promptIngredients, setPromptIngredients] = useState<PromptIngredients | null>(null);
   const [pendingVariation, setPendingVariation] = useState<string | null>(null);
@@ -573,6 +581,15 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     return Array.isArray(raw) ? raw : [];
   }, [spatialData]);
 
+  // Hanging / suspended elements (rings, halos, fabric arrays). Like
+  // features, these live at spatialData root (not per-config) so they
+  // survive footprint switches. Empty array fallback so the canvas
+  // never has to null-check.
+  const hangingElements: AbsoluteHangingElement[] = useMemo(() => {
+    const raw = (spatialData?.hangingElements ?? []) as AbsoluteHangingElement[];
+    return Array.isArray(raw) ? raw : [];
+  }, [spatialData]);
+
   const materialsCatalog: MaterialEntry[] = useMemo(() => {
     const raw = (spatialData?.materialsAndMood ?? []) as Array<{
       id?: string;
@@ -596,9 +613,9 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       { ...boothDimensions, measurementSystem },
       normalizedZones,
       12,
-      { features: boothFeatures, materialsCatalog },
+      { features: boothFeatures, materialsCatalog, hangingElements },
     );
-  }, [boothDimensions, normalizedZones, measurementSystem, boothFeatures, materialsCatalog]);
+  }, [boothDimensions, normalizedZones, measurementSystem, boothFeatures, materialsCatalog, hangingElements]);
 
   const handleCanvasGeometryChange = useCallback(
     (next: BoothGeometry) => {
@@ -639,6 +656,10 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         configs: updatedConfigs,
         ceilingHeightFt: next.ceilingHeightFt,
         features: next.features ?? [],
+        // Hanging elements live at spatialData root alongside features.
+        // Same rationale: they describe booth-wide overhead structure
+        // and don't change per footprint variation.
+        hangingElements: next.hangingElements ?? [],
       };
       // Optimistic local update via project store + persist to DB.
       if (currentProject) {
@@ -657,6 +678,31 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       projectId,
     ],
   );
+
+  // Insert a fresh hanging element centered on the booth at a default
+  // suspension drop. Defaults are deliberately conservative — a ring
+  // ~1/3 the booth's footprint, 3 ft below the ceiling — so the
+  // outline is visible without dominating. User refines size, shape,
+  // and drop in Brief Review (task 4) or by dragging on the canvas.
+  const addHangingElement = useCallback(() => {
+    const id = `hang_${Date.now().toString(36)}`;
+    const existing = canvasGeometry.hangingElements ?? [];
+    const newEl: AbsoluteHangingElement = {
+      id,
+      name: `Hanging element ${existing.length + 1}`,
+      x: canvasGeometry.width / 2,
+      y: canvasGeometry.depth / 2,
+      width: canvasGeometry.width / 3,
+      depth: canvasGeometry.depth / 3,
+      thicknessFt: 1,
+      shape: "ring",
+      suspensionDropFt: 3,
+    };
+    handleCanvasGeometryChange({
+      ...canvasGeometry,
+      hangingElements: [...existing, newEl],
+    });
+  }, [canvasGeometry, handleCanvasGeometryChange]);
 
   // ── Spatial enrichment ─────────────────────────────────────────
   // Phase 2 of the spatial-as-design-source rebuild. Calls the
@@ -873,6 +919,36 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         </Card>
       )}
 
+      {/* Hanging-element toolbar — sits above the spatial canvas.
+          "+ Hanging element" inserts a default ring at booth center.
+          "Show/hide hanging" is a local visibility toggle (does NOT
+          modify persisted geometry) so users can declutter the canvas
+          while editing the floor. */}
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={addHangingElement}
+        >
+          <Wind className="h-3 w-3 mr-1" />
+          Hanging element
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowHanging((v) => !v)}
+        >
+          {showHanging ? (
+            <Eye className="h-3 w-3 mr-1" />
+          ) : (
+            <EyeOff className="h-3 w-3 mr-1" />
+          )}
+          {showHanging ? "Hide hanging" : "Show hanging"}
+        </Button>
+      </div>
+
       {/* Interactive spatial canvas — primary editing surface for booth
           geometry. Edits flow through handleCanvasGeometryChange to
           spatialStrategy.configs[].zones, persisted via saveProjectField. */}
@@ -882,6 +958,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
         getZoneDefaultPrompt={getZoneDefaultPrompt}
         onEnrichSpatial={handleEnrichSpatial}
         isEnriching={isEnriching}
+        showHanging={showHanging}
       />
 
       {/* Layout / Metrics / Validate / Costs tabs — used to live in the

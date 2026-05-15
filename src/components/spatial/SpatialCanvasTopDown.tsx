@@ -21,6 +21,7 @@ import type Konva from "konva";
 import { Transformer } from "react-konva";
 import {
   type AbsoluteZone,
+  type AbsoluteHangingElement,
   type BoothFeature,
   type BoothGeometry,
   unitSnap,
@@ -81,6 +82,20 @@ export interface SpatialCanvasTopDownProps {
   selectedFeatureId?: string | null;
   onSelectFeature?: (id: string | null) => void;
   onFeaturesChange?: (features: BoothFeature[]) => void;
+  /**
+   * Overhead / suspended elements (rings, halos, fabric arrays) drawn
+   * ABOVE the zone layer as dashed outlines. Visually distinct from
+   * solid floor zones so users read them as "hanging from rigging,
+   * not sitting on the floor." Clicking selects, dragging moves.
+   */
+  hangingElements?: AbsoluteHangingElement[];
+  /**
+   * When false, the hanging-element layer is hidden entirely — useful
+   * while the user is editing the floor plan and doesn't want overhead
+   * shapes obscuring their view. Defaults to true.
+   */
+  showHanging?: boolean;
+  onHangingElementsChange?: (elements: AbsoluteHangingElement[]) => void;
 }
 
 export interface SpatialCanvasTopDownHandle {
@@ -134,6 +149,9 @@ export const SpatialCanvasTopDown = forwardRef<
     selectedFeatureId = null,
     onSelectFeature,
     onFeaturesChange,
+    hangingElements = [],
+    showHanging = true,
+    onHangingElementsChange,
   },
   ref,
 ) {
@@ -774,6 +792,107 @@ export const SpatialCanvasTopDown = forwardRef<
                     fontSize={11}
                     fontStyle="bold"
                     fill="rgba(255,255,255,0.9)"
+                  />
+                </Group>
+              );
+            })}
+          </Layer>
+        )}
+
+        {/* Hanging-element layer — overhead / suspended objects (rings,
+            halos, fabric arrays). Rendered ABOVE features as dashed
+            outlines so users read them as "hanging from rigging, not
+            sitting on the floor." The (x, y) coordinate is the CENTER
+            of the footprint (not the front-left like zones), so we
+            anchor the Group at the center and draw the shape symmetric
+            around (0, 0) in local coords. On drag end the Group's new
+            canvas position is converted back to booth-unit center
+            coords, snapped, and pushed through onHangingElementsChange. */}
+        {showHanging && hangingElements.length > 0 && (
+          <Layer>
+            {hangingElements.map((el) => {
+              const pw = el.width * pxPerUnit;
+              const pd = el.depth * pxPerUnit;
+              const isRound = el.shape === "circle" || el.shape === "ring" || el.shape === "oval";
+              const stroke = "rgb(99, 102, 241)";
+              const fill = "rgba(99, 102, 241, 0.12)";
+              return (
+                <Group
+                  key={el.id}
+                  x={toPxX(el.x)}
+                  y={toPxY(el.y)}
+                  draggable={!readonly}
+                  onMouseDown={(e) => {
+                    e.cancelBubble = true;
+                  }}
+                  onDragEnd={(e) => {
+                    if (!onHangingElementsChange) return;
+                    const node = e.target;
+                    // Convert the Group's new pixel center back to
+                    // booth-unit center coords, then snap to the grid
+                    // step (same UX as zones/features).
+                    const newX = snapToGrid(
+                      toUnitsX(node.x()),
+                      geometry.measurementSystem,
+                    );
+                    const newY = snapToGrid(
+                      toUnitsY(node.y()),
+                      geometry.measurementSystem,
+                    );
+                    // Clamp the CENTER to booth bounds. We allow the
+                    // bounding box to extend past the booth — rigging
+                    // commonly overhangs the rented footprint — so we
+                    // only constrain the anchor point itself.
+                    const clampedX = Math.max(0, Math.min(geometry.width, newX));
+                    const clampedY = Math.max(0, Math.min(geometry.depth, newY));
+                    // Equivalent to moveHangingElement(el, {dx, dy}) —
+                    // inlined to avoid a circular import back to
+                    // SpatialCanvas.tsx (which already imports this
+                    // file). The pure helper still lives in
+                    // SpatialCanvas.tsx for unit-test consumption.
+                    const moved: AbsoluteHangingElement = {
+                      ...el,
+                      x: clampedX,
+                      y: clampedY,
+                    };
+                    onHangingElementsChange(
+                      hangingElements.map((h) => (h.id === el.id ? moved : h)),
+                    );
+                  }}
+                >
+                  {isRound ? (
+                    <Ellipse
+                      x={0}
+                      y={0}
+                      radiusX={pw / 2}
+                      radiusY={pd / 2}
+                      fill={fill}
+                      stroke={stroke}
+                      strokeWidth={1.5}
+                      dash={[6, 3]}
+                    />
+                  ) : (
+                    <Rect
+                      x={-pw / 2}
+                      y={-pd / 2}
+                      width={pw}
+                      height={pd}
+                      fill={fill}
+                      stroke={stroke}
+                      strokeWidth={1.5}
+                      dash={[6, 3]}
+                      cornerRadius={4}
+                    />
+                  )}
+                  <Text
+                    x={-pw / 2}
+                    y={-pd / 2 - 14}
+                    width={pw}
+                    text={el.name}
+                    fontSize={11}
+                    fontStyle="bold"
+                    align="center"
+                    fill={stroke}
                   />
                 </Group>
               );

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import type { DesignContext } from "@/lib/designContextBuilder";
+import { unwrapInvokeError } from "@/lib/supabaseInvokeError";
 
 export interface GeneratedImage {
   url: string;
@@ -322,8 +323,16 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
       const { data, error } = await supabase.functions.invoke("generate-hero", { body });
 
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      // supabase-js wraps non-2xx with a generic "non-2xx status code"
+      // message and stashes the real response body on error.context.
+      // Unwrap it so toasts surface the actual OpenAI / edge-function
+      // error (model not found, content filter, quota, etc.) instead
+      // of the opaque wrapper string.
+      if (error) {
+        const msg = await unwrapInvokeError(error);
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
 
       // Only update if still on the same project
       if (get().projectId !== projectId) return;
@@ -443,8 +452,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
         const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
-        if (error) throw error;
-        if (data.error) throw new Error(data.error);
+        if (error) {
+          const msg = await unwrapInvokeError(error);
+          throw new Error(msg);
+        }
+        if (data?.error) throw new Error(data.error);
 
         if (get().projectId !== projectId) return;
 
@@ -536,8 +548,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
       const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if (error) {
+        const msg = await unwrapInvokeError(error);
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
 
       if (get().projectId !== projectId) return;
 
@@ -629,8 +644,11 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
 
         const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
-        if (error) throw error;
-        if (data.error) throw new Error(data.error);
+        if (error) {
+          const msg = await unwrapInvokeError(error);
+          throw new Error(msg);
+        }
+        if (data?.error) throw new Error(data.error);
 
         if (get().projectId !== projectId) return;
 

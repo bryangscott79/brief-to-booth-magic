@@ -684,7 +684,11 @@ serve(async (req) => {
     const responseText = "";
     let modelUsed = "";
 
-    console.log(`[generate-view] Using OpenAI gpt-image-2 for ${viewName} (single-model pipeline, no fallback)`);
+    // callOpenAIImage tries gpt-image-2 first and falls back to
+    // gpt-image-1 if the newer model isn't available — same safety
+    // net as generate-hero. Logs which model actually ran on the
+    // gateway side.
+    console.log(`[generate-view] Calling OpenAI image gateway for ${viewName} (primary: gpt-image-2, fallback: gpt-image-1)`);
     try {
       // Reference URLs for the OpenAI /v1/images/edits call.
       //
@@ -724,17 +728,17 @@ serve(async (req) => {
       const img = out[0];
       if (!img) {
         throw new Error(
-          "gpt-image-2 returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
+          "OpenAI returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
         );
       }
       generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-      modelUsed = "openai/gpt-image-2";
+      modelUsed = "openai/gpt-image";
     } catch (e) {
-      console.error(`[generate-view] gpt-image-2 failed for ${viewName}:`, e);
+      console.error(`[generate-view] OpenAI image generation failed for ${viewName}:`, e);
       const message = e instanceof Error ? e.message : "Unknown error";
       throw new Error(
-        `Image generation failed via gpt-image-2 (${viewName}): ${message}. ` +
-        `No fallback is configured — please retry, or contact the operator if this persists.`,
+        `Image generation failed for ${viewName}: ${message}. ` +
+        `Verify OPENAI_API_KEY in Supabase Edge Function Secrets and that the key has access to gpt-image-2 or gpt-image-1.`,
       );
     }
 

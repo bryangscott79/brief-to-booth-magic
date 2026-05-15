@@ -958,16 +958,59 @@ function aspectRatioToSize(aspect?: string): "1024x1024" | "1536x1024" | "1024x1
  * sent as image[] entries. (gpt-image-2 supports a small number of
  * references; we cap at 4.)
  */
+/**
+ * Errors from OpenAI that mean "this model isn't available to you right
+ * now" — distinct from "your prompt was bad" or "you're out of credits".
+ * If we see one of these on gpt-image-2 we silently fall back to
+ * gpt-image-1 so the user still gets an image. The user's directive is
+ * "use gpt-image-2"; this fallback only fires when gpt-image-2 itself
+ * refuses (rolled-back release, tier-gated access, model rename, etc.).
+ */
+function isModelUnavailableError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes("model_not_found") ||
+    m.includes("does not have access to model") ||
+    m.includes("invalid_model") ||
+    m.includes("model not found") ||
+    m.includes("the model `") ||
+    m.includes("model `gpt-image-2`") ||
+    // Generic 400 with "model" in the message — covers the case where
+    // OpenAI hasn't normalised their error code yet for a newly-renamed
+    // model. Tight enough that other 400s (prompt filter, malformed
+    // body) won't get caught.
+    (m.includes("(400)") && m.includes("model"))
+  );
+}
+
 export async function callOpenAIImage(
   options: OpenAIImageOptions,
 ): Promise<OpenAIImageResult[]> {
   const started = Date.now();
+  // Try the user's preferred model first (gpt-image-2). If OpenAI
+  // says it's unavailable, drop back to gpt-image-1 so the render
+  // still lands. Log loudly so the operator can see which model
+  // actually produced the image.
+  const primary = "gpt-image-2";
+  const fallback = "gpt-image-1";
+  let modelUsed = primary;
   try {
-    const result = await _callOpenAIImageInner(options);
+    let result: OpenAIImageResult[];
+    try {
+      result = await _callOpenAIImageInner(options, primary);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!isModelUnavailableError(msg)) throw e;
+      console.warn(
+        `[ai-gateway] gpt-image-2 unavailable — falling back to gpt-image-1. Reason: ${msg.slice(0, 200)}`,
+      );
+      modelUsed = fallback;
+      result = await _callOpenAIImageInner(options, fallback);
+    }
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: "openai/gpt-image-2",
+        model: `openai/${modelUsed}`,
         imageCount: result.length,
         durationMs: Date.now() - started,
         status: "success",
@@ -978,7 +1021,7 @@ export async function callOpenAIImage(
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: "openai/gpt-image-2",
+        model: `openai/${modelUsed}`,
         durationMs: Date.now() - started,
         status: "error",
         errorMessage: e instanceof Error ? e.message : String(e),
@@ -990,6 +1033,7 @@ export async function callOpenAIImage(
 
 async function _callOpenAIImageInner(
   options: OpenAIImageOptions,
+  model: string = "gpt-image-2",
 ): Promise<OpenAIImageResult[]> {
   const resolved = resolveOpenAIKey();
   if (!resolved) {
@@ -1004,7 +1048,7 @@ async function _callOpenAIImageInner(
   const refs = (options.referenceImageUrls ?? []).slice(0, 4);
 
   console.log(
-    `[ai-gateway] OpenAI gpt-image-2 call: size=${size}, quality=${quality}, refs=${refs.length}, key_source=${resolved.sourceName}`,
+    `[ai-gateway] OpenAI ${model} call: size=${size}, quality=${quality}, refs=${refs.length}, key_source=${resolved.sourceName}`,
   );
 
   let response: Response;
@@ -1020,7 +1064,7 @@ async function _callOpenAIImageInner(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-image-2",
+          model,
           prompt: options.prompt,
           size,
           quality,
@@ -1033,12 +1077,12 @@ async function _callOpenAIImageInner(
             : {}),
         }),
       },
-      "OpenAI/gpt-image-2",
+      `OpenAI/${model}`,
     );
   } else {
     // With references → /v1/images/edits (multipart form data).
     const form = new FormData();
-    form.append("model", "gpt-image-2");
+    form.append("model", model);
     form.append("prompt", options.prompt);
     form.append("size", size);
     form.append("quality", quality);
@@ -1075,11 +1119,11 @@ async function _callOpenAIImageInner(
         headers: { Authorization: `Bearer ${resolved.key}` },
         body: form,
       },
-      "OpenAI/gpt-image-2",
+      `OpenAI/${model}`,
     );
   }
 
-  const data = await parseJsonResponse(response, "OpenAI/gpt-image-2");
+  const data = await parseJsonResponse(response, `OpenAI/${model}`);
   const items: any[] = Array.isArray(data?.data) ? data.data : [];
   if (items.length === 0) {
     throw new Error("[ai-gateway] OpenAI returned no images");

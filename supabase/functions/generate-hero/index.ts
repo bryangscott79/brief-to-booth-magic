@@ -863,7 +863,12 @@ applied. Zero overlaid text or annotations.`;
     const responseText = "";
     let modelUsed = "";
 
-    console.log(`[generate-hero] Using OpenAI gpt-image-2 (single-model pipeline, no fallback)`);
+    // callOpenAIImage tries gpt-image-2 first and silently falls
+    // back to gpt-image-1 when OpenAI says the newer model isn't
+    // available (rolled-back release, tier-gated access, etc.). The
+    // edge function doesn't need to know which one ran — the gateway
+    // logs it on the server side.
+    console.log(`[generate-hero] Calling OpenAI image gateway (primary: gpt-image-2, fallback: gpt-image-1)`);
     try {
       const out = await callOpenAIImage({
         usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
@@ -875,17 +880,17 @@ applied. Zero overlaid text or annotations.`;
       const img = out[0];
       if (!img) {
         throw new Error(
-          "gpt-image-2 returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
+          "OpenAI returned no image. This usually means the prompt was filtered by content policy or the model is overloaded. Try regenerating or simplifying the prompt.",
         );
       }
       generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
-      modelUsed = "openai/gpt-image-2";
+      modelUsed = "openai/gpt-image";
     } catch (e) {
-      console.error("[generate-hero] gpt-image-2 failed:", e);
+      console.error("[generate-hero] OpenAI image generation failed:", e);
       const message = e instanceof Error ? e.message : "Unknown error";
       throw new Error(
-        `Image generation failed via gpt-image-2: ${message}. ` +
-        `No fallback is configured — please retry, or contact the operator if this persists.`,
+        `Image generation failed: ${message}. ` +
+        `Verify OPENAI_API_KEY in Supabase Edge Function Secrets and that the key has access to gpt-image-2 or gpt-image-1.`,
       );
     }
 

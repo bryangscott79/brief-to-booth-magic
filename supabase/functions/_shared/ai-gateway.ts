@@ -1139,7 +1139,11 @@ export async function generateImageWithFallback(
 // response parsing and persistence). callGemini itself doesn't take a
 // signal so we race the call against a manual timeout — the upstream
 // fetch continues but the caller stops waiting.
-const GEMINI_TIMEOUT_MS = 50_000;
+// Bumped from 50s → 90s. Callers (generate-view, generate-hero) now
+// stream keep-alive bytes, so we're no longer bound by the 150s idle
+// cap — only the longer wall-clock budget. Image models routinely take
+// 60–80s under load and were timing out at 50s.
+const GEMINI_TIMEOUT_MS = 90_000;
 
 async function _callGeminiImageInner(
   options: OpenAIImageOptions,

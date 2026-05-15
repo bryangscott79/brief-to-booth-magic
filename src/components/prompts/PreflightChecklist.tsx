@@ -54,6 +54,16 @@ interface PreflightChecklistProps {
   brandLogo: BrandLogo | null;
   /** All non-logo visual references that will be sent to the model. */
   visualReferences: VisualReference[];
+  /**
+   * Client-level brand colors (from the brand book on the Client →
+   * Brand page). The project's parsedBrief.brand.visualIdentity.colors
+   * is brief-derived and is often empty when the brief PDF doesn't
+   * mention colors. We fall back to these so a brand whose colors
+   * were extracted from the brand-book PDF still counts as "ready"
+   * here. Pair: `clientId` is required for the Edit deep link below.
+   */
+  clientId?: string | null;
+  clientBrandColors?: string[];
 }
 
 interface SectionStatus {
@@ -73,6 +83,8 @@ export function PreflightChecklist({
   boothDimensions,
   brandLogo,
   visualReferences,
+  clientId,
+  clientBrandColors,
 }: PreflightChecklistProps) {
   const [open, setOpen] = useState(false);
   const projectQuery = projectId ? `?project=${projectId}` : "";
@@ -81,23 +93,40 @@ export function PreflightChecklist({
     const out: SectionStatus[] = [];
 
     // ── Brand identity ────────────────────────────────────────────────
+    // Colors come from two sources: the project's parsed brief
+    // (visualIdentity.colors — often empty when the brief PDF didn't
+    // mention colors) and the client's brand record (primary/secondary
+    // extracted from the brand book on the Clients → Brand page).
+    // Either source counts as "ready" — otherwise the user sees a
+    // false "No brand colors" warning after they uploaded a brand book.
     const brand = brief?.brand ?? {};
-    const colors: string[] = brand?.visualIdentity?.colors ?? [];
+    const briefColors: string[] = brand?.visualIdentity?.colors ?? [];
+    const clientColors: string[] = clientBrandColors ?? [];
+    const colors = [...briefColors, ...clientColors];
     const personality: string[] = brand?.personality ?? [];
+    const colorSourceLabel =
+      briefColors.length > 0 ? "" : clientColors.length > 0 ? " (from brand book)" : "";
     const brandComplete = !!brand?.name && !!brand?.category && colors.length > 0;
+    // Deep-link to the place the user can actually fix the gap:
+    // missing colors → Client → Brand tab; everything else → brief
+    // review (which has the brand-name / category editor).
+    const brandEditPath =
+      colors.length === 0 && clientId
+        ? `/clients/${clientId}?tab=brand`
+        : `/review${projectQuery}`;
     out.push({
       id: "brand",
       label: "Brand identity",
       icon: Palette,
       status: brandComplete ? "ok" : "warn",
       summary: brandComplete
-        ? `${brand.name} · ${brand.category} · ${colors.length} color${colors.length === 1 ? "" : "s"}${personality.length ? ` · ${personality.length} personality trait${personality.length === 1 ? "" : "s"}` : ""}`
+        ? `${brand.name} · ${brand.category} · ${colors.length} color${colors.length === 1 ? "" : "s"}${colorSourceLabel}${personality.length ? ` · ${personality.length} personality trait${personality.length === 1 ? "" : "s"}` : ""}`
         : !brand?.name
           ? "Brand name missing"
           : colors.length === 0
-            ? "No brand colors set — renders will use default palettes"
+            ? "No brand colors set — upload a brand book on the client page"
             : "Brand category missing",
-      edit: { path: `/review${projectQuery}`, label: "Edit brand" },
+      edit: { path: brandEditPath, label: "Edit brand" },
     });
 
     // ── Brief / objectives ────────────────────────────────────────────

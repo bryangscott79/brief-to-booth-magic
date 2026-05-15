@@ -75,6 +75,11 @@ export function BrandGuidePrompt({
   const upsertClient = useUpsertClient();
 
   const [dismissed, setDismissed] = useState(false);
+  // When the client's brand is already complete, the prompt collapses
+  // to a tiny "Brand ✓ — Refresh from PDF" chip instead of vanishing.
+  // Clicking the chip flips this to true and the full extractor UI
+  // unfolds so the user can re-run on a newer brand book.
+  const [forceExpanded, setForceExpanded] = useState(false);
   const [mode, setMode] = useState<"url" | "pdf">(
     client.website ? "url" : "pdf",
   );
@@ -83,12 +88,43 @@ export function BrandGuidePrompt({
   const [running, setRunning] = useState(false);
   const [renderProgress, setRenderProgress] = useState("");
 
-  // Hide entirely once the client has enough brand intelligence. We
-  // pick on count rather than category coverage to keep the threshold
-  // simple — most projects with ≥4 entries already have at least the
-  // basics covered (mission, colors, voice, audience).
+  const isBrandReady = entries.length >= threshold;
+
+  // Dismissed by the user → stay hidden for the session.
   if (dismissed) return null;
-  if (entries.length >= threshold) return null;
+  // Brand is healthy → show the compact "ready" chip rather than the
+  // full prompt. Keeps the affordance visible so the user can refresh
+  // on demand (per the project-onboarding requirement) without nagging.
+  if (isBrandReady && !forceExpanded) {
+    const colorCount =
+      (client.primary_color ? 1 : 0) + (client.secondary_color ? 1 : 0);
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs",
+          className,
+        )}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-5 w-5 rounded bg-emerald-500/15 flex items-center justify-center shrink-0">
+            <Check className="h-3 w-3 text-emerald-600" />
+          </div>
+          <span className="text-foreground/90 truncate">
+            Brand for <span className="font-medium">{client.name}</span> is set
+            {colorCount > 0 ? ` · ${colorCount} color${colorCount === 1 ? "" : "s"}` : ""}
+            {` · ${entries.length} ${entries.length === 1 ? "entry" : "entries"}`}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setForceExpanded(true)}
+          className="text-emerald-700 hover:text-emerald-800 hover:underline underline-offset-2 whitespace-nowrap"
+        >
+          Refresh from PDF
+        </button>
+      </div>
+    );
+  }
 
   /**
    * Shared persistence: writes entries with dedupe-by-(category,title)

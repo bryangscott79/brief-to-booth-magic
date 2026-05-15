@@ -712,15 +712,37 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
       // Replace features wholesale — the LLM gives us a complete
       // proposal anchored to the zones. The user can then drag /
       // delete / refine via the canvas toolbar.
-      const nextGeometry: BoothGeometry = {
+      const enrichedGeometry: BoothGeometry = {
         ...canvasGeometry,
         zones: mergedZones,
         features: Array.isArray(enr.features) ? enr.features : [],
       };
+      // The metadata merge above leaves positions/sizes untouched, so
+      // any pre-existing layout warnings (undersized zones, coverage
+      // under target, overlaps) persist after "Suggest layout" runs —
+      // which makes the button feel like a no-op to the user. Run the
+      // same automatic layout fixer the canvas uses on its own button
+      // so the suggested layout is also a usable layout. Zone metadata
+      // is preserved through the spreads inside fixLayoutAutomatically.
+      const nextGeometry = fixLayoutAutomatically(enrichedGeometry);
+      // Detect whether the fixer actually moved/resized anything so
+      // we can tell the user what changed instead of just "enriched".
+      const layoutChanged = nextGeometry.zones.some((z, i) => {
+        const before = enrichedGeometry.zones[i];
+        if (!before) return true;
+        return (
+          before.x !== z.x ||
+          before.y !== z.y ||
+          before.width !== z.width ||
+          before.depth !== z.depth
+        );
+      });
       handleCanvasGeometryChange(nextGeometry);
       toast({
-        title: "Spatial enriched",
-        description: `Updated ${enr.zones?.length ?? 0} zones and added ${enr.features?.length ?? 0} features.`,
+        title: layoutChanged ? "Spatial enriched & arranged" : "Spatial enriched",
+        description: layoutChanged
+          ? `Updated ${enr.zones?.length ?? 0} zones, added ${enr.features?.length ?? 0} features, and adjusted layout to fit the booth.`
+          : `Updated ${enr.zones?.length ?? 0} zones and added ${enr.features?.length ?? 0} features.`,
       });
     } catch (e) {
       console.error("enrich-spatial failed:", e);

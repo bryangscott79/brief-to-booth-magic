@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -403,9 +403,23 @@ function ProjectsTab({ clientId }: { clientId: string }) {
 
 export default function ClientDashboardPage() {
   const { clientId } = useParams<{ clientId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: client, isLoading } = useClient(clientId);
   const { data: projects = [] } = useClientProjects(clientId);
   const [editOpen, setEditOpen] = useState(false);
+  // Tab is controlled by ?tab=… so other pages can deep-link to a
+  // specific tab (e.g. Preflight → "Edit brand" routes here with
+  // ?tab=brand). Falls back to "overview" when absent or unknown.
+  const activeTab = (() => {
+    const t = searchParams.get("tab");
+    return t === "brand" || t === "knowledge" || t === "projects" ? t : "overview";
+  })();
+  const handleTabChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === "overview") next.delete("tab");
+    else next.set("tab", value);
+    setSearchParams(next, { replace: true });
+  };
 
   if (isLoading) {
     return (
@@ -457,7 +471,7 @@ export default function ClientDashboardPage() {
           <ClientHeader client={client} onEdit={() => setEditOpen(true)} />
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="brand">Brand</TabsTrigger>

@@ -34,7 +34,7 @@ import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
 import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
-import { useBrandIntelligence } from "@/hooks/useClients";
+import { useBrandIntelligence, useClient } from "@/hooks/useClients";
 import { useBrandRAG } from "@/hooks/useBrandRAG";
 
 // Import prompt building utilities
@@ -102,19 +102,17 @@ import { useProjectVisualReferences } from "@/hooks/useProjectVisualReferences";
 // they can confirm or fix anything before kicking off generation.
 import { PreflightChecklist } from "@/components/prompts/PreflightChecklist";
 
-// Spatial canvas — interactive top-down + iso 3D preview. Edits the
-// booth geometry in absolute units; captures floor plan + iso PNGs at
-// render time so the image model has visual ground truth, not just
-// text dimensions.
-import { SpatialCanvas, type SpatialCanvasHandle } from "@/components/spatial/SpatialCanvas";
+// Floor-plan rasterizer — pure render of the current geometry to a
+// data-URL PNG. The Prompts step no longer mounts the spatial canvas
+// (the dedicated Spatial step owns editing) but the image model still
+// benefits from a top-down visual anchor for the hero generation, so
+// we generate the floorplan PNG directly from the geometry here.
+import { renderFloorPlanForExport } from "@/lib/renderFloorPlanForExport";
 import {
   type BoothGeometry,
-  type AbsoluteZone,
   boothGeometryFromLegacy,
-  normalizedFromAbsoluteZone,
 } from "@/lib/geometryModel";
 import { useGeometryReferences } from "@/hooks/useGeometryReferences";
-import { saveProjectField } from "@/hooks/useProjectSync";
 
 // Versioning + style presets
 import { usePromptVersions } from "@/hooks/usePromptVersions";
@@ -198,6 +196,17 @@ export function PromptGenerator() {
     () => brandIntelEntries?.filter(e => e.is_approved).map(e => ({ category: e.category, title: e.title, content: e.content, tags: e.tags })),
     [brandIntelEntries]
   );
+  // Client-level brand colors — extracted from the client's brand
+  // book (Clients → Brand → Brand assets) and surfaced here so the
+  // preflight panel doesn't false-warn "No brand colors" when the
+  // brief PDF didn't mention them but the brand book did.
+  const { data: clientRecord } = useClient(clientId);
+  const clientBrandColors = useMemo(() => {
+    const c: string[] = [];
+    if (clientRecord?.primary_color) c.push(clientRecord.primary_color);
+    if (clientRecord?.secondary_color) c.push(clientRecord.secondary_color);
+    return c;
+  }, [clientRecord?.primary_color, clientRecord?.secondary_color]);
 
   // Brand RAG context for edge function calls
   const parentId = currentProject?.hierarchy?.parentId ?? null;
@@ -318,85 +327,29 @@ export function PromptGenerator() {
     setGeometry(initialGeometry);
   }, [initialGeometry]);
 
-  // Write-through geometry handler — mirrors SpatialPlanner.handleCanvasGeometryChange
-  // so users can manipulate the canvas from the Prompts step (incl. the
-  // expanded fullscreen view) and edits persist back to spatial_strategy.
-  // Without this the canvas was readonly here, which made expanding feel
-  // broken: the user opened the fullscreen editor and discovered they
-  // couldn't drag/resize anything. We update local geometry optimistically
-  // and write the legacy-shape zones back to configs[0] (the only config
-  // PromptGenerator reads from) so the next render and any return trip to
-  // the Spatial step see the change.
-  const handleGeometryChange = useCallback(
-    (next: BoothGeometry) => {
-      setGeometry(next);
-      if (!spatialData || !currentProject) return;
-      const config = spatialData.configs?.[0];
-      if (!config) return;
-      const legacyZones = next.zones.map((abs: AbsoluteZone) => {
-        const original = config.zones?.find((z: any) => z.id === abs.id);
-        const normalized = normalizedFromAbsoluteZone(
-          abs,
-          next,
-          boothDimensions.totalSqft,
-        );
-        return {
-          ...(original ?? {}),
-          ...normalized,
-          // Canvas-owned fields. Without these the next round-trip
-          // through boothGeometryFromLegacy would lose the user's
-          // edits to height / shape / structural form / materials /
-          // intent / featureDescription / per-zone prompt.
-          customPromptOverride: abs.customPromptOverride,
-          heightFt: abs.heightFt,
-          shape: abs.shape,
-          shapeParams: abs.shapeParams,
-          structuralForm: abs.structuralForm,
-          featureDescription: abs.featureDescription,
-          intent: abs.intent,
-          materialIds: abs.materialIds,
-        };
-      });
-      const updatedConfigs = [...(spatialData.configs ?? [])];
-      updatedConfigs[0] = { ...config, zones: legacyZones };
-      const updatedSpatial = {
-        ...spatialData,
-        // Features live at spatialData root and survive footprint
-        // switches — persist alongside zones.
-        features: next.features ?? [],
-        configs: updatedConfigs,
-        ceilingHeightFt: next.ceilingHeightFt,
-      };
-      useProjectStore
-        .getState()
-        .setElementData("spatialStrategy", updatedSpatial);
-      if (effectiveProjectId) {
-        saveProjectField(effectiveProjectId, "spatial_strategy", updatedSpatial);
-      }
-    },
-    [
-      spatialData,
-      currentProject,
-      boothDimensions.totalSqft,
-      effectiveProjectId,
-    ],
-  );
+  // (Geometry edits now happen exclusively in the dedicated Spatial
+  // step — the canvas and its write-through handler used to live here
+  // too, but were removed once the editing surface moved upstream. The
+  // Prompts step still reads the latest geometry via `geometry` /
+  // `setGeometry` above, just no longer mutates it locally.)
 
-  const spatialCanvasRef = useRef<SpatialCanvasHandle>(null);
   const geometryRefs = useGeometryReferences(effectiveProjectId);
 
   /**
-   * Capture the canvas PNGs and upload them to render-references storage.
-   * Returns the URL pair for inclusion in the next render call. Falls
-   * back to {} on failure (image still renders, just without geometry
-   * anchors). Cached by geometry hash so consecutive calls are free.
+   * Rasterise the current geometry to a floor-plan PNG and upload it
+   * to render-references storage so the image model has a top-down
+   * visual anchor for the hero render. The iso reference was dropped
+   * with the spatial-canvas removal from this step — the textual zone
+   * program in the composed prompt now carries the 3-D intent.
+   * Returns the URL on success, {} on failure (image still renders,
+   * just without geometry anchors). Cached by geometry hash so
+   * consecutive calls are free.
    */
   const captureGeometryRefs = useCallback(async () => {
-    if (!spatialCanvasRef.current || !effectiveProjectId) return {};
-    const captured = await spatialCanvasRef.current.captureRefs();
+    if (!effectiveProjectId) return {};
     return geometryRefs.captureAndUpload(geometry, {
-      captureFloorplan: async () => captured.floorplan,
-      captureIsometric: async () => captured.isometric,
+      captureFloorplan: async () => renderFloorPlanForExport(geometry),
+      captureIsometric: async () => null,
     });
   }, [geometry, effectiveProjectId, geometryRefs]);
 
@@ -706,22 +659,10 @@ export function PromptGenerator() {
     brandIntelligence: approvedBrandIntel,
   };
 
-  /**
-   * Build the SYSTEM-generated prompt for an angle, ignoring any
-   * zone-interior override. Used by the SpatialCanvas to show the
-   * "default" prompt in the per-zone edit dialog.
-   *
-   * MUST stay above the early-return below — React requires the same
-   * hook order on every render.
-   */
-  const getZoneDefaultPrompt = useCallback(
-    (zoneId: string): string => {
-      const angleId = `zone_interior_${zoneId}`;
-      const base = generatePrompt(angleId, promptParams);
-      return applyStylePresetToPrompt(base, activePreset, activeCustomEmphasis);
-    },
-    [promptParams, activePreset, activeCustomEmphasis],
-  );
+  // (The previous `getZoneDefaultPrompt` helper, which fed the
+  // SpatialCanvas's per-zone "default prompt" dialog, was removed
+  // along with the canvas embed. Zone-interior generation still uses
+  // `generatePrompt` directly via `promptParams` further below.)
 
   // ─── ADDITIONAL HOOKS HOISTED ABOVE EARLY-RETURN ──────────────────
   // Same reason: React requires identical hook count between the
@@ -1138,37 +1079,12 @@ export function PromptGenerator() {
     promptVersions.selectVersion(versionId);
   };
 
-  // Spatial canvas — shown above every phase as a fully editable surface.
-  // Edits write through to spatial_strategy via handleGeometryChange so
-  // the canvas behaves the same here as it does in the Spatial step
-  // (Expand → drag/resize/reshape works in either place). Geometry refs
-  // are still captured here at render time so the image model gets the
-  // latest visual reference.
-  const spatialPanel = (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-xs text-muted-foreground">
-          Live spatial layout — drag, resize, or reshape zones here, or
-          jump to the{" "}
-          <button
-            type="button"
-            onClick={() => navigate("/spatial")}
-            className="text-primary underline-offset-2 hover:underline"
-          >
-            Spatial step
-          </button>{" "}
-          for the full editing toolkit. Edits save automatically and feed
-          the next render.
-        </p>
-      </div>
-      <SpatialCanvas
-        ref={spatialCanvasRef}
-        geometry={geometry}
-        onGeometryChange={handleGeometryChange}
-        getZoneDefaultPrompt={getZoneDefaultPrompt}
-      />
-    </div>
-  );
+  // (The spatial canvas used to live here as well, mirrored from the
+  // Spatial step. It was removed once the dedicated Spatial step shipped
+  // — the zone program and sq-ft data still flow into the prompt via
+  // composePrompt + the floorplan PNG anchor captured by
+  // captureGeometryRefs(), so the model receives the full layout
+  // without duplicating the editing surface on this page.)
 
   // Versions header — shown above every phase. Lets the user switch between
   // saved versions (each with its own preset + render set) or spin up a new
@@ -1261,10 +1177,6 @@ export function PromptGenerator() {
           </CardContent>
         </Card>
 
-        {/* Spatial canvas — rendered via shared {spatialPanel} above
-            so it persists into hero-review and all-views phases too. */}
-        {spatialPanel}
-
         {/* Pre-flight check — collapsible "what's the AI about to see"
           * panel. Surfaces brand, brief, spatial, dimensions, logo, and
           * visual references with one-click edit links so the user can
@@ -1276,6 +1188,8 @@ export function PromptGenerator() {
           boothDimensions={boothDimensions}
           brandLogo={brandLogo ?? null}
           visualReferences={projectVisualRefs.selected.filter((r) => r.role !== "brand-logo")}
+          clientId={clientId}
+          clientBrandColors={clientBrandColors}
         />
 
         {/* Step 1: Generate Hero */}
@@ -1375,10 +1289,6 @@ export function PromptGenerator() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         {versionsHeader}
-        {/* Spatial canvas stays editable — drag zones, change heights,
-            override per-zone prompts. Edits feed the next regeneration
-            via captureGeometryRefs() at handleRegenerateWithFeedback. */}
-        {spatialPanel}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold">Review Hero Image</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
@@ -1574,9 +1484,6 @@ export function PromptGenerator() {
         }}
         onJump={handleReadinessJump}
       />
-      {/* Spatial canvas — still editable here. Re-render any view (or
-          the whole set) and the latest geometry is what gets used. */}
-      {spatialPanel}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Generated Renders</h2>

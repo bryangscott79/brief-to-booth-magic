@@ -551,6 +551,45 @@ function buildStructuredViewPrompt(opts: {
   return sections.join("\n\n");
 }
 
+/**
+ * Stream a single JSON body but emit a space byte every keepAliveMs to
+ * keep the edge proxy from hitting the 150s idle timeout while
+ * gpt-image-2 renders. JSON.parse tolerates leading whitespace, so the
+ * client (supabase.functions.invoke) decodes the final body unchanged.
+ * Mirrors the helper in generate-hero/index.ts.
+ */
+function streamingJsonResponse(
+  produce: () => Promise<{ status: number; body: unknown }>,
+  keepAliveMs = 20_000,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let done = false;
+      const ping = setInterval(() => {
+        if (done) return;
+        try { controller.enqueue(encoder.encode(" ")); } catch { /* closed */ }
+      }, keepAliveMs);
+      try {
+        const { body } = await produce();
+        done = true;
+        clearInterval(ping);
+        controller.enqueue(encoder.encode(JSON.stringify(body)));
+        controller.close();
+      } catch (e) {
+        done = true;
+        clearInterval(ping);
+        const msg = e instanceof Error ? e.message : "Failed to generate image";
+        controller.enqueue(encoder.encode(JSON.stringify({ error: msg })));
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -572,16 +611,24 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
+  // Parse body before opening the stream so a malformed payload still
+  // returns a clean 400 instead of a 200-with-error-body.
+  let body: GenerateViewRequest;
   try {
-    const body: GenerateViewRequest = await req.json();
-    const { referenceImageUrl, viewPrompt, viewName, aspectRatio, heroPromptText, boothSize, boothDimensions, geometryReferences, consistencyTokens, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (!body?.viewPrompt || typeof body.viewPrompt !== "string") {
+    return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (!body?.viewName || typeof body.viewName !== "string") {
+    return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
 
-    if (!viewPrompt || typeof viewPrompt !== "string") {
-      return new Response(JSON.stringify({ error: "viewPrompt is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (!viewName || typeof viewName !== "string") {
-      return new Response(JSON.stringify({ error: "viewName is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+  return streamingJsonResponse(async () => {
+    try {
+      const { referenceImageUrl, viewPrompt, viewName, aspectRatio, heroPromptText, boothSize, boothDimensions, geometryReferences, consistencyTokens, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini" } = body;
 
     // The old block builders (scaleBlock, geometryBlock,
     // geometryClosingReinforcement, consistencyBlock, brandBlock) are
@@ -745,23 +792,19 @@ serve(async (req) => {
 
     console.log(`Successfully generated ${viewName} view via ${modelUsed}`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        viewName,
-        imageUrl: generatedImageUrl,
-        message: responseText,
-        modelUsed,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Error generating view:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Failed to generate image" 
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+      return {
+        status: 200,
+        body: {
+          success: true,
+          viewName,
+          imageUrl: generatedImageUrl,
+          message: responseText,
+          modelUsed,
+        },
+      };
+    } catch (error) {
+      console.error("Error generating view:", error);
+      throw error instanceof Error ? error : new Error("Failed to generate image");
+    }
+  });
 });

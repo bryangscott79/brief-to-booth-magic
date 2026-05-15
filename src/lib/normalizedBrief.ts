@@ -1144,8 +1144,15 @@ export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
 
   const renderer = rendererPrompt(normalized, negative);
 
+  // Strip _dismissedGaps before emitting briefJson — it's a UX sentinel
+  // for "user already answered this clarification", not part of the
+  // canonical brief shape the composer consumes. Without this destructure
+  // the spread would leak it into the JSON payload.
+  const { _dismissedGaps: _omitted, ...canonicalNormalized } = normalized as
+    NormalizedBrief & { _dismissedGaps?: string[] };
+
   return {
-    briefJson: { ...normalized, compliance: { hardConstraints: failures } },
+    briefJson: { ...canonicalNormalized, compliance: { hardConstraints: failures } },
     geometrySummary: geometrySummaryText(normalized.geometry),
     renderer,
     negative,
@@ -1417,6 +1424,15 @@ export function applyGapAnswer(
           );
         }
       } else {
+        // "No — floor-only booth" must both record the dismissal AND
+        // clear any element seeded by a prior "Yes" answer. Without
+        // the clear, toggling No → Yes → No would leave the seeded
+        // hanging element behind: validateBrief masks the regression
+        // (length > 0 suppresses the gap), but downstream consumers
+        // (composer, canvas, prompt anchoring in Tasks 3-6) would
+        // treat the stale seed as authored intent. "No" means no
+        // hanging elements, full stop.
+        nextLoose.hangingElements = [];
         const list = Array.isArray(nextLoose._dismissedGaps)
           ? nextLoose._dismissedGaps
           : [];

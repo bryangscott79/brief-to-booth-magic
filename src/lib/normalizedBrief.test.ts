@@ -628,6 +628,11 @@ describe("validateBrief — hanging-elements gap", () => {
     expect(gap?.severity).toBe("helpful");
     expect(gap?.question).toMatch(/hanging/i);
     expect(gap?.options).toEqual(["Yes — add one", "No — floor-only booth"]);
+    // Lock in the gap's data shape — composer + UX both depend on
+    // fallback (empty hanging list = "we never asked") and source
+    // (schema-emitted, not AI-suggested).
+    expect(gap?.fallback).toEqual([]);
+    expect(gap?.source).toBe("schema");
   });
 
   it("does NOT emit when hanging.elements is non-empty", () => {
@@ -677,11 +682,25 @@ describe("applyGapAnswer — hanging.elements", () => {
       after = next;
     });
     const updated = after as unknown as {
-      hangingElements?: Array<{ name?: string }>;
+      hangingElements?: Array<{
+        name?: string;
+        shape?: string;
+        materials?: string[];
+        lighting?: string[];
+        printed?: string[];
+      }>;
     };
     expect(updated.hangingElements).toBeDefined();
     expect(updated.hangingElements).toHaveLength(1);
     expect(updated.hangingElements?.[0].name).toMatch(/identity|hanging/i);
+    // Lock in the seed shape spec'd for Tasks 3-6 (composer, canvas,
+    // prompt anchoring). If the seed silently regresses (e.g. swaps
+    // shape from "ring" to "banner") downstream rendering breaks.
+    const seed = updated.hangingElements?.[0];
+    expect(seed?.shape).toBe("ring");
+    expect(seed?.materials).toContain("brushed aluminum frame");
+    expect(seed?.lighting).toContain("edge-lit perimeter glow");
+    expect(seed?.printed).toContain("front: brand logotype");
   });
 
   it('"No — floor-only booth" dismisses the gap so it does not re-emit', async () => {
@@ -700,6 +719,36 @@ describe("applyGapAnswer — hanging.elements", () => {
     });
     const { gaps } = validateBrief(normalized);
     expect(gaps.some((g) => g.field === "hanging.elements")).toBe(false);
+  });
+
+  it("Yes then No clears the seeded element AND records the dismissal", async () => {
+    // Regression test for i1: prior to this fix, toggling Yes → No
+    // left the Yes-seeded element on the brief. validateBrief masked
+    // the issue (length > 0 suppresses the gap), but downstream
+    // consumers (composer, canvas, Tasks 3-6) would still see a
+    // stale "ring" the user explicitly rejected.
+    const { applyGapAnswer } = await import("./normalizedBrief");
+
+    // Step 1: Yes seeds an element.
+    const initial = structuredClone(eqvilentParsedBrief);
+    let afterYes = initial;
+    applyGapAnswer(initial, "hanging.elements", "Yes — add one", (next) => {
+      afterYes = next;
+    });
+    const yesLoose = afterYes as unknown as { hangingElements?: unknown[] };
+    expect((yesLoose.hangingElements ?? []).length).toBe(1);
+
+    // Step 2: No clears it and records the dismissal.
+    let afterNo = afterYes;
+    applyGapAnswer(afterYes, "hanging.elements", "No — floor-only booth", (next) => {
+      afterNo = next;
+    });
+    const noLoose = afterNo as unknown as {
+      hangingElements?: unknown[];
+      _dismissedGaps?: string[];
+    };
+    expect(noLoose.hangingElements ?? []).toEqual([]);
+    expect(noLoose._dismissedGaps).toContain("hanging.elements");
   });
 });
 

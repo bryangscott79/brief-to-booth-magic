@@ -13,8 +13,6 @@ import { BriefReadinessPanel } from "@/components/common/BriefReadinessPanel";
 import type { CheckResult } from "@/lib/briefReadiness";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Copy,
-  Check,
   ChevronRight,
   Camera,
   Sparkles,
@@ -58,6 +56,7 @@ import {
 } from "@/lib/normalizedBrief";
 import { BriefClarification } from "@/components/prompts/BriefClarification";
 import { PromptDebugPanel } from "@/components/prompts/PromptDebugPanel";
+import { PromptInspector } from "@/components/prompts/PromptInspector";
 
 /**
  * Map an internal angle id to the canonical ViewAngle the composer
@@ -137,7 +136,9 @@ export function PromptGenerator() {
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("project");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  // (Copy-state moved into PromptInspector — each instance owns its
+  // own "Copied" badge timeout. The page-level copiedId map was
+  // retired with the move; the legacy handleCopy below is gone.)
   const [showGallery, setShowGallery] = useState(false);
   // Lightbox for click-to-expand on any generated render.
   // useImageLightbox returns an open() trigger + props spread for
@@ -743,6 +744,60 @@ export function PromptGenerator() {
     return applyStylePresetToPrompt(base, activePreset, activeCustomEmphasis);
   };
 
+  // Compose the hero prompt without kicking off image generation. Lets
+  // the user review (and optionally edit) the exact text the model will
+  // see before paying for a render. The prompt is the same one
+  // `handleGenerateHeroImage` would use, so the two-step flow always
+  // matches what the one-shot button used to do.
+  const handleComposeHeroPrompt = () => {
+    const prompt = composerOutput?.renderer || buildPrompt("hero_34");
+    renderStore.setHeroPrompt(prompt);
+    toast({
+      title: "Hero prompt ready",
+      description: "Review or edit the prompt, then click Generate Hero Image.",
+    });
+  };
+
+  // Commit an edited hero prompt and trigger a fresh render with it.
+  // The override sticks via renderStore.setHeroPrompt, so subsequent
+  // renders (and the PromptInspector's "Edited" badge) reflect the
+  // user's text until they hit Reset.
+  const handleSaveHeroPromptAndRerender = async (edited: string) => {
+    renderStore.setHeroPrompt(edited);
+    await handleGenerateHeroImage();
+  };
+
+  // Drop the user's hero-prompt override and recompose from current
+  // brief/spatial/brand state. Doesn't auto-render — the user gets
+  // the fresh prompt and decides whether to click Generate.
+  const handleResetHeroPrompt = () => {
+    const fresh = composerOutput?.renderer || buildPrompt("hero_34");
+    renderStore.setHeroPrompt(fresh);
+  };
+
+  // Same pattern for an individual view: commit edited text into
+  // generatedPrompts[angleId] and re-run regeneration so the new
+  // image uses the override. handleRegenerateView already reads
+  // from generatedPrompts so no further plumbing needed.
+  const handleSaveViewPromptAndRerender = async (
+    angleId: string,
+    edited: string,
+  ) => {
+    renderStore.setGeneratedPrompts({
+      ...generatedPrompts,
+      [angleId]: edited,
+    });
+    await handleRegenerateView(angleId);
+  };
+
+  const handleResetViewPrompt = (angleId: string) => {
+    const fresh = buildPrompt(angleId);
+    renderStore.setGeneratedPrompts({
+      ...generatedPrompts,
+      [angleId]: fresh,
+    });
+  };
+
   const handleGenerateHeroImage = async () => {
     const prompt = heroPrompt || buildPrompt("hero_34");
     if (!heroPrompt) renderStore.setHeroPrompt(prompt);
@@ -822,17 +877,6 @@ export function PromptGenerator() {
       return;
     }
     await handleGenerateHeroImage();
-  };
-
-  const handleCopy = async (angleId: string) => {
-    const prompt = angleId === "hero_34" ? heroPrompt : (generatedPrompts[angleId] || buildPrompt(angleId));
-    await navigator.clipboard.writeText(prompt);
-    setCopiedId(angleId);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast({
-      title: "Copied to clipboard",
-      description: "Prompt copied successfully",
-    });
   };
 
   const handleGenerateAllViews = async () => {
@@ -1209,30 +1253,6 @@ export function PromptGenerator() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {heroPrompt && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">Prompt Preview</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopy("hero_34")}
-                  >
-                    {copiedId === "hero_34" ? (
-                      <Check className="h-3 w-3" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-                <Textarea
-                  value={heroPrompt}
-                  readOnly
-                  className="min-h-[200px] text-xs font-mono bg-muted/50"
-                />
-              </div>
-            )}
-            
             {/* Reference attachments for the hero generation. Same per-angle
              * scratchpad as the standard views — uploads land in project KB
              * tagged "render-reference" and pass through as
@@ -1253,25 +1273,68 @@ export function PromptGenerator() {
               />
             )}
 
-            <PromptDebugPanel output={composerOutput} />
+            {/* Two-step flow:
+             *   1. "Generate Hero Prompt" composes and shows the prompt
+             *      without spending a render call. PromptInspector below
+             *      lets the user review, copy, or edit before rendering.
+             *   2. Once a prompt exists, the primary action becomes
+             *      "Generate Hero Image" and a "Re-compose" link sits
+             *      alongside for the user to drop edits and pull a
+             *      fresh prompt from the current brief state.
+             * The composed-stages debug panel stays available as
+             * supplementary context for what the composer produced. */}
+            {!heroPrompt ? (
+              <Button
+                onClick={handleComposeHeroPrompt}
+                className="w-full btn-glow"
+                disabled={isGeneratingHero}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate Hero Prompt
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <PromptInspector
+                  prompt={heroPrompt}
+                  defaultPrompt={composerOutput?.renderer || buildPrompt("hero_34")}
+                  onSaveAndRerender={handleSaveHeroPromptAndRerender}
+                  onReset={handleResetHeroPrompt}
+                  disabled={isGeneratingHero}
+                  label="Hero prompt"
+                  defaultOpen
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleGenerateHeroImage}
+                    className="flex-1 btn-glow"
+                    disabled={isGeneratingHero}
+                  >
+                    {isGeneratingHero ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating Hero Image...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Generate Hero Image
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleComposeHeroPrompt}
+                    disabled={isGeneratingHero}
+                    title="Discard the current prompt and recompose from the latest brief / spatial state"
+                  >
+                    Re-compose
+                  </Button>
+                </div>
+              </div>
+            )}
 
-            <Button
-              onClick={handleGenerateHeroImage}
-              className="w-full btn-glow"
-              disabled={isGeneratingHero}
-            >
-              {isGeneratingHero ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating Hero Image...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {heroPrompt ? "Generate Hero Image" : "Generate Hero Prompt & Image"}
-                </>
-              )}
-            </Button>
+            <PromptDebugPanel output={composerOutput} />
 
             {isGeneratingHero && (
               <p className="text-xs text-muted-foreground text-center">
@@ -1325,6 +1388,22 @@ export function PromptGenerator() {
                 className="w-full h-auto"
               />
             </button>
+
+            {/* The exact prompt that produced the visible hero — always
+              * accessible for review, copy (take to another model), or
+              * edit + re-render. The chat input below is for
+              * natural-language refinements; this is for full prompt
+              * control when the user wants the literal text. */}
+            {heroPrompt && (
+              <PromptInspector
+                prompt={heroPrompt}
+                defaultPrompt={composerOutput?.renderer || buildPrompt("hero_34")}
+                onSaveAndRerender={handleSaveHeroPromptAndRerender}
+                onReset={handleResetHeroPrompt}
+                disabled={isGeneratingHero}
+                label="Prompt used for this hero"
+              />
+            )}
 
             {/* ── Hero refinement thread ───────────────────────────
                ChatGPT-style iteration: each render appends a turn,
@@ -1765,16 +1844,23 @@ export function PromptGenerator() {
                   )}
                 </div>
 
+                {/* Always-accessible prompt: review, edit + re-render,
+                  * copy to another model, or reset to default. Hidden
+                  * until the angle has a prompt to show (no image
+                  * generated yet = no prompt yet). */}
+                {prompt && (
+                  <PromptInspector
+                    prompt={prompt}
+                    defaultPrompt={buildPrompt(angle.id)}
+                    onSaveAndRerender={(edited) =>
+                      handleSaveViewPromptAndRerender(angle.id, edited)
+                    }
+                    onReset={() => handleResetViewPrompt(angle.id)}
+                    disabled={currentlyGenerating === angle.id}
+                  />
+                )}
+
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopy(angle.id)}
-                    className="flex-1"
-                    disabled={!prompt}
-                  >
-                    {copiedId === angle.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  </Button>
                   {imageData?.status === "complete" && imageData.url && (
                     <Button
                       variant="outline"
@@ -1891,10 +1977,23 @@ export function PromptGenerator() {
                         </div>
                       )}
                     </div>
+                    {/* Always-accessible prompt for this zone interior:
+                      * review, edit + re-render, copy to another model,
+                      * or reset to the auto-composed default. Same UX
+                      * as the standard view cards above. */}
+                    {prompt && (
+                      <PromptInspector
+                        prompt={prompt}
+                        defaultPrompt={buildPrompt(angle.id)}
+                        onSaveAndRerender={(edited) =>
+                          handleSaveViewPromptAndRerender(angle.id, edited)
+                        }
+                        onReset={() => handleResetViewPrompt(angle.id)}
+                        disabled={currentlyGenerating === angle.id}
+                      />
+                    )}
+
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleCopy(angle.id)} className="flex-1" disabled={!prompt}>
-                        {copiedId === angle.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                      </Button>
                       {imageData?.status === "complete" && imageData.url && (
                         <Button variant="outline" size="sm" onClick={() => downloadImage(imageData.url, angle.name)}>
                           <Download className="h-3 w-3" />

@@ -1059,4 +1059,26 @@ describe("existingSpace block (interior design)", () => {
     expect(poly?.points.length).toBe(4); // 3 + 1 closing duplicate
     expect(poly?.points[3]).toEqual(poly?.points[0]);
   });
+
+  it("does not double-close an already-closed polygon", () => {
+    const closedPolygon = {
+      photoUrl: samplePhoto,
+      annotations: {
+        keep: [{ points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 0 }] }],
+        change: [],
+      },
+      analysis: { features: [], existingMaterials: {}, lighting: {} },
+    };
+    const parsed = {
+      ...eqvilentParsedBrief,
+      existingSpace: closedPolygon,
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.existingSpace?.annotations.keep[0]?.points.length).toBe(4); // unchanged, not 5
+  });
 });

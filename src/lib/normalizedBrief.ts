@@ -233,10 +233,11 @@ export interface NormalizedBriefHanging {
   elements: NormalizedHangingElement[];
 }
 
-// Pass-through interface — reserved for future normalized-only derived
-// fields (e.g. rasterized mask URL, photo aspect ratio). The explicit
-// `extends` (rather than a type alias) lets future fields be added
-// without touching every downstream type reference.
+// Use `interface` (not `type X = Y`) to match every other NormalizedBrief*
+// shape in this module — keeps the cross-cutting "find all normalized
+// shapes" pattern intact. Currently a structural pass-through; Task 6
+// will add normalized-only fields (rasterized mask URL, photo aspect
+// ratio) inside the braces.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface NormalizedBriefExistingSpace extends ParsedBriefExistingSpace {}
 

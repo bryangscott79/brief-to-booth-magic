@@ -1134,16 +1134,15 @@ export async function generateImageWithFallback(
  * generate-hero/index.ts so behaviour is known-good rather than newly
  * written.
  */
-// Gemini fallback gets the remaining budget under the 150s Supabase
-// edge-function cap (80s for primary + 50s here = 130s; pad for
-// response parsing and persistence). callGemini itself doesn't take a
-// signal so we race the call against a manual timeout — the upstream
-// fetch continues but the caller stops waiting.
-// Bumped from 50s → 90s. Callers (generate-view, generate-hero) now
-// stream keep-alive bytes, so we're no longer bound by the 150s idle
-// cap — only the longer wall-clock budget. Image models routinely take
-// 60–80s under load and were timing out at 50s.
-const GEMINI_TIMEOUT_MS = 90_000;
+// Gemini fallback budget. The Supabase idle-timeout is no longer the
+// constraint (the calling edge function uses streamingJsonResponse
+// keep-alive), so the budget is sized to Gemini's actual latency
+// rather than what fits inside 150s. 100s comfortably handles Gemini
+// pro image-gen and gives the flash retry room if pro returns empty.
+// callGemini itself doesn't take a signal, so we race the call
+// against a manual timeout — the upstream fetch continues but the
+// caller stops waiting.
+const GEMINI_TIMEOUT_MS = 100_000;
 
 async function _callGeminiImageInner(
   options: OpenAIImageOptions,
@@ -1207,10 +1206,9 @@ async function _callGeminiImageInner(
           messages: messages as any,
           modalities: ["image", "text"],
         }),
-        // Tighter budget on the retry since we've already spent time
-        // on the primary attempt — we'd rather fail cleanly than blow
-        // the Supabase wall clock.
-        Math.min(GEMINI_TIMEOUT_MS, 30_000),
+        // Tighter budget on the retry — we've already spent time on
+        // the primary attempt and the flash variant is faster anyway.
+        Math.min(GEMINI_TIMEOUT_MS, 60_000),
         "Gemini/gemini-3.1-flash-image-preview",
       );
       image = result.images?.[0];
@@ -1230,11 +1228,24 @@ async function _callGeminiImageInner(
   }];
 }
 
-// Per-call timeout budgets. Callers stream keep-alive bytes so we're
-// no longer bound by the 150s idle cap — only the longer wall-clock
-// budget. gpt-image-2 commonly takes 90–120s for edits with refs.
+// Per-call timeout budgets, sized to match observed image-gen latencies
+// rather than the old Supabase 150s idle-timeout (now neutralised by
+// streamingJsonResponse keep-alive in the edge function).
+//
+// Empirical data points (both from Lovable's own observations):
+//   - gpt-image-2 routinely takes 150-180s for high-quality renders
+//     with no refs (text → image).
+//   - gpt-image-2 commonly takes 90-120s for edits with refs.
+// Going with 220s as the ceiling so the slower path has 40s headroom.
+// The earlier 80s ceiling was killing valid in-flight renders, which
+// is what triggered the "Both image models failed" cascade — the
+// fallback fired against Gemini, which then also got cut short.
+//
+// Gemini fallback gets 100s (see GEMINI_TIMEOUT_MS above) — generally
+// faster than gpt-image-2 at the same size. Reference fetches stay at
+// 10s parallel — they're not the bottleneck.
 const REF_FETCH_TIMEOUT_MS = 10_000;
-const OPENAI_TIMEOUT_MS = 130_000;
+const OPENAI_TIMEOUT_MS = 220_000;
 
 async function _callOpenAIImageInner(
   options: OpenAIImageOptions,

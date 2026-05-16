@@ -92,7 +92,13 @@ export function BriefExistingSpace({ value, onChange, projectId }: BriefExisting
       setIsUploading(true);
       try {
         const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-        const path = `existing-space/${projectId}/${Date.now()}.${ext}`;
+        // Path layout: <projectId>/existing-space/<timestamp>.<ext>.
+        // The project-id MUST be the first folder segment — the
+        // project-images RLS policy keys ownership off
+        // `(storage.foldername(name))[1]` (see migration
+        // 20260512190216). With the project-id second the INSERT
+        // policy rejects the upload and the user sees a silent fail.
+        const path = `${projectId}/existing-space/${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from("project-images")
           .upload(path, file, { upsert: true });

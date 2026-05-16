@@ -8,15 +8,19 @@ const invokeMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ data: { success: true, analysis: {} }, error: null }),
 );
 
+// Hoisted upload mock — we assert on its first argument (the storage
+// path) in the B2 RLS-shape regression below.
+const uploadMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ data: { path: "x" }, error: null }),
+);
+
 // Mock the supabase client so the upload codepath in the empty-state
-// drop zone never tries to hit a real backend. None of the four tests
-// exercise the drop path — they cover empty + populated rendering and
-// onChange — so a stub is sufficient.
+// drop zone never tries to hit a real backend.
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     storage: {
       from: () => ({
-        upload: vi.fn().mockResolvedValue({ data: { path: "x" }, error: null }),
+        upload: uploadMock,
         getPublicUrl: () => ({ data: { publicUrl: "https://example.com/uploaded.jpg" } }),
       }),
     },
@@ -72,6 +76,35 @@ describe("BriefExistingSpace", () => {
     render(<BriefExistingSpace value={SAMPLE} onChange={onChange} projectId="p1" />);
     fireEvent.click(screen.getByRole("button", { name: /replace photo/i }));
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  // B2 regression: project-images RLS requires
+  // (storage.foldername(name))[1] == projectId. The earlier path
+  // `existing-space/<projectId>/...` put the literal string
+  // "existing-space" as the first segment, so every upload silently
+  // failed with an RLS policy violation. This test pins the path
+  // layout so we don't regress.
+  it("uploads to a path whose first folder segment is the projectId", async () => {
+    uploadMock.mockClear();
+    const projectId = "11111111-2222-3333-4444-555555555555";
+    render(<BriefExistingSpace value={null} onChange={() => {}} projectId={projectId} />);
+
+    const file = new File(["fake-bytes"], "room.jpg", { type: "image/jpeg" });
+    const dropInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(dropInput).not.toBeNull();
+    await act(async () => {
+      fireEvent.change(dropInput!, { target: { files: [file] } });
+    });
+
+    expect(uploadMock).toHaveBeenCalled();
+    const [path] = uploadMock.mock.calls[0] as [string, ...unknown[]];
+    // First folder segment must be the project id (RLS contract).
+    expect(path.split("/")[0]).toBe(projectId);
+    // The "existing-space" tag is still useful for browsing — it just
+    // can't be first.
+    expect(path).toMatch(/^[^/]+\/existing-space\/.+\.jpg$/);
   });
 
   // C1 regression: when the user uploads a photo, the analyze-existing-

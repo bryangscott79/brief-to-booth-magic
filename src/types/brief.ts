@@ -19,9 +19,11 @@ export interface Polygon {
 export interface ParsedBriefExistingSpace {
   /**
    * Single canonical photo URL of the existing space. Stored in the
-   * project-images bucket under existing-space/<projectId>/<ts>.<ext>.
-   * Re-uploads replace; the previous URL is dropped from the brief
-   * (storage cleanup happens via a separate sweep).
+   * project-images bucket under <projectId>/existing-space/<ts>.<ext>
+   * — project-id MUST be the first folder segment so the bucket's RLS
+   * INSERT policy (which keys ownership off the first foldername)
+   * accepts the write. Re-uploads replace; the previous URL is dropped
+   * from the brief (storage cleanup happens via a separate sweep).
    */
   photoUrl: string;
   /** User-drawn keep/change annotations. */
@@ -564,4 +566,16 @@ export interface Project {
   parsedBrief: ParsedBrief | null;
   elements: Record<ElementType, ElementState>;
   renderPrompts: RenderPromptSet | null;
+  /**
+   * Industry vertical slug (e.g. "experiential", "interior_design").
+   *
+   * Optional today — the `projects` table doesn't carry an industry
+   * column, so callers resolve this from the owning agency's
+   * `primary_industry` at the point of use (see PromptGenerator and
+   * BriefReview, which mirror the same fallback). This field exists so
+   * downstream code can read `project.industrySlug` without knowing
+   * about the agency join, and so a future per-project industry column
+   * can be wired in without touching every consumer.
+   */
+  industrySlug?: string;
 }

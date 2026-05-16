@@ -88,6 +88,7 @@ import { useBrandLogo } from "@/hooks/useBrandLogo";
 // platform leads with GPT-image-2 by default and super admins can
 // override per agency from settings.
 import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
+import { useAgency } from "@/hooks/useAgency";
 
 // Per-view supplemental references that the user attaches at regen time.
 import { useRenderReferences } from "@/hooks/useRenderReferences";
@@ -238,6 +239,15 @@ export function PromptGenerator() {
   // never see model selection. If OPENAI_API_KEY is missing in Supabase
   // secrets, the edge function falls back to Gemini automatically.
   const { provider: activeImageModel } = useAgencyImageModel();
+
+  // Industry slug — resolved from the owning agency's primary_industry.
+  // The `projects` table doesn't carry an industry column today, so we
+  // mirror the same fallback BriefReview uses (see
+  // BriefReview.tsx:industryInputMode). composePrompt dispatches the
+  // existing-space-photo path off this; without it interior-design
+  // projects silently fall through to the spatial-canvas renderer.
+  const { agency } = useAgency();
+  const projectIndustrySlug = agency?.primary_industry ?? undefined;
 
   // Per-view supplemental references — user attaches images via "Attach
   // reference" on each view card. URLs flow into the next regeneration of
@@ -454,6 +464,12 @@ export function PromptGenerator() {
           id: currentProject.id,
           name: currentProject.name,
           projectType: currentProject.projectType ?? "exhibition_booth",
+          // industrySlug feeds composePrompt's dispatch onto the
+          // existing-space vs spatial-canvas renderer path. Prefer the
+          // per-project value if a future schema carries one; fall
+          // back to the agency-level primary_industry (same fallback
+          // BriefReview uses).
+          industrySlug: currentProject.industrySlug ?? projectIndustrySlug,
         },
         parsedBrief: brief,
         geometry,
@@ -468,7 +484,7 @@ export function PromptGenerator() {
       console.warn("[PromptGenerator] normalizeBrief failed:", e);
       return null;
     }
-  }, [brief, currentProject, geometry, elements]);
+  }, [brief, currentProject, geometry, elements, projectIndustrySlug]);
 
   const composerOutput = useMemo(() => {
     if (!normalizedBrief) return null;

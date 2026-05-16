@@ -1170,4 +1170,51 @@ describe("composePrompt — interior design path", () => {
     const out = composePrompt(n);
     expect(out.renderer).toMatch(/# REDESIGN INTENT/);
   });
+
+  // B1 regression: PromptGenerator forwards `project.industrySlug`
+  // resolved from the agency. If that wiring breaks (e.g. someone drops
+  // the field when building the normalizeBrief input), composePrompt
+  // silently dispatches onto the spatial-canvas renderer and the
+  // existing-space photo is ignored. These two tests pin the contract:
+  // industrySlug present → existing-space path; absent → spatial-canvas
+  // path (legacy projects). The other Task-5 tests above prove the
+  // forward direction; this pair proves the dispatch is gated on the
+  // field actually arriving.
+  it("falls back to spatial-canvas renderer when industrySlug is missing", () => {
+    // Same brief as buildIdBrief BUT no industrySlug on project.
+    const parsed = {
+      ...eqvilentParsedBrief,
+      existingSpace: {
+        photoUrl: "https://example.com/room.jpg",
+        annotations: { keep: [], change: [] },
+        analysis: {
+          features: [],
+          existingMaterials: {},
+          lighting: {},
+          summary: "A room.",
+        },
+      },
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta, // no industrySlug
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    // Without industrySlug the existing-space block is ignored — the
+    // composer falls through to the spatial-canvas renderer. This is
+    // the exact bug B1 fixed at the PromptGenerator wiring layer.
+    expect(out.renderer).not.toMatch(/# EXISTING SPACE/);
+    expect(out.renderer).toMatch(/# SPACE\n/);
+  });
+
+  it("dispatches to existing-space renderer when industrySlug='interior_design' is forwarded", () => {
+    // Mirrors what PromptGenerator now does: passes
+    // industrySlug=agency.primary_industry through normalizeBrief.
+    const n = buildIdBrief();
+    expect(n.project.industrySlug).toBe("interior_design");
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(/# EXISTING SPACE/);
+  });
 });

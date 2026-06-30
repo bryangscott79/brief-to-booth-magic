@@ -938,11 +938,27 @@ serve(async (req) => {
           `[generate-hero] Existing-space path: photo=${existingSpacePhotoUrl.slice(0, 80)}, mask=${maskUrlForOpenAI ? "present" : "absent"}`,
         );
       } else {
-        refUrlsForOpenAI = [
+        // Image models (gpt-image-2 + gemini-3-pro-image) require raster
+        // inputs. SVG logos cause an immediate upstream 400 ("URL did
+        // not return an image"). Strip them and warn — the render
+        // proceeds without the logo rather than hanging the user.
+        const isRasterRef = (u: string) => {
+          const lower = u.split("?")[0].toLowerCase();
+          if (lower.endsWith(".svg")) return false;
+          return true;
+        };
+        const rawRefs = [
           ...(previousImageUrl ? [previousImageUrl] : []),
           ...(brandLogoUrl ? [brandLogoUrl] : []),
           ...(extraReferenceUrls ?? []),
-        ].slice(0, 4); // gpt-image-2 hard limit
+        ];
+        const dropped = rawRefs.filter((u) => !isRasterRef(u));
+        if (dropped.length > 0) {
+          console.warn(
+            `[generate-hero] Dropping non-raster reference(s) (SVG not supported by image models): ${dropped.map((u) => u.split("?")[0].split("/").pop()).join(", ")}`,
+          );
+        }
+        refUrlsForOpenAI = rawRefs.filter(isRasterRef).slice(0, 4); // gpt-image-2 hard limit
         maskUrlForOpenAI = undefined;
       }
 

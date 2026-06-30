@@ -985,6 +985,21 @@ serve(async (req) => {
           maskUrlForOpenAI = undefined;
         }
 
+        // Image models require raster references — strip any SVGs
+        // (e.g. brand logos uploaded as .svg) so we don't 400 with
+        // "URL did not return an image".
+        {
+          const before = referenceImageUrls.length;
+          referenceImageUrls = referenceImageUrls.filter(
+            (u) => !u.split("?")[0].toLowerCase().endsWith(".svg"),
+          );
+          if (referenceImageUrls.length < before) {
+            console.warn(
+              `[generate-view] ${viewName}: dropped ${before - referenceImageUrls.length} SVG reference(s) (image models require raster)`,
+            );
+          }
+        }
+
         const out = await generateImageWithFallback({
           usage: await buildUsageContext(req, "generate-view").catch(() =>
             undefined

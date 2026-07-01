@@ -656,6 +656,9 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       // Phase 4: Include consistency tokens if available
       const { consistencyTokens } = get();
       const viewBody: Record<string, unknown> = {
+        // See generateHeroImage: project_id gates server-side Storage
+        // upload; without it renders don't land in Files.
+        project_id: projectId,
         referenceImageUrl: referenceUrl,
         viewPrompt: prompt,
         viewName: angle.name,

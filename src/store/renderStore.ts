@@ -525,6 +525,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       try {
         const { consistencyTokens, designContext } = get();
         const viewBody: Record<string, unknown> = {
+          // See generateHeroImage: project_id gates server-side Storage
+          // upload; without it we return multi-MB base64 and the client
+          // save-render-image hop silently drops -> Files stays empty.
+          project_id: projectId,
           referenceImageUrl: referenceUrl,
           viewPrompt: prompts[angle.id],
           viewName: angle.name,

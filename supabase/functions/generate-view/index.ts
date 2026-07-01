@@ -1038,6 +1038,39 @@ serve(async (req) => {
 
       console.log(`Successfully generated ${viewName} view via ${modelUsed}`);
 
+      // Upload the base64 to Storage server-side and return a short
+      // public URL instead of a multi-MB data: URL. See generate-hero
+      // for the full rationale — sending base64 back to the browser
+      // and having it re-POST to save-render-image was silently
+      // failing for large renders, so views weren't landing in Files.
+      if (project_id && generatedImageUrl?.startsWith("data:")) {
+        try {
+          const match = generatedImageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+          if (match) {
+            const ext = match[1];
+            const binary = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+            const safeAngle = viewName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+            const path = `${project_id}/${safeAngle}_${Date.now()}_gen.${ext}`;
+            const admin = createServiceClient(
+              Deno.env.get("SUPABASE_URL")!,
+              Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+            );
+            const { error: upErr } = await admin.storage
+              .from("project-images")
+              .upload(path, binary, { contentType: `image/${ext}`, upsert: false });
+            if (upErr) {
+              console.warn(`[generate-view] Storage upload failed for ${viewName}, using data URL:`, upErr.message);
+            } else {
+              const { data: urlData } = admin.storage.from("project-images").getPublicUrl(path);
+              generatedImageUrl = urlData.publicUrl;
+              console.log(`[generate-view] Uploaded ${viewName} to storage: ${path}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[generate-view] Storage upload threw for ${viewName}, using data URL:`, e);
+        }
+      }
+
       return {
         status: 200,
         body: {

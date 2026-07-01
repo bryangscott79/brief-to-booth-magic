@@ -134,7 +134,7 @@ async function invokeGenerateElementWithRetry(
         });
       return await withTimeout(
         invokePromise,
-        ELEMENT_GENERATION_TIMEOUT_MS,
+        timeoutFor(elementType),
         `${elementType} generation`,
       );
     } catch (e) {

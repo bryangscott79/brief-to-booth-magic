@@ -592,17 +592,22 @@ export function PromptGenerator() {
     // matches images saved BEFORE versioning shipped — no __v__ suffix.
     const matchesLegacy =
       active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
-    return savedImages
-      .map((img) => {
-        const { baseAngleId, versionId: imgVersionId } = parseVersionedAngleId(img.angle_id);
-        return { img, baseAngleId, imgVersionId };
-      })
-      .filter(({ imgVersionId }) => {
-        if (matchesLegacy) return imgVersionId === null;
-        if (versionId) return imgVersionId === versionId;
-        // No version active → fall back to legacy untagged.
-        return imgVersionId === null;
-      });
+    const all = savedImages.map((img) => {
+      const { baseAngleId, versionId: imgVersionId } = parseVersionedAngleId(img.angle_id);
+      return { img, baseAngleId, imgVersionId };
+    });
+    const scoped = all.filter(({ imgVersionId }) => {
+      if (matchesLegacy) return imgVersionId === null;
+      if (versionId) return imgVersionId === versionId;
+      // No version active → fall back to legacy untagged.
+      return imgVersionId === null;
+    });
+    // Fallback: if the active version has no saved images yet (fresh
+    // version, or the user's earlier iterations were saved under a
+    // different version id), show ALL saved images so previous
+    // iterations are still browseable from the Prompts page instead
+    // of vanishing until a new hero is generated.
+    return scoped.length > 0 ? scoped : all;
   }, [savedImages, promptVersions.activeVersionId, promptVersions.activeVersion]);
 
   useEffect(() => {

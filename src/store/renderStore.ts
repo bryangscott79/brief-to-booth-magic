@@ -367,6 +367,12 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       const { designContext } = get();
       const body: Record<string, unknown> = {
         prompt,
+        // CRITICAL: project_id gates the server-side Storage upload in
+        // generate-hero. Without it, the edge function returns the full
+        // base64 data URL (often 5-10 MB), the client's follow-up
+        // save-render-image invoke silently drops on the size, and
+        // nothing lands in project_images -> Files stays empty.
+        project_id: projectId,
         feedback: feedback || undefined,
         previousImageUrl: previousImageUrl || undefined,
         boothSize: boothSize || undefined,
@@ -519,6 +525,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       try {
         const { consistencyTokens, designContext } = get();
         const viewBody: Record<string, unknown> = {
+          // See generateHeroImage: project_id gates server-side Storage
+          // upload; without it we return multi-MB base64 and the client
+          // save-render-image hop silently drops -> Files stays empty.
+          project_id: projectId,
           referenceImageUrl: referenceUrl,
           viewPrompt: prompts[angle.id],
           viewName: angle.name,
@@ -646,6 +656,9 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       // Phase 4: Include consistency tokens if available
       const { consistencyTokens } = get();
       const viewBody: Record<string, unknown> = {
+        // See generateHeroImage: project_id gates server-side Storage
+        // upload; without it renders don't land in Files.
+        project_id: projectId,
         referenceImageUrl: referenceUrl,
         viewPrompt: prompt,
         viewName: angle.name,

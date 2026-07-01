@@ -1010,6 +1010,42 @@ serve(async (req) => {
       }
   
       console.log("Successfully generated hero image");
+
+      // Upload the base64 image to Storage server-side and return a
+      // short public URL instead of a multi-MB data: URL. Sending
+      // 5–10 MB of base64 back to the browser (and then having the
+      // browser POST it again to save-render-image) was silently
+      // failing for large renders — the invoke body would exceed
+      // limits or the user would navigate away before the second
+      // upload completed. Result: image never landed in Files.
+      // By uploading server-side we return a tiny URL and the
+      // client's save-render-image call is a fast metadata insert.
+      if (project_id && generatedImageUrl?.startsWith("data:")) {
+        try {
+          const match = generatedImageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+          if (match) {
+            const ext = match[1];
+            const binary = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+            const path = `${project_id}/hero_34_${Date.now()}_gen.${ext}`;
+            const admin = createClient(
+              Deno.env.get("SUPABASE_URL")!,
+              Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+            );
+            const { error: upErr } = await admin.storage
+              .from("project-images")
+              .upload(path, binary, { contentType: `image/${ext}`, upsert: false });
+            if (upErr) {
+              console.warn("[generate-hero] Storage upload failed, falling back to data URL:", upErr.message);
+            } else {
+              const { data: urlData } = admin.storage.from("project-images").getPublicUrl(path);
+              generatedImageUrl = urlData.publicUrl;
+              console.log("[generate-hero] Uploaded image to storage:", path);
+            }
+          }
+        } catch (e) {
+          console.warn("[generate-hero] Storage upload threw, using data URL:", e);
+        }
+      }
   
       // Persist composer output to project_images.prompt_artifacts so
       // auxiliary view renders can read it as heroSnapshot. This is the

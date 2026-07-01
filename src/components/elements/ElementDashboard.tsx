@@ -59,14 +59,23 @@ function getActiveJob(projectId: string): GenerationJob | null {
 
 /**
  * Per-element generation timeout. Browser fetch has no default
- * timeout, so without this, a hung edge function (e.g. Gemini taking
- * 5+ minutes on a heavy schema like budgetLogic) leaves the UI stuck
- * on "Generating…" indefinitely. 90s is generous — most elements
- * land in 10-30s; structured-heavy ones (budgetLogic, spatialStrategy)
- * can take 60-80s on a cold cache. 90s gives them headroom and
- * surfaces a clear error for genuine hangs.
+ * timeout, so without this, a hung edge function leaves the UI stuck
+ * on "Generating…" indefinitely. Structured-heavy elements
+ * (budgetLogic, spatialStrategy) routinely take 90-120s on Gemini 2.5
+ * Pro — recent gateway logs show 92-120s durations — so they need a
+ * larger budget than the lighter narrative elements.
  */
-const ELEMENT_GENERATION_TIMEOUT_MS = 90_000;
+const ELEMENT_GENERATION_TIMEOUT_MS = 180_000;
+const ELEMENT_GENERATION_TIMEOUT_LIGHT_MS = 90_000;
+const STRUCTURED_HEAVY_ELEMENTS: ReadonlySet<ElementType> = new Set([
+  "spatialStrategy",
+  "budgetLogic",
+]);
+function timeoutFor(elementType: ElementType): number {
+  return STRUCTURED_HEAVY_ELEMENTS.has(elementType)
+    ? ELEMENT_GENERATION_TIMEOUT_MS
+    : ELEMENT_GENERATION_TIMEOUT_LIGHT_MS;
+}
 
 /**
  * Wrap a promise with a hard timeout. Rejects with a clear error if
@@ -125,7 +134,7 @@ async function invokeGenerateElementWithRetry(
         });
       return await withTimeout(
         invokePromise,
-        ELEMENT_GENERATION_TIMEOUT_MS,
+        timeoutFor(elementType),
         `${elementType} generation`,
       );
     } catch (e) {

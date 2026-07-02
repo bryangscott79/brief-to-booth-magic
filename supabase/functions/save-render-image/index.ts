@@ -142,20 +142,48 @@ serve(async (req) => {
           }
         : null;
 
-    const { data: record, error: insertError } = await adminClient
+    const insertPayload: Record<string, unknown> = {
+      project_id: projectId,
+      user_id: user.id,
+      angle_id: angleId,
+      angle_name: angleName,
+      storage_path: storagePath,
+      public_url: publicUrl,
+      is_current: true,
+      ...(promptArtifacts ? { prompt_artifacts: promptArtifacts } : {}),
+    };
+
+    let { data: record, error: insertError } = await adminClient
       .from("project_images")
-      .insert({
-        project_id: projectId,
-        user_id: user.id,
-        angle_id: angleId,
-        angle_name: angleName,
-        storage_path: storagePath,
-        public_url: publicUrl,
-        is_current: true,
-        ...(promptArtifacts ? { prompt_artifacts: promptArtifacts } : {}),
-      })
+      .insert(insertPayload)
       .select()
       .single();
+
+    // Schema-drift guard: if the production DB is missing the
+    // prompt_artifacts column (migration 20260514000000 not applied —
+    // Lovable's migration pipeline is unreliable), PostgREST rejects
+    // the ENTIRE insert with PGRST204. That silently killed every
+    // render save: the image uploaded to storage but no project_images
+    // row was ever written, so renders vanished on reload and Files
+    // stayed empty. Retry without the optional field — losing badge
+    // metadata is far better than losing the render.
+    if (
+      insertError &&
+      promptArtifacts &&
+      (insertError.code === "PGRST204" ||
+        /prompt_artifacts/i.test(insertError.message ?? ""))
+    ) {
+      console.warn(
+        "prompt_artifacts column missing in project_images; retrying insert without it. Apply migration 20260514000000_prompt_artifacts.sql to restore badge persistence.",
+        insertError.message,
+      );
+      delete insertPayload.prompt_artifacts;
+      ({ data: record, error: insertError } = await adminClient
+        .from("project_images")
+        .insert(insertPayload)
+        .select()
+        .single());
+    }
 
     if (insertError) {
       console.error("Insert error:", insertError);

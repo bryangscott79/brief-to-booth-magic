@@ -121,6 +121,17 @@ export default function UploadPage() {
 
         {projectId && mode === "upload" && (
           <>
+            {/* Brand website — captured up front so we can scrape brand data
+             * (colors, logo, fonts, voice) before the brief even parses.
+             * When a client is linked, extraction runs immediately. */}
+            <div className="max-w-3xl mx-auto">
+              <BrandWebsiteCard
+                projectId={projectId}
+                initialUrl={(dbProject as any)?.brand_website_url ?? null}
+                client={linkedClient}
+              />
+            </div>
+
             {/* Brand logo upload — captured early so every downstream
              * render references it. Image generation includes the logo
              * URL as a reference image so signage and fascia render with
@@ -128,6 +139,7 @@ export default function UploadPage() {
             <div className="max-w-3xl mx-auto">
               <BrandLogoUpload projectId={projectId} />
             </div>
+
 
             {/* Inspiration intake — collected first so it grounds every
              * downstream generation step. Documents land in the project

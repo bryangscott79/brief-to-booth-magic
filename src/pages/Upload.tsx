@@ -20,6 +20,11 @@ export default function UploadPage() {
   const { projectId, isLoading, dbProject } = useProjectSync();
   const [searchParams] = useSearchParams();
   const isSuiteMode = searchParams.get("suite") === "true";
+  const { data: clients = [] } = useClients();
+  const linkedClient = dbProject?.client_id
+    ? clients.find((c) => c.id === dbProject.client_id) ?? null
+    : null;
+
 
   // Show chooser for fresh/empty projects; skip only if a brief already exists
   const hasBriefContent = Boolean(

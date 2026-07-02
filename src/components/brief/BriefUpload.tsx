@@ -1032,8 +1032,11 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
           !newClientConfirmed &&
           (() => {
             const matched = clients.find((c) => c.id === selectedClientId);
-            return matched ? <BrandGuidePrompt client={matched} /> : null;
+            return matched ? (
+              <BrandGuidePrompt client={matched} defaultWebsite={projectBrandUrl ?? null} />
+            ) : null;
           })()}
+
       </div>
 
       <div className="border-t border-border" />

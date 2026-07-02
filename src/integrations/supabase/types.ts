@@ -1429,6 +1429,7 @@ export type Database = {
           activation_type: string | null
           adjacent_activations: Json | null
           big_idea: Json | null
+          brand_website_url: string | null
           brief_file_name: string | null
           brief_file_url: string | null
           brief_text: string | null
@@ -1462,6 +1463,7 @@ export type Database = {
           activation_type?: string | null
           adjacent_activations?: Json | null
           big_idea?: Json | null
+          brand_website_url?: string | null
           brief_file_name?: string | null
           brief_file_url?: string | null
           brief_text?: string | null
@@ -1495,6 +1497,7 @@ export type Database = {
           activation_type?: string | null
           adjacent_activations?: Json | null
           big_idea?: Json | null
+          brand_website_url?: string | null
           brief_file_name?: string | null
           brief_file_url?: string | null
           brief_text?: string | null

@@ -106,6 +106,9 @@ function fuzzyMatchClient(brandName: string, clients: { id: string; name: string
 
 export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange }: BriefUploadProps) {
   const queryClient = useQueryClient();
+  const { data: dbProject } = useProject(projectId ?? undefined);
+  const projectBrandUrl = (dbProject as any)?.brand_website_url as string | null | undefined;
+
   const [step, setStep] = useState<UploadStep>("upload");
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");

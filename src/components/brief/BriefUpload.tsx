@@ -23,6 +23,8 @@ import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
 import type { AiTypeSuggestion, NewCustomType } from "@/components/brief/ProjectTypeSelector";
 import { ALL_PROJECT_TYPES, DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
+import { useProject } from "@/hooks/useProjects";
+
 import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";
 import { useCustomProjectTypes, useUpsertCustomProjectType } from "@/hooks/useCustomProjectTypes";
 import { BrandGuidePrompt } from "@/components/brief/BrandGuidePrompt";

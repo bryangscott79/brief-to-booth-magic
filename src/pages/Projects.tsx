@@ -167,8 +167,10 @@ export default function ProjectsPage() {
   const { projects, isLoading, createProject, deleteProject } = useProjects(adminMode);
   const { setActiveStep } = useProjectStore();
   const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectBrandUrl, setNewProjectBrandUrl] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSuiteCreate, setIsSuiteCreate] = useState(false);
+
   const [search, setSearch] = useState("");
   const [expandedSuites, setExpandedSuites] = useState<Set<string>>(new Set());
 

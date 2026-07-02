@@ -1290,6 +1290,7 @@ export type Database = {
           id: string
           is_current: boolean
           project_id: string
+          prompt_artifacts: Json | null
           public_url: string
           storage_path: string
           user_id: string
@@ -1301,6 +1302,7 @@ export type Database = {
           id?: string
           is_current?: boolean
           project_id: string
+          prompt_artifacts?: Json | null
           public_url: string
           storage_path: string
           user_id: string
@@ -1312,6 +1314,7 @@ export type Database = {
           id?: string
           is_current?: boolean
           project_id?: string
+          prompt_artifacts?: Json | null
           public_url?: string
           storage_path?: string
           user_id?: string

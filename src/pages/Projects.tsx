@@ -383,12 +383,36 @@ export default function ProjectsPage() {
                     : "Give your project a name to get started."}
                 </DialogDescription>
               </DialogHeader>
-              <Input
-                placeholder={isSuiteCreate ? "e.g., CES 2025 Full Program" : "e.g., RSA Conference 2024"}
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
-              />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Project name
+                  </label>
+                  <Input
+                    autoFocus
+                    placeholder={isSuiteCreate ? "e.g., CES 2025 Full Program" : "e.g., RSA Conference 2024"}
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Brand website <span className="text-muted-foreground/70">(optional)</span>
+                  </label>
+                  <Input
+                    placeholder="https://brand.com"
+                    value={newProjectBrandUrl}
+                    onChange={(e) => setNewProjectBrandUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    We'll scrape colors, logo, fonts, and voice from this URL and pre-load it
+                    into brand intelligence for this project.
+                  </p>
+                </div>
+              </div>
+
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 {!isSuiteCreate && (
                   <Button

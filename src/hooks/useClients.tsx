@@ -237,19 +237,59 @@ export function useBatchCreateIntelligence() {
   return useMutation({
     mutationFn: async (entries: Array<Omit<BrandIntelligenceEntry, "id" | "user_id" | "created_at" | "updated_at">>) => {
       if (!user) throw new Error("Not authenticated");
-      const payload = entries.map((e) => ({ ...e, user_id: user.id }));
+      if (entries.length === 0) return { inserted: [] as BrandIntelligenceEntry[], skipped: 0 };
+
+      // Dedupe by (client_id, category, title) against BOTH what's already in
+      // the DB and what's about to be inserted in this same batch. Prevents
+      // the "4x Budget Parameters" issue from re-uploading briefs for the
+      // same client.
+      const clientIds = Array.from(new Set(entries.map((e) => e.client_id)));
+      const { data: existingRows, error: existingErr } = await supabase
+        .from("brand_intelligence")
+        .select("client_id,category,title")
+        .in("client_id" as any, clientIds);
+      if (existingErr) throw existingErr;
+
+      const seen = new Set<string>(
+        (existingRows ?? []).map((r: any) => `${r.client_id}::${r.category}::${String(r.title).trim().toLowerCase()}`)
+      );
+
+      const fresh: typeof entries = [];
+      let skipped = 0;
+      for (const e of entries) {
+        const key = `${e.client_id}::${e.category}::${e.title.trim().toLowerCase()}`;
+        if (seen.has(key)) {
+          skipped++;
+          continue;
+        }
+        seen.add(key);
+        fresh.push(e);
+      }
+
+      if (fresh.length === 0) {
+        return { inserted: [] as BrandIntelligenceEntry[], skipped };
+      }
+
+      const payload = fresh.map((e) => ({ ...e, user_id: user.id }));
       const { data, error } = await supabase
         .from("brand_intelligence")
         .insert(payload as any)
         .select();
       if (error) throw error;
-      return data as unknown as BrandIntelligenceEntry[];
+      return { inserted: data as unknown as BrandIntelligenceEntry[], skipped };
     },
-    onSuccess: (data) => {
-      if (data.length > 0) {
-        qc.invalidateQueries({ queryKey: ["brand-intelligence", data[0].client_id] });
+    onSuccess: (result) => {
+      const { inserted, skipped } = result;
+      if (inserted.length > 0) {
+        qc.invalidateQueries({ queryKey: ["brand-intelligence", inserted[0].client_id] });
       }
-      toast({ title: `${data.length} intelligence entries created` });
+      if (inserted.length === 0 && skipped > 0) {
+        toast({ title: `Skipped ${skipped} duplicate ${skipped === 1 ? "entry" : "entries"}` });
+      } else if (skipped > 0) {
+        toast({ title: `${inserted.length} added, ${skipped} skipped as duplicates` });
+      } else if (inserted.length > 0) {
+        toast({ title: `${inserted.length} intelligence entries created` });
+      }
     },
     onError: (e: any) => toast({ title: "Error creating intelligence entries", description: e.message, variant: "destructive" }),
   });

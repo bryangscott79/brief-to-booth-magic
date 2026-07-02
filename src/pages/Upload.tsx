@@ -4,12 +4,15 @@ import { BriefUpload } from "@/components/brief/BriefUpload";
 import { GuidedBriefBuilder } from "@/components/brief/GuidedBriefBuilder";
 import { InspirationIntake } from "@/components/brief/InspirationIntake";
 import { BrandLogoUpload } from "@/components/brief/BrandLogoUpload";
+import { BrandWebsiteCard } from "@/components/brief/BrandWebsiteCard";
 import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 import { useProjectSync } from "@/hooks/useProjectSync";
+import { useClients } from "@/hooks/useClients";
 import { useSearchParams } from "react-router-dom";
 import { Loader2, FileText, Sparkles, ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
 
 type Mode = "choose" | "upload" | "guided";
 

@@ -563,7 +563,20 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           };
         }
 
-        const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
+        // Retry once on transient boot/resource failures. The edge
+        // platform occasionally returns 503 BOOT_ERROR /
+        // WORKER_RESOURCE_LIMIT when several view workers spin up in
+        // the same instant; a short backoff before a single retry
+        // clears it without user impact.
+        let data: any, error: any;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          ({ data, error } = await supabase.functions.invoke("generate-view", { body: viewBody }));
+          if (!error) break;
+          const msg = await unwrapInvokeError(error);
+          const transient = /BOOT_ERROR|WORKER_RESOURCE_LIMIT|503|failed to start/i.test(msg);
+          if (!transient || attempt === 1) break;
+          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
+        }
 
         if (error) {
           const msg = await unwrapInvokeError(error);

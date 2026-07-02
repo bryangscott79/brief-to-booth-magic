@@ -23,6 +23,8 @@ import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
 import type { AiTypeSuggestion, NewCustomType } from "@/components/brief/ProjectTypeSelector";
 import { ALL_PROJECT_TYPES, DEFAULT_PROJECT_TYPE } from "@/lib/projectTypes";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
+import { useProject } from "@/hooks/useProjects";
+
 import { extractBrandIntelligence } from "@/lib/brandIntelligenceExtractor";
 import { useCustomProjectTypes, useUpsertCustomProjectType } from "@/hooks/useCustomProjectTypes";
 import { BrandGuidePrompt } from "@/components/brief/BrandGuidePrompt";
@@ -104,6 +106,9 @@ function fuzzyMatchClient(brandName: string, clients: { id: string; name: string
 
 export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange }: BriefUploadProps) {
   const queryClient = useQueryClient();
+  const { data: dbProject } = useProject(projectId ?? undefined);
+  const projectBrandUrl = (dbProject as any)?.brand_website_url as string | null | undefined;
+
   const [step, setStep] = useState<UploadStep>("upload");
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [pasteText, setPasteText] = useState("");
@@ -1027,8 +1032,11 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
           !newClientConfirmed &&
           (() => {
             const matched = clients.find((c) => c.id === selectedClientId);
-            return matched ? <BrandGuidePrompt client={matched} /> : null;
+            return matched ? (
+              <BrandGuidePrompt client={matched} defaultWebsite={projectBrandUrl ?? null} />
+            ) : null;
           })()}
+
       </div>
 
       <div className="border-t border-border" />

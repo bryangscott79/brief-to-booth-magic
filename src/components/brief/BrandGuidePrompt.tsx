@@ -58,6 +58,11 @@ export interface BrandGuidePromptProps {
   onComplete?: () => void;
   /** Dismiss button is hidden when false (used in compulsory flows). */
   dismissible?: boolean;
+  /**
+   * Pre-fill the website input from the project-level brand URL
+   * captured on the Upload page. Wins over `client.website`.
+   */
+  defaultWebsite?: string | null;
   className?: string;
 }
 
@@ -66,6 +71,7 @@ export function BrandGuidePrompt({
   threshold = 4,
   onComplete,
   dismissible = true,
+  defaultWebsite,
   className,
 }: BrandGuidePromptProps) {
   const { toast } = useToast();
@@ -75,18 +81,14 @@ export function BrandGuidePrompt({
   const upsertClient = useUpsertClient();
 
   const [dismissed, setDismissed] = useState(false);
-  // When the client's brand is already complete, the prompt collapses
-  // to a tiny "Brand ✓ — Refresh from PDF" chip instead of vanishing.
-  // Clicking the chip flips this to true and the full extractor UI
-  // unfolds so the user can re-run on a newer brand book.
   const [forceExpanded, setForceExpanded] = useState(false);
-  const [mode, setMode] = useState<"url" | "pdf">(
-    client.website ? "url" : "pdf",
-  );
-  const [website, setWebsite] = useState(client.website ?? "");
+  const initialWebsite = (defaultWebsite ?? client.website ?? "").trim();
+  const [mode, setMode] = useState<"url" | "pdf">(initialWebsite ? "url" : "pdf");
+  const [website, setWebsite] = useState(initialWebsite);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [running, setRunning] = useState(false);
   const [renderProgress, setRenderProgress] = useState("");
+
 
   const isBrandReady = entries.length >= threshold;
 

@@ -59,22 +59,27 @@ export function useProjects(adminMode = false) {
   });
 
   const createProject = useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (input: string | { name: string; brand_website_url?: string | null }) => {
       if (!user) throw new Error("Not authenticated");
-      
+      const name = typeof input === "string" ? input : input.name;
+      const brandUrl =
+        typeof input === "string" ? null : (input.brand_website_url?.trim() || null);
+
       const { data, error } = await supabase
         .from("projects")
         .insert({
           user_id: user.id,
           name,
           status: "draft",
+          brand_website_url: brandUrl,
         } as any)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as unknown as DBProject;
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects", user?.id] });
       toast({

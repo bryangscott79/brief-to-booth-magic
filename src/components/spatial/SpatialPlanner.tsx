@@ -1,5 +1,4 @@
 import { useProjectStore } from "@/store/projectStore";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +49,8 @@ import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { saveProjectField } from "@/hooks/useProjectSync";
+import { useActiveSpatialConfig } from "@/hooks/useActiveSpatialConfig";
+import { ConfigSizeChips } from "@/components/common/ConfigSizeChips";
 import { useBrandIntelligence } from "@/hooks/useClients";
 import {
   generatePrompt,
@@ -144,7 +145,11 @@ export function SpatialPlanner() {
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("project");
-  const [activeFootprint, setActiveFootprint] = useState(0);
+  // Active footprint config — persisted selection (spatial_strategy.
+  // activeConfigKey) shared with the Prompts step, so the size chosen
+  // here is the size the render pipeline generates for.
+  const { activeIndex: activeFootprint, setActiveIndex: setActiveFootprint } =
+    useActiveSpatialConfig(projectId);
   const [activeVariation, setActiveVariation] = useState("balanced");
   const [activeTab, setActiveTab] = useState<"layout" | "metrics" | "constraints" | "costs">("layout");
   const [selectedZone, setSelectedZone] = useState<{ zone: NormalizedZone; colors: any } | null>(null);
@@ -874,25 +879,11 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
           bottom Floor Plan card — they're now in that card's header,
           where the relationship is obvious. */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex gap-2 flex-wrap">
-          {spatialData.configs.map((config: any, index: number) => (
-            <button
-              key={config.footprintSize}
-              onClick={() => setActiveFootprint(index)}
-              className={cn(
-                "px-4 py-2 rounded-lg border text-sm font-medium transition-all",
-                activeFootprint === index
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card border-border hover:border-primary/30"
-              )}
-            >
-              {config.footprintSize}
-              <span className="text-xs opacity-70 ml-2">
-                ({config.totalSqft || calculateBoothDimensions(config.footprintSize).totalSqft} sq ft)
-              </span>
-            </button>
-          ))}
-        </div>
+        <ConfigSizeChips
+          configs={spatialData.configs}
+          activeIndex={activeFootprint}
+          onSelect={setActiveFootprint}
+        />
       </div>
 
       {/* Materials & Mood — surfaced ABOVE the canvas so the user sees

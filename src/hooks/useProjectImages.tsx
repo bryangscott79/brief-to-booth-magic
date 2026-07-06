@@ -22,6 +22,10 @@ export interface ProjectImage {
   prompt_artifacts?: {
     modelUsed?: string;
     primaryError?: string;
+    /** Sanitized footprint config key ("20x40") this render was generated for. */
+    configKey?: string;
+    /** Human label for the config (raw footprintSize, e.g. "20x40"). */
+    configLabel?: string;
     [key: string]: unknown;
   } | null;
 }
@@ -53,6 +57,8 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       imageDataUrl,
       modelUsed,
       primaryError,
+      configKey,
+      configLabel,
     }: {
       angleId: string;
       angleName: string;
@@ -61,6 +67,11 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       // Canopy 2.0 / Canopy Lite badge survives page reload.
       modelUsed?: string;
       primaryError?: string;
+      // Footprint config (booth size) tags — persisted into
+      // prompt_artifacts AND used by the edge function to prefix the
+      // storage filename, so renders stay organized per size.
+      configKey?: string;
+      configLabel?: string;
     }) => {
       if (!projectId) throw new Error("No project ID");
 
@@ -72,7 +83,7 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const { data, error } = await supabase.functions.invoke("save-render-image", {
-            body: { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError },
+            body: { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError, configKey, configLabel },
           });
           if (error) throw error;
           if (data?.error) throw new Error(data.error);

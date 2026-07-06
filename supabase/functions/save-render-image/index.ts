@@ -25,6 +25,16 @@ interface SaveImageRequest {
    * chain. Persisted so the hover-tooltip survives reload too.
    */
   primaryError?: string;
+  /**
+   * Footprint config (booth size) this render was generated for, as a
+   * sanitized key (e.g. "20x40"). Optional — older clients / single-
+   * config flows omit it and behave exactly as before. When present it
+   * is persisted into prompt_artifacts AND used to prefix the storage
+   * filename so renders are organized per size.
+   */
+  configKey?: string;
+  /** Human label for the config (raw footprintSize, e.g. "20x40"). */
+  configLabel?: string;
 }
 
 serve(async (req) => {
@@ -58,7 +68,7 @@ serve(async (req) => {
       });
     }
 
-    const { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError }: SaveImageRequest = await req.json();
+    const { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError, configKey, configLabel }: SaveImageRequest = await req.json();
 
     if (!projectId || !angleId || !angleName || !imageDataUrl) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -95,9 +105,16 @@ serve(async (req) => {
     // Use service role client for storage operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Generate unique filename
+    // Generate unique filename. When the client tags the render with a
+    // footprint config, prefix the filename with the config key so files
+    // in storage group per booth size. Sanitize defensively — the key is
+    // already file-safe when produced by the current client, but older
+    // or third-party callers could send anything.
     const timestamp = Date.now();
-    const storagePath = `${projectId}/${angleId}_${timestamp}.${imageType}`;
+    const safeConfigKey = configKey
+      ? configKey.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "")
+      : "";
+    const storagePath = `${projectId}/${safeConfigKey ? `${safeConfigKey}_` : ""}${angleId}_${timestamp}.${imageType}`;
 
     // Upload to storage
     const { error: uploadError } = await adminClient.storage
@@ -135,10 +152,12 @@ serve(async (req) => {
     // if the caller supplied at least one of the fields. When
     // generate-hero overwrites, it includes its own modelUsed too.
     const promptArtifacts: Record<string, unknown> | null =
-      (modelUsed || primaryError)
+      (modelUsed || primaryError || configKey || configLabel)
         ? {
             ...(modelUsed ? { modelUsed } : {}),
             ...(primaryError ? { primaryError } : {}),
+            ...(configKey ? { configKey } : {}),
+            ...(configLabel ? { configLabel } : {}),
           }
         : null;
 

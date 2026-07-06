@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
 import { BriefReadinessPanel } from "@/components/common/BriefReadinessPanel";
 import type { CheckResult } from "@/lib/briefReadiness";
@@ -126,11 +126,18 @@ import {
 } from "@/lib/promptStylePresets";
 import {
   makeVersionedAngleId,
+  makeConfigScopedAngleId,
   parseVersionedAngleId,
+  sanitizeConfigKey,
   findOrphanedVersions,
   LEGACY_VERSION_ID,
   type PromptVersionMeta,
 } from "@/lib/promptVersions";
+
+// Multi-config (booth size) support — persisted active footprint selection
+// shared with the Spatial step, plus the same chip row UI.
+import { useActiveSpatialConfig } from "@/hooks/useActiveSpatialConfig";
+import { ConfigSizeChips } from "@/components/common/ConfigSizeChips";
 
 
 export function PromptGenerator() {
@@ -143,6 +150,16 @@ export function PromptGenerator() {
   // own "Copied" badge timeout. The page-level copiedId map was
   // retired with the move; the legacy handleCopy below is gone.)
   const [showGallery, setShowGallery] = useState(false);
+  // Gallery size filter — "all" or a sanitized config key ("20x40"), or
+  // "__untagged__" for legacy renders saved before multi-config support.
+  const [gallerySizeFilter, setGallerySizeFilter] = useState<string>("all");
+  // "Generate all sizes" batch flow: confirmation gate + per-config
+  // progress. batchRuns is null when no batch has been started.
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [batchRuns, setBatchRuns] = useState<
+    Array<{ key: string; label: string; status: "pending" | "generating" | "done" | "error"; error?: string }>
+    | null
+  >(null);
   // Lightbox for click-to-expand on any generated render.
   // useImageLightbox returns an open() trigger + props spread for
   // the ImageLightbox component instance below.
@@ -171,12 +188,24 @@ export function PromptGenerator() {
   const activePreset = activeVersion ? getPresetById(activeVersion.preset) : PROMPT_STYLE_PRESETS[0]!;
   const activeCustomEmphasis = activeVersion?.customEmphasis;
 
+  // ── Active footprint config (booth size) ──────────────────────────────────
+  // Multi-config projects (e.g. 100x60 + 20x40 + 10x10) pick their active
+  // size on the Spatial step OR via the chip row rendered below — both drive
+  // the same persisted selection (spatial_strategy.activeConfigKey). Every
+  // downstream input (dimensions, zones, geometry, composed prompts, hero
+  // snapshot, saves) derives from the ACTIVE config instead of the old
+  // hardcoded configs[0] (which always rendered the largest size).
+  const spatialConfig = useActiveSpatialConfig(effectiveProjectId);
+  const activeConfigKey = spatialConfig.activeConfigKey;
+  const activeConfigLabel = spatialConfig.activeConfigLabel;
+
   useEffect(() => {
     renderStore.setProjectId(projectId);
   }, [projectId]);
 
-  // Reset render state when the active version flips so the UI re-hydrates
-  // from the project_images rows that belong to the new version.
+  // Reset render state when the active version OR active booth size flips so
+  // the UI re-hydrates from the project_images rows that belong to the new
+  // version/config combination.
   useEffect(() => {
     if (!effectiveProjectId) return;
     renderStore.setHydratedFromDb(false);
@@ -186,7 +215,7 @@ export function PromptGenerator() {
     renderStore.setPhase("prompt");
     // We intentionally don't depend on renderStore — it's a stable reference.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promptVersions.activeVersionId, effectiveProjectId]);
+  }, [promptVersions.activeVersionId, activeConfigKey, effectiveProjectId]);
 
   const brief = currentProject?.parsedBrief;
   const spatialData = currentProject?.elements.spatialStrategy.data;
@@ -260,9 +289,12 @@ export function PromptGenerator() {
   const projectVisualRefs = useProjectVisualReferences(effectiveProjectId);
   const projectVisualRefUrls = projectVisualRefs.inspirationUrls;
 
-  // Calculate booth dimensions
+  // Calculate booth dimensions — for the ACTIVE footprint config (was
+  // hardcoded to configs[0], i.e. always the largest size).
+  const activeSpatialConfigData = spatialConfig.activeConfig;
   const boothDimensions = useMemo(() => {
-    const footprintStr = spatialData?.configs?.[0]?.footprintSize ||
+    const footprintStr = (activeSpatialConfigData?.footprintSize as string | undefined) ||
+      brief?.spatial?.footprints?.[spatialConfig.activeIndex]?.size ||
       brief?.spatial?.footprints?.[0]?.size ||
       "30x30";
     // Override the unit detected from the string with the project's
@@ -270,13 +302,14 @@ export function PromptGenerator() {
     // string didn't carry a unit marker (e.g. "30x30") but the user has
     // chosen metric — interpret as 30m × 30m.
     return calculateBoothDimensions(footprintStr, measurementSystem);
-  }, [spatialData, brief, measurementSystem]);
+  }, [activeSpatialConfigData, spatialConfig.activeIndex, brief, measurementSystem]);
 
-  // Normalize zones
+  // Normalize zones — for the ACTIVE footprint config.
   const normalizedZones = useMemo(() => {
-    if (!spatialData?.configs?.[0]?.zones) return [];
-    return normalizeZones(spatialData.configs[0].zones, boothDimensions.totalSqft);
-  }, [spatialData, boothDimensions.totalSqft]);
+    const zones = activeSpatialConfigData?.zones;
+    if (!zones || !Array.isArray(zones)) return [];
+    return normalizeZones(zones as any[], boothDimensions.totalSqft);
+  }, [activeSpatialConfigData, boothDimensions.totalSqft]);
 
   // Build combined angle list: standard + zone interiors
   const zoneInteriorAngles = useMemo(() => {
@@ -593,10 +626,29 @@ export function PromptGenerator() {
     const matchesLegacy =
       active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
     const all = savedImages.map((img) => {
-      const { baseAngleId, versionId: imgVersionId } = parseVersionedAngleId(img.angle_id);
-      return { img, baseAngleId, imgVersionId };
+      const { baseAngleId, versionId: imgVersionId, configKey: parsedConfigKey } =
+        parseVersionedAngleId(img.angle_id);
+      // The angle_id suffix is the primary config channel (survives even if
+      // the prompt_artifacts column is missing in prod); artifacts are the
+      // fallback for saves that carried tags but no suffix.
+      const artifactConfigKey =
+        typeof img.prompt_artifacts?.configKey === "string"
+          ? img.prompt_artifacts.configKey
+          : null;
+      return { img, baseAngleId, imgVersionId, imgConfigKey: parsedConfigKey ?? artifactConfigKey };
     });
-    const scoped = all.filter(({ imgVersionId }) => {
+    // Config scoping first: an image belongs to the active booth size when
+    // its config key matches, OR when it's untagged (legacy — everything
+    // generated before multi-config support) and the active size is the
+    // project's FIRST config (the largest — the size the old pipeline
+    // always rendered). Projects without configs skip this filter entirely.
+    const configScoped = all.filter(({ imgConfigKey }) => {
+      if (!activeConfigKey) return true;
+      if (imgConfigKey === activeConfigKey) return true;
+      if (imgConfigKey === null && activeConfigKey === spatialConfig.defaultConfigKey) return true;
+      return false;
+    });
+    const scoped = configScoped.filter(({ imgVersionId }) => {
       if (matchesLegacy) return imgVersionId === null;
       if (versionId) return imgVersionId === versionId;
       // No version active → fall back to legacy untagged.
@@ -604,11 +656,19 @@ export function PromptGenerator() {
     });
     // Fallback: if the active version has no saved images yet (fresh
     // version, or the user's earlier iterations were saved under a
-    // different version id), show ALL saved images so previous
-    // iterations are still browseable from the Prompts page instead
-    // of vanishing until a new hero is generated.
-    return scoped.length > 0 ? scoped : all;
-  }, [savedImages, promptVersions.activeVersionId, promptVersions.activeVersion]);
+    // different version id), show all saved images FOR THIS BOOTH SIZE so
+    // previous iterations are still browseable from the Prompts page
+    // instead of vanishing until a new hero is generated. Deliberately
+    // never falls back across booth sizes — a 100x60 hero must not hydrate
+    // into the 20x40 view.
+    return scoped.length > 0 ? scoped : configScoped;
+  }, [
+    savedImages,
+    promptVersions.activeVersionId,
+    promptVersions.activeVersion,
+    activeConfigKey,
+    spatialConfig.defaultConfigKey,
+  ]);
 
   useEffect(() => {
     if (
@@ -691,46 +751,69 @@ export function PromptGenerator() {
     return meta.id;
   }, [promptVersions]);
 
-  // doSave is what renderStore calls when a render finishes. We rewrite the
-  // angle id to include the active version's suffix so storage stays
-  // partitioned per version — UNLESS the active version claims unversioned
-  // (legacy) renders, in which case we save without a suffix so it stays
-  // attached to the same legacy bucket.
-  const doSave = useCallback(
-    (
-      angleId: string,
-      angleName: string,
-      imageDataUrl: string,
-      // modelUsed + primaryError ride along so save-render-image can
-      // persist them in project_images.prompt_artifacts. That's what
-      // makes the Canopy 2.0 / Canopy Lite badge (and its hover-
-      // tooltip with the gpt-image-2 failure reason) survive page
-      // reload — without persistence the badge vanishes the first
-      // time the user navigates away.
-      meta?: { modelUsed?: string; primaryError?: string },
-    ) => {
-      const versionId = ensureActiveVersion();
-      const active = promptVersions.activeVersion;
-      const isLegacyVersion =
-        active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
-      const finalAngleId = isLegacyVersion ? angleId : makeVersionedAngleId(angleId, versionId);
-      saveImage.mutate(
-        {
-          angleId: finalAngleId,
-          angleName,
-          imageDataUrl,
-          modelUsed: meta?.modelUsed,
-          primaryError: meta?.primaryError,
-        },
-        {
-          onSuccess: () => {
-            promptVersions.touchActiveVersion();
+  // makeSaveHandler builds the onSave callback renderStore calls when a
+  // render finishes. We rewrite the angle id to include the active version's
+  // suffix AND the footprint config's suffix so storage stays partitioned
+  // per version per booth size — UNLESS the active version claims
+  // unversioned (legacy) renders, in which case we save without any suffix
+  // so it stays attached to the same legacy bucket (legacy renders belong
+  // to configs[0] by definition).
+  //
+  // It's a factory (rather than a single doSave) because "Generate all
+  // sizes" needs a save handler bound to EACH config while it loops — the
+  // config captured at generation start is the config the render belongs
+  // to, even if the user flips chips mid-flight.
+  const makeSaveHandler = useCallback(
+    (configKey: string | null, configLabel: string | null) =>
+      (
+        angleId: string,
+        angleName: string,
+        imageDataUrl: string,
+        // modelUsed + primaryError ride along so save-render-image can
+        // persist them in project_images.prompt_artifacts. That's what
+        // makes the Canopy 2.0 / Canopy Lite badge (and its hover-
+        // tooltip with the gpt-image-2 failure reason) survive page
+        // reload — without persistence the badge vanishes the first
+        // time the user navigates away.
+        meta?: { modelUsed?: string; primaryError?: string },
+      ) => {
+        const versionId = ensureActiveVersion();
+        const active = promptVersions.activeVersion;
+        const isLegacyVersion =
+          active?.claimsUnversioned === true || versionId === LEGACY_VERSION_ID;
+        // Legacy versions keep the bare angle id (their contract is "no
+        // suffix at all"); everything else gets version + config suffixes.
+        const versioned = isLegacyVersion ? angleId : makeVersionedAngleId(angleId, versionId);
+        const finalAngleId =
+          !isLegacyVersion && configKey ? makeConfigScopedAngleId(versioned, configKey) : versioned;
+        saveImage.mutate(
+          {
+            angleId: finalAngleId,
+            angleName,
+            imageDataUrl,
+            modelUsed: meta?.modelUsed,
+            primaryError: meta?.primaryError,
+            // Config tags always ride along (even for legacy versions) —
+            // they land in prompt_artifacts and prefix the storage
+            // filename so Files/gallery can organize renders per size.
+            configKey: configKey ?? undefined,
+            configLabel: configLabel ?? undefined,
           },
-          onError: (err) => console.error(`Failed to save ${angleName}:`, err),
-        },
-      );
-    },
+          {
+            onSuccess: () => {
+              promptVersions.touchActiveVersion();
+            },
+            onError: (err) => console.error(`Failed to save ${angleName}:`, err),
+          },
+        );
+      },
     [saveImage, promptVersions, ensureActiveVersion],
+  );
+
+  // Default save handler — bound to the currently active booth size.
+  const doSave = useMemo(
+    () => makeSaveHandler(activeConfigKey, activeConfigLabel),
+    [makeSaveHandler, activeConfigKey, activeConfigLabel],
   );
 
   /** Prompt builder params — shared across all generatePrompt calls.
@@ -773,6 +856,75 @@ export function PromptGenerator() {
       includeLegacy: !alreadyHasLegacyVersion,
     });
   }, [effectiveProjectId, savedImages, promptVersions.versions, alreadyHasLegacyVersion]);
+
+  // Map sanitized config key → human label, from the project's configs.
+  // Used to label gallery filter chips and per-render size badges when
+  // the saved artifacts didn't carry a configLabel.
+  const configKeyLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const cfg of spatialConfig.configs) {
+      if (cfg?.footprintSize) {
+        map.set(sanitizeConfigKey(String(cfg.footprintSize)), String(cfg.footprintSize));
+      }
+    }
+    return map;
+  }, [spatialConfig.configs]);
+
+  // Every saved image annotated with its booth-size tag (angle_id suffix
+  // first, prompt_artifacts fallback). Drives the gallery's size filter
+  // chips + per-card badges. No brief/spatial deps → safe on loading pass.
+  const taggedSavedImages = useMemo(
+    () =>
+      savedImages.map((img) => {
+        const { configKey: parsedKey } = parseVersionedAngleId(img.angle_id);
+        const artifactKey =
+          typeof img.prompt_artifacts?.configKey === "string"
+            ? img.prompt_artifacts.configKey
+            : null;
+        const cfgKey = parsedKey ?? artifactKey;
+        const artifactLabel =
+          typeof img.prompt_artifacts?.configLabel === "string"
+            ? img.prompt_artifacts.configLabel
+            : null;
+        const cfgLabel = artifactLabel ?? (cfgKey ? configKeyLabelMap.get(cfgKey) ?? cfgKey : null);
+        return { img, cfgKey, cfgLabel };
+      }),
+    [savedImages, configKeyLabelMap],
+  );
+
+  // Size filter chips for the gallery: distinct config keys present among
+  // saved images (project-config order first), plus an untagged bucket.
+  const gallerySizeChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    let untagged = 0;
+    for (const { cfgKey } of taggedSavedImages) {
+      if (cfgKey) counts.set(cfgKey, (counts.get(cfgKey) ?? 0) + 1);
+      else untagged += 1;
+    }
+    const ordered: Array<{ key: string; label: string; count: number }> = [];
+    // Project-config order first (largest → smallest as authored)…
+    for (const [key, label] of configKeyLabelMap) {
+      if (counts.has(key)) {
+        ordered.push({ key, label, count: counts.get(key)! });
+        counts.delete(key);
+      }
+    }
+    // …then any keys from configs that no longer exist on the project.
+    for (const [key, count] of counts) {
+      ordered.push({ key, label: configKeyLabelMap.get(key) ?? key, count });
+    }
+    if (untagged > 0) {
+      ordered.push({ key: "__untagged__", label: "Earlier renders", count: untagged });
+    }
+    return ordered;
+  }, [taggedSavedImages, configKeyLabelMap]);
+
+  const galleryFilteredImages = useMemo(() => {
+    if (gallerySizeFilter === "all") return taggedSavedImages;
+    if (gallerySizeFilter === "__untagged__")
+      return taggedSavedImages.filter((t) => t.cfgKey === null);
+    return taggedSavedImages.filter((t) => t.cfgKey === gallerySizeFilter);
+  }, [taggedSavedImages, gallerySizeFilter]);
 
   // Brief-readiness jump handler — pure navigation, no brief deps.
   const handleReadinessJump = useCallback(
@@ -1227,6 +1379,156 @@ export function PromptGenerator() {
     }
   };
 
+  // ── "Generate all sizes" batch flow ─────────────────────────────────
+  // Queues ONE hero generation per footprint config, strictly
+  // sequentially (never parallel — the image gateway already shows
+  // rate-limit symptoms at low concurrency). Each run recomputes the
+  // full prompt pipeline (dimensions → zones → geometry → floor-plan
+  // reference → composed prompt) for ITS config and saves under that
+  // config's key, reusing the exact same generateHeroImage machinery
+  // (including its error unwrapping and the save-side retry).
+  const isBatchRunning = !!batchRuns?.some(
+    (r) => r.status === "pending" || r.status === "generating",
+  );
+
+  const runBatchAllSizes = async () => {
+    const configs = spatialConfig.configs;
+    if (configs.length <= 1 || !projectId) return;
+    setShowBatchConfirm(false);
+    setBatchRuns(
+      configs.map((cfg, i) => ({
+        key: cfg.footprintSize ? sanitizeConfigKey(String(cfg.footprintSize)) : `config-${i}`,
+        label: String(cfg.footprintSize ?? `Config ${i + 1}`),
+        status: "pending" as const,
+      })),
+    );
+    const setRunStatus = (
+      index: number,
+      status: "pending" | "generating" | "done" | "error",
+      error?: string,
+    ) =>
+      setBatchRuns((prev) =>
+        prev ? prev.map((r, i) => (i === index ? { ...r, status, error } : r)) : prev,
+      );
+
+    // Interior-design mask is per-project, not per-size — compute once.
+    const existingSpaceParams = await buildExistingSpaceParams();
+
+    let succeeded = 0;
+    for (let i = 0; i < configs.length; i++) {
+      const cfg = configs[i]!;
+      setRunStatus(i, "generating");
+      try {
+        // Recompute the prompt pipeline for THIS config — the page-level
+        // memos (boothDimensions, normalizedZones, composerOutput, …) are
+        // bound to the ACTIVE config only.
+        const dims = calculateBoothDimensions(
+          String(cfg.footprintSize ?? "30x30"),
+          measurementSystem,
+        );
+        const zones = Array.isArray(cfg.zones)
+          ? normalizeZones(cfg.zones as any[], dims.totalSqft)
+          : [];
+        const geom = boothGeometryFromLegacy(dims, zones, 12, {
+          features: promptBoothFeatures,
+          materialsCatalog: promptMaterialsCatalog,
+        });
+        let cfgComposer: ReturnType<typeof composePrompt> | null = null;
+        try {
+          const nb = normalizeBrief({
+            project: {
+              id: currentProject!.id,
+              name: currentProject!.name,
+              projectType: currentProject!.projectType ?? "exhibition_booth",
+              industrySlug: currentProject!.industrySlug ?? projectIndustrySlug,
+            },
+            parsedBrief: brief,
+            geometry: geom,
+            elements,
+          });
+          cfgComposer = composePrompt(nb);
+        } catch (e) {
+          console.warn(
+            `[PromptGenerator] batch composePrompt failed for ${cfg.footprintSize}:`,
+            e,
+          );
+        }
+        const cfgPromptParams: GeneratePromptParams = {
+          ...promptParams,
+          boothDimensions: dims,
+          normalizedZones: zones,
+          zoneInteriorAngles: getZoneInteriorAngles(zones),
+        };
+        const promptText =
+          cfgComposer?.renderer ||
+          applyStylePresetToPrompt(
+            generatePrompt("hero_34", cfgPromptParams),
+            activePreset,
+            activeCustomEmphasis,
+          );
+        // Floor-plan reference for THIS config's geometry — the visual
+        // scale anchor. Cached by geometry hash inside the hook.
+        const geomRefs = await geometryRefs.captureAndUpload(geom, {
+          captureFloorplan: async () => renderFloorPlanForExport(geom),
+          captureIsometric: async () => null,
+        });
+        const cfgKey = cfg.footprintSize ? sanitizeConfigKey(String(cfg.footprintSize)) : null;
+        const cfgLabel = cfg.footprintSize ? String(cfg.footprintSize) : null;
+
+        await renderStore.generateHeroImage({
+          composedPrompt: cfgComposer
+            ? {
+                renderer: cfgComposer.renderer,
+                negative: cfgComposer.negative,
+                artifacts: cfgComposer,
+              }
+            : undefined,
+          prompt: promptText,
+          projectId,
+          boothSize: dims.footprintLabel,
+          boothDimensions: {
+            width: dims.width,
+            depth: dims.depth,
+            sqft: dims.totalSqft,
+            system: dims.measurementSystem,
+            ceilingHeightFt: geom.ceilingHeightFt,
+          },
+          geometryReferences: geomRefs,
+          projectType: currentProject?.projectType ?? null,
+          brandIntelligence: approvedBrandIntel,
+          brandContext: ragBrandContext || undefined,
+          suiteContext: ragSuiteContext || undefined,
+          brandLogoUrl,
+          imageModel: activeImageModel,
+          extraReferenceUrls: projectVisualRefUrls.length > 0 ? projectVisualRefUrls : undefined,
+          ...existingSpaceParams,
+          // Save under THIS config's key — not whatever chip happens to
+          // be active by the time the render lands.
+          onSave: makeSaveHandler(cfgKey, cfgLabel),
+        });
+        succeeded += 1;
+        setRunStatus(i, "done");
+      } catch (e) {
+        console.error(`[PromptGenerator] batch hero failed for ${cfg.footprintSize}:`, e);
+        setRunStatus(i, "error", e instanceof Error ? e.message : "Generation failed");
+      }
+    }
+
+    // The loop leaves the LAST size's hero in the render store — reset so
+    // the page re-hydrates the ACTIVE size's hero from the saved images.
+    renderStore.setHydratedFromDb(false);
+    renderStore.setHeroImage(null);
+    renderStore.setGeneratedImages({});
+    renderStore.setHeroPrompt("");
+    renderStore.setPhase("prompt");
+
+    toast({
+      title: succeeded === configs.length ? "All sizes generated" : "Batch finished with errors",
+      description: `${succeeded} of ${configs.length} hero renders completed. Switch size chips to review each one.`,
+      variant: succeeded === configs.length ? undefined : "destructive",
+    });
+  };
+
   const downloadImage = (url: string, name: string) => {
     const link = document.createElement('a');
     link.href = url;
@@ -1283,6 +1585,114 @@ export function PromptGenerator() {
   // one. Generation handlers auto-create "Balanced" on first use.
   const versionsHeader = effectiveProjectId ? (
     <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+      {/* Booth-size selector — same chips as the Spatial step, driving the
+        * same persisted selection. Hidden for single-config projects. */}
+      <ConfigSizeChips
+        configs={spatialConfig.configs}
+        activeIndex={spatialConfig.activeIndex}
+        onSelect={spatialConfig.setActiveIndex}
+        disabled={isGeneratingHero || isGenerating || isBatchRunning}
+      />
+
+      {/* "Generate all sizes" confirmation. Mounted here (the header is
+        * rendered on every phase) so the dialogs survive phase flips
+        * during the batch run. */}
+      <Dialog open={showBatchConfirm} onOpenChange={setShowBatchConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate hero renders for all sizes?</DialogTitle>
+            <DialogDescription>
+              This will run {spatialConfig.configs.length} generations (
+              {spatialConfig.configs.length} sizes × 1 hero view each), one size at a
+              time to avoid rate limits. You can then switch size chips to review each
+              hero and generate its remaining views.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            {spatialConfig.configs.map((cfg, i) => (
+              <Badge key={`${cfg.footprintSize ?? "config"}-${i}`} variant="secondary">
+                {String(cfg.footprintSize ?? `Config ${i + 1}`)}
+              </Badge>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={runBatchAllSizes}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate {spatialConfig.configs.length} heroes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Per-config batch progress. */}
+      <Dialog
+        open={!!batchRuns}
+        onOpenChange={(open) => {
+          if (!open && !isBatchRunning) setBatchRuns(null);
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Generating all sizes</DialogTitle>
+            <DialogDescription>
+              {isBatchRunning
+                ? "Running one size at a time — keep this tab open."
+                : "Batch finished. Switch size chips to review each hero."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {batchRuns?.map((run) => (
+              <div
+                key={run.key}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+              >
+                <span className="font-medium">{run.label}</span>
+                <span className="flex items-center gap-1.5 text-xs">
+                  {run.status === "pending" && (
+                    <span className="text-muted-foreground">Waiting…</span>
+                  )}
+                  {run.status === "generating" && (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      <span className="text-primary">Generating…</span>
+                    </>
+                  )}
+                  {run.status === "done" && (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                      <span>Done</span>
+                    </>
+                  )}
+                  {run.status === "error" && (
+                    <>
+                      <X className="h-3.5 w-3.5 text-destructive" />
+                      <span className="text-destructive" title={run.error}>
+                        Failed
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBatchRuns(null)}
+              disabled={isBatchRunning}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PromptVersionTabs
         versions={promptVersions.versions}
         activeVersionId={promptVersions.activeVersionId}
@@ -1480,6 +1890,21 @@ export function PromptGenerator() {
                   </Button>
                 </div>
               </div>
+            )}
+
+            {/* Batch alternative to the single-size Generate above: queue a
+              * hero render for EVERY footprint config, sequentially. Only
+              * shown for multi-config projects. */}
+            {spatialConfig.configs.length > 1 && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowBatchConfirm(true)}
+                disabled={isGeneratingHero || isBatchRunning}
+              >
+                <Layers className="mr-2 h-4 w-4" />
+                Generate all sizes ({spatialConfig.configs.length})
+              </Button>
             )}
 
             <PromptDebugPanel output={composerOutput} />
@@ -1732,9 +2157,20 @@ export function PromptGenerator() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          {spatialConfig.configs.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBatchConfirm(true)}
+              disabled={isGenerating || isGeneratingHero || isBatchRunning}
+            >
+              <Layers className="mr-2 h-4 w-4" />
+              Generate all sizes
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRegenerateAll}
             disabled={isGenerating || isGeneratingHero}
           >
@@ -1752,18 +2188,53 @@ export function PromptGenerator() {
               <DialogHeader>
                 <DialogTitle>Project Image Gallery</DialogTitle>
               </DialogHeader>
+              {/* Size filter — driven by the configKey tags on each saved
+                * render. Only shown when there's more than one bucket. */}
+              {gallerySizeChips.length > 1 && (
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setGallerySizeFilter("all")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium transition-colors border",
+                      gallerySizeFilter === "all"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/50 text-muted-foreground border-border hover:bg-muted",
+                    )}
+                  >
+                    All sizes
+                    <span className="ml-1.5 opacity-70">{savedImages.length}</span>
+                  </button>
+                  {gallerySizeChips.map((chip) => (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={() => setGallerySizeFilter(chip.key)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium transition-colors border",
+                        gallerySizeFilter === chip.key
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted/50 text-muted-foreground border-border hover:bg-muted",
+                      )}
+                    >
+                      {chip.label}
+                      <span className="ml-1.5 opacity-70">{chip.count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <ScrollArea className="h-[60vh] pr-4">
-                {savedImages.length === 0 ? (
+                {galleryFilteredImages.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No images saved yet.</p>
                 ) : (
                   <div className="space-y-6">
                     {Object.entries(
-                      savedImages.reduce((acc, img) => {
-                        const key = img.angle_name;
+                      galleryFilteredImages.reduce((acc, tagged) => {
+                        const key = tagged.img.angle_name;
                         if (!acc[key]) acc[key] = [];
-                        acc[key].push(img);
+                        acc[key].push(tagged);
                         return acc;
-                      }, {} as Record<string, typeof savedImages>)
+                      }, {} as Record<string, typeof galleryFilteredImages>)
                     ).map(([angleName, images]) => (
                       <div key={angleName}>
                         <div className="flex items-center gap-2 mb-2">
@@ -1771,7 +2242,7 @@ export function PromptGenerator() {
                           <Badge variant="secondary" className="text-xs">{images.length} version{images.length > 1 ? "s" : ""}</Badge>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {images.map((img) => (
+                          {images.map(({ img, cfgLabel }) => (
                             <div key={img.id} className="group relative rounded-lg overflow-hidden border bg-muted">
                               <button
                                 type="button"
@@ -1791,6 +2262,11 @@ export function PromptGenerator() {
                                   className="w-full aspect-video object-cover"
                                 />
                               </button>
+                              {cfgLabel && (
+                                <Badge className="absolute top-2 left-2 bg-black/60 text-white border-0 text-[10px]">
+                                  {cfgLabel}
+                                </Badge>
+                              )}
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
                                 <Button
                                   variant="secondary"

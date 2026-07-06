@@ -136,6 +136,40 @@ export async function savePromptVersions(
 
 const VERSION_SUFFIX_DELIM = "__v__";
 
+// ─── Config (booth size) scoping ────────────────────────────────────────────
+//
+// Multi-footprint projects (e.g. 100x60 + 20x40 + 10x10) need each size's
+// renders isolated from the others — a 20x40 hero must never overwrite the
+// 100x60 hero. We append a config suffix AFTER the version suffix:
+//
+//   hero_34                                → legacy (pre-versioning, pre-config)
+//   hero_34__v__abc123                     → versioned, pre-config (configs[0])
+//   hero_34__v__abc123__cfg__20x40         → versioned + config-scoped
+//
+// The config key is derived from the config's footprintSize string via
+// sanitizeConfigKey so it stays deterministic and storage-filename-safe.
+// Legacy ids without a __cfg__ suffix are treated as belonging to the
+// project's FIRST config (configs[0] — the largest), which is what the old
+// hardcoded pipeline always rendered.
+
+const CONFIG_SUFFIX_DELIM = "__cfg__";
+
+/** Deterministic, file-safe key for a footprint config ("20x40", "10m-x-10m"). */
+export function sanitizeConfigKey(footprintLabel: string): string {
+  return (
+    footprintLabel
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9.]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "size"
+  );
+}
+
+/** Append a config suffix to an (optionally already versioned) angle id. */
+export function makeConfigScopedAngleId(angleId: string, configKey: string): string {
+  return `${angleId}${CONFIG_SUFFIX_DELIM}${sanitizeConfigKey(configKey)}`;
+}
+
 export function makeVersionedAngleId(baseAngleId: string, versionId: string): string {
   return `${baseAngleId}${VERSION_SUFFIX_DELIM}${versionId}`;
 }
@@ -143,12 +177,23 @@ export function makeVersionedAngleId(baseAngleId: string, versionId: string): st
 export function parseVersionedAngleId(angleId: string): {
   baseAngleId: string;
   versionId: string | null;
+  /** Sanitized config key ("20x40") or null for legacy / pre-config ids. */
+  configKey: string | null;
 } {
-  const idx = angleId.indexOf(VERSION_SUFFIX_DELIM);
-  if (idx < 0) return { baseAngleId: angleId, versionId: null };
+  // Strip the config suffix first — it's appended outermost.
+  let rest = angleId;
+  let configKey: string | null = null;
+  const cfgIdx = angleId.lastIndexOf(CONFIG_SUFFIX_DELIM);
+  if (cfgIdx >= 0) {
+    configKey = angleId.slice(cfgIdx + CONFIG_SUFFIX_DELIM.length) || null;
+    rest = angleId.slice(0, cfgIdx);
+  }
+  const idx = rest.indexOf(VERSION_SUFFIX_DELIM);
+  if (idx < 0) return { baseAngleId: rest, versionId: null, configKey };
   return {
-    baseAngleId: angleId.slice(0, idx),
-    versionId: angleId.slice(idx + VERSION_SUFFIX_DELIM.length),
+    baseAngleId: rest.slice(0, idx),
+    versionId: rest.slice(idx + VERSION_SUFFIX_DELIM.length),
+    configKey,
   };
 }
 

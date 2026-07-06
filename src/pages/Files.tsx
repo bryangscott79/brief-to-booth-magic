@@ -26,6 +26,8 @@ import {
 import { RhinoUploadPanel } from "@/components/rhino/RhinoUploadPanel";
 import { RhinoGallery } from "@/components/rhino/RhinoGallery";
 import { FilesVideoPanel } from "@/components/files/FilesVideoPanel";
+import { parseVersionedAngleId, sanitizeConfigKey } from "@/lib/promptVersions";
+import type { ProjectImage } from "@/hooks/useProjectImages";
 
 export default function FilesPage() {
   const { projectId, isLoading: syncLoading } = useProjectSync();
@@ -52,12 +54,82 @@ export default function FilesPage() {
     return true;
   });
 
+  // ── Booth-size (footprint config) grouping ──────────────────────────
+  // Renders are tagged with their config via the angle_id __cfg__ suffix
+  // (primary channel) and prompt_artifacts.configKey/configLabel
+  // (fallback). Untagged/legacy renders land in an "Earlier renders"
+  // group at the end. Single-group projects render the flat grid exactly
+  // as before.
+  const spatialConfigs: Array<{ footprintSize?: string }> = Array.isArray(
+    currentProject?.elements?.spatialStrategy?.data?.configs,
+  )
+    ? currentProject!.elements.spatialStrategy.data.configs
+    : [];
+  const configKeyLabelMap = new Map<string, string>();
+  for (const cfg of spatialConfigs) {
+    if (cfg?.footprintSize) {
+      configKeyLabelMap.set(
+        sanitizeConfigKey(String(cfg.footprintSize)),
+        String(cfg.footprintSize),
+      );
+    }
+  }
+  const sizeTagOf = (img: ProjectImage): { key: string | null; label: string | null } => {
+    const { configKey: parsedKey } = parseVersionedAngleId(img.angle_id);
+    const artifactKey =
+      typeof img.prompt_artifacts?.configKey === "string" ? img.prompt_artifacts.configKey : null;
+    const key = parsedKey ?? artifactKey;
+    const artifactLabel =
+      typeof img.prompt_artifacts?.configLabel === "string"
+        ? img.prompt_artifacts.configLabel
+        : null;
+    return { key, label: artifactLabel ?? (key ? configKeyLabelMap.get(key) ?? key : null) };
+  };
+
+  const sizeGroups: Array<{ key: string | null; label: string; images: ProjectImage[] }> = (() => {
+    const byKey = new Map<string, ProjectImage[]>();
+    const untagged: ProjectImage[] = [];
+    for (const img of filtered) {
+      const { key } = sizeTagOf(img);
+      if (!key) {
+        untagged.push(img);
+        continue;
+      }
+      const list = byKey.get(key);
+      if (list) list.push(img);
+      else byKey.set(key, [img]);
+    }
+    const groups: Array<{ key: string | null; label: string; images: ProjectImage[] }> = [];
+    // Project-config order first (largest → smallest as authored)…
+    for (const [key, label] of configKeyLabelMap) {
+      const images = byKey.get(key);
+      if (images) {
+        groups.push({ key, label, images });
+        byKey.delete(key);
+      }
+    }
+    // …then keys whose config no longer exists on the project…
+    for (const [key, images] of byKey) {
+      groups.push({ key, label: sizeTagOf(images[0]).label ?? key, images });
+    }
+    // …and untagged/legacy renders last.
+    if (untagged.length > 0) {
+      groups.push({ key: null, label: "Earlier renders", images: untagged });
+    }
+    return groups;
+  })();
+
+  // Flattened display order (group order) — the lightbox walks this list
+  // so prev/next follows what's on screen.
+  const displayImages = sizeGroups.flatMap((g) => g.images);
+  const displayIndexById = new Map(displayImages.map((img, i) => [img.id, i]));
+
   // Lightbox navigation
-  const lightboxImg = lightbox !== null ? filtered[lightbox] : null;
+  const lightboxImg = lightbox !== null ? displayImages[lightbox] : null;
   const goLightbox = (dir: 1 | -1) => {
     if (lightbox === null) return;
     const next = lightbox + dir;
-    if (next >= 0 && next < filtered.length) setLightbox(next);
+    if (next >= 0 && next < displayImages.length) setLightbox(next);
   };
 
   const handleDownload = (img: (typeof savedImages)[0]) => {
@@ -237,15 +309,17 @@ export default function FilesPage() {
                       </div>
                     )}
 
-                    {/* Image grid */}
+                    {/* Image grid — grouped under booth-size headers when the
+                        project's renders span more than one size. */}
                     {filtered.length === 0 ? (
                       <div className="text-center py-16 text-muted-foreground text-sm">
                         No images match the current filter.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                        {filtered.map((img, idx) => {
+                      (() => {
+                        const renderCard = (img: ProjectImage) => {
                           const isSelected = selectedImages.has(img.id);
+                          const sizeLabel = sizeTagOf(img).label;
                           return (
                             <div
                               key={img.id}
@@ -258,7 +332,7 @@ export default function FilesPage() {
                                 if (selectMode) {
                                   toggleSelectImage(img.id);
                                 } else {
-                                  setLightbox(idx);
+                                  setLightbox(displayIndexById.get(img.id) ?? 0);
                                 }
                               }}
                             >
@@ -282,7 +356,7 @@ export default function FilesPage() {
                                   </span>
                                 </div>
                               )}
-                              {selectMode && (
+                              {selectMode ? (
                                 <div className="absolute top-1.5 left-1.5">
                                   {isSelected ? (
                                     <CheckSquare className="h-4 w-4 text-primary drop-shadow" />
@@ -290,11 +364,41 @@ export default function FilesPage() {
                                     <Square className="h-4 w-4 text-white/80 drop-shadow" />
                                   )}
                                 </div>
+                              ) : (
+                                sizeLabel && (
+                                  <div className="absolute top-1.5 left-1.5">
+                                    <span className="bg-black/60 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">
+                                      {sizeLabel}
+                                    </span>
+                                  </div>
+                                )
                               )}
                             </div>
                           );
-                        })}
-                      </div>
+                        };
+
+                        return sizeGroups.length > 1 ? (
+                          <div className="space-y-6">
+                            {sizeGroups.map((group) => (
+                              <div key={group.key ?? "__untagged__"}>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h3 className="text-sm font-semibold">{group.label}</h3>
+                                  <Badge variant="secondary" className="px-1.5 py-0 text-[10px] h-4">
+                                    {group.images.length}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                                  {group.images.map(renderCard)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                            {displayImages.map(renderCard)}
+                          </div>
+                        );
+                      })()
                     )}
                   </>
                 )}
@@ -370,9 +474,9 @@ export default function FilesPage() {
                 Download
               </Button>
             </div>
-            <p className="text-white/30 text-xs">{lightbox + 1} of {filtered.length}</p>
+            <p className="text-white/30 text-xs">{lightbox + 1} of {displayImages.length}</p>
           </div>
-          {lightbox < filtered.length - 1 && (
+          {lightbox < displayImages.length - 1 && (
             <button
               className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-white/10 rounded-full p-2"
               onClick={(e) => { e.stopPropagation(); goLightbox(1); }}

@@ -427,6 +427,50 @@ describe("composePrompt — hanging elements section", () => {
     expect(out.renderer).toMatch(/2 × 2 m ×/);
   });
 
+  it("emits user-authored creativeDirection with EXACT lock language", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [
+        {
+          name: "Primary identity ring",
+          physicalForm: "white ring",
+          creativeDirection:
+            "Thin brushed-aluminum ring, logo on outer face only, no printing on the underside.",
+        },
+      ],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.hanging.elements[0]?.creativeDirection).toBe(
+      "Thin brushed-aluminum ring, logo on outer face only, no printing on the underside.",
+    );
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(
+      /Creative direction \(EXACT — follow precisely\): Thin brushed-aluminum ring/,
+    );
+    expect(out.renderer).toMatch(/NOT inspiration; do not reinterpret/i);
+  });
+
+  it("omits creative-direction lock language when no element carries one", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      hangingElements: [{ name: "Ring", physicalForm: "white ring" }],
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    expect(out.renderer).not.toMatch(/Creative direction \(EXACT/);
+    expect(out.renderer).not.toMatch(/NOT inspiration/);
+  });
+
   // Regression for the compliance-propagation bug: validateBrief rebuilds
   // failures from scratch and never reads normalized.compliance
   // .hardConstraints, so the new hanging_elements_aloft constraint was

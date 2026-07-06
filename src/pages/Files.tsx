@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import {
   Download,
+  FileText,
   ImageIcon,
   Loader2,
   FolderOpen,
@@ -23,6 +24,7 @@ import {
   Square,
   Play,
 } from "lucide-react";
+import { RenderPromptDialog } from "@/components/common/RenderPromptDialog";
 import { RhinoUploadPanel } from "@/components/rhino/RhinoUploadPanel";
 import { RhinoGallery } from "@/components/rhino/RhinoGallery";
 import { FilesVideoPanel } from "@/components/files/FilesVideoPanel";
@@ -39,6 +41,9 @@ export default function FilesPage() {
   const [activeAngle, setActiveAngle] = useState<string>("all");
   const [currentOnly, setCurrentOnly] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null);
+  // "View prompt" dialog — shows the stored prompt_artifacts for the
+  // render currently open in the lightbox.
+  const [promptDialogImage, setPromptDialogImage] = useState<ProjectImage | null>(null);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
 
@@ -473,6 +478,16 @@ export default function FilesPage() {
                 <Download className="h-3 w-3 mr-1" />
                 Download
               </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 text-xs"
+                onClick={() => setPromptDialogImage(lightboxImg)}
+                title="View the exact prompt that produced this render"
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                View prompt
+              </Button>
             </div>
             <p className="text-white/30 text-xs">{lightbox + 1} of {displayImages.length}</p>
           </div>
@@ -486,6 +501,12 @@ export default function FilesPage() {
           )}
         </div>
       )}
+
+      {/* Prompt-transparency dialog — portaled above the lightbox. */}
+      <RenderPromptDialog
+        image={promptDialogImage}
+        onClose={() => setPromptDialogImage(null)}
+      />
     </AppLayout>
   );
 }

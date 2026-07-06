@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-05-15-stream-flush-padding
+// generate-view — DEPLOY TOKEN: 2026-07-06-prompt-transparency
 //
 // Same restructure as generate-hero (see that file for the full
 // rationale). Two relevant changes for view rendering:
@@ -1079,6 +1079,10 @@ serve(async (req) => {
           imageUrl: generatedImageUrl,
           message: responseText,
           modelUsed,
+          // The EXACT prompt text sent to the image model — echoed back
+          // so the client can persist it into prompt_artifacts for the
+          // "View prompt" transparency surface.
+          promptUsed: editPrompt,
           // Only set when the Gemini fallback fired — surfaced in
           // the UI tooltip so the user can see exactly why
           // gpt-image-2 didn't produce this render.

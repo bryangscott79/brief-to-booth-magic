@@ -12,12 +12,16 @@ export interface ProjectImage {
   is_current: boolean;
   created_at: string;
   /**
-   * JSON blob of render metadata. Currently holds modelUsed
-   * ("openai/gpt-image-2" or "google/gemini-3-pro-image-preview")
-   * and primaryError (gpt-image-2's failure reason when the Gemini
-   * fallback fired). Populated by save-render-image so the
-   * "Canopy 2.0" / "Canopy Lite" badge survives page reloads.
-   * May also carry hero composer artifacts written by generate-hero.
+   * JSON blob of render metadata, populated by save-render-image.
+   *   - modelUsed / primaryError → Canopy 2.0 / Canopy Lite badge
+   *   - configKey / configLabel → booth-size (footprint config) tags
+   *   - prompt / negative / geometrySummary / compliance / references /
+   *     model / generatedAt → prompt-transparency payload (see
+   *     buildRenderPromptArtifacts) shown by the "View prompt" dialog
+   *   - hangingApproved → hanging-element check gate approval for the
+   *     hero this row stores
+   * Legacy rows (pre prompt-tracking) may be null or carry only a
+   * subset — the UI shows "Prompt not recorded" for those.
    */
   prompt_artifacts?: {
     modelUsed?: string;
@@ -26,6 +30,17 @@ export interface ProjectImage {
     configKey?: string;
     /** Human label for the config (raw footprintSize, e.g. "20x40"). */
     configLabel?: string;
+    /** Full prompt text actually sent to the image model. */
+    prompt?: string;
+    promptTruncated?: boolean;
+    negative?: string;
+    geometrySummary?: string;
+    compliance?: unknown[];
+    references?: Array<{ label?: string; url?: string }>;
+    model?: string;
+    generatedAt?: string;
+    /** Hanging-element check approved for this hero render. */
+    hangingApproved?: boolean;
     [key: string]: unknown;
   } | null;
 }
@@ -59,6 +74,7 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       primaryError,
       configKey,
       configLabel,
+      promptArtifacts,
     }: {
       angleId: string;
       angleName: string;
@@ -72,6 +88,10 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       // storage filename, so renders stay organized per size.
       configKey?: string;
       configLabel?: string;
+      // Prompt-transparency payload (buildRenderPromptArtifacts) —
+      // merged into prompt_artifacts by the edge function so every
+      // render keeps the exact prompt that produced it.
+      promptArtifacts?: Record<string, unknown>;
     }) => {
       if (!projectId) throw new Error("No project ID");
 
@@ -83,7 +103,7 @@ export function useSaveRenderImage(projectId: string | null | undefined) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const { data, error } = await supabase.functions.invoke("save-render-image", {
-            body: { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError, configKey, configLabel },
+            body: { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError, configKey, configLabel, promptArtifacts },
           });
           if (error) throw error;
           if (data?.error) throw new Error(data.error);

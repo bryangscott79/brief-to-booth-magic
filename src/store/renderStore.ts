@@ -2,6 +2,28 @@ import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import type { DesignContext } from "@/lib/designContextBuilder";
 import { unwrapInvokeError } from "@/lib/supabaseInvokeError";
+import { buildRenderPromptArtifacts } from "@/lib/renderPromptArtifacts";
+
+/**
+ * Metadata that rides along with every onSave callback so
+ * save-render-image can persist it into project_images.prompt_artifacts.
+ *   - modelUsed / primaryError → Canopy 2.0 / Canopy Lite badge
+ *   - promptArtifacts → prompt-transparency payload (the exact prompt
+ *     sent to the model, negative, geometry summary, compliance,
+ *     labeled reference URLs, model, timestamp)
+ */
+export interface RenderSaveMeta {
+  modelUsed?: string;
+  primaryError?: string;
+  promptArtifacts?: Record<string, unknown>;
+}
+
+type OnSaveRender = (
+  angleId: string,
+  angleName: string,
+  imageDataUrl: string,
+  meta?: RenderSaveMeta,
+) => void;
 
 export interface GeneratedImage {
   url: string;
@@ -95,6 +117,13 @@ interface RenderState {
    */
   designContext: DesignContext | null;
   consistencyTokens: Record<string, unknown> | null;
+  /**
+   * Hanging-element check approvals, keyed by
+   * hangingApprovalKey(configKey, heroImageUrl). A refined/regenerated
+   * hero produces a new URL → approval resets automatically for the new
+   * hero. Reset on project switch like everything else here.
+   */
+  hangingApprovals: Record<string, boolean>;
 }
 
 interface RenderActions {
@@ -145,6 +174,14 @@ interface RenderActions {
     };
     prompt: string;
     feedback?: string;
+    /**
+     * Short human-readable label for this turn in the hero refinement
+     * thread. When the `feedback` text is a long machine-built edit
+     * instruction (e.g. the hanging-element refine flow), pass the
+     * user's original words here so the conversation UI stays readable.
+     * Falls back to `feedback` when omitted.
+     */
+    threadMessage?: string;
     previousImageUrl?: string;
     projectId: string;
     boothSize?: string;
@@ -183,7 +220,7 @@ interface RenderActions {
      * editable per the prompt.
      */
     maskDataUrl?: string | null;
-    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
+    onSave: OnSaveRender;
   }) => Promise<void>;
 
   generateAllViews: (params: {
@@ -193,9 +230,14 @@ interface RenderActions {
      * Per-angle composed prompts. Keys are angle ids; values come from
      * composeViewPrompt(heroSnapshot, angle). When present, the edge
      * function uses each renderer verbatim. Falls back to legacy
-     * builder per-angle for any missing key.
+     * builder per-angle for any missing key. geometrySummary +
+     * compliance ride along for the prompt-transparency artifacts —
+     * they are NOT sent to the edge function.
      */
-    composedPrompts?: Record<string, { renderer: string; negative: string }>;
+    composedPrompts?: Record<
+      string,
+      { renderer: string; negative: string; geometrySummary?: string; compliance?: unknown[] }
+    >;
     heroImageUrl: string;
     /**
      * Original hero prompt text — the full prompt that produced the hero
@@ -240,14 +282,14 @@ interface RenderActions {
      * Pass null when the user has no change polygons.
      */
     maskDataUrl?: string | null;
-    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
+    onSave: OnSaveRender;
   }) => Promise<void>;
 
   regenerateView: (params: {
     angle: { id: string; name: string; aspectRatio: string; isZoneInterior?: boolean };
     prompt: string;
     /** Pre-composed renderer for this single angle (Phase 3). */
-    composedPrompt?: { renderer: string; negative: string };
+    composedPrompt?: { renderer: string; negative: string; geometrySummary?: string; compliance?: unknown[] };
     heroImageUrl: string;
     /** Original hero prompt text — see generateAllViews for rationale. */
     heroPromptText?: string;
@@ -282,7 +324,7 @@ interface RenderActions {
     existingSpacePhotoUrl?: string;
     /** Optional alpha-mask PNG data URL for the existing-space path. */
     maskDataUrl?: string | null;
-    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
+    onSave: OnSaveRender;
   }) => Promise<void>;
 
   /** Phase 4E: Cascade regenerate all views after hero change */
@@ -294,8 +336,16 @@ interface RenderActions {
     newHeroImageUrl: string;
     projectId: string;
     boothSize?: string;
-    onSave: (angleId: string, angleName: string, imageDataUrl: string, meta?: { modelUsed?: string; primaryError?: string }) => void;
+    onSave: OnSaveRender;
   }) => Promise<void>;
+
+  /**
+   * Mark/unmark the hanging-element check as approved for a specific
+   * config+hero combination (key from hangingApprovalKey). Session
+   * state — persistence lives in that hero image's prompt_artifacts
+   * (hangingApproved: true), which the Prompts page re-hydrates from.
+   */
+  setHangingApproval: (key: string, approved: boolean) => void;
 
   /** Phase 4: Set design context for hero generation */
   setDesignContext: (ctx: DesignContext | null) => void;
@@ -326,7 +376,58 @@ const initialState: RenderState = {
   viewVersions: {},
   designContext: null,
   consistencyTokens: null,
+  hangingApprovals: {},
 };
+
+/**
+ * Prompt-transparency artifacts for a single VIEW render. Mirrors
+ * generate-view's actual reference-attachment logic so the stored
+ * reference list reflects what the model really received:
+ *   - existing-space photo → that photo is the ONLY reference
+ *   - composed prompt → hero/exterior reference only (edit mode)
+ *   - legacy → reference + brand logo + extras
+ */
+function buildViewPromptArtifacts(opts: {
+  /** Edge-function response body (promptUsed / modelUsed live here). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+  composed?: { renderer: string; negative: string; geometrySummary?: string; compliance?: unknown[] };
+  legacyPrompt: string | undefined;
+  referenceUrl: string;
+  referenceLabel: string;
+  brandLogoUrl?: string;
+  extraReferenceUrls?: string[];
+  existingSpacePhotoUrl?: string;
+  imageModel?: string;
+}): Record<string, unknown> | undefined {
+  const { data, composed, legacyPrompt, referenceUrl, referenceLabel, brandLogoUrl, extraReferenceUrls, existingSpacePhotoUrl, imageModel } = opts;
+  const promptUsed =
+    typeof data?.promptUsed === "string" && data.promptUsed.trim().length > 0
+      ? data.promptUsed
+      : composed?.renderer ?? legacyPrompt;
+  const references = existingSpacePhotoUrl
+    ? [{ label: "Existing space photo", url: existingSpacePhotoUrl }]
+    : composed
+      ? [{ label: referenceLabel, url: referenceUrl }]
+      : [
+          { label: referenceLabel, url: referenceUrl },
+          ...(brandLogoUrl ? [{ label: "Brand logo", url: brandLogoUrl }] : []),
+          ...(extraReferenceUrls ?? []).map((url, i) => ({
+            label: `Attached reference ${i + 1}`,
+            url,
+          })),
+        ];
+  return (
+    buildRenderPromptArtifacts({
+      prompt: promptUsed,
+      negative: composed?.negative,
+      geometrySummary: composed?.geometrySummary,
+      compliance: composed?.compliance,
+      model: typeof data?.modelUsed === "string" ? data.modelUsed : imageModel,
+      references,
+    }) ?? undefined
+  );
+}
 
 export const useRenderStore = create<RenderStore>((set, get) => ({
   ...initialState,
@@ -359,8 +460,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
   resetForProject: (projectId) => set({ ...initialState, projectId }),
   setDesignContext: (designContext) => set({ designContext }),
   setConsistencyTokens: (consistencyTokens) => set({ consistencyTokens }),
+  setHangingApproval: (key, approved) =>
+    set((s) => ({ hangingApprovals: { ...s.hangingApprovals, [key]: approved } })),
 
-  generateHeroImage: async ({ composedPrompt, prompt, feedback, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, existingSpacePhotoUrl, maskDataUrl, onSave }) => {
+  generateHeroImage: async ({ composedPrompt, prompt, feedback, threadMessage, previousImageUrl, projectId, boothSize, boothDimensions, geometryReferences, projectType, brandIntelligence, brandContext, suiteContext, brandLogoUrl, extraReferenceUrls, imageModel, existingSpacePhotoUrl, maskDataUrl, onSave }) => {
     set({ isGeneratingHero: true, phase: "hero-generation" });
 
     try {
@@ -430,8 +533,9 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
       // initial generation, populated when they typed something to
       // refine). Each turn carries its own imageUrl so the user can
       // click any thumbnail to branch off.
+      const turnMessage = (threadMessage ?? feedback ?? "").trim();
       const turn: HeroTurn = {
-        userMessage: feedback && feedback.trim().length > 0 ? feedback.trim() : null,
+        userMessage: turnMessage.length > 0 ? turnMessage : null,
         imageUrl: data.imageUrl,
         generatedAt: new Date().toISOString(),
       };
@@ -448,13 +552,49 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         heroVersion: s.heroVersion + 1,
       }));
 
+      // Prompt-transparency artifacts. The edge function echoes back
+      // the EXACT prompt it sent to the model (promptUsed) — critical
+      // for the edit-mode path where the edge wraps the feedback in
+      // its edit template. Fall back to the composed renderer / legacy
+      // prompt for older function deployments that don't echo it.
+      const promptUsed =
+        typeof data.promptUsed === "string" && data.promptUsed.trim().length > 0
+          ? data.promptUsed
+          : composedPrompt?.renderer ?? prompt;
+      // Reference list mirrors generate-hero's actual attachment logic:
+      // existing-space photo is exclusive; otherwise previous hero (edit
+      // source) + brand logo + user extras. data: URLs (e.g. the mask)
+      // are filtered inside the builder — never persisted.
+      const promptArtifacts = buildRenderPromptArtifacts({
+        prompt: promptUsed,
+        negative: composedPrompt?.negative,
+        geometrySummary: composedPrompt?.artifacts?.geometrySummary,
+        compliance: composedPrompt?.artifacts?.compliance,
+        model: typeof data.modelUsed === "string" ? data.modelUsed : imageModel,
+        references: existingSpacePhotoUrl
+          ? [{ label: "Existing space photo", url: existingSpacePhotoUrl }]
+          : [
+              ...(previousImageUrl
+                ? [{ label: "Previous hero (edit source)", url: previousImageUrl }]
+                : []),
+              ...(brandLogoUrl ? [{ label: "Brand logo", url: brandLogoUrl }] : []),
+              ...(extraReferenceUrls ?? []).map((url, i) => ({
+                label: `Attached reference ${i + 1}`,
+                url,
+              })),
+            ],
+      });
+
       // Save to storage. modelUsed + primaryError ride along so the
       // edge function can persist them into project_images.prompt_
       // artifacts — that's what makes the "Canopy 2.0" / "Canopy
-      // Lite" badge survive a page reload.
+      // Lite" badge survive a page reload. promptArtifacts makes the
+      // exact prompt reviewable forever ("View prompt" in the gallery
+      // and Files lightbox).
       onSave("hero_34", "3/4 Hero View", data.imageUrl, {
         modelUsed: typeof data.modelUsed === "string" ? data.modelUsed : undefined,
         primaryError: typeof data.primaryError === "string" ? data.primaryError : undefined,
+        promptArtifacts: promptArtifacts ?? undefined,
       });
     } catch (error) {
       if (get().projectId !== projectId) return;
@@ -607,6 +747,19 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           onSave(angle.id, angle.name, imageUrl, {
             modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
             primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
+            promptArtifacts: buildViewPromptArtifacts({
+              data,
+              composed: composedPrompts?.[angle.id],
+              legacyPrompt: prompts[angle.id],
+              referenceUrl,
+              referenceLabel: angle.isZoneInterior && referenceUrl !== heroImageUrl
+                ? "Exterior reference"
+                : "Hero reference",
+              brandLogoUrl,
+              extraReferenceUrls,
+              existingSpacePhotoUrl,
+              imageModel,
+            }),
           });
         }
       } catch (error) {
@@ -734,6 +887,19 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         onSave(angle.id, angle.name, imageUrl, {
           modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
           primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
+          promptArtifacts: buildViewPromptArtifacts({
+            data,
+            composed: composedPrompt,
+            legacyPrompt: prompt,
+            referenceUrl,
+            referenceLabel: angle.isZoneInterior && referenceUrl !== heroImageUrl
+              ? "Exterior reference"
+              : "Hero reference",
+            brandLogoUrl,
+            extraReferenceUrls,
+            existingSpacePhotoUrl,
+            imageModel,
+          }),
         });
       }
     } catch (error) {
@@ -839,6 +1005,15 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           onSave(angle.id, angle.name, imageUrl, {
             modelUsed: typeof data?.modelUsed === "string" ? data.modelUsed : undefined,
             primaryError: typeof data?.primaryError === "string" ? data.primaryError : undefined,
+            promptArtifacts: buildViewPromptArtifacts({
+              data,
+              composed: composedPrompts?.[angle.id],
+              legacyPrompt: prompts[angle.id],
+              referenceUrl,
+              referenceLabel: angle.isZoneInterior && referenceUrl !== newHeroImageUrl
+                ? "Exterior reference"
+                : "Hero reference",
+            }),
           });
         }
       } catch (_err) {

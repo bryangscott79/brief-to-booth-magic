@@ -164,6 +164,8 @@ function deriveHangingElements(brief: ParsedBrief): NormalizedHangingElement[] {
       surfaces: Array.isArray(e.surfaces) ? (e.surfaces as unknown[]).map(String) : [],
       lighting: Array.isArray(e.lighting) ? (e.lighting as unknown[]).map(String) : [],
       printed: Array.isArray(e.printed) ? (e.printed as unknown[]).map(String) : [],
+      creativeDirection:
+        typeof e.creativeDirection === "string" ? e.creativeDirection : undefined,
     };
   });
 }
@@ -432,6 +434,9 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
           surfaces: el.surfaces,
           lighting: el.lighting,
           printed: el.printed,
+          // Exact creative direction — the composer emits this with
+          // lock language ("EXACT — follow precisely").
+          creativeDirection: el.creativeDirection,
         })),
       };
       hangingLatestRef.current = updated;

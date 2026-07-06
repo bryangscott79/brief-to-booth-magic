@@ -237,6 +237,14 @@ export interface NormalizedHangingElement {
    * accurately by the image model.
    */
   printed: string[];
+  /**
+   * Optional user-authored EXACT creative direction. When present the
+   * composer's # HANGING ELEMENTS block emits it with lock language:
+   * this text is the author's specification, not inspiration. Free
+   * text, e.g. "thin brushed-aluminum ring, logo on outer face only,
+   * no printing on the underside".
+   */
+  creativeDirection?: string;
 }
 
 export interface NormalizedBriefHanging {
@@ -564,6 +572,13 @@ export interface ParsedHangingElement {
   surfaces?: string[];
   lighting?: string[];
   printed?: string[];
+  /**
+   * User-authored EXACT creative direction for this element. Authored
+   * on the Brief Review card or the Prompts-step hanging check panel.
+   * When present the composer emits it with lock language — the model
+   * is told it's a specification to follow literally, not inspiration.
+   */
+  creativeDirection?: string;
 }
 
 /**
@@ -632,6 +647,10 @@ function normalizeHangingElement(
     surfaces: Array.isArray(raw.surfaces) ? raw.surfaces.map(String) : [],
     lighting: Array.isArray(raw.lighting) ? raw.lighting.map(String) : [],
     printed: Array.isArray(raw.printed) ? raw.printed.map(String) : [],
+    creativeDirection:
+      typeof raw.creativeDirection === "string" && raw.creativeDirection.trim().length > 0
+        ? raw.creativeDirection.trim()
+        : undefined,
   };
 }
 
@@ -1193,7 +1212,24 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
       if (el.surfaces.length > 0) heLines.push(`  Surfaces: ${el.surfaces.join("; ")}`);
       if (el.lighting.length > 0) heLines.push(`  Lighting: ${el.lighting.join(", ")}`);
       if (el.printed.length > 0) heLines.push(`  Printed: ${el.printed.join("; ")}`);
+      // User-authored creative direction is a LOCK, not a mood board.
+      // Without this the model treated the hanging spec as loose
+      // inspiration and produced random overhead forms.
+      if (el.creativeDirection && el.creativeDirection.trim().length > 0) {
+        heLines.push(
+          `  Creative direction (EXACT — follow precisely): ${el.creativeDirection.trim()}`,
+        );
+      }
       heLines.push("");
+    }
+    if (
+      n.hanging.elements.some(
+        (el) => (el.creativeDirection ?? "").trim().length > 0,
+      )
+    ) {
+      heLines.push(
+        'Where an element carries "Creative direction (EXACT)" above, that text is the author\'s literal specification for the element — render it exactly as described. It is NOT inspiration; do not reinterpret, restyle, or embellish it.',
+      );
     }
     sections.push(heLines.join("\n").trimEnd());
   }

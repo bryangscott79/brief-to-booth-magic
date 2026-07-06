@@ -1,4 +1,4 @@
-// generate-hero — DEPLOY TOKEN: 2026-05-14-composer-driven
+// generate-hero — DEPLOY TOKEN: 2026-07-06-prompt-transparency
 //
 // Prompt structure: We assemble a compact markdown prompt with sections
 // in priority order (SCENE → SCALE → HERO → ZONES → BRAND → MATERIALS
@@ -1047,43 +1047,20 @@ serve(async (req) => {
         }
       }
   
-      // Persist composer output to project_images.prompt_artifacts so
-      // auxiliary view renders can read it as heroSnapshot. This is the
-      // contract between hero and view renders — views derive from this
-      // object. Wrapped in try/catch so a missing column (pre-migration)
-      // or an RLS hiccup doesn't fail the response.
-      if (body.composedPrompt?.artifacts && project_id) {
-        try {
-          const adminClient = createClient(
-            Deno.env.get("SUPABASE_URL")!,
-            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-          );
-          // Merge composer artifacts (used by view renders for
-          // heroSnapshot) with the model-badge metadata (used by the
-          // client UI). Both live in the same prompt_artifacts JSON
-          // column; we write them together so save-render-image's
-          // earlier insert with modelUsed isn't clobbered by this
-          // update.
-          const mergedArtifacts: Record<string, unknown> = {
-            ...body.composedPrompt.artifacts,
-            ...(modelUsed ? { modelUsed } : {}),
-            ...(primaryError ? { primaryError } : {}),
-          };
-          const { error: persistError } = await adminClient
-            .from("project_images")
-            .update({ prompt_artifacts: mergedArtifacts })
-            .eq("project_id", project_id)
-            .eq("angle_id", "hero_34")
-            .eq("is_current", true);
-          if (persistError) {
-            console.warn("[generate-hero] prompt_artifacts persist returned:", persistError.message);
-          } else {
-            console.log("[generate-hero] Persisted prompt_artifacts to project_images");
-          }
-        } catch (e) {
-          console.warn("[generate-hero] prompt_artifacts persistence failed:", e);
-        }
-      }
+      // NOTE: this function used to UPDATE project_images.prompt_artifacts
+      // for the row (angle_id = "hero_34", is_current = true) here. That
+      // write was removed:
+      //   1. It raced the client's save-render-image call — at this point
+      //      the "current" hero row is the PREVIOUS render, so the update
+      //      clobbered the previous hero's stored prompt with the NEW
+      //      composer artifacts (corrupting prompt history).
+      //   2. Versioned/config-scoped saves use suffixed angle ids
+      //      ("hero_34__v__x__cfg__y"), so the exact-match update usually
+      //      hit nothing anyway.
+      // The client now persists the full prompt-transparency payload
+      // through save-render-image's promptArtifacts field, attached to
+      // the CORRECT row, and echoes the exact prompt via `promptUsed`
+      // below.
 
       return {
         status: 200,
@@ -1092,6 +1069,11 @@ serve(async (req) => {
           imageUrl: generatedImageUrl,
           message: responseText,
           modelUsed,
+          // The EXACT prompt text sent to the image model — echoed back
+          // so the client can persist it for prompt transparency. This
+          // matters most in EDIT MODE, where the prompt is assembled
+          // edge-side around the feedback text.
+          promptUsed: flattenedPrompt,
           // Present only when the Gemini fallback fired — lets the
           // client show "Canopy Lite (gpt-image-2 said: <reason>)" on
           // hover so the user can see what went wrong with the

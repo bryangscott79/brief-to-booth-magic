@@ -30,8 +30,24 @@ import {
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useToast } from "@/hooks/use-toast";
-import { useProjectImages, useSaveRenderImage } from "@/hooks/useProjectImages";
+import { useProjectImages, useSaveRenderImage, type ProjectImage } from "@/hooks/useProjectImages";
 import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { saveProjectField } from "@/hooks/useProjectSync";
+
+// Prompt transparency — every saved render carries its exact prompt in
+// prompt_artifacts; this dialog surfaces it from the gallery cards.
+import { RenderPromptDialog } from "@/components/common/RenderPromptDialog";
+import { FileText } from "lucide-react";
+
+// Hanging-element creative control: hero-first check gate + refine-in-
+// place edit flow. Approval is scoped per config + hero version.
+import { HangingElementCheck } from "@/components/prompts/HangingElementCheck";
+import {
+  hangingApprovalKey,
+  buildHangingEditInstruction,
+} from "@/lib/hangingRefinement";
 import { useBrandIntelligence, useClient } from "@/hooks/useClients";
 import { useBrandRAG } from "@/hooks/useBrandRAG";
 
@@ -164,6 +180,10 @@ export function PromptGenerator() {
   // useImageLightbox returns an open() trigger + props spread for
   // the ImageLightbox component instance below.
   const lightbox = useImageLightbox();
+  // "View prompt" dialog target — a saved render whose stored
+  // prompt_artifacts we're showing. null = closed.
+  const [promptDialogImage, setPromptDialogImage] = useState<ProjectImage | null>(null);
+  const queryClient = useQueryClient();
 
   // Global render store
   const renderStore = useRenderStore();
@@ -539,19 +559,51 @@ export function PromptGenerator() {
     }
   }, [normalizedBrief]);
 
+  // ── Hanging-element check gate ─────────────────────────────────────
+  // Only projects whose brief carries hanging elements see the gate —
+  // everything below is a no-op for floor-only booths. Approval is
+  // scoped per config + hero image URL: refining/regenerating the hero
+  // produces a new URL, so the new hero starts unapproved.
+  const hangingElements = useMemo(
+    () => normalizedBrief?.hanging.elements ?? [],
+    [normalizedBrief],
+  );
+  const hangingKey = hangingApprovalKey(activeConfigKey, heroImage);
+  const hangingApproved = !!renderStore.hangingApprovals[hangingKey];
+
+  // Re-hydrate approval from the persisted flag on the hero's saved
+  // row (prompt_artifacts.hangingApproved) so it survives reloads.
+  useEffect(() => {
+    if (!heroImage || hangingElements.length === 0) return;
+    const row = savedImages.find((img) => img.public_url === heroImage);
+    if (row?.prompt_artifacts?.hangingApproved === true) {
+      const state = useRenderStore.getState();
+      if (!state.hangingApprovals[hangingKey]) {
+        state.setHangingApproval(hangingKey, true);
+      }
+    }
+  }, [heroImage, savedImages, hangingElements.length, hangingKey]);
+
   // Build per-angle composed view prompts once the hero has rendered.
   // Each view is composed against the hero snapshot, so all views share
   // the same canonical design state instead of diverging from the brief
   // independently.
   const composedViewPrompts = useMemo(() => {
-    if (!composerOutput || !normalizedBrief || !heroImage) return {} as Record<string, { renderer: string; negative: string }>;
+    if (!composerOutput || !normalizedBrief || !heroImage)
+      return {} as Record<
+        string,
+        { renderer: string; negative: string; geometrySummary?: string; compliance?: unknown[] }
+      >;
     const snapshot: HeroSnapshot = {
       composerOutput,
       normalizedBrief,
       imageUrl: heroImage,
       generatedAt: new Date().toISOString(),
     };
-    const out: Record<string, { renderer: string; negative: string }> = {};
+    const out: Record<
+      string,
+      { renderer: string; negative: string; geometrySummary?: string; compliance?: unknown[] }
+    > = {};
     for (const angle of allAngles) {
       if (angle.id === "hero_34") continue;
       const viewAngle = mapAngleIdToViewAngle(angle.id);
@@ -567,6 +619,10 @@ export function PromptGenerator() {
         out[angle.id] = {
           renderer: viewOut.renderer,
           negative: viewOut.negative,
+          // Carried for the prompt-transparency artifacts only — the
+          // edge function still receives just renderer + negative.
+          geometrySummary: viewOut.geometrySummary,
+          compliance: viewOut.compliance,
         };
       } catch (e) {
         // Defense-in-depth — a single bad angle shouldn't break the
@@ -774,8 +830,10 @@ export function PromptGenerator() {
         // makes the Canopy 2.0 / Canopy Lite badge (and its hover-
         // tooltip with the gpt-image-2 failure reason) survive page
         // reload — without persistence the badge vanishes the first
-        // time the user navigates away.
-        meta?: { modelUsed?: string; primaryError?: string },
+        // time the user navigates away. promptArtifacts carries the
+        // prompt-transparency payload (exact prompt, negative,
+        // geometry, references, timestamp) built in renderStore.
+        meta?: { modelUsed?: string; primaryError?: string; promptArtifacts?: Record<string, unknown> },
       ) => {
         const versionId = ensureActiveVersion();
         const active = promptVersions.activeVersion;
@@ -793,6 +851,7 @@ export function PromptGenerator() {
             imageDataUrl,
             modelUsed: meta?.modelUsed,
             primaryError: meta?.primaryError,
+            promptArtifacts: meta?.promptArtifacts,
             // Config tags always ride along (even for legacy versions) —
             // they land in prompt_artifacts and prefix the storage
             // filename so Files/gallery can organize renders per size.
@@ -1167,7 +1226,122 @@ export function PromptGenerator() {
     await handleGenerateHeroImage();
   };
 
+  // ── Hanging-element gate handlers ──────────────────────────────────
+
+  /**
+   * Approve the hanging element for the CURRENT config + hero version.
+   * Store flag flips immediately; persistence lands on the hero's saved
+   * project_images row (prompt_artifacts.hangingApproved) so the
+   * approval survives page reloads. RLS allows the update — the row is
+   * owned by the current user.
+   */
+  const handleApproveHanging = async () => {
+    renderStore.setHangingApproval(hangingKey, true);
+    const row = savedImages.find((img) => img.public_url === heroImage);
+    if (row) {
+      try {
+        const { error } = await supabase
+          .from("project_images")
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .update({ prompt_artifacts: { ...(row.prompt_artifacts ?? {}), hangingApproved: true } } as any)
+          .eq("id", row.id);
+        if (error) {
+          console.warn("[PromptGenerator] hangingApproved persist failed:", error.message);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ["project-images", effectiveProjectId] });
+        }
+      } catch (e) {
+        console.warn("[PromptGenerator] hangingApproved persist threw:", e);
+      }
+    }
+    toast({
+      title: "Hanging element approved",
+      description: "Views generated from this hero will inherit it.",
+    });
+  };
+
+  /**
+   * Refine the hanging element in isolation. Calls generate-hero's EDIT
+   * MODE (previousImageUrl + feedback, deliberately NO composedPrompt —
+   * that branch takes priority and would regenerate from scratch). The
+   * instruction locks booth/environment/lighting/camera and scopes the
+   * change to the suspended element per the user's feedback + the
+   * canonical spec. The result saves as a NEW hero version in the same
+   * config's stack; iterating refine → refine always uses the latest.
+   */
+  const handleRefineHanging = async (feedbackText: string) => {
+    if (!heroImage || !projectId) return;
+    const instruction = buildHangingEditInstruction(
+      hangingElements,
+      feedbackText,
+      boothDimensions.measurementSystem,
+    );
+    try {
+      await renderStore.generateHeroImage({
+        prompt: instruction,
+        feedback: instruction,
+        // Keep the conversation thread readable — show the user's own
+        // words, not the machine-built edit instruction.
+        threadMessage: `Refine hanging element: ${feedbackText}`,
+        previousImageUrl: heroImage,
+        projectId,
+        boothSize: boothDimensions.footprintLabel,
+        boothDimensions: structuredBoothDims,
+        projectType: currentProject?.projectType ?? null,
+        brandLogoUrl,
+        imageModel: activeImageModel,
+        onSave: doSave,
+      });
+      toast({
+        title: "Hanging element refined",
+        description: "Saved as a new hero version — approve it, refine again, or flip back in the conversation thread.",
+      });
+    } catch (error) {
+      console.error("Error refining hanging element:", error);
+      toast({
+        title: "Refinement failed",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  /**
+   * Persist a creative-direction edit (from the check panel) back into
+   * parsed_brief.hangingElements[index] — same field the Review step's
+   * hanging card authors, same saveProjectField write path.
+   */
+  const handleHangingCreativeDirection = (index: number, text: string) => {
+    if (!brief) return;
+    const list = Array.isArray(brief.hangingElements) ? brief.hangingElements : [];
+    if (!list[index]) return;
+    const trimmed = text.trim();
+    const updated = {
+      ...brief,
+      hangingElements: list.map((el, i) =>
+        i === index
+          ? { ...el, creativeDirection: trimmed.length > 0 ? trimmed : undefined }
+          : el,
+      ),
+    };
+    useProjectStore.getState().setParsedBrief(updated);
+    if (effectiveProjectId) {
+      void saveProjectField(effectiveProjectId, "parsed_brief", updated);
+    }
+  };
+
   const handleGenerateAllViews = async () => {
+    // Hanging gate: generating views while the hanging element is
+    // unapproved is allowed, but warn once — every view inherits the
+    // hero's hanging element.
+    if (hangingElements.length > 0 && !hangingApproved) {
+      toast({
+        title: "Hanging element not approved",
+        description:
+          "All views will inherit the hanging element from the current hero. You can refine it on the hero first.",
+      });
+    }
+
     const prompts: Record<string, string> = {};
     allAngles.forEach(angle => {
       if (angle.id !== "hero_34") {
@@ -2122,6 +2296,22 @@ export function PromptGenerator() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Hanging-element check gate — only for briefs that carry
+          * hanging elements. Spec next to the render, hero-first
+          * approve/refine before fanning out to the other views. */}
+        {hangingElements.length > 0 && (
+          <HangingElementCheck
+            elements={hangingElements}
+            units={boothDimensions.measurementSystem}
+            approved={hangingApproved}
+            disabled={isGeneratingHero}
+            refining={isGeneratingHero}
+            onApprove={handleApproveHanging}
+            onRefine={handleRefineHanging}
+            onCreativeDirectionChange={handleHangingCreativeDirection}
+          />
+        )}
       </div>
     );
   }
@@ -2291,6 +2481,16 @@ export function PromptGenerator() {
                                 >
                                   <Download className="h-3 w-3 mr-1" />
                                   Download
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="pointer-events-auto"
+                                  onClick={() => setPromptDialogImage(img)}
+                                  title="View the exact prompt that produced this render"
+                                >
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  Prompt
                                 </Button>
                               </div>
                               {img.is_current && (
@@ -2674,6 +2874,13 @@ export function PromptGenerator() {
           once at the page level; consumed by every <img onClick={…}>
           via the lightbox.open() helper. */}
       <ImageLightbox {...lightbox.props} />
+
+      {/* "View prompt" dialog — shows the stored prompt_artifacts for
+          any saved render clicked from the gallery. */}
+      <RenderPromptDialog
+        image={promptDialogImage}
+        onClose={() => setPromptDialogImage(null)}
+      />
     </div>
   );
 }

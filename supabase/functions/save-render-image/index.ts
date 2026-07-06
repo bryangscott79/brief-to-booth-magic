@@ -35,6 +35,36 @@ interface SaveImageRequest {
   configKey?: string;
   /** Human label for the config (raw footprintSize, e.g. "20x40"). */
   configLabel?: string;
+  /**
+   * Prompt-transparency payload built client-side by
+   * buildRenderPromptArtifacts: the exact prompt sent to the image
+   * model, negative prompt, geometry summary, compliance list, labeled
+   * reference URLs, model id, and generation timestamp. Merged into
+   * prompt_artifacts alongside the badge/config fields. Optional —
+   * older clients omit it and behave exactly as before.
+   */
+  promptArtifacts?: Record<string, unknown>;
+}
+
+/**
+ * Row-size guard for the client-supplied artifacts payload. The client
+ * already caps the prompt text and never sends base64, but defend
+ * against misbehaving callers: reject non-objects and anything that
+ * serializes past ~100 KB (a composed prompt is a few KB).
+ */
+function sanitizePromptArtifacts(
+  input: unknown,
+): Record<string, unknown> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  try {
+    if (JSON.stringify(input).length > 100_000) {
+      console.warn("promptArtifacts payload too large; dropping it (render still saves)");
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return input as Record<string, unknown>;
 }
 
 serve(async (req) => {
@@ -68,7 +98,7 @@ serve(async (req) => {
       });
     }
 
-    const { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError, configKey, configLabel }: SaveImageRequest = await req.json();
+    const { projectId, angleId, angleName, imageDataUrl, modelUsed, primaryError, configKey, configLabel, promptArtifacts: clientArtifacts }: SaveImageRequest = await req.json();
 
     if (!projectId || !angleId || !angleName || !imageDataUrl) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -144,16 +174,19 @@ serve(async (req) => {
       .eq("angle_id", angleId)
       .eq("user_id", user.id);
 
-    // Insert record. modelUsed + primaryError go into
-    // prompt_artifacts so the badge + hover tooltip survive a
-    // page reload (the column already exists; no migration needed).
-    // generate-hero may later overwrite prompt_artifacts with its
-    // own composer artifacts JSON; that's fine — we merge here only
-    // if the caller supplied at least one of the fields. When
-    // generate-hero overwrites, it includes its own modelUsed too.
+    // Insert record. The prompt_artifacts JSON merges (in override
+    // order): the client's prompt-transparency payload (exact prompt,
+    // negative, geometry summary, compliance, labeled reference URLs,
+    // model, timestamp), then the badge fields (modelUsed /
+    // primaryError), then the booth-size config tags. Badge + config
+    // fields come from the same request, so they win on key collisions.
+    // (The column already exists in prod; no migration needed. The
+    // PGRST204 retry below still guards drifted environments.)
+    const safeArtifacts = sanitizePromptArtifacts(clientArtifacts);
     const promptArtifacts: Record<string, unknown> | null =
-      (modelUsed || primaryError || configKey || configLabel)
+      (safeArtifacts || modelUsed || primaryError || configKey || configLabel)
         ? {
+            ...(safeArtifacts ?? {}),
             ...(modelUsed ? { modelUsed } : {}),
             ...(primaryError ? { primaryError } : {}),
             ...(configKey ? { configKey } : {}),

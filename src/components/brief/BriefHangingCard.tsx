@@ -181,6 +181,21 @@ function ElementSubCard({
           />
         </div>
 
+        {/* Creative direction — EXACT language, not inspiration. The
+          * composer emits this with lock wording so the model treats it
+          * as the author's literal specification. Optional. */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">
+            Creative direction (optional — treated as EXACT instructions, not inspiration)
+          </Label>
+          <Textarea
+            value={element.creativeDirection ?? ""}
+            onChange={(e) => patch({ creativeDirection: e.target.value })}
+            placeholder='e.g. "Thin brushed-aluminum ring, logo on outer face only, no printing on the underside."'
+            className="min-h-[52px] text-sm"
+          />
+        </div>
+
         {/* Shape + drop */}
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">

@@ -142,6 +142,12 @@ export interface NormalizedBriefContext {
   show?: NormalizedBriefShow;
   goals: string[];
   budgetTier: "standard" | "premium" | "ultra";
+  /**
+   * $/sq ft figure the tier was inferred from, when the brief stated a
+   * budget. Undefined when no budget was given (tier defaults to
+   * "premium"). Feeds the renderer's # BUDGET REALITY line.
+   */
+  budgetPerSqft?: number;
   timeOfDay: "morning" | "midday" | "evening" | "controlled";
   staffing: NormalizedBriefStaffing;
   interactiveTech: string[];
@@ -514,10 +520,13 @@ function projectTypeOrDefault(raw: string | ProjectType): ProjectType {
   return legacyMap[raw as string] ?? "exhibition_booth";
 }
 
-function inferBudgetTier(parsed: ParsedBrief, area: number): "standard" | "premium" | "ultra" {
+function inferBudgetTier(
+  parsed: ParsedBrief,
+  area: number,
+): { tier: "standard" | "premium" | "ultra"; perSqft?: number } {
   const perShow = parsed.budget?.perShow;
   const budget = perShow || (parsed.budget?.range?.max ?? 0);
-  if (budget <= 0) return "premium";
+  if (budget <= 0) return { tier: "premium" };
   // area is in sqm for metric, sq ft for imperial — convert sqm to sqft
   // for the cost calc since budget is in $ and we want $/sqft as the heuristic.
   // The fixtures use sqft for imperial geometries already; we approximate by
@@ -525,9 +534,9 @@ function inferBudgetTier(parsed: ParsedBrief, area: number): "standard" | "premi
   // in native units.
   const sqftEquivalent = parsed.budget && area < 200 ? area * 10.7639 : area;
   const costPerSqft = budget / Math.max(sqftEquivalent, 1);
-  if (costPerSqft >= 400) return "ultra";
-  if (costPerSqft >= 250) return "premium";
-  return "standard";
+  if (costPerSqft >= 400) return { tier: "ultra", perSqft: costPerSqft };
+  if (costPerSqft >= 250) return { tier: "premium", perSqft: costPerSqft };
+  return { tier: "standard", perSqft: costPerSqft };
 }
 
 /**
@@ -846,6 +855,10 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       ? normalizeExistingSpace(parsedBrief.existingSpace)
       : undefined;
 
+  // Compute once — tier + $/sqft feed context.budgetTier and the
+  // renderer's # BUDGET REALITY section respectively.
+  const budget = inferBudgetTier(parsedBrief, area);
+
   return {
     project: {
       id: project.id,
@@ -893,7 +906,8 @@ export function normalizeBrief(input: NormalizeBriefInput): NormalizedBrief {
       venue,
       show,
       goals: [parsedBrief.objectives.primary, ...parsedBrief.objectives.secondary].filter(Boolean),
-      budgetTier: inferBudgetTier(parsedBrief, area),
+      budgetTier: budget.tier,
+      budgetPerSqft: budget.perSqft,
       timeOfDay: "controlled",
       staffing: { count: 4, roles: ["sales", "engineer"], attire: "business" },
       interactiveTech: [],
@@ -1121,6 +1135,78 @@ const PROJECT_TYPE_SCENE: Record<ProjectType, string> = {
     "A 16:9 photorealistic 3/4 perspective render of a permanent architectural installation, photographed at eye level (1.7m / 5'8\") from the front-left at 45°. Designed for long lifespan. Architectural photography quality — Snøhetta / Foster + Partners lineage.",
 };
 
+/**
+ * Tier-appropriate material vocabulary for # BUDGET REALITY. Grounds
+ * the render in what the stated budget can actually build — without
+ * this the model defaults to ultra-tier fantasy materials on standard
+ * budgets, and the client sees a booth they can't afford.
+ */
+const BUDGET_TIER_VOCAB: Record<NormalizedBriefContext["budgetTier"], string> = {
+  standard:
+    "laminate surfaces, fabric graphics, vinyl, stock aluminum extrusion, functional lighting",
+  premium:
+    "custom millwork, backlit SEG fabric, wood veneer, metal trim, integrated AV, designed lighting",
+  ultra:
+    "sculptural forms, kinetic elements, natural stone, LED-integrated panels, theatrical lighting",
+};
+
+function budgetRealitySection(n: NormalizedBrief): string {
+  const tier = n.context.budgetTier;
+  const perSqft = n.context.budgetPerSqft;
+  const lines: string[] = ["# BUDGET REALITY"];
+  lines.push(
+    `Budget tier: ${tier}${perSqft ? ` (~$${Math.round(perSqft)}/sq ft)` : ""}`,
+  );
+  lines.push(`Material vocabulary for this tier: ${BUDGET_TIER_VOCAB[tier]}.`);
+  // The upsell rule: one accent moment may reach up a tier — never the
+  // whole booth. Ultra has no tier above, so the rule collapses to a
+  // plain "design within the tier" instruction there.
+  lines.push(
+    tier === "ultra"
+      ? "Design within the ultra tier — the whole booth reads top-tier."
+      : `Design within the ${tier} tier. ONE accent moment may hint one tier above (the upsell) — never the whole booth.`,
+  );
+  return lines.join("\n");
+}
+
+/**
+ * # ENVIRONMENT — emitted for EVERY project type so the booth is never
+ * rendered floating in a blank void. Venue context (name / ambient
+ * light) folds in when the brief provided it; otherwise the per-type
+ * default environment still grounds the render. The existing-space
+ * composer path deliberately skips this — its environment IS the
+ * source photo.
+ */
+function environmentSection(n: NormalizedBrief): string {
+  const v = n.context.venue;
+  const light = v.ambientLight.replace(/_/g, " ");
+  const at = v.name ? ` at ${v.name}` : "";
+  const lines: string[] = ["# ENVIRONMENT"];
+  switch (n.project.type) {
+    case "exhibition_booth":
+      lines.push(
+        `Render the booth inside a working convention hall${at}: venue floor visible (carpet or polished concrete), 10 ft aisles on the open sides, adjacent booths softly out of focus, attendees at human scale, ${light} hall lighting.`,
+      );
+      break;
+    case "brand_activation":
+      lines.push(
+        `Render the activation on festival / outdoor event grounds${at}: open sky and ground surface visible, a natural crowd of attendees at human scale, surrounding event infrastructure softly out of focus, ${
+          light === "controlled indoor" ? "outdoor daylight" : light
+        }.`,
+      );
+      break;
+    default:
+      // permanent_interior, retail_environment, architectural_installation
+      lines.push(
+        `Render the space within its real architectural context${at} (${v.type.replace(/_/g, " ")}): surrounding building visible — floors, ceiling, adjacent circulation — people at human scale using the space, ${light} ambient lighting.`,
+      );
+  }
+  lines.push(
+    "The structure occupies roughly 60-70% of the frame width — the surrounding environment is always visible around and behind it.",
+  );
+  return lines.join("\n");
+}
+
 function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, "");
 }
@@ -1307,6 +1393,10 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
   }
   sections.push(bLines.join("\n"));
 
+  // # BUDGET REALITY — after # BRAND (identity), before # CONTEXT
+  // (situation): the tier constrains HOW the brand gets built.
+  sections.push(budgetRealitySection(n));
+
   // # CONTEXT
   const ctxLines: string[] = ["# CONTEXT"];
   if (n.context.venue.name) {
@@ -1325,6 +1415,10 @@ function rendererPrompt(n: NormalizedBrief, neg: string): string {
     ctxLines.push(`Interactive tech: ${n.context.interactiveTech.join(", ")}`);
   }
   sections.push(ctxLines.join("\n"));
+
+  // # ENVIRONMENT — always emitted, every project type. Pairs with the
+  // void-ban in the negative output.
+  sections.push(environmentSection(n));
 
   // # DESIGN INTENT
   if (n.creative.designIntent.trim().length > 0) {
@@ -1509,6 +1603,9 @@ export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
     "no dimension callouts or percentage labels",
     "no flat horizontal rectangular fascia / generic trade-show truss",
     "no cartoon, no over-saturation, no obvious AI artifacts",
+    // Environment void-ban — pairs with # ENVIRONMENT: the booth must
+    // never be rendered isolated against nothing.
+    "blank background, white void, studio backdrop, isolated product shot, floating booth with no floor",
   ]
     .filter((s) => typeof s === "string" && s.trim().length > 0)
     .join(", ");
@@ -1643,6 +1740,9 @@ export function composeViewPrompt(
     "no overlaid annotations",
     "no zone names or room labels on fascia",
     "no architectural reinvention from the hero reference",
+    // Views inherit the environment ban: the hero was rendered in its
+    // venue context, and camera moves must not strip that away.
+    "blank background, white void, studio backdrop, isolated product shot, floating booth with no floor",
   ]
     .filter((s) => typeof s === "string" && s.trim().length > 0)
     .join(", ");

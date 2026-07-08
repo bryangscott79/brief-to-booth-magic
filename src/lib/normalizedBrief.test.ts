@@ -307,6 +307,195 @@ describe("composePrompt — 5 output stages", () => {
   });
 });
 
+// ─── composePrompt — # BUDGET REALITY ────────────────────────────────
+//
+// budgetTier was computed by the normalizer since the prompt-engine
+// refactor but never injected into the renderer prompt, so standard-
+// budget briefs rendered ultra-tier fantasy booths. The section sits
+// after # BRAND and before # CONTEXT: the tier constrains HOW the
+// brand gets built.
+
+describe("composePrompt — # BUDGET REALITY", () => {
+  it("emits premium tier + vocab + upsell rule for Eqvilent (~$387/sq ft)", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief, // $150k / 36 sqm ≈ $387/sq ft
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    expect(n.context.budgetTier).toBe("premium");
+    expect(n.context.budgetPerSqft).toBeGreaterThan(250);
+    const out = composePrompt(n);
+    expect(out.renderer).toContain("# BUDGET REALITY");
+    expect(out.renderer).toMatch(/Budget tier: premium \(~\$\d+\/sq ft\)/);
+    expect(out.renderer).toContain("custom millwork");
+    expect(out.renderer).toContain("backlit SEG");
+    expect(out.renderer).toMatch(
+      /Design within the premium tier\. ONE accent moment may hint one tier above \(the upsell\) — never the whole booth\./,
+    );
+  });
+
+  it("emits standard tier vocab for US Cabinet Depot (~$233/sq ft)", () => {
+    const n = normalizeBrief({
+      project: usCabinetDepotProjectMeta,
+      parsedBrief: usCabinetDepotParsedBrief, // $280k / 1200 sq ft ≈ $233/sq ft
+      geometry: usCabinetDepotGeometry,
+      elements: { interactiveMechanics: { data: { hero: usCabinetDepotInteractiveMechanicsHero } } },
+    });
+    expect(n.context.budgetTier).toBe("standard");
+    const out = composePrompt(n);
+    expect(out.renderer).toContain("Budget tier: standard");
+    expect(out.renderer).toContain("laminate");
+    expect(out.renderer).toContain("stock aluminum extrusion");
+    expect(out.renderer).toMatch(/ONE accent moment may hint one tier above/);
+  });
+
+  it("emits ultra tier vocab (no upsell line) when budget ≥ $400/sq ft", () => {
+    const parsed = {
+      ...usCabinetDepotParsedBrief,
+      budget: { ...usCabinetDepotParsedBrief.budget, perShow: 500_000 }, // /1200 ≈ $417
+    };
+    const n = normalizeBrief({
+      project: usCabinetDepotProjectMeta,
+      parsedBrief: parsed,
+      geometry: usCabinetDepotGeometry,
+      elements: { interactiveMechanics: { data: { hero: usCabinetDepotInteractiveMechanicsHero } } },
+    });
+    expect(n.context.budgetTier).toBe("ultra");
+    const out = composePrompt(n);
+    expect(out.renderer).toContain("Budget tier: ultra");
+    expect(out.renderer).toContain("sculptural forms");
+    expect(out.renderer).toContain("natural stone");
+    // There is no tier above ultra — the upsell rule collapses.
+    expect(out.renderer).not.toMatch(/hint one tier above/);
+    expect(out.renderer).toContain("Design within the ultra tier");
+  });
+
+  it("omits the $/sq ft figure (tier only) when the brief has no budget", () => {
+    const parsed = {
+      ...eqvilentParsedBrief,
+      budget: { inclusions: [], exclusions: [], efficiencyNotes: "" },
+    } as unknown as typeof eqvilentParsedBrief;
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: parsed,
+      geometry: eqvilentGeometry,
+      elements: null,
+    });
+    expect(n.context.budgetPerSqft).toBeUndefined();
+    const out = composePrompt(n);
+    expect(out.renderer).toMatch(/Budget tier: premium\n/); // default tier, no ($/sq ft)
+    expect(out.renderer).not.toMatch(/Budget tier: premium \(~\$/);
+  });
+
+  it("sits after # BRAND and before # CONTEXT in the section order", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    const headers = out.renderer
+      .split("\n")
+      .filter((l) => l.startsWith("# "));
+    const brandIdx = headers.indexOf("# BRAND");
+    const budgetIdx = headers.indexOf("# BUDGET REALITY");
+    const contextIdx = headers.indexOf("# CONTEXT");
+    expect(budgetIdx).toBe(brandIdx + 1);
+    expect(contextIdx).toBe(budgetIdx + 1);
+  });
+});
+
+// ─── composePrompt — # ENVIRONMENT ───────────────────────────────────
+//
+// Venue context was collected but the prompt never explicitly told the
+// model to render the booth IN an environment, so gpt-image-2 often
+// produced studio-void isolates. # ENVIRONMENT is emitted for EVERY
+// project type; the negative gains a matching void-ban. The existing-
+// space path is exempt — its environment is the source photo.
+
+describe("composePrompt — # ENVIRONMENT", () => {
+  it("emits convention-hall environment for exhibition_booth with venue name + light", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    expect(out.renderer).toContain("# ENVIRONMENT");
+    expect(out.renderer).toMatch(/inside a working convention hall/);
+    expect(out.renderer).toContain("COEX Convention & Exhibition Center, Seoul");
+    expect(out.renderer).toMatch(/10 ft aisles on the open sides/);
+    expect(out.renderer).toMatch(/adjacent booths softly out of focus/);
+    expect(out.renderer).toMatch(/attendees at human scale/);
+    expect(out.renderer).toMatch(/controlled indoor hall lighting/);
+    expect(out.renderer).toMatch(/60-70% of the frame width/);
+  });
+
+  it("emits festival/outdoor environment for brand_activation", () => {
+    const n = normalizeBrief({
+      project: { ...eqvilentProjectMeta, projectType: "brand_activation" as const },
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: null,
+    });
+    const out = composePrompt(n);
+    expect(out.renderer).toContain("# ENVIRONMENT");
+    expect(out.renderer).toMatch(/festival \/ outdoor event grounds/);
+    expect(out.renderer).toMatch(/open sky/);
+    expect(out.renderer).toMatch(/crowd of attendees/);
+  });
+
+  it("emits architectural-context environment for permanent installs (never empty)", () => {
+    const n = normalizeBrief({
+      project: { ...eqvilentProjectMeta, projectType: "permanent_interior" as const },
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: null,
+    });
+    const out = composePrompt(n);
+    expect(out.renderer).toContain("# ENVIRONMENT");
+    expect(out.renderer).toMatch(/architectural context/);
+    // Section is never empty: header always followed by content.
+    expect(out.renderer).not.toMatch(/# ENVIRONMENT\n\n/);
+  });
+
+  it("negative output contains the void-ban", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const out = composePrompt(n);
+    expect(out.negative).toContain("blank background");
+    expect(out.negative).toContain("white void");
+    expect(out.negative).toContain("studio backdrop");
+    expect(out.negative).toContain("isolated product shot");
+    expect(out.negative).toContain("floating booth with no floor");
+  });
+
+  it("view prompts inherit the void-ban in their negative", () => {
+    const n = normalizeBrief({
+      project: eqvilentProjectMeta,
+      parsedBrief: eqvilentParsedBrief,
+      geometry: eqvilentGeometry,
+      elements: { interactiveMechanics: { data: { hero: eqvilentInteractiveMechanicsHero } } },
+    });
+    const snapshot: HeroSnapshot = {
+      composerOutput: composePrompt(n),
+      normalizedBrief: n,
+      imageUrl: "https://example.test/hero.png",
+      generatedAt: "2026-07-08T10:00:00Z",
+    };
+    const out = composeViewPrompt(snapshot, "front");
+    expect(out.negative).toContain("white void");
+    expect(out.negative).toContain("floating booth with no floor");
+  });
+});
+
 // ─── composePrompt — hanging elements section ────────────────────────
 
 describe("composePrompt — hanging elements section", () => {

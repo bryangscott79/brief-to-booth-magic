@@ -7,10 +7,19 @@ import { BrandLogoUpload } from "@/components/brief/BrandLogoUpload";
 import { BrandWebsiteCard } from "@/components/brief/BrandWebsiteCard";
 import { ProjectKnowledgeBase } from "@/components/files/ProjectKnowledgeBase";
 import { useProjectSync } from "@/hooks/useProjectSync";
-import { useClients } from "@/hooks/useClients";
-import { useSearchParams } from "react-router-dom";
+import { useClients, useBrandIntelligence, type Client } from "@/hooks/useClients";
+import { useBrandGuidelines } from "@/hooks/useBrandGuidelines";
+import { Link, useSearchParams } from "react-router-dom";
 import { Loader2, FileText, Sparkles, ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  WorkSheet,
+  InkRail,
+  RailSection,
+  RailTitle,
+  RailRow,
+  StatusChip,
+} from "@/components/shell";
 import { cn } from "@/lib/utils";
 
 
@@ -55,23 +64,29 @@ export default function UploadPage() {
 
   return (
     <AppLayout surface="light">
-      <div className="container py-12 space-y-12">
-        <div>
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold mb-2">
-              {isSuiteMode ? "Upload Suite Brief" : "New Project"}
-            </h1>
-            <p className="text-muted-foreground">
-              {mode === "choose"
+      <div className="px-5 py-5 md:px-10">
+        <div className="flex flex-col gap-5 lg:flex-row">
+          <WorkSheet
+            className="min-w-0 flex-1"
+            title={isSuiteMode ? "Upload Suite Brief" : "Brief"}
+            subtitle={
+              mode === "choose"
                 ? "Start with a brief — or build one with us."
                 : mode === "upload"
                 ? isSuiteMode
                   ? "Upload the master brief for this suite — activations will inherit this context"
                   : "Upload your brief and let AI extract the details — then confirm and continue"
-                : "Answer a few questions and we'll craft a complete, structured brief."}
-            </p>
-          </div>
-
+                : "Answer a few questions and we'll craft a complete, structured brief."
+            }
+            headerRight={
+              hasBriefContent ? (
+                <StatusChip variant="pass">Brief captured</StatusChip>
+              ) : (
+                <StatusChip variant="neutral">Awaiting brief</StatusChip>
+              )
+            }
+            bodyClassName="space-y-12"
+          >
           {mode === "choose" && (
             <ChooserCards
               onUpload={() => setMode("upload")}
@@ -117,9 +132,8 @@ export default function UploadPage() {
               />
             </div>
           )}
-        </div>
 
-        {projectId && mode === "upload" && (
+          {projectId && mode === "upload" && (
           <>
             {/* Brand website — captured up front so we can scrape brand data
              * (colors, logo, fonts, voice) before the brief even parses.
@@ -198,9 +212,111 @@ export default function UploadPage() {
               </div>
             )}
           </>
-        )}
+          )}
+          </WorkSheet>
+
+          <BrandProfileRail client={linkedClient} />
+        </div>
       </div>
     </AppLayout>
+  );
+}
+
+// ─── Brand Profile Rail ──────────────────────────────────────────────────────
+// Read-only reference truth for the Brief step: client colors, voice and
+// typography from brand guidelines, and brand-intelligence counts. Uses only
+// data already loaded on this page (client record + existing query hooks).
+
+function ColorValue({ hex }: { hex: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        aria-hidden="true"
+        className="inline-block h-2.5 w-2.5 rounded-[3px] border border-white/20"
+        style={{ background: hex }}
+      />
+      {hex.toUpperCase()}
+    </span>
+  );
+}
+
+function BrandProfileRail({ client }: { client: Client | null }) {
+  const clientId = client?.id ?? null;
+  const { data: guidelines } = useBrandGuidelines(clientId);
+  const { data: intelligence } = useBrandIntelligence(clientId);
+
+  const approvedCount = (intelligence ?? []).filter((e) => e.is_approved).length;
+  const pendingCount = (intelligence ?? []).length - approvedCount;
+  const tone = guidelines?.toneOfVoice?.description || null;
+
+  return (
+    <InkRail
+      footer={
+        clientId ? (
+          <Link
+            to={`/clients/${clientId}`}
+            className="group flex items-center justify-between gap-2"
+          >
+            <span className="text-[12px] font-semibold text-white group-hover:underline">
+              Review pending entries
+            </span>
+            <ArrowRight className="h-3.5 w-3.5 text-white/60 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        ) : (
+          <p className="text-[12px] leading-[17px]" style={{ color: "rgba(255,255,255,0.56)" }}>
+            Link a client to build a brand profile.
+          </p>
+        )
+      }
+    >
+      <RailTitle
+        label="Brand profile"
+        hint="Read-only reference — everything here feeds generation."
+      />
+
+      <RailSection label="Client" accent="sky">
+        <RailRow label="Name" value={client?.name} />
+        <RailRow
+          label="Primary color"
+          mono
+          value={client?.primary_color ? <ColorValue hex={client.primary_color} /> : undefined}
+        />
+        <RailRow
+          label="Secondary color"
+          mono
+          value={client?.secondary_color ? <ColorValue hex={client.secondary_color} /> : undefined}
+        />
+      </RailSection>
+
+      <RailSection label="Voice & typography" accent="violet">
+        <RailRow label="Typeface" value={guidelines?.typography?.primaryTypeface} />
+        {tone ? (
+          <p
+            className="mt-1.5 line-clamp-3 text-[12px] leading-[18px]"
+            style={{ color: "rgba(255,255,255,0.72)" }}
+          >
+            "{tone}"
+          </p>
+        ) : (
+          <RailRow label="Tone of voice" />
+        )}
+      </RailSection>
+
+      <RailSection label="Intelligence" accent="pink">
+        <RailRow
+          label="Approved entries"
+          mono
+          tone={approvedCount > 0 ? "pass" : "default"}
+          value={intelligence ? String(approvedCount) : undefined}
+        />
+        <RailRow
+          label="Pending review"
+          mono
+          tone={pendingCount > 0 ? "warn" : "default"}
+          value={intelligence ? String(pendingCount) : undefined}
+        />
+      </RailSection>
+    </InkRail>
   );
 }
 

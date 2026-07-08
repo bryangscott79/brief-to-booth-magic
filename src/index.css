@@ -1,53 +1,61 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /*
- * ─── CANOPY SPATIAL UI SYSTEM ─────────────────────────────────────────────
- * A living system interface for experiential planning.
- * Dark-first. Gradient-accented. Node-driven.
+ * ─── CANOPY FLOW C UI SYSTEM ──────────────────────────────────────────────
+ * White sheets on a cloud ground, navy ink, hairline borders.
+ * Light-first. Gradient reserved for accent moments only.
  */
 
 @layer base {
   :root {
-    /* ═══ CANOPY CORE PALETTE ═══════════════════════════════════════════
-     * Dark-first. Navy base with charcoal surfaces. Glass overlays.
+    /* ═══ FLOW C CORE PALETTE ═══════════════════════════════════════════
+     * White sheets · cloud ground · navy ink · slate secondary text.
      */
-    --background: 212 60% 11%;              /* #0B1B2B navy */
-    --foreground: 220 15% 98%;
+    --background: 0 0% 100%;                /* white sheets */
+    --foreground: 212 60% 11%;              /* #0B1B2B navy ink */
 
-    /* Lifted card surface — stands out clearly against the navy background.
-     * Was 217 33% 13% which sat right on top of the background and felt
-     * muddy on dense working pages (Spatial, Prompts, Files, Pricing). */
-    --card: 217 24% 18%;                    /* lifted charcoal */
-    --card-foreground: 220 15% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 212 60% 11%;
 
-    --popover: 217 24% 18%;
-    --popover-foreground: 220 15% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 60% 11%;
 
-    /* Primary = Canopy gradient purple anchor */
-    --primary: 260 88% 76%;                 /* #A78BFA */
-    --primary-foreground: 212 60% 11%;
+    /* Primary = solid navy. The gradient is an accent, never the default CTA. */
+    --primary: 212 60% 11%;                 /* #0B1B2B */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217 20% 18%;
-    --secondary-foreground: 220 15% 92%;
+    --secondary: 210 29% 97%;               /* #F6F8FA cloud */
+    --secondary-foreground: 212 60% 11%;
 
-    --muted: 217 25% 16%;
-    --muted-foreground: 220 10% 65%;
+    --muted: 210 29% 97%;                   /* cloud */
+    --muted-foreground: 215 16% 47%;        /* #64748B slate */
 
-    --accent: 272 91% 74%;                  /* #C084FC */
+    --accent: 210 29% 97%;                  /* cloud */
     --accent-foreground: 212 60% 11%;
 
-    --destructive: 0 72% 58%;
+    --destructive: 3 67% 49%;               /* #D2322A blocking red */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 100% / 0.08;          /* rgba(255,255,255,0.08) */
-    --input: 220 15% 100% / 0.1;
-    --ring: 260 88% 76%;
+    --border: 214 32% 91%;                  /* #E2E8F0 cloud-line */
+    --input: 214 32% 91%;
+    --ring: 212 60% 11%;                    /* navy focus ring */
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;                       /* 8px → md 6px buttons, sm 4px tags */
+
+    /* ═══ FLOW C INK / TEXT SCALE ═══════════════════════════════════════ */
+    --navy: 212 60% 11%;                    /* #0B1B2B */
+    --charcoal: 215 28% 17%;                /* #1F2937 body copy */
+    --slate: 215 16% 47%;                   /* #64748B secondary */
+    --slate-faint: 215 20% 65%;             /* #94A3B8 hints/disabled */
+    --cloud: 210 29% 97%;                   /* #F6F8FA ground/wells */
+    --cloud-line: 214 32% 91%;              /* #E2E8F0 hairlines */
+
+    /* ═══ ACTION GRADIENT (white-text safe — ONE generative CTA/screen) ═ */
+    --gradient-action: linear-gradient(90deg, #4F6BE8 0%, #7C3AED 55%, #DB2777 100%);
 
     /* ═══ CANOPY GRADIENT STOPS ═══════════════════════════════════════ */
     --canopy-sky: 197 83% 76%;              /* #8FD3F4 */
@@ -82,26 +90,25 @@
       #F472B6 100%
     );
 
-    /* ═══ GLOW SYSTEM (critical for brand feel) ══════════════════════ */
-    --glow-soft: radial-gradient(circle at center, rgba(167, 139, 250, 0.25), transparent 70%);
-    --glow-strong: radial-gradient(circle at center, rgba(244, 114, 182, 0.35), transparent 65%);
-    --glow-sky: radial-gradient(circle at center, rgba(111, 168, 255, 0.25), transparent 65%);
+    /* ═══ GLOW SYSTEM (marketing pages only — muted in the light app) ══ */
+    --glow-soft: radial-gradient(circle at center, rgba(167, 139, 250, 0.12), transparent 70%);
+    --glow-strong: radial-gradient(circle at center, rgba(244, 114, 182, 0.16), transparent 65%);
+    --glow-sky: radial-gradient(circle at center, rgba(111, 168, 255, 0.12), transparent 65%);
 
-    /* Shadow glows for interactive elements */
-    --shadow-glow-violet: 0 0 32px rgba(167, 139, 250, 0.35);
-    --shadow-glow-pink: 0 0 32px rgba(244, 114, 182, 0.35);
-    --shadow-glow-sky: 0 0 32px rgba(111, 168, 255, 0.3);
+    /* Shadow glows — Flow C separates surfaces with borders, not shadows. */
+    --shadow-glow-violet: none;
+    --shadow-glow-pink: none;
+    --shadow-glow-sky: none;
 
-    /* Surface shadows */
-    --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -16px rgba(0, 0, 0, 0.5);
+    /* Surface shadows — none; separation via ground/sheet contrast. */
+    --shadow-panel: none;
 
-    /* Glass surface layers — bumped slightly so working pages don't feel
-     * muddy. Sidebar + hero panels still read dark; interactive cards lift. */
-    --surface-glass: rgba(255, 255, 255, 0.06);
-    --surface-glass-hover: rgba(255, 255, 255, 0.10);
-    --surface-glass-active: rgba(255, 255, 255, 0.13);
-    --border-subtle: rgba(255, 255, 255, 0.10);
-    --border-subtle-strong: rgba(255, 255, 255, 0.16);
+    /* "Glass" surface layers on light ground = faint navy tints. */
+    --surface-glass: rgba(11, 27, 43, 0.03);
+    --surface-glass-hover: rgba(11, 27, 43, 0.05);
+    --surface-glass-active: rgba(11, 27, 43, 0.08);
+    --border-subtle: #E2E8F0;
+    --border-subtle-strong: #CBD5E1;
 
     /* Bright working surface — used by .canopy-panel-light for forms,
      * editors, and dense lists where dark-on-dark felt heavy. Off-white
@@ -111,12 +118,77 @@
     --surface-bright-muted: 220 13% 50%;
 
     /* Legacy compatibility (kept for components that still reference these) */
-    --surface-elevated: 217 33% 13%;
-    --surface-sunken: 212 60% 9%;
-    --amber-glow: 260 88% 76% / 0.15;
-    --slate-glow: 220 30% 70% / 0.08;
+    --surface-elevated: 0 0% 100%;
+    --surface-sunken: 210 29% 97%;
+    --amber-glow: 260 88% 76% / 0.10;
+    --slate-glow: 215 16% 47% / 0.08;
 
     --gradient-primary: var(--gradient-canopy);
+    --gradient-hero: linear-gradient(180deg, #FFFFFF 0%, #F6F8FA 100%);
+    --gradient-surface: linear-gradient(180deg, #FFFFFF, #F6F8FA);
+
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-amber: none;
+
+    /* Sidebar — 224px white site rail with a 1px cloud-line border. */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 28% 17%;
+    --sidebar-primary: 212 60% 11%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 29% 97%;
+    --sidebar-accent-foreground: 212 60% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 212 60% 11%;
+  }
+
+  /* ── Dark brand scope ──────────────────────────────────────────────────
+   * The marketing/auth surfaces (landing, auth, public industry pages) keep
+   * the original navy "spatial OS" look. Wrapping a page root in
+   * .canopy-dark re-binds every token to the previous dark values, so the
+   * hand-tuned dark styling on those pages continues to work unchanged.
+   */
+  .canopy-dark {
+    color-scheme: dark;
+
+    --background: 212 60% 11%;
+    --foreground: 220 15% 98%;
+    --card: 217 24% 18%;
+    --card-foreground: 220 15% 98%;
+    --popover: 217 24% 18%;
+    --popover-foreground: 220 15% 98%;
+    --primary: 260 88% 76%;
+    --primary-foreground: 212 60% 11%;
+    --secondary: 217 20% 18%;
+    --secondary-foreground: 220 15% 92%;
+    --muted: 217 25% 16%;
+    --muted-foreground: 220 10% 65%;
+    --accent: 272 91% 74%;
+    --accent-foreground: 212 60% 11%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 100% / 0.08;
+    --input: 220 15% 100% / 0.1;
+    --ring: 260 88% 76%;
+    --radius: 0.75rem;
+
+    --glow-soft: radial-gradient(circle at center, rgba(167, 139, 250, 0.25), transparent 70%);
+    --glow-strong: radial-gradient(circle at center, rgba(244, 114, 182, 0.35), transparent 65%);
+    --glow-sky: radial-gradient(circle at center, rgba(111, 168, 255, 0.25), transparent 65%);
+    --shadow-glow-violet: 0 0 32px rgba(167, 139, 250, 0.35);
+    --shadow-glow-pink: 0 0 32px rgba(244, 114, 182, 0.35);
+    --shadow-glow-sky: 0 0 32px rgba(111, 168, 255, 0.3);
+    --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -16px rgba(0, 0, 0, 0.5);
+
+    --surface-glass: rgba(255, 255, 255, 0.06);
+    --surface-glass-hover: rgba(255, 255, 255, 0.10);
+    --surface-glass-active: rgba(255, 255, 255, 0.13);
+    --border-subtle: rgba(255, 255, 255, 0.10);
+    --border-subtle-strong: rgba(255, 255, 255, 0.16);
+
+    --surface-elevated: 217 33% 13%;
+    --surface-sunken: 212 60% 9%;
     --gradient-hero: linear-gradient(180deg, #0B1B2B 0%, #0F2438 100%);
     --gradient-surface: linear-gradient(180deg, hsl(217, 33%, 13%), hsl(212, 60%, 11%));
 
@@ -124,36 +196,6 @@
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
     --shadow-amber: var(--shadow-glow-violet);
-
-    /* Sidebar */
-    --sidebar-background: 212 60% 9%;
-    --sidebar-foreground: 220 15% 85%;
-    --sidebar-primary: 260 88% 76%;
-    --sidebar-primary-foreground: 212 60% 11%;
-    --sidebar-accent: 217 25% 15%;
-    --sidebar-accent-foreground: 220 15% 95%;
-    --sidebar-border: 220 15% 100% / 0.06;
-    --sidebar-ring: 260 88% 76%;
-  }
-
-  /* Canopy is dark-first. The .dark class mirrors :root for anything that opts in. */
-  .dark {
-    /* Same tokens as :root — canopy is always dark */
-  }
-
-  /* Light mode override is explicitly disabled under canopy brand. */
-  .light {
-    --background: 220 20% 98%;
-    --foreground: 212 60% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 212 60% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 212 60% 11%;
-    --primary: 258 95% 60%;
-    --primary-foreground: 0 0% 100%;
-    --border: 220 15% 88%;
-    --muted: 220 15% 95%;
-    --muted-foreground: 220 10% 45%;
   }
 }
 
@@ -163,7 +205,7 @@
   }
 
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -180,12 +222,16 @@
   h1 { letter-spacing: -0.025em; }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
   }
 
   /* Selection color */
   ::selection {
     background: rgba(167, 139, 250, 0.35);
+    color: #0B1B2B;
+  }
+
+  .canopy-dark ::selection {
     color: white;
   }
 }
@@ -193,14 +239,19 @@
 /* ─── CANOPY COMPONENT LAYER ───────────────────────────────────────────── */
 
 @layer components {
-  /* Glass panel — the core Canopy surface */
+  /* Panel — the core Canopy surface. In the light app this is a white
+   * sheet with a hairline border; in .canopy-dark it stays glass. */
   .canopy-panel {
-    background: var(--surface-glass);
+    background: hsl(var(--card));
     border: 1px solid var(--border-subtle);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     border-radius: var(--radius);
     box-shadow: var(--shadow-panel);
+  }
+
+  .canopy-dark .canopy-panel {
+    background: var(--surface-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
   .canopy-panel-hover {
@@ -208,8 +259,11 @@
   }
 
   .canopy-panel-hover:hover {
-    background: var(--surface-glass-hover);
     border-color: var(--border-subtle-strong);
+  }
+
+  .canopy-dark .canopy-panel-hover:hover {
+    background: var(--surface-glass-hover);
     box-shadow: var(--shadow-panel), var(--shadow-glow-violet);
   }
 
@@ -362,9 +416,13 @@
 
   /* Connection line (SVG stroke class) */
   .canopy-line {
-    stroke: rgba(255, 255, 255, 0.15);
+    stroke: rgba(11, 27, 43, 0.15);
     stroke-width: 1;
     fill: none;
+  }
+
+  .canopy-dark .canopy-line {
+    stroke: rgba(255, 255, 255, 0.15);
   }
 
   .canopy-line-active {
@@ -375,11 +433,17 @@
   /* Radial grid pattern (for empty states, hero backgrounds) */
   .canopy-grid-pattern {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      linear-gradient(rgba(11, 27, 43, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11, 27, 43, 0.05) 1px, transparent 1px);
     background-size: 48px 48px;
     mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
     -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+  }
+
+  .canopy-dark .canopy-grid-pattern {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   }
 
   /* ─── Legacy components kept for non-landing pages ─── */
@@ -445,18 +509,28 @@
     box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15);
   }
 
+  /* Status grammar: pass=green, warn=amber, blocking=red, generating=violet */
   .status-pending { @apply bg-muted text-muted-foreground; }
   .status-generating {
-    background: rgba(167, 139, 250, 0.12);
-    color: #A78BFA;
+    background: #F3EFFE;              /* violet-soft */
+    color: #7C3AED;
     animation: canopy-pulse-subtle 2s ease-in-out infinite;
   }
   .status-complete {
-    background: rgba(111, 168, 255, 0.12);
-    color: #6FA8FF;
+    background: #E8F4ED;              /* green-soft */
+    color: #0C7C3F;
   }
   .status-error {
     @apply bg-destructive/15 text-destructive;
+  }
+
+  .canopy-dark .status-generating {
+    background: rgba(167, 139, 250, 0.12);
+    color: #A78BFA;
+  }
+  .canopy-dark .status-complete {
+    background: rgba(111, 168, 255, 0.12);
+    color: #6FA8FF;
   }
 
   /* Zones (legacy floor plan) — remapped to canopy palette */
@@ -477,9 +551,15 @@
 
   .grid-pattern {
     background-image:
+      linear-gradient(rgba(11, 27, 43, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11, 27, 43, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .canopy-dark .grid-pattern {
+    background-image:
       linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 20px 20px;
   }
 }
 
@@ -559,6 +639,10 @@
   .glass {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.75);
+  }
+
+  .canopy-dark .glass {
     background: rgba(11, 27, 43, 0.7);
   }
 

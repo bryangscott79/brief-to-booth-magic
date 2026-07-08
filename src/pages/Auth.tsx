@@ -164,7 +164,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden bg-background">
+    <div className="canopy-dark relative min-h-screen flex items-center justify-center p-4 overflow-hidden bg-background text-foreground">
       {/* Ambient brand glows */}
       <div className="absolute inset-0 canopy-grid-pattern opacity-60" aria-hidden />
       <CanopyAmbientGlow

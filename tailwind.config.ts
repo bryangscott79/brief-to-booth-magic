@@ -78,6 +78,48 @@ export default {
           navy: "#0B1B2B",
           charcoal: "#1F2937",
         },
+        /* ── Flow C ink + ground scale ─────────────────────────────── */
+        navy: "#0B1B2B",
+        charcoal: "#1F2937",
+        slate: {
+          DEFAULT: "#64748B",
+          faint: "#94A3B8",
+          // Tailwind slate scale preserved (extend replaces the key wholesale)
+          50: "#F8FAFC",
+          100: "#F1F5F9",
+          200: "#E2E8F0",
+          300: "#CBD5E1",
+          400: "#94A3B8",
+          500: "#64748B",
+          600: "#475569",
+          700: "#334155",
+          800: "#1E293B",
+          900: "#0F172A",
+          950: "#020617",
+        },
+        cloud: {
+          DEFAULT: "#F6F8FA",
+          line: "#E2E8F0",
+        },
+        /* ── Flow C brand gradient stops (accents only) ────────────── */
+        "grad-a": "#8FD3F4",
+        "grad-b": "#6FA8FF",
+        "grad-c": "#A78BFA",
+        "grad-d": "#C084FC",
+        "grad-e": "#F472B6",
+        /* ── Flow C semantic grammar ───────────────────────────────── */
+        blocking: "#D2322A",
+        "red-soft": "#FBEAE9",
+        warn: "#B25E09",
+        "amber-soft": "#FBF1E3",
+        "amber-on-ink": "#F5B266",
+        pass: "#0C7C3F",
+        "green-soft": "#E8F4ED",
+        "green-on-ink": "#34D399",
+        "pink-deep": "#DB2777",
+        "pink-soft": "#FDF2F8",
+        "violet-soft": "#F3EFFE",
+        link: "#4F6BE8",
         surface: {
           elevated: "hsl(var(--surface-elevated))",
           sunken: "hsl(var(--surface-sunken))",
@@ -93,10 +135,16 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        /* Flow C radii scale */
+        tag: "4px",
+        btn: "6px",
+        square: "8px",
+        media: "14px",
+        sheet: "20px",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Helvetica Neue", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        mono: ["IBM Plex Mono", "monospace"],
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
@@ -141,6 +189,10 @@ export default {
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         shimmer: "linear-gradient(90deg, transparent, hsl(var(--primary) / 0.1), transparent)",
+        /* Brand gradient — accents/marks/meters only, never under white text */
+        "gradient-canopy": "var(--gradient-canopy)",
+        /* Action gradient — white-text safe; the ONE generative CTA per screen */
+        "gradient-action": "var(--gradient-action)",
       },
     },
   },

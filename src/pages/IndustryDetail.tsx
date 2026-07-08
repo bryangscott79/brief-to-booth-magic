@@ -249,7 +249,7 @@ export default function IndustryDetail() {
   }, [industry.label, industry.description, narrative]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+    <div className="canopy-dark min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* HEADER */}
       <header className="fixed inset-x-0 top-0 z-50 glass border-b border-white/5">
         <div className="container flex h-16 items-center justify-between">

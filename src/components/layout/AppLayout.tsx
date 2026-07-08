@@ -8,31 +8,24 @@ import { cn } from "@/lib/utils";
 interface AppLayoutProps {
   children: ReactNode;
   /**
-   * Visual treatment for the working area inside <main>. Sidebar + header
-   * always stay dark — only the content surface flips.
-   *   - "dark" (default): standard navy/glass surface, matches the brand
-   *     across landing/dashboard/marketing pages.
-   *   - "light": near-white card surface for dense interactive editors
-   *     (forms, BOMs, file lists, brief intake). Cards inside automatically
-   *     pick up the light treatment via .canopy-surface-light.
+   * Legacy prop from the dark-first era. The app is now Flow C light
+   * everywhere: white sheets on a cloud ground. Kept so existing call
+   * sites (`surface="light"`) keep compiling — both values render the
+   * same light shell.
    */
   surface?: "dark" | "light";
 }
 
-export function AppLayout({ children, surface = "dark" }: AppLayoutProps) {
+export function AppLayout({ children, surface: _surface = "light" }: AppLayoutProps) {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="min-h-screen flex w-full bg-cloud">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-h-screen min-w-0">
           <SuspensionBanner />
           <ProjectHeader />
-          <main
-            className={cn(
-              "flex-1 overflow-auto",
-              surface === "light" && "canopy-surface-light bg-[hsl(var(--surface-bright))] text-[hsl(var(--surface-bright-foreground))]",
-            )}
-          >
+          {/* Flow C ground: cloud page background; pages lay white sheets on it */}
+          <main className={cn("flex-1 overflow-auto bg-cloud text-foreground")}>
             {children}
           </main>
         </div>

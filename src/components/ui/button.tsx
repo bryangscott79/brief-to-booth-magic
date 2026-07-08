@@ -16,6 +16,10 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         hero: "btn-canopy",
+        /* Flow C: the ONE generative primary per screen. White-text-safe
+         * action gradient; pair the label with a ✦ glyph. */
+        generative:
+          "bg-gradient-action text-white border-0 hover:brightness-110 focus-visible:ring-[#7C3AED]",
       },
       size: {
         default: "h-10 px-4 py-2",

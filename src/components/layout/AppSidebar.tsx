@@ -17,7 +17,7 @@ import {
   Sparkles,
   Calculator,
 } from "lucide-react";
-import { CanopyLogo } from "@/components/canopy";
+import { CanopyMark } from "@/components/shell";
 import {
   Sidebar,
   SidebarContent,
@@ -100,13 +100,13 @@ export function AppSidebar() {
           <Link
             to={path}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-r-btn border-l-2 px-3 py-2 text-sm font-medium transition-colors",
               active
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                ? "border-navy bg-cloud text-navy"
+                : "border-transparent text-slate hover:bg-cloud/70 hover:text-navy"
             )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
             {!collapsed && <span className="truncate">{label}</span>}
           </Link>
         </SidebarMenuButton>
@@ -139,11 +139,18 @@ export function AppSidebar() {
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
           <Link to={showPlatformNav ? "/admin" : "/projects"} className="flex items-center gap-2 min-w-0" aria-label="Canopy home">
             {isSuperAdmin && !previewMode ? (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500">
-                <Crown className="h-6 w-6 text-white" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-btn bg-amber-500">
+                <Crown className="h-5 w-5 text-white" />
               </div>
             ) : (
-              <CanopyLogo variant="horizontal" size="lg" />
+              <span className="flex items-center gap-2.5">
+                <CanopyMark size={26} />
+                {!collapsed && (
+                  <span className="text-[13px] font-bold uppercase tracking-[0.22em] text-navy">
+                    Canopy
+                  </span>
+                )}
+              </span>
             )}
             {!collapsed && isSuperAdmin && !previewMode && (
               <span className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">

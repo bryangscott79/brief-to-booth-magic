@@ -72,6 +72,11 @@ export interface ParsedBrief {
      *  (e.g. "Quantitative Trading" under the wordmark). Optional —
      *  empty when the brief doesn't specify. */
     tagline?: string;
+    /** Client website extracted from the brief, normalized to a bare
+     *  domain (e.g. "coca-cola.com"). Used to auto-populate
+     *  projects.brand_website_url after parse. Optional — empty when
+     *  the brief doesn't mention one. */
+    website?: string;
   };
 
   objectives: {

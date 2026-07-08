@@ -652,6 +652,20 @@ describe("applyGapAnswer + validate round trip", () => {
     expect(afterGaps.some((g) => g.field === "brand.colors.hex")).toBe(false);
   });
 
+  it("round-trip through applyGapAnswer preserves brand.website", async () => {
+    // safeBrief rebuilds the brand block field-by-field; if it drops
+    // the parsed website domain, every gap answer would silently erase
+    // the brand-URL auto-populate source on the persisted brief.
+    const { applyGapAnswer } = await import("./normalizedBrief");
+    const initial = structuredClone(eqvilentParsedBrief);
+    initial.brand.website = "eqvilent.com";
+    let after = initial;
+    applyGapAnswer(initial, "brand.colors.hex", "#E67E22", (next) => {
+      after = next;
+    });
+    expect(after.brand.website).toBe("eqvilent.com");
+  });
+
   it("re-applying the hex answer doesn't double-suffix the color name", async () => {
     // Edge case: user saves, then edits, then saves again. The "(hex)"
     // suffix should be replaced, not appended a second time.

@@ -351,6 +351,10 @@ function safeBrief(brief: Partial<ParsedBrief> | null | undefined): ParsedBrief 
           : [],
       },
       tagline: b.brand?.tagline,
+      // Preserve the parsed website domain — applyGapAnswer round-trips
+      // briefs through safeBrief + structuredClone, and dropping this
+      // field there would erase the brand-URL auto-populate source.
+      website: typeof b.brand?.website === "string" ? b.brand.website : undefined,
     },
     objectives: {
       primary: b.objectives?.primary ?? "",

@@ -198,6 +198,10 @@ const toolSchema = {
               type: "string",
               description: "Literal tagline/descriptor that must appear ON the booth signage (e.g. brief states 'logo must have descriptor (Quantitative Trading)'). Empty string if no explicit signage requirement.",
             },
+            website: {
+              type: "string",
+              description: "The client's website/domain if it appears ANYWHERE in the brief (contact blocks, footers, email domains, letterheads). Normalize to a bare domain like 'coca-cola.com' — no protocol, no www, no path. Empty string if absent.",
+            },
           },
           required: ["name", "category", "pov", "personality", "competitors", "visualIdentity"],
         },

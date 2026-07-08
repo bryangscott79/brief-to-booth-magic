@@ -323,6 +323,12 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
           status: "reviewed",
           project_type: type,
           client_id: effectiveClientId,
+          // Brand URL auto-populate: persist the brief-extracted website
+          // when the project has none (BrandWebsiteCard/BrandGuidePrompt
+          // prefill from brand_website_url, so it appears automatically).
+          ...(parseResult.parsed?.brand?.website && !projectBrandUrl
+            ? { brand_website_url: parseResult.parsed.brand.website }
+            : {}),
         } as any)
         .eq("id", dbProjectId);
 

@@ -110,7 +110,7 @@ export default function AdminIndustryDashboard() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-white/10 flex items-center justify-center shrink-0">
+            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center shrink-0">
               <Icon className="h-6 w-6 text-[#A78BFA]" />
             </div>
             <div>
@@ -361,7 +361,7 @@ function ProjectTypesTab({
             {tagged.map((t) => (
               <div
                 key={t.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg border border-white/10 bg-white/[0.02]"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg border border-cloud-line bg-cloud/50"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -394,7 +394,7 @@ function ProjectTypesTab({
 
         {/* Picker for cross-tagging existing types */}
         {showPicker && (
-          <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="mt-6 pt-6 border-t border-cloud-line">
             <Label className="text-xs uppercase tracking-widest text-muted-foreground">
               Add an existing project type
             </Label>
@@ -423,7 +423,7 @@ function ProjectTypesTab({
                       onClick={() => handleTag(t)}
                       className={cn(
                         "w-full text-left px-3 py-2 rounded-lg border transition-colors",
-                        "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]",
+                        "border-cloud-line bg-cloud/50 hover:border-slate-300 hover:bg-cloud",
                       )}
                     >
                       <div className="flex items-center gap-2">
@@ -496,7 +496,7 @@ function VocabularyEditor({ industry }: { industry: AdminIndustryRow }) {
           onChange={(e) => setDraft(e.target.value)}
           className="font-mono text-xs"
         />
-        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs space-y-1.5">
+        <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3 text-xs space-y-1.5">
           <div className="font-medium text-foreground/80">Recognized keys</div>
           {[
             ["project_type", "What's an 'activation type' called here?"],
@@ -510,7 +510,7 @@ function VocabularyEditor({ industry }: { industry: AdminIndustryRow }) {
             ["client", "Who we're delivering to."],
           ].map(([key, hint]) => (
             <div key={key} className="flex items-start gap-2">
-              <code className="font-mono text-[10px] bg-white/5 px-1.5 py-0.5 rounded text-[#A78BFA]">
+              <code className="font-mono text-[10px] bg-cloud px-1.5 py-0.5 rounded text-[#A78BFA]">
                 {key}
               </code>
               <span className="text-muted-foreground">{hint}</span>
@@ -545,7 +545,7 @@ function SummaryTile({
     red: "text-red-300",
   }[tone];
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4">
       <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
       <div className={`text-3xl font-semibold mt-1 ${toneClass}`}>{value}</div>
     </div>

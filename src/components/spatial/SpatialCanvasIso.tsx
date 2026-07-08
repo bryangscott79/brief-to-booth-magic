@@ -191,7 +191,7 @@ function ZoneBox({
           metalness={0.1}
           roughness={0.85}
         />
-        <Edges color={highlighted ? "#ffffff" : zone.colorHex} threshold={1} />
+        <Edges color={highlighted ? "#0B1B2B" : zone.colorHex} threshold={1} />
       </mesh>
       {/* Floor footprint shape — slightly darker fill so zones still
           read from above. Uses the same THREE.Shape extruded by 0.04
@@ -207,11 +207,11 @@ function ZoneBox({
       <Text
         position={[0, h / 2 + 1.5, 0]}
         fontSize={1.2}
-        color="#ffffff"
+        color="#0B1B2B"
         anchorX="center"
         anchorY="middle"
         outlineWidth={0.05}
-        outlineColor="#000000"
+        outlineColor="#ffffff"
         maxWidth={Math.max(w - 0.5, 4)}
       >
         {zone.name.length > 18 ? `${zone.name.slice(0, 16)}…` : zone.name}
@@ -317,11 +317,11 @@ function FeatureBox({
       <Text
         position={[0, verticalExtent + 1, 0]}
         fontSize={0.9}
-        color="#ffffff"
+        color="#0B1B2B"
         anchorX="left"
         anchorY="bottom"
         outlineWidth={0.04}
-        outlineColor="#000000"
+        outlineColor="#ffffff"
       >
         {feature.name}
       </Text>
@@ -408,7 +408,7 @@ function HangingElementBox({
         anchorX="center"
         anchorY="bottom"
         outlineWidth={0.04}
-        outlineColor="#000000"
+        outlineColor="#ffffff"
       >
         {el.name}
       </Text>
@@ -433,10 +433,10 @@ function HumanSilhouette({ x, z }: { x: number; z: number }) {
       <Text
         position={[0, -HUMAN_HEIGHT_FT / 2 - 0.6, 0]}
         fontSize={0.7}
-        color="#cbd5e1"
+        color="#64748B"
         anchorX="center"
         outlineWidth={0.03}
-        outlineColor="#000000"
+        outlineColor="#ffffff"
       >
         5'8"
       </Text>
@@ -446,7 +446,7 @@ function HumanSilhouette({ x, z }: { x: number; z: number }) {
 
 export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvasIsoProps>(
   function SpatialCanvasIso(
-    { geometry, highlightedZoneId = null, height = 360, showHuman = true, background = "#0b1020" },
+    { geometry, highlightedZoneId = null, height = 360, showHuman = true, background = "#FFFFFF" },
     ref,
   ) {
     const glRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -530,20 +530,20 @@ export const SpatialCanvasIso = forwardRef<SpatialCanvasIsoHandle, SpatialCanvas
           {/* Booth floor outline */}
           <mesh position={[wFt / 2, 0, dFt / 2]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[wFt, dFt]} />
-            <meshBasicMaterial color="#1e293b" />
+            <meshBasicMaterial color="#F1F5F9" />
           </mesh>
           {/* Floor edge lines for clean orthographic reading */}
           <mesh position={[wFt / 2, 0.01, dFt / 2]}>
             <boxGeometry args={[wFt, 0.05, dFt]} />
-            <meshBasicMaterial color="#0f172a" />
-            <Edges color="#94a3b8" threshold={1} />
+            <meshBasicMaterial color="#E2E8F0" />
+            <Edges color="#64748B" threshold={1} />
           </mesh>
 
           {/* Ceiling wireframe — shows max height envelope. */}
           <mesh position={[wFt / 2, ceiling, dFt / 2]}>
             <boxGeometry args={[wFt, 0.02, dFt]} />
-            <meshBasicMaterial color="#0f172a" transparent opacity={0.5} />
-            <Edges color="#475569" threshold={1} />
+            <meshBasicMaterial color="#CBD5E1" transparent opacity={0.4} />
+            <Edges color="#94A3B8" threshold={1} />
           </mesh>
 
           {/* Each zone as an extruded box. */}

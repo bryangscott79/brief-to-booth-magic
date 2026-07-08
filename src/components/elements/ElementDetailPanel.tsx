@@ -256,10 +256,10 @@ function BigIdeaDetail({ data, onUpdateField }: { data: any; onUpdateField: (pat
   return (
     <>
       {/* Hero section */}
-      <div className="rounded-xl p-8 hero-gradient text-card-foreground dark:text-foreground relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
+      <div className="rounded-xl p-8 bg-navy text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-grad-c/15 to-transparent" />
         <div className="relative space-y-4">
-          <Badge className="bg-primary/20 text-primary border-0">Core Concept</Badge>
+          <Badge className="bg-white/10 text-grad-a border-0">Core Concept</Badge>
           <EditableText
             value={data.headline || ""}
             onChange={(v) => onUpdateField("headline", v)}

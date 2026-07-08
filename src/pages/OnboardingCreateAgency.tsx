@@ -173,9 +173,9 @@ export default function OnboardingCreateAgency() {
                   key={inv.id}
                   onClick={() => handleAcceptInvite(inv.id, inv.agency_name)}
                   disabled={acceptInvite.isPending}
-                  className="w-full text-left rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-colors p-3 flex items-center gap-3"
+                  className="w-full text-left rounded-lg border border-cloud-line bg-cloud/50 hover:bg-cloud hover:border-slate-300 transition-colors p-3 flex items-center gap-3"
                 >
-                  <div className="h-9 w-9 rounded-lg bg-primary/10 border border-white/10 flex items-center justify-center shrink-0">
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 border border-cloud-line flex items-center justify-center shrink-0">
                     <Building2 className="h-4 w-4 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -198,7 +198,7 @@ export default function OnboardingCreateAgency() {
         {/* Create agency form */}
         <CanopyPanel className="p-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-white/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center">
               <Building2 className="h-5 w-5 text-[#A78BFA]" />
             </div>
             <span className="text-xs uppercase tracking-widest text-foreground/60">
@@ -274,7 +274,7 @@ export default function OnboardingCreateAgency() {
                           "relative text-left rounded-lg border p-3 transition-all",
                           isPrimary
                             ? "border-[#A78BFA]/60 bg-[#A78BFA]/[0.08] shadow-[0_0_0_1px_rgba(167,139,250,0.4)]"
-                            : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]",
+                            : "border-cloud-line bg-cloud/50 hover:border-slate-300 hover:bg-cloud",
                         )}
                       >
                         <div className="flex items-start gap-2.5">
@@ -283,7 +283,7 @@ export default function OnboardingCreateAgency() {
                               "h-8 w-8 rounded-lg flex items-center justify-center shrink-0",
                               isPrimary
                                 ? "bg-canopy-gradient text-background"
-                                : "bg-white/[0.06] text-foreground/70",
+                                : "bg-cloud text-foreground/70",
                             )}
                           >
                             <Icon className="h-4 w-4" />
@@ -331,7 +331,7 @@ export default function OnboardingCreateAgency() {
                               "text-xs px-3 py-1.5 rounded-full border transition-colors",
                               checked
                                 ? "border-[#A78BFA]/50 bg-[#A78BFA]/15 text-foreground"
-                                : "border-white/10 bg-white/[0.02] text-foreground/65 hover:border-white/20 hover:text-foreground",
+                                : "border-cloud-line bg-cloud/50 text-foreground/65 hover:border-slate-300 hover:text-foreground",
                             )}
                           >
                             {checked && <Check className="inline h-3 w-3 mr-1" />}
@@ -354,7 +354,7 @@ export default function OnboardingCreateAgency() {
                     value={primaryColor}
                     onChange={(e) => setPrimaryColor(e.target.value)}
                     disabled={createAgency.isPending}
-                    className="h-10 w-12 rounded-md border border-white/10 bg-transparent cursor-pointer"
+                    className="h-10 w-12 rounded-md border border-cloud-line bg-transparent cursor-pointer"
                   />
                   <Input
                     value={primaryColor}
@@ -373,7 +373,7 @@ export default function OnboardingCreateAgency() {
                     value={secondaryColor}
                     onChange={(e) => setSecondaryColor(e.target.value)}
                     disabled={createAgency.isPending}
-                    className="h-10 w-12 rounded-md border border-white/10 bg-transparent cursor-pointer"
+                    className="h-10 w-12 rounded-md border border-cloud-line bg-transparent cursor-pointer"
                   />
                   <Input
                     value={secondaryColor}

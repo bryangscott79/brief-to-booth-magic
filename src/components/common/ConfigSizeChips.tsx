@@ -35,11 +35,11 @@ export function ConfigSizeChips({
           disabled={disabled}
           onClick={() => onSelect(index)}
           className={cn(
-            "px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+            "px-4 py-2 rounded-full border font-mono text-[13px] font-medium transition-all",
             disabled && "opacity-50 cursor-not-allowed",
             activeIndex === index
               ? "bg-primary text-primary-foreground border-primary"
-              : "bg-card border-border hover:border-primary/30",
+              : "bg-card border-border text-charcoal hover:border-primary/30",
           )}
         >
           {String(config.footprintSize ?? `Config ${index + 1}`)}

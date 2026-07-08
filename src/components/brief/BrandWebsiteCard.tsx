@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Globe, Sparkles, Loader2, Check } from "lucide-react";
+import { Globe, Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -182,6 +182,7 @@ export function BrandWebsiteCard({ projectId, initialUrl, client }: BrandWebsite
           onClick={handleExtract}
           disabled={extracting || saving || !url.trim()}
           size="sm"
+          variant="generative"
         >
           {extracting ? (
             <>
@@ -190,7 +191,7 @@ export function BrandWebsiteCard({ projectId, initialUrl, client }: BrandWebsite
             </>
           ) : (
             <>
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              <span className="mr-1.5" aria-hidden="true">✦</span>
               {client ? "Extract now" : "Save URL"}
             </>
           )}

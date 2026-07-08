@@ -283,9 +283,9 @@ function IndustryRow({ industry }: { industry: AdminIndustryRow }) {
   const inUse = industry.agency_count > 0;
 
   return (
-    <div className="px-5 py-3 hover:bg-white/[0.02] transition-colors flex items-center gap-4">
+    <div className="px-5 py-3 hover:bg-cloud/50 transition-colors flex items-center gap-4">
       <Link to={`/admin/industries/${industry.slug}`} className="flex items-center gap-4 flex-1 min-w-0">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-white/10 flex items-center justify-center shrink-0">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center shrink-0">
           <Icon className="h-4 w-4 text-[#A78BFA]" />
         </div>
         <div className="flex-1 min-w-0">
@@ -573,7 +573,7 @@ function SchemaSetupBanner() {
           </div>
 
           {showSql && (
-            <pre className="mt-4 rounded-lg border border-white/10 bg-black/40 p-3 text-[10px] font-mono text-foreground/80 overflow-auto max-h-72 whitespace-pre">
+            <pre className="mt-4 rounded-lg border border-cloud-line bg-cloud p-3 text-[10px] font-mono text-foreground/80 overflow-auto max-h-72 whitespace-pre">
               {INDUSTRIES_SETUP_SQL}
             </pre>
           )}
@@ -602,7 +602,7 @@ function SummaryTile({
     red: "text-red-300",
   }[tone];
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4">
       <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
       <div className={`text-3xl font-semibold mt-1 ${toneClass}`}>{value}</div>
     </div>

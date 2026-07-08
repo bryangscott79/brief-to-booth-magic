@@ -2018,10 +2018,11 @@ export function PromptGenerator() {
             {!heroPrompt ? (
               <Button
                 onClick={handleComposeHeroPrompt}
-                className="w-full btn-glow"
+                variant="generative"
+                className="w-full"
                 disabled={isGeneratingHero}
               >
-                <Sparkles className="mr-2 h-4 w-4" />
+                <span className="mr-2" aria-hidden="true">✦</span>
                 Generate Hero Prompt
               </Button>
             ) : (
@@ -2038,7 +2039,8 @@ export function PromptGenerator() {
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={handleGenerateHeroImage}
-                    className="flex-1 btn-glow"
+                    variant="generative"
+                    className="flex-1"
                     disabled={isGeneratingHero}
                   >
                     {isGeneratingHero ? (
@@ -2048,7 +2050,7 @@ export function PromptGenerator() {
                       </>
                     ) : (
                       <>
-                        <Sparkles className="mr-2 h-4 w-4" />
+                        <span className="mr-2" aria-hidden="true">✦</span>
                         Generate Hero Image
                       </>
                     )}

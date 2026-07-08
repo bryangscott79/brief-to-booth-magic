@@ -415,15 +415,15 @@ export function DeckPreview({
 
   return (
     <div className={cn(
-      'fixed inset-0 z-50 bg-gray-950 flex flex-col',
+      'fixed inset-0 z-50 bg-navy flex flex-col',
       isFullscreen ? 'z-[100]' : ''
     )}>
       {/* Top toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-900 border-b border-gray-800 shrink-0">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-navy border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3">
-          <Presentation className="h-4 w-4 text-gray-400" />
+          <Presentation className="h-4 w-4 text-white/60" />
           <span className="text-sm font-medium text-white">{projectName}</span>
-          <Badge variant="secondary" className="text-xs bg-gray-700 text-gray-300">
+          <Badge variant="secondary" className="text-xs bg-white/15 text-white/80">
             {currentIdx + 1} / {sections.length}
           </Badge>
         </div>
@@ -432,7 +432,7 @@ export function DeckPreview({
           <Button
             variant="ghost"
             size="sm"
-            className={cn('h-7 text-xs gap-1', showGrid ? 'text-white bg-gray-700' : 'text-gray-400 hover:text-white')}
+            className={cn('h-7 text-xs gap-1', showGrid ? 'text-white bg-white/15' : 'text-white/60 hover:text-white')}
             onClick={() => setShowGrid(s => !s)}
           >
             <Grid className="h-3 w-3" />
@@ -441,7 +441,7 @@ export function DeckPreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs gap-1 text-gray-400 hover:text-white"
+            className="h-7 text-xs gap-1 text-white/60 hover:text-white"
             onClick={onDownloadPDF}
             disabled={isGeneratingPDF}
           >
@@ -451,7 +451,7 @@ export function DeckPreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs gap-1 text-gray-400 hover:text-white"
+            className="h-7 text-xs gap-1 text-white/60 hover:text-white"
             onClick={onDownloadPPTX}
             disabled={isGeneratingPPTX}
           >
@@ -461,7 +461,7 @@ export function DeckPreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0 text-gray-400 hover:text-white"
+            className="h-7 w-7 p-0 text-white/60 hover:text-white"
             onClick={() => setIsFullscreen(f => !f)}
           >
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -469,7 +469,7 @@ export function DeckPreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0 text-gray-400 hover:text-white"
+            className="h-7 w-7 p-0 text-white/60 hover:text-white"
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -487,7 +487,7 @@ export function DeckPreview({
                 onClick={() => { setCurrentIdx(i); setShowGrid(false); }}
                 className={cn(
                   'relative rounded-lg overflow-hidden border-2 transition-all text-left',
-                  i === currentIdx ? 'border-blue-400 shadow-lg shadow-blue-400/20' : 'border-gray-700 hover:border-gray-500'
+                  i === currentIdx ? 'border-grad-a' : 'border-white/15 hover:border-white/40'
                 )}
                 style={{ aspectRatio: '16/9' }}
               >
@@ -496,7 +496,7 @@ export function DeckPreview({
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-2 py-1 flex items-center justify-between">
                   <span className="text-white text-[10px] font-medium truncate">{sec.title}</span>
-                  <span className="text-gray-400 text-[10px]">{i + 1}</span>
+                  <span className="text-white/50 text-[10px]">{i + 1}</span>
                 </div>
               </button>
             ))}
@@ -533,7 +533,7 @@ export function DeckPreview({
 
       {/* Bottom slide strip */}
       {!showGrid && (
-        <div className="flex gap-2 px-4 py-2 overflow-x-auto bg-gray-900 border-t border-gray-800 shrink-0">
+        <div className="flex gap-2 px-4 py-2 overflow-x-auto bg-navy border-t border-white/10 shrink-0">
           {sections.map((sec, i) => (
             <button
               key={sec.id}
@@ -541,8 +541,8 @@ export function DeckPreview({
               className={cn(
                 'flex-shrink-0 rounded text-[10px] px-3 py-1.5 transition-colors',
                 i === currentIdx
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                  ? 'bg-white text-navy'
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
               )}
             >
               {i + 1}. {sec.title}

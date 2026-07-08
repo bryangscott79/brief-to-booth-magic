@@ -71,7 +71,7 @@ export default function AccessSuspendedPage() {
           )}
 
           {access?.suspensionReason && (
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 mb-5">
+            <div className="rounded-lg border border-cloud-line bg-cloud/60 p-4 mb-5">
               <div className="text-xs uppercase tracking-widest text-foreground/55 mb-1">
                 Reason
               </div>
@@ -80,7 +80,7 @@ export default function AccessSuspendedPage() {
           )}
 
           {access?.trialEndsAt && isTrialExpired && (
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 mb-5">
+            <div className="rounded-lg border border-cloud-line bg-cloud/60 p-4 mb-5">
               <div className="text-xs uppercase tracking-widest text-foreground/55 mb-1">
                 Trial ended
               </div>

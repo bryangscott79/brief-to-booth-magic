@@ -181,7 +181,7 @@ export default function ActivationTypes() {
                 "text-xs px-3 py-1.5 rounded-full border transition-colors",
                 industryFilter === "all"
                   ? "border-[#A78BFA]/50 bg-[#A78BFA]/15 text-foreground"
-                  : "border-white/10 bg-white/[0.02] text-foreground/65 hover:text-foreground",
+                  : "border-cloud-line bg-cloud/50 text-foreground/65 hover:text-foreground",
               )}
             >
               All industries
@@ -194,7 +194,7 @@ export default function ActivationTypes() {
                   "text-xs px-3 py-1.5 rounded-full border transition-colors",
                   industryFilter === ind.slug
                     ? "border-[#A78BFA]/50 bg-[#A78BFA]/15 text-foreground"
-                    : "border-white/10 bg-white/[0.02] text-foreground/65 hover:text-foreground",
+                    : "border-cloud-line bg-cloud/50 text-foreground/65 hover:text-foreground",
                 )}
               >
                 {ind.label}

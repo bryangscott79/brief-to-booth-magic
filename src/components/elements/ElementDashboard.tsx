@@ -9,7 +9,6 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
-  Sparkles,
   RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -556,7 +555,7 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           <Button
             onClick={() => generateAllElements(completedCount > 0)}
             disabled={isGenerating}
-            className="btn-glow"
+            variant="generative"
           >
             {isGenerating ? (
               <>
@@ -570,7 +569,7 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 h-4 w-4" />
+                <span className="mr-2" aria-hidden="true">✦</span>
                 Generate All with AI
               </>
             )}

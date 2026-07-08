@@ -254,15 +254,15 @@ function AgencyDetailDrawer({
           {/* ── Status / suspend / trial ─────────────────────────────── */}
           <TabsContent value="status" className="space-y-6 mt-4">
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3">
                 <div className="text-xs text-foreground/55">Members</div>
                 <div className="text-2xl font-semibold mt-0.5">{agency.member_count}</div>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3">
                 <div className="text-xs text-foreground/55">Clients</div>
                 <div className="text-2xl font-semibold mt-0.5">{agency.client_count}</div>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3">
                 <div className="text-xs text-foreground/55">Projects</div>
                 <div className="text-2xl font-semibold mt-0.5">{agency.project_count}</div>
               </div>
@@ -332,7 +332,7 @@ function AgencyDetailDrawer({
             </div>
 
             {/* Trial */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+            <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-[#A78BFA]" />
                 <h4 className="font-semibold text-sm">Trial period</h4>
@@ -399,7 +399,7 @@ function AgencyDetailDrawer({
             </div>
 
             {/* Quick toggles for common flags */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-2">
+            <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4 space-y-2">
               <div className="text-xs uppercase tracking-widest text-foreground/55 mb-2">
                 Quick toggles
               </div>
@@ -471,7 +471,7 @@ function AgencyDetailDrawer({
             ) : (
               <div className="space-y-2">
                 {log.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+                  <div key={entry.id} className="rounded-lg border border-cloud-line bg-cloud/50 p-3 text-sm">
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="font-medium">{entry.action.replace(/_/g, " ")}</span>
                       <span className="text-xs text-foreground/50">
@@ -594,7 +594,7 @@ function IndustriesTabContent({ agencyId, agencyName }: { agencyId: string; agen
                 "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                 primary === ind.slug
                   ? "border-amber-500/50 bg-amber-500/10"
-                  : "border-white/10 bg-white/[0.02] hover:border-white/20",
+                  : "border-cloud-line bg-cloud/50 hover:border-slate-300",
               )}
             >
               <div className="font-medium">{ind.label}</div>
@@ -627,7 +627,7 @@ function IndustriesTabContent({ agencyId, agencyName }: { agencyId: string; agen
                   "rounded-full border px-3 py-1 text-xs transition-colors",
                   active
                     ? "border-[#A78BFA]/50 bg-[#A78BFA]/15 text-[#E9D5FF]"
-                    : "border-white/10 bg-white/[0.02] hover:border-white/20",
+                    : "border-cloud-line bg-cloud/50 hover:border-slate-300",
                   isPrimary && "opacity-60 cursor-not-allowed",
                 )}
               >
@@ -798,9 +798,9 @@ export default function AdminAgencies() {
                     <button
                       key={a.id}
                       onClick={() => setSelected(a)}
-                      className="w-full text-left px-5 py-3 hover:bg-white/[0.02] transition-colors flex items-center gap-4"
+                      className="w-full text-left px-5 py-3 hover:bg-cloud/50 transition-colors flex items-center gap-4"
                     >
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 border border-white/10 flex items-center justify-center shrink-0">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 border border-cloud-line flex items-center justify-center shrink-0">
                         <Building2 className="h-4 w-4 text-primary" />
                       </div>
 
@@ -881,7 +881,7 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4">
       <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
       <div className={cn("text-3xl font-semibold mt-1", toneClass)}>{value}</div>
     </div>

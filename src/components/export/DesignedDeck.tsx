@@ -379,7 +379,8 @@ export function DesignedDeck({
           <Button
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="w-full btn-glow"
+            variant="generative"
+            className="w-full"
           >
             {isGenerating ? (
               <>
@@ -388,7 +389,7 @@ export function DesignedDeck({
               </>
             ) : (
               <>
-                <Wand2 className="h-4 w-4 mr-2" />
+                <span className="mr-2" aria-hidden="true">✦</span>
                 Design my deck
               </>
             )}

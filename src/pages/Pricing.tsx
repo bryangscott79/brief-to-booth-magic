@@ -116,7 +116,7 @@ const SOURCE_BADGE: Record<string, { label: string; tone: string }> = {
   vendor_api:            { label: "Vendor API",        tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
   rsmeans:               { label: "RSMeans",           tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
   subcontractor_quote:   { label: "Sub quote",         tone: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  manual:                { label: "Manual",            tone: "bg-white/10 text-foreground/70 border-white/20" },
+  manual:                { label: "Manual",            tone: "bg-cloud text-foreground/70 border-slate-300" },
   no_quote:              { label: "Unpriced",          tone: "bg-red-500/15 text-red-300 border-red-500/30" },
 };
 
@@ -206,7 +206,7 @@ export default function PricingPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-white/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center">
               <Calculator className="h-5 w-5 text-[#A78BFA]" />
             </div>
             <div>
@@ -283,7 +283,7 @@ export default function PricingPage() {
                   return (
                     <div key={division}>
                       {/* Division header */}
-                      <div className="px-5 py-2 bg-white/[0.02] flex items-center justify-between">
+                      <div className="px-5 py-2 bg-cloud/50 flex items-center justify-between">
                         <span className="text-xs uppercase tracking-widest text-foreground/55 font-medium">
                           {division}
                         </span>
@@ -335,7 +335,7 @@ export default function PricingPage() {
                 })}
 
                 {/* Grand total footer */}
-                <div className="px-5 py-4 bg-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 bg-cloud flex items-center justify-between">
                   <span className="text-sm font-semibold">Grand total</span>
                   <span className="text-2xl font-bold canopy-text-gradient">
                     {formatCurrency(grandTotal)}
@@ -361,7 +361,7 @@ export default function PricingPage() {
                 {summary
                   .filter((r) => r.csi_division !== null)
                   .map((row, i) => (
-                    <div key={i} className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
+                    <div key={i} className="flex items-center justify-between py-1 border-b border-cloud-line/60 last:border-0">
                       <span className="text-foreground/75">
                         {row.csi_division}
                         {row.category && <span className="text-foreground/50"> · {row.category}</span>}
@@ -450,7 +450,7 @@ function ItemRow({
   };
 
   return (
-    <div className="px-5 py-3 hover:bg-white/[0.015] transition-colors flex items-center gap-3 group">
+    <div className="px-5 py-3 hover:bg-cloud/50 transition-colors flex items-center gap-3 group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm">{item.description}</span>

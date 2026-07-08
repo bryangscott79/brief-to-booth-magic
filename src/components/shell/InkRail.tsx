@@ -27,7 +27,7 @@ export function InkRail({ children, footer, className }: InkRailProps) {
   return (
     <aside
       className={cn(
-        "flex w-full shrink-0 flex-col rounded-sheet bg-navy text-white lg:w-[372px]",
+        "flex h-fit w-full shrink-0 flex-col self-start rounded-sheet bg-navy text-white lg:w-[372px]",
         className,
       )}
       style={{ padding: "26px 28px" }}
@@ -118,14 +118,14 @@ export function RailRow({ label, value, mono, tone = "default", className }: Rai
   return (
     <div className={cn("flex items-baseline justify-between gap-3 py-[3px]", className)}>
       <span
-        className="min-w-0 text-[13px] leading-[19px]"
+        className="shrink-0 text-[13px] leading-[19px]"
         style={{ color: "rgba(255,255,255,0.72)" }}
       >
         {label}
       </span>
       <span
         className={cn(
-          "shrink-0 text-right text-[13px] font-medium leading-[19px] text-white",
+          "min-w-0 flex-1 break-words text-right text-[13px] font-medium leading-[19px] text-white",
           mono && "font-mono tracking-tight",
         )}
         style={

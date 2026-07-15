@@ -1,0 +1,315 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>34 · Agency Admin Settings · agency</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.side-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{margin-top:auto;border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy)}
+.side-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 18px}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+
+/* tabs */
+.seg{display:inline-flex;background:var(--cloud);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:2px;margin-bottom:20px}
+.seg span{padding:6px 14px;border-radius:4px;font-size:12px;font-weight:500;color:var(--slate)}
+.seg span.on{background:var(--white);color:var(--navy);font-weight:600;border:1px solid var(--cloud-line)}
+
+/* layout */
+.split{display:grid;grid-template-columns:280px 1fr;gap:18px;align-items:start}
+.card{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card)}
+
+/* section labels */
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+
+/* type list */
+.typehead{padding:16px 16px 10px}
+.typehead .desc{font-size:11px;color:var(--slate);margin-top:6px;line-height:16px}
+.typelist{padding:8px}
+.typerow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-left:2px solid transparent;border-radius:0 var(--r-btn) var(--r-btn) 0;color:var(--slate)}
+.typerow.sel{border-left-color:var(--navy);background:var(--cloud);color:var(--navy)}
+.typeicon{width:28px;height:28px;border-radius:var(--r-well);background:var(--cloud);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.typerow.sel .typeicon{background:var(--navy)}
+.typeicon svg{width:14px;height:14px;stroke:var(--navy);stroke-width:1.3;fill:none}
+.typerow.sel .typeicon svg{stroke:var(--white)}
+.typerow .tn{font-size:13px;font-weight:500;flex:1;min-width:0;display:flex;align-items:center;gap:6px}
+.typerow.sel .tn{font-weight:600}
+.custom{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6D28D9;background:#F5F3FF;border-radius:999px;padding:1px 7px}
+.typerow .chev{color:var(--slate-faint);font-size:13px}
+
+/* editor */
+.editor{padding:22px 26px}
+.edithead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:20px;border-bottom:1px solid var(--cloud-line)}
+.editid{display:flex;align-items:flex-start;gap:12px}
+.bigwell{width:40px;height:40px;border-radius:var(--r-well);background:var(--cloud);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bigwell svg{width:18px;height:18px;stroke:var(--navy);stroke-width:1.3;fill:none}
+.titlerow{display:flex;align-items:center;gap:10px}
+.tname{font-size:18px;font-weight:600;color:var(--navy)}
+.chip{font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip-green{background:var(--green-soft);color:var(--green)}
+.tagline{font-size:13px;color:var(--slate);margin-top:4px}
+.tid{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--slate-faint);margin-top:4px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate)}
+.switch{width:34px;height:19px;border-radius:999px;background:var(--navy);position:relative;flex-shrink:0}
+.switch i{position:absolute;top:2px;right:2px;width:15px;height:15px;border-radius:50%;background:var(--white)}
+
+/* sections */
+.esec{padding:20px 0 0}
+.esec .lblrow{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.esec .lblrow .note{font-size:12px;color:var(--slate-faint)}
+.esec .lblrow .note .mono{color:var(--slate);font-weight:500}
+.descbox{border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:10px 14px;font-size:13px;line-height:19px;color:var(--charcoal)}
+.codewell{background:var(--cloud);border:1px solid var(--cloud-line);border-radius:var(--r-well);padding:12px 16px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:18px;color:var(--navy)}
+.hr{border:none;border-top:1px solid var(--cloud-line);margin:22px 0 0}
+
+/* element rows */
+.el{display:flex;align-items:flex-start;gap:12px;border:1px solid var(--cloud-line);border-radius:var(--r-well);padding:11px 14px;margin-bottom:8px}
+.el .num{width:20px;height:20px;border-radius:6px;background:var(--navy);color:var(--white);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.el .et{font-size:13px;font-weight:600;color:var(--navy)}
+.el .ed{font-size:12px;color:var(--slate);font-weight:400}
+.el .eg{font-size:12px;font-style:italic;color:var(--slate);margin-top:3px;line-height:17px}
+.el .pen{margin-left:auto;color:var(--slate-faint);flex-shrink:0}
+.el .pen svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.3;fill:none}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <svg width="26" height="26" viewBox="0 0 100 100">
+        <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+          <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+          <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+        <g fill="url(#cm)">
+          <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+          <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+          <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+          <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+        </g>
+        <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+        <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+        <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+        <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+      </svg>
+      <span class="side-word">CANOPY</span>
+    </div>
+    <p class="ws-label">Exhibitus</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6Z"/></svg>Admin Settings</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">B</div>
+      <p>bryan@exhibitus.co</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div>
+        <p class="eyebrow">Agency · Configuration</p>
+        <h1>Agency Settings</h1>
+        <p class="sub">Configure project types, manage clients, and build brand intelligence.</p>
+      </div>
+    </div>
+
+    <div class="seg">
+      <span class="on">Project Types</span>
+      <span>Clients &amp; Brand Intelligence</span>
+      <span>Agency Knowledge Base</span>
+      <span>KB Health</span>
+      <span>Team</span>
+    </div>
+
+    <div class="split">
+      <!-- type list -->
+      <div class="card">
+        <div class="typehead">
+          <div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>Project Types</div>
+          <p class="desc">Select a type to configure its AI instructions and element guidance</p>
+        </div>
+        <div class="typelist">
+          <div class="typerow sel">
+            <span class="typeicon"><svg viewBox="0 0 24 24"><path d="M4 21h16M5 21V10h14v11M3 10l9-5 9 5M9 21v-5h6v5"/></svg></span>
+            <span class="tn">Trade Show<span class="custom">custom</span></span>
+            <span class="chev">›</span>
+          </div>
+          <div class="typerow">
+            <span class="typeicon"><svg viewBox="0 0 24 24"><path d="M13 3 5 13h5l-1 8 8-10h-5Z"/></svg></span>
+            <span class="tn">Brand Activation</span>
+            <span class="chev">›</span>
+          </div>
+          <div class="typerow">
+            <span class="typeicon"><svg viewBox="0 0 24 24"><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M3 21h18M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg></span>
+            <span class="tn">Permanent Install<span class="custom">custom</span></span>
+            <span class="chev">›</span>
+          </div>
+          <div class="typerow">
+            <span class="typeicon"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 7l2.5-4 4 2-2.5 4M9.5 5l4 2L16 3l4 2-2.5 4"/></svg></span>
+            <span class="tn">Film Premiere</span>
+            <span class="chev">›</span>
+          </div>
+          <div class="typerow">
+            <span class="typeicon"><svg viewBox="0 0 24 24"><path d="M7 9h10a4 4 0 0 1 4 4c0 2.2-1.4 4-3.2 4-1.2 0-2-.6-2.8-1.6H9c-.8 1-1.6 1.6-2.8 1.6C4.4 17 3 15.2 3 13a4 4 0 0 1 4-4Z"/><path d="M8 12v2M7 13h2M15.5 12.2h.01M17.5 13.8h.01"/></svg></span>
+            <span class="tn">Game Release</span>
+            <span class="chev">›</span>
+          </div>
+          <div class="typerow">
+            <span class="typeicon"><svg viewBox="0 0 24 24"><path d="M6 21V7l6-4 6 4v14M3 21h18M10 21v-4h4v4"/></svg></span>
+            <span class="tn">Architectural</span>
+            <span class="chev">›</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- editor -->
+      <div class="card editor">
+        <div class="edithead">
+          <div class="editid">
+            <span class="bigwell"><svg viewBox="0 0 24 24"><path d="M4 21h16M5 21V10h14v11M3 10l9-5 9 5M9 21v-5h6v5"/></svg></span>
+            <div>
+              <div class="titlerow">
+                <span class="tname">Trade Show Booth</span>
+                <span class="chip chip-green">Active</span>
+              </div>
+              <p class="tagline">Turn your RFP into a render-ready exhibit design</p>
+              <p class="tid">trade_show_booth</p>
+            </div>
+          </div>
+          <div class="toggle"><span class="switch"><i></i></span>Enabled</div>
+        </div>
+
+        <div class="esec">
+          <div class="lblrow">
+            <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>Description</div>
+          </div>
+          <div class="descbox">Convention &amp; exhibition booths, inline, peninsula, and island configurations for B2B and B2C trade shows.</div>
+        </div>
+
+        <div class="esec">
+          <div class="lblrow">
+            <div class="slabel" style="color:#6D28D9"><span class="sw" style="background:var(--violet)"></span>Render Context</div>
+            <span class="note">injected into every AI image generation prompt</span>
+          </div>
+          <div class="codewell">trade show exhibit booth on a convention hall floor with carpet, neighboring booths, overhead lighting</div>
+        </div>
+
+        <hr class="hr">
+
+        <div class="esec">
+          <div class="lblrow">
+            <div class="slabel" style="color:#DB2777"><span class="sw" style="background:var(--pink)"></span>Strategic Elements</div>
+            <span class="note"><span class="mono">8</span> elements — AI guidance controls generation quality</span>
+          </div>
+
+          <div class="el">
+            <span class="num">1</span>
+            <div>
+              <p><span class="et">Big Idea</span> <span class="ed">· Core concept and strategic brand positioning</span></p>
+              <p class="eg">Focus on trade show ROI, booth traffic drivers, and competitive differentiation on the show floor.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">2</span>
+            <div>
+              <p><span class="et">Experience Framework</span> <span class="ed">· Visitor journey and zone design principles</span></p>
+              <p class="eg">Map the visitor flow from aisle approach through qualification zones to VIP close, with dwell time targets per zone.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">3</span>
+            <div>
+              <p><span class="et">Interactive Mechanics</span> <span class="ed">· Hero installation and engagement systems</span></p>
+              <p class="eg">Define the hero interaction that drives badge scans and demos, plus secondary touchpoints for passive traffic.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">4</span>
+            <div>
+              <p><span class="et">Digital Storytelling</span> <span class="ed">· AV content strategy and screen architecture</span></p>
+              <p class="eg">Specify LED wall content, looping demos, and audience-targeted content tracks for executive vs technical visitors.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">5</span>
+            <div>
+              <p><span class="et">Human Connection</span> <span class="ed">· Meeting zones and private conversation spaces</span></p>
+              <p class="eg">Design meeting room capacity, booking flow, and conversation zone configurations by footprint size.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">6</span>
+            <div>
+              <p><span class="et">Adjacent Activations</span> <span class="ed">· Off-booth events and hospitality experiences</span></p>
+              <p class="eg">Propose evening events, show-floor happy hours, and partner co-activations that extend booth impact.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">7</span>
+            <div>
+              <p><span class="et">Spatial Strategy</span> <span class="ed">· Floor plan zoning and traffic flow analysis</span></p>
+              <p class="eg">Produce zone allocation by sqft, traffic flow diagrams, and ADA compliance notes for each footprint size.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+          <div class="el">
+            <span class="num">8</span>
+            <div>
+              <p><span class="et">Budget Logic</span> <span class="ed">· Cost allocation and multi-show ROI analysis</span></p>
+              <p class="eg">Break down fabrication, A/V, logistics, labor, and show services costs with amortization across show schedule.</p>
+            </div>
+            <span class="pen"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L8 21H3v-5Z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 34 · Agency Admin Settings · role: agency -->
+</body>
+</html>

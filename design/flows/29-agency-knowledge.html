@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>29 · Agency Knowledge · agency</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.side-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{margin-top:auto;border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy)}
+.side-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 22px}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+.actions{display:flex;align-items:center;gap:10px}
+.search{display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:7px 12px;width:260px;font-size:13px;color:var(--slate-faint)}
+.search svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:var(--navy);color:var(--white)}
+
+/* section labels */
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:26px 0 10px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.slabel .cnt{margin-left:2px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.slabel .hint{font-family:'Inter',-apple-system,sans-serif;font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--slate);margin-left:4px}
+
+/* dropzone */
+.dropzone{border:2px dashed var(--cloud-line);border-radius:var(--r-card);background:var(--white);padding:30px 20px;text-align:center}
+.dropzone svg{width:26px;height:26px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;margin:0 auto 10px;display:block}
+.dropzone .dz-title{font-size:13px;font-weight:600;color:var(--navy)}
+.dropzone .dz-hint{font-size:12px;color:var(--slate);margin-top:4px}
+.dropzone .dz-hint .mono{font-size:11px}
+
+/* document rows */
+.rows{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);overflow:hidden}
+.row{display:flex;align-items:flex-start;gap:14px;padding:14px 20px;border-top:1px solid var(--cloud-line)}
+.row:first-child{border-top:none}
+.well{width:36px;height:36px;border-radius:var(--r-well);background:var(--cloud);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.well svg{width:16px;height:16px;stroke:var(--navy);stroke-width:1.3;fill:none}
+.grow{flex:1;min-width:0}
+.doc-title{font-size:14px;font-weight:600;color:var(--navy)}
+.doc-file{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--slate-faint);margin-left:8px;font-weight:400}
+.doc-sum{font-size:12px;color:var(--slate);margin-top:3px;line-height:17px}
+.tagline{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tag{font-size:10px;font-weight:500;color:var(--slate);border:1px solid var(--cloud-line);background:var(--white);border-radius:999px;padding:1px 8px}
+.doc-meta{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--slate);margin-left:auto;white-space:nowrap}
+.rightcol{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:2px}
+.chip{font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip-green{background:var(--green-soft);color:var(--green)}
+.chip-amber{background:var(--amber-soft);color:var(--amber)}
+.chip-pink{background:var(--pink-soft);color:var(--pink-deep)}
+.chip-scope{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);background:var(--cloud);border:1px solid var(--cloud-line);border-radius:var(--r-chip);padding:2px 7px}
+.rowicons{display:flex;align-items:center;gap:10px;color:var(--slate-faint)}
+.rowicons svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none}
+.rowicons .pinned{color:var(--pink-deep)}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <svg width="26" height="26" viewBox="0 0 100 100">
+        <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+          <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+          <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+        <g fill="url(#cm)">
+          <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+          <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+          <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+          <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+        </g>
+        <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+        <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+        <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+        <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+      </svg>
+      <span class="side-word">CANOPY</span>
+    </div>
+    <p class="ws-label">Exhibitus</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">B</div>
+      <p>bryan@exhibitus.co</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div>
+        <p class="eyebrow">Exhibitus · Shared context</p>
+        <h1>Agency Knowledge</h1>
+        <p class="sub">Playbooks, rate standards, and style references — context for every project.</p>
+      </div>
+      <div class="actions">
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search by filename, title, or tag…</div>
+      </div>
+    </div>
+
+    <div class="dropzone">
+      <svg viewBox="0 0 24 24"><path d="M12 16V5M7.5 9.5 12 5l4.5 4.5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <p class="dz-title">Drag &amp; drop or click to upload documents</p>
+      <p class="dz-hint">PDF, DOCX, XLSX, PPTX, TXT, MD, CSV, or images · up to <span class="mono">50 MB</span> — anything that should influence generation across all clients and projects.</p>
+    </div>
+
+    <div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>Agency documents<span class="cnt">5</span><span class="hint">Fed into brief parsing and every generation flow.</span></div>
+    <div class="rows">
+
+      <div class="row">
+        <div class="well"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6Z"/><path d="M15 3v4h4M9 12h7M9 15.5h7M9 8.5h3"/></svg></div>
+        <div class="grow">
+          <p class="doc-title">Exhibitus Design Playbook<span class="doc-file">exhibitus_playbook_2026.pdf</span></p>
+          <p class="doc-sum">House design principles, fabrication standards, and the approval checklist every concept must pass before client review.</p>
+          <div class="tagline">
+            <span class="tag">playbook</span><span class="tag">design standards</span><span class="tag">fabrication</span>
+            <span class="doc-meta">142 chunks · 8.2 MB · 2d ago</span>
+          </div>
+        </div>
+        <div class="rightcol">
+          <span class="chip chip-scope">Agency</span>
+          <span class="chip chip-pink">Pinned</span>
+          <span class="chip chip-green">Ready</span>
+          <div class="rowicons">
+            <svg class="pinned" viewBox="0 0 24 24"><path d="M12 17v5M8 6l8-2 1 6 2 3H5l2-3Z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="well"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9.3h16M4 14.6h16M9.3 4v16M14.6 4v16"/></svg></div>
+        <div class="grow">
+          <p class="doc-title">Rate Standards — Q3 2026<span class="doc-file">rate_standards_q3.xlsx</span></p>
+          <p class="doc-sum">Labor classes, shop rates, and standard markups by discipline. Governs how the pricing engine resolves agency rate-card matches.</p>
+          <div class="tagline">
+            <span class="tag">pricing</span><span class="tag">rate card</span><span class="tag">labor</span>
+            <span class="doc-meta">64 chunks · 1.1 MB · 5d ago</span>
+          </div>
+        </div>
+        <div class="rightcol">
+          <span class="chip chip-scope">Agency</span>
+          <span class="chip chip-green">Ready</span>
+          <div class="rowicons">
+            <svg viewBox="0 0 24 24"><path d="M12 17v5M8 6l8-2 1 6 2 3H5l2-3Z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="well"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6Z"/><path d="M15 3v4h4M9 12h7M9 15.5h7M9 8.5h3"/></svg></div>
+        <div class="grow">
+          <p class="doc-title">Fabrication House Rules<span class="doc-file">fabrication_house_rules.docx</span></p>
+          <p class="doc-sum">Tolerances, approved materials list, sustainability substitutions, and crating specs the shop enforces on every build.</p>
+          <div class="tagline">
+            <span class="tag">fabrication</span><span class="tag">materials</span><span class="tag">house rules</span>
+            <span class="doc-meta">38 chunks · 420 KB · 1w ago</span>
+          </div>
+        </div>
+        <div class="rightcol">
+          <span class="chip chip-scope">Agency</span>
+          <span class="chip chip-green">Ready</span>
+          <div class="rowicons">
+            <svg viewBox="0 0 24 24"><path d="M12 17v5M8 6l8-2 1 6 2 3H5l2-3Z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="well"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 4 3 3-2 4 3"/></svg></div>
+        <div class="grow">
+          <p class="doc-title">Style Reference — Modern Minimal<span class="doc-file">style_ref_modern_minimal.pdf</span></p>
+          <p class="doc-sum">Curated photo set of past builds in the house style: light wood, matte white, warm LED, open sightlines. Anchors render tone.</p>
+          <div class="tagline">
+            <span class="tag">style reference</span><span class="tag">renders</span><span class="tag">photography</span>
+            <span class="doc-meta">96 chunks · 24.6 MB · 2w ago</span>
+          </div>
+        </div>
+        <div class="rightcol">
+          <span class="chip chip-scope">Agency</span>
+          <span class="chip chip-green">Ready</span>
+          <div class="rowicons">
+            <svg viewBox="0 0 24 24"><path d="M12 17v5M8 6l8-2 1 6 2 3H5l2-3Z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="well"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6Z"/><path d="M15 3v4h4M9 12h7M9 15.5h7M9 8.5h3"/></svg></div>
+        <div class="grow">
+          <p class="doc-title">CES Show Services Guide 2027<span class="doc-file">ces_show_services_2027.pdf</span></p>
+          <p class="doc-sum">LVCC drayage rates, rigging rules, union labor requirements, and electrical order deadlines for the January show.</p>
+          <div class="tagline">
+            <span class="tag">show services</span><span class="tag">CES</span><span class="tag">logistics</span>
+            <span class="doc-meta">embedding · 12.8 MB · just now</span>
+          </div>
+        </div>
+        <div class="rightcol">
+          <span class="chip chip-scope">Agency</span>
+          <span class="chip chip-amber">Processing</span>
+          <div class="rowicons">
+            <svg viewBox="0 0 24 24"><path d="M12 17v5M8 6l8-2 1 6 2 3H5l2-3Z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+<!-- artboard 29 · Agency Knowledge · role: agency -->
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CANOPY — every screen, both roles</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--cloud);color:var(--charcoal);padding:40px 48px 80px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+header{margin-bottom:8px}
+header .eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+header h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+header p{font-size:13px;color:var(--slate);margin-top:6px;max-width:640px}
+.rule{height:2px;background:var(--grad-brand);border-radius:1px;margin:22px 0 8px;max-width:220px}
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:34px 0 14px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
+a.card{display:block;background:var(--white);border:1px solid var(--cloud-line);border-radius:14px;overflow:hidden;text-decoration:none;color:inherit}
+.frame{height:210px;overflow:hidden;position:relative;background:var(--cloud);border-bottom:1px solid var(--cloud-line)}
+.frame iframe{width:1440px;height:920px;transform:scale(.229);transform-origin:0 0;border:0;pointer-events:none}
+.card .cap{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 14px}
+.card .cap b{font-size:13px;font-weight:600;color:var(--navy)}
+.card .cap span{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--slate-faint);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Canopy · Flow C · 27 boards · Paper artboards 24–50</p>
+  <h1>Every screen, both roles</h1>
+  <p>The complete application surface in the Flow C design language — agency workspace, six-step project flow, and the super-admin platform — authored as Paper-ready artboards. Click any card to open it at full 1440px.</p>
+  <div class="rule"></div>
+</header>
+
+<div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>Agency workspace</div>
+<div class="grid">
+  <a class="card" href="24-projects-home.html"><div class="frame"><iframe src="24-projects-home.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Projects home</b><span>24 · agency</span></div></a>
+  <a class="card" href="25-clients.html"><div class="frame"><iframe src="25-clients.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Clients</b><span>25 · agency</span></div></a>
+  <a class="card" href="26-client-dashboard.html"><div class="frame"><iframe src="26-client-dashboard.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Client dashboard</b><span>26 · agency</span></div></a>
+  <a class="card" href="27-activation-types.html"><div class="frame"><iframe src="27-activation-types.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Activation types</b><span>27 · agency</span></div></a>
+  <a class="card" href="28-activation-type-dashboard.html"><div class="frame"><iframe src="28-activation-type-dashboard.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Activation type detail</b><span>28 · agency</span></div></a>
+  <a class="card" href="29-agency-knowledge.html"><div class="frame"><iframe src="29-agency-knowledge.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Agency knowledge</b><span>29 · agency</span></div></a>
+  <a class="card" href="30-agency-pricing.html"><div class="frame"><iframe src="30-agency-pricing.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Agency pricing</b><span>30 · agency</span></div></a>
+  <a class="card" href="31-project-pricing-bom.html"><div class="frame"><iframe src="31-project-pricing-bom.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Project pricing · BOM</b><span>31 · agency</span></div></a>
+  <a class="card" href="32-company-profile.html"><div class="frame"><iframe src="32-company-profile.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Company profile</b><span>32 · agency</span></div></a>
+  <a class="card" href="33-team.html"><div class="frame"><iframe src="33-team.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Team &amp; invites</b><span>33 · agency</span></div></a>
+  <a class="card" href="34-agency-admin-settings.html"><div class="frame"><iframe src="34-agency-admin-settings.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Admin settings</b><span>34 · agency admin</span></div></a>
+</div>
+
+<div class="slabel" style="color:#6D28D9"><span class="sw" style="background:var(--violet)"></span>Project flow — Samsung · CES 2027</div>
+<div class="grid">
+  <a class="card" href="35-step-01-brief.html"><div class="frame"><iframe src="35-step-01-brief.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Step 01 · Brief</b><span>35</span></div></a>
+  <a class="card" href="36-step-02-review.html"><div class="frame"><iframe src="36-step-02-review.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Step 02 · Review</b><span>36</span></div></a>
+  <a class="card" href="37-step-03-concept.html"><div class="frame"><iframe src="37-step-03-concept.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Step 03 · Concept</b><span>37</span></div></a>
+  <a class="card" href="38-step-04-spatial.html"><div class="frame"><iframe src="38-step-04-spatial.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Step 04 · Spatial</b><span>38</span></div></a>
+  <a class="card" href="39-step-05-render.html"><div class="frame"><iframe src="39-step-05-render.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Step 05 · Render</b><span>39</span></div></a>
+  <a class="card" href="40-step-06-export.html"><div class="frame"><iframe src="40-step-06-export.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Step 06 · Export</b><span>40</span></div></a>
+  <a class="card" href="41-files.html"><div class="frame"><iframe src="41-files.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Files</b><span>41</span></div></a>
+  <a class="card" href="42-project-knowledge-base.html"><div class="frame"><iframe src="42-project-knowledge-base.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Knowledge base</b><span>42</span></div></a>
+</div>
+
+<div class="slabel" style="color:#B45309"><span class="sw" style="background:#F59E0B"></span>Platform — super admin</div>
+<div class="grid">
+  <a class="card" href="43-platform-accounts.html"><div class="frame"><iframe src="43-platform-accounts.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Accounts</b><span>43 · super admin</span></div></a>
+  <a class="card" href="44-admin-agencies.html"><div class="frame"><iframe src="44-admin-agencies.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Agencies</b><span>44 · super admin</span></div></a>
+  <a class="card" href="45-admin-industries.html"><div class="frame"><iframe src="45-admin-industries.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Industries</b><span>45 · super admin</span></div></a>
+  <a class="card" href="46-industry-dashboard.html"><div class="frame"><iframe src="46-industry-dashboard.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Industry dashboard</b><span>46 · super admin</span></div></a>
+  <a class="card" href="47-super-admins.html"><div class="frame"><iframe src="47-super-admins.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Super admins</b><span>47 · super admin</span></div></a>
+  <a class="card" href="48-agency-account.html"><div class="frame"><iframe src="48-agency-account.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Agency account</b><span>48 · super admin</span></div></a>
+  <a class="card" href="49-preview-mode.html"><div class="frame"><iframe src="49-preview-mode.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Preview mode</b><span>49 · preview</span></div></a>
+  <a class="card" href="50-role-nav-matrix.html"><div class="frame"><iframe src="50-role-nav-matrix.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Roles &amp; navigation</b><span>50 · reference</span></div></a>
+</div>
+</body>
+</html>

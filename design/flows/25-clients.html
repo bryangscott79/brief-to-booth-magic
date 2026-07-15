@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>25 · Clients · agency</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.side-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{margin-top:auto;border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy)}
+.side-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 22px}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+.actions{display:flex;align-items:center;gap:10px}
+.search{display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:7px 12px;width:240px;font-size:13px;color:var(--slate-faint)}
+.search svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:var(--navy);color:var(--white)}
+
+/* client grid */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);padding:20px;display:flex;gap:14px;align-items:flex-start}
+.well{width:48px;height:48px;border-radius:var(--r-well);background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--navy);flex-shrink:0}
+.card h3{font-size:16px;font-weight:600;color:var(--navy);line-height:1.2}
+.card .industry{font-size:12px;color:var(--slate);margin-top:3px}
+.card .footrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px}
+.cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.view{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--navy);text-decoration:none;white-space:nowrap}
+.view svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.5;fill:none}
+.grow{flex:1;min-width:0}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <svg width="26" height="26" viewBox="0 0 100 100">
+        <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+          <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+          <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+        <g fill="url(#cm)">
+          <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+          <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+          <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+          <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+        </g>
+        <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+        <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+        <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+        <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+      </svg>
+      <span class="side-word">CANOPY</span>
+    </div>
+    <p class="ws-label">Exhibitus</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">B</div>
+      <p>bryan@exhibitus.co</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div>
+        <p class="eyebrow">Exhibitus · 8 clients</p>
+        <h1>Clients</h1>
+        <p class="sub">Brands your agency designs for — each carries its own intelligence and projects.</p>
+      </div>
+      <div class="actions">
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search clients…</div>
+        <button class="btn btn-primary">+ New Client</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="well">SA</div>
+        <div class="grow">
+          <h3>Samsung</h3>
+          <p class="industry">Consumer Electronics</p>
+          <div class="footrow">
+            <span class="cnt">4 projects</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">NI</div>
+        <div class="grow">
+          <h3>Nike</h3>
+          <p class="industry">Athletic Apparel &amp; Footwear</p>
+          <div class="footrow">
+            <span class="cnt">3 projects</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">DA</div>
+        <div class="grow">
+          <h3>Delta Air Lines</h3>
+          <p class="industry">Aviation &amp; Travel</p>
+          <div class="footrow">
+            <span class="cnt">2 projects</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">PA</div>
+        <div class="grow">
+          <h3>Patagonia</h3>
+          <p class="industry">Outdoor Apparel</p>
+          <div class="footrow">
+            <span class="cnt">2 projects</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">SO</div>
+        <div class="grow">
+          <h3>Sonos</h3>
+          <p class="industry">Consumer Audio</p>
+          <div class="footrow">
+            <span class="cnt">1 project</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">RI</div>
+        <div class="grow">
+          <h3>Rivian</h3>
+          <p class="industry">Electric Vehicles</p>
+          <div class="footrow">
+            <span class="cnt">1 project</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">FI</div>
+        <div class="grow">
+          <h3>Figma</h3>
+          <p class="industry">Design Software</p>
+          <div class="footrow">
+            <span class="cnt">1 project</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="well">CH</div>
+        <div class="grow">
+          <h3>Chewy</h3>
+          <p class="industry">Pet Retail &amp; E-commerce</p>
+          <div class="footrow">
+            <span class="cnt">1 project</span>
+            <a class="view" href="#">View dashboard<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 25 · Clients · role: agency -->
+</body>
+</html>

@@ -1,0 +1,294 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>31 · Project Pricing BOM · agency</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.side-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{margin-top:auto;border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy)}
+.side-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 18px}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+.actions{display:flex;align-items:center;gap:10px}
+.select{display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:7px 12px;font-size:13px;color:var(--charcoal)}
+.select .caret{color:var(--slate-faint);font-size:10px}
+.input{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:7px 12px;font-size:13px;width:128px;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--charcoal)}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:var(--navy);color:var(--white)}
+
+/* summary tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.tile{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);padding:14px 18px}
+.tile .tl{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.tile .tv{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:5px;color:var(--navy)}
+.tile .tv.pass{color:var(--green)}
+.tile .tv.warn{color:var(--amber)}
+
+/* line items card */
+.card{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);overflow:hidden}
+.cardhead{padding:16px 20px 12px;border-bottom:1px solid var(--cloud-line)}
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.cardhead .desc{font-size:12px;color:var(--slate);margin-top:6px}
+
+/* division header */
+.divhead{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;background:var(--cloud);border-top:1px solid var(--cloud-line)}
+.divhead:first-of-type{border-top:none}
+.divtotal{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;font-weight:600;color:var(--navy)}
+
+/* item rows */
+.irow{display:flex;align-items:center;gap:14px;padding:11px 20px;border-top:1px solid var(--cloud-line)}
+.iname{flex:1;min-width:0}
+.iname .t{font-size:13px;font-weight:500;color:var(--charcoal)}
+.iname .t .mfr{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--slate-faint);font-weight:400;margin-left:8px}
+.iname .k{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--slate-faint);margin-top:3px}
+.qty{width:110px;text-align:right;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal)}
+.unitp{width:110px;text-align:right}
+.unitp .p{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal)}
+.unitp .u{font-size:10px;color:var(--slate-faint);margin-top:1px}
+.total{width:110px;text-align:right;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--navy)}
+.total .dim{color:var(--slate-faint);font-weight:400}
+.src{width:118px;display:flex;justify-content:flex-end}
+.chip{font-size:10px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip-green{background:var(--green-soft);color:var(--green)}
+.chip-violet{background:#F5F3FF;color:#6D28D9}
+.chip-amber{background:var(--amber-soft);color:var(--amber)}
+.chip-red{background:var(--red-soft);color:var(--red)}
+
+/* grand total footer */
+.gtotal{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--cloud);border-top:1px solid var(--cloud-line)}
+.gtotal .gl{font-size:14px;font-weight:600;color:var(--navy)}
+.gtotal .gv{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:26px;font-weight:600;letter-spacing:-.02em;background:var(--grad-action);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.gtotal .gnote{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--slate);margin-right:14px}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <svg width="26" height="26" viewBox="0 0 100 100">
+        <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+          <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+          <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+        <g fill="url(#cm)">
+          <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+          <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+          <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+          <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+        </g>
+        <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+        <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+        <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+        <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+      </svg>
+      <span class="side-word">CANOPY</span>
+    </div>
+    <p class="ws-label">Exhibitus</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">B</div>
+      <p>bryan@exhibitus.co</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div>
+        <p class="eyebrow">Samsung — CES 2027 · Pricing engine · 12 line items</p>
+        <h1>Pricing</h1>
+        <p class="sub">Bill of materials with real-time pricing — rate cards, AI estimates, feeds, and overrides.</p>
+      </div>
+      <div class="actions">
+        <div class="select">Premium <span class="caret">▾</span></div>
+        <input class="input" value="89109" readonly>
+        <button class="btn btn-primary">+ Add line item</button>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><p class="tl">Grand total</p><p class="tv">$157,340</p></div>
+      <div class="tile"><p class="tl">Line items</p><p class="tv">12</p></div>
+      <div class="tile"><p class="tl">Priced</p><p class="tv pass">10</p></div>
+      <div class="tile"><p class="tl">Unpriced</p><p class="tv warn">2</p></div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>Line items</div>
+        <p class="desc">Edit quantity inline. Click a row to override pricing or change details.</p>
+      </div>
+
+      <div class="divhead">
+        <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>01 — General Requirements</div>
+        <span class="divtotal">$6,200</span>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Show services coordination &amp; supervision</p><p class="k">labor · show_services_supervision</p></div>
+        <span class="qty">1 each</span>
+        <div class="unitp"><p class="p">$6,200</p><p class="u">/ each</p></div>
+        <span class="total">$6,200</span>
+        <div class="src"><span class="chip chip-green">Rate card</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Hanging sign rigging, LVCC union</p><p class="k">labor · hanging_sign_rigging</p></div>
+        <span class="qty">1 each</span>
+        <div class="unitp"><p class="p">—</p><p class="u">/ each</p></div>
+        <span class="total"><span class="dim">—</span></span>
+        <div class="src"><span class="chip chip-red">Unpriced</span></div>
+      </div>
+
+      <div class="divhead">
+        <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>06 — Wood &amp; Plastics</div>
+        <span class="divtotal">$32,720</span>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Custom millwork reception counter</p><p class="k">structural · millwork_reception_counter</p></div>
+        <span class="qty">1 each</span>
+        <div class="unitp"><p class="p">$8,400</p><p class="u">/ each</p></div>
+        <span class="total">$8,400</span>
+        <div class="src"><span class="chip chip-green">Rate card</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Slatted canopy structure, white oak</p><p class="k">structural · slatted_canopy_white_oak</p></div>
+        <span class="qty">640 sqft</span>
+        <div class="unitp"><p class="p">$38</p><p class="u">/ sqft</p></div>
+        <span class="total">$24,320</span>
+        <div class="src"><span class="chip chip-violet">AI estimate</span></div>
+      </div>
+
+      <div class="divhead">
+        <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>09 — Finishes</div>
+        <span class="divtotal">$20,880</span>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Premium carpet + padding, graphite</p><p class="k">finish · carpet_padding_graphite</p></div>
+        <span class="qty">800 sqft</span>
+        <div class="unitp"><p class="p">$6.50</p><p class="u">/ sqft</p></div>
+        <span class="total">$5,200</span>
+        <div class="src"><span class="chip chip-green">Rate card</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Tension fabric graphics, dye-sub print</p><p class="k">finish · tension_fabric_dyesub</p></div>
+        <span class="qty">1,120 sqft</span>
+        <div class="unitp"><p class="p">$14</p><p class="u">/ sqft</p></div>
+        <span class="total">$15,680</span>
+        <div class="src"><span class="chip chip-green">Sub quote</span></div>
+      </div>
+
+      <div class="divhead">
+        <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>12 — Furnishings</div>
+        <span class="divtotal">$11,320</span>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Lounge seating set, leather</p><p class="k">furniture · lounge_seating_leather</p></div>
+        <span class="qty">4 each</span>
+        <div class="unitp"><p class="p">$2,150</p><p class="u">/ each</p></div>
+        <span class="total">$8,600</span>
+        <div class="src"><span class="chip chip-green">Inventory</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Charging side tables, wireless pads</p><p class="k">furniture · charging_side_tables</p></div>
+        <span class="qty">8 each</span>
+        <div class="unitp"><p class="p">$340</p><p class="u">/ each</p></div>
+        <span class="total">$2,720</span>
+        <div class="src"><span class="chip chip-amber">Vendor API</span></div>
+      </div>
+
+      <div class="divhead">
+        <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>26 — Electrical</div>
+        <span class="divtotal">$15,520</span>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">200A power distribution + floor drops</p><p class="k">electrical · power_distribution_200a</p></div>
+        <span class="qty">1 each</span>
+        <div class="unitp"><p class="p">$9,800</p><p class="u">/ each</p></div>
+        <span class="total">$9,800</span>
+        <div class="src"><span class="chip chip-green">Rate card</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">LED strip accent lighting, warm white</p><p class="k">electrical · led_strip_accent</p></div>
+        <span class="qty">260 lf</span>
+        <div class="unitp"><p class="p">$22</p><p class="u">/ lf</p></div>
+        <span class="total">$5,720</span>
+        <div class="src"><span class="chip chip-amber">Commodity feed</span></div>
+      </div>
+
+      <div class="divhead">
+        <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>27 — Communications &amp; A/V</div>
+        <span class="divtotal">$70,700</span>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">LED video wall 2.6mm, 20×10 ft<span class="mfr">Samsung · IER-2.6</span></p><p class="k">av_equipment · led_wall_26mm</p></div>
+        <span class="qty">200 sqft</span>
+        <div class="unitp"><p class="p">$310</p><p class="u">/ sqft</p></div>
+        <span class="total">$62,000</span>
+        <div class="src"><span class="chip chip-violet">Override</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Demo station displays, 55&quot; 4K<span class="mfr">Samsung · QM55B</span></p><p class="k">av_equipment · demo_display_55</p></div>
+        <span class="qty">6 each</span>
+        <div class="unitp"><p class="p">$1,450</p><p class="u">/ each</p></div>
+        <span class="total">$8,700</span>
+        <div class="src"><span class="chip chip-green">Rate card</span></div>
+      </div>
+      <div class="irow">
+        <div class="iname"><p class="t">Show wifi + hardline internet</p><p class="k">av_equipment · show_wifi_hardline</p></div>
+        <span class="qty">1 each</span>
+        <div class="unitp"><p class="p">—</p><p class="u">/ each</p></div>
+        <span class="total"><span class="dim">—</span></span>
+        <div class="src"><span class="chip chip-red">Unpriced</span></div>
+      </div>
+
+      <div class="gtotal">
+        <span class="gl">Grand total</span>
+        <div style="display:flex;align-items:baseline">
+          <span class="gnote">Region 89109 · premium · 2 unpriced</span>
+          <span class="gv">$157,340</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 31 · Project Pricing BOM · role: agency -->
+</body>
+</html>

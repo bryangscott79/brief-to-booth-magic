@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>48 · Agency account · super-admin</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar (platform variant) ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:12px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.plat-square{width:36px;height:36px;border-radius:var(--r-btn);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.plat-square svg{width:18px;height:18px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.plat-word{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.preview-wrap{margin-top:auto;padding:0 8px 10px}
+.preview-btn{width:100%;display:flex;align-items:center;gap:10px;border:1px dashed var(--cloud-line);border-radius:var(--r-well);background:var(--white);padding:8px 12px;font-size:12px;color:var(--slate);font-family:inherit;cursor:pointer;text-align:left}
+.preview-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--amber-soft);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.avatar svg{width:13px;height:13px;stroke:var(--amber);stroke-width:1.5;fill:none}
+.side-foot p{flex:1;font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot>svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;flex-shrink:0}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.wrap{max-width:1020px}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--slate);text-decoration:none;margin-bottom:14px}
+.back svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.5;fill:none}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+
+/* identity header */
+.idhead{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:20px;border-bottom:1px solid var(--cloud-line);margin-bottom:20px}
+.idlead{display:flex;align-items:flex-start;gap:16px}
+.mono-lg{width:56px;height:56px;border-radius:var(--r-card);background:var(--navy);color:var(--white);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
+.titleline{display:flex;align-items:center;gap:10px;margin-top:2px}
+.idhead h1{font-size:24px;line-height:30px;font-weight:700;letter-spacing:-.015em;color:var(--navy)}
+.idhead .sub{font-size:13px;color:var(--slate);margin-top:5px}
+.agrow{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:13px;color:var(--slate)}
+.agrow svg{width:14px;height:14px;stroke:var(--navy);stroke-width:1.3;fill:none}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.8;fill:none}
+.chip-navy{background:var(--cloud);color:var(--navy);border:1px solid var(--cloud-line)}
+.chip-green{background:var(--green-soft);color:var(--green)}
+.chip-amber{background:var(--amber-soft);color:var(--amber)}
+.chip-slug{background:var(--white);border:1px solid var(--cloud-line);color:var(--slate);font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:500;font-size:10px}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer;font-family:inherit;flex-shrink:0}
+.btn-ghost{background:var(--white);border-color:var(--cloud-line);color:var(--navy)}
+.btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.4;fill:none}
+
+/* stat tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.tile{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);padding:14px 18px;position:relative}
+.tile .tl{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.tile .tv{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:26px;font-weight:600;letter-spacing:-.02em;color:var(--navy);margin-top:4px}
+.tile .ts{font-size:11px;color:var(--slate-faint);margin-top:2px}
+.tile .tw{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:var(--r-well);background:var(--cloud);display:flex;align-items:center;justify-content:center}
+.tile .tw svg{width:14px;height:14px;stroke:var(--navy);stroke-width:1.3;fill:none}
+
+/* cards */
+.card{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);margin-bottom:18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px 0}
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px}
+.card-body{padding:12px 22px 18px}
+.pills{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{border:1px solid var(--cloud-line);border-radius:999px;background:var(--white);padding:5px 14px;font-size:12px;font-weight:500;color:var(--slate)}
+.pill.on{border-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.pillnote{font-size:11px;color:var(--slate-faint);margin-left:auto}
+.mrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--cloud-line)}
+.mrow:first-child{border-top:none}
+.mgw{width:30px;height:30px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy);flex-shrink:0}
+.grow{flex:1;min-width:0}
+.mrow .name{font-size:13px;font-weight:600;color:var(--navy)}
+.mrow .meta{font-size:11px;color:var(--slate);margin-top:1px}
+.spec{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal);letter-spacing:-.01em}
+.spec.dim{color:var(--slate)}
+.active-tag{font-size:10px;font-weight:600;color:var(--green)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="plat-square"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <span class="plat-word">Platform Admin</span>
+    </div>
+    <p class="ws-label">Platform</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>Accounts</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Agencies</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Industries</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg>Super Admins</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/></svg>Invites</a>
+    </nav>
+    <div class="preview-wrap">
+      <button class="preview-btn"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</button>
+    </div>
+    <div class="side-foot">
+      <div class="avatar"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <p>bryan@canopy.app</p>
+      <svg viewBox="0 0 24 24"><path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9M16 16l4-4-4-4M20 12H9"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="wrap">
+      <a class="back" href="#"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Back to Accounts</a>
+
+      <!-- identity header -->
+      <div class="idhead">
+        <div class="idlead">
+          <div class="mono-lg">BS</div>
+          <div>
+            <div class="titleline">
+              <h1>Bryan Scott</h1>
+              <span class="chip chip-navy"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/></svg>Agency Owner</span>
+            </div>
+            <p class="sub">bryan@exhibitus.co · Joined <span class="spec dim">March 2025</span></p>
+            <div class="agrow">
+              <svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>
+              Account owner for <strong style="color:var(--navy)">Exhibitus</strong>
+              <span class="chip chip-slug">exhibitus</span>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-ghost"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</button>
+      </div>
+
+      <!-- stats -->
+      <div class="tiles">
+        <div class="tile">
+          <p class="tl">Projects</p><p class="tv">15</p><p class="ts"><span class="spec dim">6</span> complete</p>
+          <div class="tw"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></div>
+        </div>
+        <div class="tile">
+          <p class="tl">Team members</p><p class="tv">9</p><p class="ts">Exhibitus roster</p>
+          <div class="tw"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg></div>
+        </div>
+        <div class="tile">
+          <p class="tl">Last active</p><p class="tv">2h</p><p class="ts">ago</p>
+          <div class="tw"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></div>
+        </div>
+        <div class="tile">
+          <p class="tl">Member since</p><p class="tv" style="font-size:20px;margin-top:8px">Mar 2025</p>
+          <div class="tw"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg></div>
+        </div>
+      </div>
+
+      <!-- subscription -->
+      <div class="card">
+        <div class="card-head">
+          <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>Subscription</div>
+        </div>
+        <div class="card-body">
+          <div class="pills">
+            <span class="pill">Free</span>
+            <span class="pill">Starter</span>
+            <span class="pill">Professional</span>
+            <span class="pill on">Agency</span>
+            <span class="pill">Enterprise</span>
+            <span class="pillnote">Billing integration coming soon</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <!-- team roster -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-head">
+            <div class="slabel" style="color:#6D28D9"><span class="sw" style="background:var(--violet)"></span>Team roster</div>
+            <span class="cnt">9 members</span>
+          </div>
+          <div class="card-body">
+            <div class="mrow">
+              <div class="mgw">BS</div>
+              <div class="grow"><p class="name">bryan@exhibitus.co</p><p class="meta">Account owner for Exhibitus</p></div>
+              <span class="chip chip-navy">owner</span>
+              <span class="active-tag">Active</span>
+            </div>
+            <div class="mrow">
+              <div class="mgw">SO</div>
+              <div class="grow"><p class="name">sarah@exhibitus.co</p></div>
+              <span class="chip chip-navy">admin</span>
+              <span class="active-tag">Active</span>
+            </div>
+            <div class="mrow">
+              <div class="mgw">TA</div>
+              <div class="grow"><p class="name">tom@exhibitus.co</p></div>
+              <span class="chip chip-navy">member</span>
+              <span class="active-tag">Active</span>
+            </div>
+            <div class="mrow">
+              <div class="mgw">NK</div>
+              <div class="grow"><p class="name">nina@exhibitus.co</p></div>
+              <span class="chip chip-navy">member</span>
+              <span class="active-tag">Active</span>
+            </div>
+            <div class="mrow">
+              <div class="mgw">JR</div>
+              <div class="grow"><p class="name">jon@exhibitus.co</p></div>
+              <span class="chip chip-navy">member</span>
+              <span class="active-tag">Active</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- recent projects -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-head">
+            <div class="slabel" style="color:#DB2777"><span class="sw" style="background:var(--pink)"></span>Recent projects</div>
+            <span class="cnt">15 total</span>
+          </div>
+          <div class="card-body">
+            <div class="mrow">
+              <div class="grow"><p class="name">CES 2027 — Innovation Pavilion</p><p class="meta">trade show booth</p></div>
+              <span class="chip chip-amber">generating</span>
+              <span class="spec dim">Jul 15, 2026</span>
+            </div>
+            <div class="mrow">
+              <div class="grow"><p class="name">Galaxy Unpacked — Press Experience</p><p class="meta">conference &amp; summit</p></div>
+              <span class="chip chip-navy">reviewed</span>
+              <span class="spec dim">Jul 14, 2026</span>
+            </div>
+            <div class="mrow">
+              <div class="grow"><p class="name">SDC Developer Lounge</p><p class="meta">experiential pop-up</p></div>
+              <span class="chip chip-green">complete</span>
+              <span class="spec dim">Jul 8, 2026</span>
+            </div>
+            <div class="mrow">
+              <div class="grow"><p class="name">Outdoor Retailer — Summer Market</p><p class="meta">trade show booth</p></div>
+              <span class="chip chip-navy">draft</span>
+              <span class="spec dim">Jul 12, 2026</span>
+            </div>
+            <div class="mrow">
+              <div class="grow"><p class="name">Business Travel Show — SkyMiles Lounge</p><p class="meta">trade show booth</p></div>
+              <span class="chip chip-amber">generating</span>
+              <span class="spec dim">Jul 14, 2026</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 48 · Agency account · role: super-admin -->
+</body>
+</html>

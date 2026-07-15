@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>47 · Super Admins · super-admin</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar (platform variant) ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:12px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.plat-square{width:36px;height:36px;border-radius:var(--r-btn);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.plat-square svg{width:18px;height:18px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.plat-word{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.preview-wrap{margin-top:auto;padding:0 8px 10px}
+.preview-btn{width:100%;display:flex;align-items:center;gap:10px;border:1px dashed var(--cloud-line);border-radius:var(--r-well);background:var(--white);padding:8px 12px;font-size:12px;color:var(--slate);font-family:inherit;cursor:pointer;text-align:left}
+.preview-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--amber-soft);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.avatar svg{width:13px;height:13px;stroke:var(--amber);stroke-width:1.5;fill:none}
+.side-foot p{flex:1;font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot>svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;flex-shrink:0}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.wrap{max-width:820px}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 22px}
+.lead{display:flex;align-items:flex-start;gap:16px}
+.idwell{width:44px;height:44px;border-radius:var(--r-well);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px}
+.idwell svg{width:20px;height:20px;stroke:#FFFFFF;stroke-width:1.5;fill:none}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer;font-family:inherit;flex-shrink:0}
+.btn-primary{background:var(--navy);color:var(--white)}
+.btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.5;fill:none}
+
+/* cards */
+.card{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);margin-bottom:18px}
+.card-head{padding:18px 22px 0}
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.slabel .cnt{margin-left:2px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.card-head .desc{font-size:12px;color:var(--slate)}
+.card-body{padding:12px 22px 18px}
+.arow{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--cloud-line)}
+.arow:first-child{border-top:none}
+.arow.pending{border-top-style:dashed}
+.mgw{width:36px;height:36px;border-radius:50%;background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mgw svg{width:15px;height:15px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.mgw.mail{background:var(--cloud);border:1px solid var(--cloud-line)}
+.mgw.mail svg{stroke:var(--slate);stroke-width:1.3}
+.grow{flex:1;min-width:0}
+.arow .nameline{display:flex;align-items:center;gap:8px}
+.arow .name{font-size:14px;font-weight:600;color:var(--navy)}
+.arow .meta{font-size:12px;color:var(--slate);margin-top:2px}
+.spec{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal);letter-spacing:-.01em}
+.spec.dim{color:var(--slate)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip-amber{background:var(--amber-soft);color:var(--amber)}
+.chip-outline{background:var(--white);border:1px solid var(--cloud-line);color:var(--slate)}
+.chip svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.8;fill:none}
+.trash{width:15px;height:15px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;flex-shrink:0}
+.trash.disabled{opacity:.35}
+
+/* caution note */
+.note{display:flex;align-items:flex-start;gap:10px;background:var(--amber-soft);border:1px solid rgba(245,158,11,.35);border-radius:var(--r-card);padding:14px 18px}
+.note svg{width:15px;height:15px;stroke:var(--amber);stroke-width:1.4;fill:none;flex-shrink:0;margin-top:1px}
+.note p{font-size:12px;color:var(--amber);line-height:18px}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="plat-square"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <span class="plat-word">Platform Admin</span>
+    </div>
+    <p class="ws-label">Platform</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>Accounts</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Agencies</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Industries</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg>Super Admins</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/></svg>Invites</a>
+    </nav>
+    <div class="preview-wrap">
+      <button class="preview-btn"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</button>
+    </div>
+    <div class="side-foot">
+      <div class="avatar"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <p>bryan@canopy.app</p>
+      <svg viewBox="0 0 24 24"><path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9M16 16l4-4-4-4M20 12H9"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="wrap">
+      <div class="pagehead">
+        <div class="lead">
+          <div class="idwell"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+          <div>
+            <p class="eyebrow">Platform · 3 accounts</p>
+            <h1>Super Admins</h1>
+            <p class="sub">Platform-level administrators with access to every agency.</p>
+          </div>
+        </div>
+        <button class="btn btn-primary"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.2"/><path d="M4 19.5c.7-3.2 3-4.8 6-4.8"/><path d="M17 14v6M14 17h6"/></svg>Invite super admin</button>
+      </div>
+
+      <!-- Active super admins -->
+      <div class="card">
+        <div class="card-head">
+          <div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>Active<span class="cnt">3</span></div>
+          <p class="desc">3 accounts with super admin access.</p>
+        </div>
+        <div class="card-body">
+          <div class="arow">
+            <div class="mgw"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+            <div class="grow">
+              <div class="nameline"><p class="name">bryan@canopy.app</p><span class="chip chip-outline">You</span><span class="chip chip-amber"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/></svg>Super Admin</span></div>
+              <p class="meta">Granted <span class="spec dim">14 months ago</span></p>
+            </div>
+            <svg class="trash disabled" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+          </div>
+          <div class="arow">
+            <div class="mgw"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+            <div class="grow">
+              <div class="nameline"><p class="name">maya@canopy.app</p><span class="chip chip-amber"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/></svg>Super Admin</span></div>
+              <p class="meta">Granted <span class="spec dim">8 months ago</span></p>
+            </div>
+            <svg class="trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+          </div>
+          <div class="arow">
+            <div class="mgw"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+            <div class="grow">
+              <div class="nameline"><p class="name">devon@canopy.app</p><span class="chip chip-amber"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/></svg>Super Admin</span></div>
+              <p class="meta">Granted <span class="spec dim">3 weeks ago</span></p>
+            </div>
+            <svg class="trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending invites -->
+      <div class="card">
+        <div class="card-head">
+          <div class="slabel" style="color:#6D28D9"><span class="sw" style="background:var(--violet)"></span>Pending invites<span class="cnt">1</span></div>
+          <p class="desc">Users become super admins automatically when they sign up with these emails.</p>
+        </div>
+        <div class="card-body">
+          <div class="arow pending">
+            <div class="mgw mail"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/></svg></div>
+            <div class="grow">
+              <div class="nameline"><p class="name">ops@canopy.app</p></div>
+              <p class="meta">Sent <span class="spec dim">3 days ago</span></p>
+            </div>
+            <svg class="trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Caution note -->
+      <div class="note">
+        <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9.5-4-1.3-7-5-7-9.5V6Z"/></svg>
+        <p>Super admins can view and impersonate any agency. The last remaining super admin cannot be revoked. Grant this role with care.</p>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 47 · Super Admins · role: super-admin -->
+</body>
+</html>

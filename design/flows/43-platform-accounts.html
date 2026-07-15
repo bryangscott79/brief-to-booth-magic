@@ -1,0 +1,249 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>43 · Platform Accounts · super-admin</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar (platform variant) ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:12px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.plat-square{width:36px;height:36px;border-radius:var(--r-btn);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.plat-square svg{width:18px;height:18px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.plat-word{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.preview-wrap{margin-top:auto;padding:0 8px 10px}
+.preview-btn{width:100%;display:flex;align-items:center;gap:10px;border:1px dashed var(--cloud-line);border-radius:var(--r-well);background:var(--white);padding:8px 12px;font-size:12px;color:var(--slate);font-family:inherit;cursor:pointer;text-align:left}
+.preview-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--amber-soft);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.avatar svg{width:13px;height:13px;stroke:var(--amber);stroke-width:1.5;fill:none}
+.side-foot p{flex:1;font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot>svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;flex-shrink:0}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 22px}
+.lead{display:flex;align-items:flex-start;gap:16px}
+.idwell{width:44px;height:44px;border-radius:var(--r-well);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px}
+.idwell svg{width:20px;height:20px;stroke:#FFFFFF;stroke-width:1.5;fill:none}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+.actions{display:flex;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--navy);color:var(--white)}
+.btn-ghost{background:var(--white);border-color:var(--cloud-line);color:var(--charcoal);font-weight:500}
+.btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.5;fill:none}
+
+/* tab bar (platform surfaces) */
+.tabbar{display:flex;gap:2px;background:var(--cloud);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:2px;width:max-content}
+.tabbar span{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:4px;font-size:12px;font-weight:500;color:var(--slate)}
+.tabbar span.on{background:var(--white);color:var(--navy);font-weight:600;border:1px solid var(--cloud-line)}
+.tabbar svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.3;fill:none}
+.cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px}
+.tabbar span.on .cnt{background:var(--cloud)}
+
+/* stat tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+.tile{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);padding:14px 18px}
+.tile .tl{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.tile .tv{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--navy);margin-top:4px}
+.tile.amber .tv{color:var(--amber)}
+
+/* search */
+.search{display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:8px 12px;font-size:13px;color:var(--slate-faint);margin-bottom:14px}
+.search svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none}
+
+/* section label + rows */
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:20px 0 10px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.rows{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:12px 20px;border-top:1px solid var(--cloud-line)}
+.row:first-child{border-top:none}
+.mgw{width:36px;height:36px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--navy);flex-shrink:0}
+.mgw.crown{background:#F59E0B;border:none}
+.mgw.crown svg{width:15px;height:15px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.grow{flex:1;min-width:0}
+.row .name{font-size:14px;font-weight:600;color:var(--navy)}
+.row .name em{font-style:normal;font-weight:400;font-size:11px;color:var(--slate-faint)}
+.row .meta{font-size:12px;color:var(--slate);margin-top:2px}
+.spec{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal);letter-spacing:-.01em}
+.spec.dim{color:var(--slate)}
+.spec.green{color:var(--green)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.8;fill:none}
+.chip-amber{background:var(--amber-soft);color:var(--amber)}
+.chip-navy{background:var(--cloud);color:var(--navy);border:1px solid var(--cloud-line)}
+.suspend{font-size:11px;font-weight:600;color:var(--slate-faint);border:1px solid var(--cloud-line);border-radius:var(--r-chip);background:var(--white);padding:3px 10px;cursor:pointer;font-family:inherit}
+.chev{color:var(--slate-faint)}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="plat-square"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <span class="plat-word">Platform Admin</span>
+    </div>
+    <p class="ws-label">Platform</p>
+    <nav class="nav">
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>Accounts</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Agencies</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Industries</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg>Super Admins</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/></svg>Invites</a>
+    </nav>
+    <div class="preview-wrap">
+      <button class="preview-btn"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</button>
+    </div>
+    <div class="side-foot">
+      <div class="avatar"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <p>bryan@canopy.app</p>
+      <svg viewBox="0 0 24 24"><path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9M16 16l4-4-4-4M20 12H9"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div class="lead">
+        <div class="idwell"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+        <div>
+          <p class="eyebrow">Platform · Accounts &amp; defaults</p>
+          <h1>Platform Admin</h1>
+          <p class="sub">Platform-wide accounts and shared defaults that every agency inherits.</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.2"/><path d="M4 19.5c.7-3.2 3-4.8 6-4.8"/><path d="M17 14v6M14 17h6"/></svg>Invite User</button>
+      </div>
+    </div>
+
+    <!-- platform surface tabs -->
+    <div class="tabbar">
+      <span class="on"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>All Accounts<span class="cnt">47</span></span>
+      <span><svg viewBox="0 0 24 24"><path d="M13 3 5 13h6l-1 8 8-10h-6Z"/></svg>Activation Types</span>
+      <span><svg viewBox="0 0 24 24"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg>Venues &amp; Shows</span>
+      <span><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/></svg>Image Models</span>
+      <span><svg viewBox="0 0 24 24"><path d="M3.5 17.5 9 11l4 4 7-8.5"/><path d="M15.5 6.5H20V11"/></svg>AI Usage</span>
+      <span><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9.5-4-1.3-7-5-7-9.5V6Z"/></svg>Invites &amp; Team</span>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><p class="tl">Total accounts</p><p class="tv">47</p></div>
+      <div class="tile"><p class="tl">Total projects</p><p class="tv">214</p></div>
+      <div class="tile"><p class="tl">Agency admins</p><p class="tv">11</p></div>
+      <div class="tile amber"><p class="tl">Platform owners</p><p class="tv">3</p></div>
+    </div>
+
+    <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search by email, name, or project…</div>
+
+    <div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>User accounts<span class="cnt">47</span></div>
+    <div class="rows">
+      <div class="row">
+        <div class="mgw crown"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+        <div class="grow">
+          <p class="name">Bryan Scott <em>(you)</em></p>
+          <p class="meta">bryan@canopy.app · Canopy · Platform</p>
+        </div>
+        <span class="chip chip-amber"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/></svg>Platform Owner</span>
+        <span class="spec dim">active 2m ago</span>
+        <span class="chev">›</span>
+      </div>
+      <div class="row">
+        <div class="mgw crown"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+        <div class="grow">
+          <p class="name">Maya Chen</p>
+          <p class="meta">maya@canopy.app · Canopy · Platform</p>
+        </div>
+        <span class="chip chip-amber"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/></svg>Platform Owner</span>
+        <span class="spec dim">active 1h ago</span>
+        <span class="chev">›</span>
+      </div>
+      <div class="row">
+        <div class="mgw">SO</div>
+        <div class="grow">
+          <p class="name">Sarah Okafor</p>
+          <p class="meta">sarah@exhibitus.co · Exhibitus</p>
+        </div>
+        <span class="spec green">$148.20 · 30d</span>
+        <span class="chip chip-navy"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9.5-4-1.3-7-5-7-9.5V6Z"/></svg>Agency Admin</span>
+        <span class="spec dim">active 26m ago</span>
+        <button class="suspend">Suspend</button>
+      </div>
+      <div class="row">
+        <div class="mgw">DW</div>
+        <div class="grow">
+          <p class="name">Dana Whitfield</p>
+          <p class="meta">dana@freemandigital.com · Freeman Digital</p>
+        </div>
+        <span class="spec green">$310.75 · 30d</span>
+        <span class="chip chip-navy"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9.5-4-1.3-7-5-7-9.5V6Z"/></svg>Agency Admin</span>
+        <span class="spec dim">active 3h ago</span>
+        <button class="suspend">Suspend</button>
+      </div>
+      <div class="row">
+        <div class="mgw">PN</div>
+        <div class="grow">
+          <p class="name">Priya Nair</p>
+          <p class="meta">priya@gpj.com · George P. Johnson</p>
+        </div>
+        <span class="spec green">$402.33 · 30d</span>
+        <span class="chip chip-navy"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9.5-4-1.3-7-5-7-9.5V6Z"/></svg>Agency Admin</span>
+        <span class="spec dim">active yesterday</span>
+        <button class="suspend">Suspend</button>
+      </div>
+      <div class="row">
+        <div class="mgw">MR</div>
+        <div class="grow">
+          <p class="name">Marcus Reed</p>
+          <p class="meta">marcus@impactxm.com · Impact XM</p>
+        </div>
+        <span class="spec green">$86.10 · 30d</span>
+        <span class="spec dim">active 2d ago</span>
+        <button class="suspend">Suspend</button>
+      </div>
+      <div class="row">
+        <div class="mgw">TA</div>
+        <div class="grow">
+          <p class="name">Tom Alvarez</p>
+          <p class="meta">tom@exhibitus.co · Exhibitus</p>
+        </div>
+        <span class="spec dim">active Jul 11</span>
+        <button class="suspend">Suspend</button>
+      </div>
+      <div class="row">
+        <div class="mgw">JP</div>
+        <div class="grow">
+          <p class="name">Jess Park</p>
+          <p class="meta">jess@freemandigital.com · Freeman Digital</p>
+        </div>
+        <span class="spec dim">active Jul 9</span>
+        <button class="suspend">Suspend</button>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 43 · Platform Accounts · role: super-admin -->
+</body>
+</html>

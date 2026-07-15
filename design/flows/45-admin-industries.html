@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>45 · Industries · super-admin</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar (platform variant) ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:12px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.plat-square{width:36px;height:36px;border-radius:var(--r-btn);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.plat-square svg{width:18px;height:18px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.plat-word{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.preview-wrap{margin-top:auto;padding:0 8px 10px}
+.preview-btn{width:100%;display:flex;align-items:center;gap:10px;border:1px dashed var(--cloud-line);border-radius:var(--r-well);background:var(--white);padding:8px 12px;font-size:12px;color:var(--slate);font-family:inherit;cursor:pointer;text-align:left}
+.preview-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--amber-soft);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.avatar svg{width:13px;height:13px;stroke:var(--amber);stroke-width:1.5;fill:none}
+.side-foot p{flex:1;font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot>svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;flex-shrink:0}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 22px}
+.lead{display:flex;align-items:flex-start;gap:16px}
+.idwell{width:44px;height:44px;border-radius:var(--r-well);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px}
+.idwell svg{width:20px;height:20px;stroke:#FFFFFF;stroke-width:1.5;fill:none}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+.actions{display:flex;align-items:center;gap:10px}
+.search{display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:7px 12px;width:240px;font-size:13px;color:var(--slate-faint)}
+.search svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--navy);color:var(--white)}
+
+/* stat tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:6px}
+.tile{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);padding:14px 18px}
+.tile .tl{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.tile .tv{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--navy);margin-top:4px}
+.tile.amber .tv{color:var(--amber)}
+.tile.violet .tv{color:#6D28D9}
+.tile.green .tv{color:var(--green)}
+
+/* section labels + rows */
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:22px 0 6px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.slabel .cnt{margin-left:2px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.hint{font-size:12px;color:var(--slate);margin:0 0 10px}
+.rows{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-card);overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:13px 20px;border-top:1px solid var(--cloud-line)}
+.row:first-child{border-top:none}
+.iwell{width:38px;height:38px;border-radius:var(--r-well);background:var(--pink-soft);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.iwell svg{width:16px;height:16px;stroke:#6D28D9;stroke-width:1.3;fill:none}
+.grow{flex:1;min-width:0}
+.row .nameline{display:flex;align-items:center;gap:8px}
+.row .name{font-size:14px;font-weight:600;color:var(--navy)}
+.row .meta{font-size:12px;color:var(--slate);margin-top:2px}
+.spec{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal);letter-spacing:-.01em}
+.spec.dim{color:var(--slate)}
+.spec.violet{color:#6D28D9}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
+.chip-violet{background:#F5F3FF;color:#6D28D9}
+.chip svg{width:9px;height:9px;stroke:currentColor;stroke-width:1.8;fill:none}
+.rowact{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.rowact svg{width:14px;height:14px;stroke:var(--slate-faint);stroke-width:1.3;fill:none}
+.chev{color:var(--slate-faint);font-size:15px}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="plat-square"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <span class="plat-word">Platform Admin</span>
+    </div>
+    <p class="ws-label">Platform</p>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>Accounts</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Agencies</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Industries</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg>Super Admins</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/></svg>Invites</a>
+    </nav>
+    <div class="preview-wrap">
+      <button class="preview-btn"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</button>
+    </div>
+    <div class="side-foot">
+      <div class="avatar"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+      <p>bryan@canopy.app</p>
+      <svg viewBox="0 0 24 24"><path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9M16 16l4-4-4-4M20 12H9"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div class="lead">
+        <div class="idwell"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+        <div>
+          <p class="eyebrow">Platform · 7 industries</p>
+          <h1>Industries</h1>
+          <p class="sub">The verticals Canopy serves — each with its own vocabulary, taxonomy, and knowledge base.</p>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search by name or slug…</div>
+        <button class="btn btn-primary">+ New industry</button>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><p class="tl">Industries</p><p class="tv">7</p></div>
+      <div class="tile amber"><p class="tl">Built-in</p><p class="tv">6</p></div>
+      <div class="tile violet"><p class="tl">Custom</p><p class="tv">1</p></div>
+      <div class="tile green"><p class="tl">Total project types</p><p class="tv">24</p></div>
+    </div>
+
+    <div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>All industries<span class="cnt">7</span></div>
+    <p class="hint">Click an industry to manage its project types, knowledge, and vocabulary.</p>
+    <div class="rows">
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">Experiential &amp; Trade Show</p><span class="chip chip-violet"><svg viewBox="0 0 24 24"><path d="M12 4l2 4.5 5 .7-3.6 3.4.9 4.9L12 15.2 7.7 17.5l.9-4.9L5 9.2l5-.7Z"/></svg>Built-in</span></div>
+          <p class="meta"><span class="spec dim">experiential</span> · <span class="spec">6</span> activation types · <span class="spec">9</span> agencies (<span class="spec">7</span> primary) · <span class="spec violet">12 KB docs</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">Architecture &amp; Construction</p><span class="chip chip-violet"><svg viewBox="0 0 24 24"><path d="M12 4l2 4.5 5 .7-3.6 3.4.9 4.9L12 15.2 7.7 17.5l.9-4.9L5 9.2l5-.7Z"/></svg>Built-in</span></div>
+          <p class="meta"><span class="spec dim">architecture</span> · <span class="spec">4</span> project types · <span class="spec">2</span> agencies (<span class="spec">1</span> primary) · <span class="spec violet">6 KB docs</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><path d="M12 3 6 11h3l-4 6h14l-4-6h3Z"/><path d="M12 17v4"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">Landscape &amp; Site Design</p><span class="chip chip-violet"><svg viewBox="0 0 24 24"><path d="M12 4l2 4.5 5 .7-3.6 3.4.9 4.9L12 15.2 7.7 17.5l.9-4.9L5 9.2l5-.7Z"/></svg>Built-in</span></div>
+          <p class="meta"><span class="spec dim">landscape</span> · <span class="spec">3</span> project types · <span class="spec">1</span> agency (<span class="spec">1</span> primary) · <span class="spec violet">2 KB docs</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><path d="M4 12V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/><path d="M3 12h18v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M6 18v2M18 18v2"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">Interior Design</p><span class="chip chip-violet"><svg viewBox="0 0 24 24"><path d="M12 4l2 4.5 5 .7-3.6 3.4.9 4.9L12 15.2 7.7 17.5l.9-4.9L5 9.2l5-.7Z"/></svg>Built-in</span></div>
+          <p class="meta"><span class="spec dim">interior_design</span> · <span class="spec">4</span> project types · <span class="spec">3</span> agencies (<span class="spec">2</span> primary) · <span class="spec violet">5 KB docs</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 6l2 4M12 6l2 4M17 6l2 4"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">Entertainment &amp; Production</p><span class="chip chip-violet"><svg viewBox="0 0 24 24"><path d="M12 4l2 4.5 5 .7-3.6 3.4.9 4.9L12 15.2 7.7 17.5l.9-4.9L5 9.2l5-.7Z"/></svg>Built-in</span></div>
+          <p class="meta"><span class="spec dim">entertainment</span> · <span class="spec">4</span> production types · <span class="spec">2</span> agencies (<span class="spec">1</span> primary) · <span class="spec violet">4 KB docs</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><circle cx="12" cy="14" r="3"/><circle cx="12" cy="8" r="1.4"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">A/V Integration &amp; Install</p><span class="chip chip-violet"><svg viewBox="0 0 24 24"><path d="M12 4l2 4.5 5 .7-3.6 3.4.9 4.9L12 15.2 7.7 17.5l.9-4.9L5 9.2l5-.7Z"/></svg>Built-in</span></div>
+          <p class="meta"><span class="spec dim">audio_visual</span> · <span class="spec">3</span> install types · <span class="spec">1</span> agency (<span class="spec">0</span> primary) · <span class="spec violet">1 KB doc</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="iwell"><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg></div>
+        <div class="grow">
+          <div class="nameline"><p class="name">Hospitality</p></div>
+          <p class="meta"><span class="spec dim">hospitality</span> · <span class="spec">0</span> project types · <span class="spec">0</span> agencies · created <span class="spec">Jul 9, 2026</span></p>
+        </div>
+        <div class="rowact"><span class="chev">›</span><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></div>
+      </div>
+    </div>
+  </main>
+</div>
+<!-- artboard 45 · Industries · role: super-admin -->
+</body>
+</html>

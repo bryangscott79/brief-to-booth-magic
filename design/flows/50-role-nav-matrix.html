@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>50 · Roles &amp; Navigation · design reference</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;background:var(--cloud);padding:40px}
+.sheet{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-sheet);padding:44px 56px 52px;max-width:1360px;margin:0 auto}
+
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.sub{font-size:13px;color:var(--slate);margin-top:6px;max-width:720px}
+.accent{height:2px;width:64px;background:var(--grad-brand);border-radius:1px;margin-top:16px}
+
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:40px 0 16px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+
+/* ── mini sidebars ── */
+.sbgrid{display:grid;grid-template-columns:224px 1fr 224px 1fr;gap:0 28px;align-items:start}
+.mini-sb{width:224px;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-well);display:flex;flex-direction:column;overflow:hidden}
+.msb-head{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--cloud-line)}
+.msb-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.plat-square{width:36px;height:36px;border-radius:var(--r-btn);background:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.plat-square svg{width:18px;height:18px;stroke:#FFFFFF;stroke-width:1.6;fill:none}
+.plat-word{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:12px 12px 6px}
+.msb-nav a{display:flex;align-items:center;gap:12px;padding:7px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.msb-nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.msb-nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.preview-btn{margin:12px 8px 10px;display:flex;align-items:center;gap:10px;border:1px dashed var(--cloud-line);border-radius:var(--r-well);background:var(--white);padding:8px 12px;font-size:12px;color:var(--slate);font-family:inherit;cursor:pointer;text-align:left}
+.preview-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.msb-foot{border-top:1px solid var(--cloud-line);padding:10px 12px;display:flex;align-items:center;gap:8px;margin-top:6px}
+.msb-foot.autotop{margin-top:6px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy);flex-shrink:0}
+.avatar.crown{background:var(--amber-soft)}
+.avatar.crown svg{width:13px;height:13px;stroke:var(--amber);stroke-width:1.5;fill:none}
+.msb-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbnote{padding-top:4px}
+.sbcap{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);margin-bottom:10px}
+.sbnote ul{list-style:none}
+.sbnote li{position:relative;font-size:12px;line-height:18px;color:var(--slate);padding:6px 0 6px 16px;border-top:1px solid var(--cloud-line)}
+.sbnote li:first-child{border-top:none}
+.sbnote li::before{content:"";position:absolute;left:2px;top:13px;width:5px;height:5px;border-radius:1.5px;background:var(--slate-faint)}
+.sbnote strong{color:var(--charcoal);font-weight:600}
+
+/* ── route matrix ── */
+table{width:100%;border-collapse:collapse}
+th{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);text-align:center;padding:8px 10px;border-bottom:1px solid var(--charcoal)}
+th.pg{text-align:left;padding-left:0}
+td{font-size:13px;color:var(--charcoal);padding:9px 10px;border-bottom:1px solid var(--cloud-line);text-align:center}
+td.pg{text-align:left;padding-left:0}
+td.pg .pname{font-weight:600;color:var(--navy);font-size:13px}
+td.pg .route{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--slate-faint);margin-left:8px}
+.yes{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--navy)}
+.no{color:var(--slate-faint)}
+.qual{display:block;font-size:10px;color:var(--slate);margin-top:1px}
+tr.group td{border-bottom:none;padding:22px 0 8px}
+tr.group .slabel{margin:0}
+.footnote{font-size:12px;color:var(--slate);margin-top:14px;line-height:18px}
+.footnote .spec{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--charcoal)}
+
+/* ── preview mode strip ── */
+.strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px}
+.step{border-top:1px solid var(--cloud-line);padding-top:16px}
+.numchip{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:var(--r-btn);background:var(--navy);color:var(--white);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:600;margin-bottom:10px}
+.step h4{font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px}
+.step p{font-size:12px;line-height:18px;color:var(--slate)}
+.mini-banner{margin-top:12px;border:1px solid rgba(245,158,11,.35);background:var(--amber-soft);border-radius:var(--r-well);padding:8px 10px;max-width:210px}
+.mb-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mb-left{display:flex;align-items:center;gap:6px}
+.mb-left svg{width:13px;height:13px;stroke:var(--amber);stroke-width:1.4;fill:none}
+.mb-left span{font-size:11px;font-weight:600;color:var(--amber)}
+.mb-exit{font-size:10px;font-weight:600;color:var(--amber)}
+.mb-sub{font-size:10px;color:var(--amber);opacity:.7;margin-top:2px}
+.mini-dashed{margin-top:12px;display:inline-flex;align-items:center;gap:8px;border:1px dashed var(--cloud-line);border-radius:var(--r-well);padding:7px 12px;font-size:12px;color:var(--slate)}
+.mini-dashed svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.3;fill:none}
+</style>
+</head>
+<body>
+<div class="artboard">
+  <div class="sheet">
+
+    <p class="eyebrow">Canopy design system · Access model</p>
+    <h1>Roles &amp; Navigation</h1>
+    <p class="sub">One shell, two sidebars. Agency members and admins live in the agency workspace; super admins get the platform sidebar — and can drop into any agency, read-only, through preview mode.</p>
+    <div class="accent"></div>
+
+    <!-- ── the two sidebars ── -->
+    <div class="slabel" style="color:#0E7490"><span class="sw" style="background:var(--sky)"></span>The two sidebars</div>
+    <div class="sbgrid">
+
+      <!-- agency sidebar -->
+      <div class="mini-sb">
+        <div class="msb-head">
+          <svg width="26" height="26" viewBox="0 0 100 100">
+            <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+              <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+              <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+            <g fill="url(#cm)">
+              <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+              <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+              <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+              <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+            </g>
+            <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+            <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+            <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+            <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+          </svg>
+          <span class="msb-word">CANOPY</span>
+        </div>
+        <p class="ws-label">Exhibitus</p>
+        <nav class="msb-nav">
+          <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+          <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+          <a href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+          <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9.5-4-1.3-7-5-7-9.5V6Z"/></svg>Admin Settings</a>
+        </nav>
+        <div class="msb-foot">
+          <div class="avatar">B</div>
+          <p>bryan@exhibitus.co</p>
+        </div>
+      </div>
+
+      <div class="sbnote">
+        <p class="sbcap">Agency — all agency roles</p>
+        <ul>
+          <li><strong>Gradient CanopyMark</strong> + wordmark; workspace label is the agency name in mono caps.</li>
+          <li>Seven nav items, all agency-scoped. Active = 2px navy left border + cloud fill.</li>
+          <li><strong>Admin Settings</strong> (shield) appears only for agency admins — members never see it.</li>
+          <li>Footer avatar = monogram on cloud; navy text, agency email.</li>
+        </ul>
+      </div>
+
+      <!-- platform sidebar -->
+      <div class="mini-sb">
+        <div class="msb-head">
+          <div class="plat-square"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+          <span class="plat-word">Platform Admin</span>
+        </div>
+        <p class="ws-label">Platform</p>
+        <nav class="msb-nav">
+          <a class="active" href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>Accounts</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Agencies</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Industries</a>
+          <a href="#"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg>Super Admins</a>
+          <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/></svg>Invites</a>
+        </nav>
+        <button class="preview-btn"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</button>
+        <div class="msb-foot" style="margin-top:0">
+          <div class="avatar crown"><svg viewBox="0 0 24 24"><path d="M4.5 16 5.8 8l4 3.6L12 6.2l2.2 5.4 4-3.6L19.5 16Z"/><path d="M6 19.5h12"/></svg></div>
+          <p>bryan@canopy.app</p>
+        </div>
+      </div>
+
+      <div class="sbnote">
+        <p class="sbcap">Platform — super admin, normal mode</p>
+        <ul>
+          <li><strong>Amber crown square</strong> (#F59E0B, r6) replaces the mark — amber is the crown identity, never a CTA color.</li>
+          <li>Workspace label is always <strong>PLATFORM</strong>; five platform-scoped nav items.</li>
+          <li>Dashed <strong>“Preview as Agency Admin”</strong> button sits above the footer — the door into preview mode.</li>
+          <li>Footer avatar = amber-tinted crown circle, platform email.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── route matrix ── -->
+    <div class="slabel" style="color:#6D28D9"><span class="sw" style="background:var(--violet)"></span>Route matrix</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="pg">Page</th>
+          <th>Agency Member</th>
+          <th>Agency Admin</th>
+          <th>Super Admin</th>
+          <th>Super Admin (Preview)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="group"><td colspan="5"><div class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>Agency workspace</div></td></tr>
+        <tr><td class="pg"><span class="pname">All Projects</span><span class="route">/projects</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Clients</span><span class="route">/clients</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Activation Types</span><span class="route">/agency/activation-types</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Agency Knowledge</span><span class="route">/agency/knowledge</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Pricing</span><span class="route">/agency/pricing</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Company Profile</span><span class="route">/company</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Team</span><span class="route">/agency/team</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">read-only</span></td></tr>
+        <tr><td class="pg"><span class="pname">Admin Settings</span><span class="route">/admin</span></td><td class="no">—</td><td><span class="yes">✓</span><span class="qual">agency surface</span></td><td><span class="yes">✓</span><span class="qual">platform surface</span></td><td><span class="yes">✓</span><span class="qual">agency surface</span></td></tr>
+
+        <tr class="group"><td colspan="5"><div class="slabel" style="color:#DB2777"><span class="sw" style="background:var(--pink)"></span>Platform</div></td></tr>
+        <tr><td class="pg"><span class="pname">Accounts</span><span class="route">/admin</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td class="pg"><span class="pname">Agencies</span><span class="route">/admin/agencies</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td class="pg"><span class="pname">Industries</span><span class="route">/admin/industries</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td class="pg"><span class="pname">Industry drill-in</span><span class="route">/admin/industries/:slug</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td class="pg"><span class="pname">Super Admins</span><span class="route">/admin/super-admins</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td class="pg"><span class="pname">Invites</span><span class="route">/platform-invites</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+        <tr><td class="pg"><span class="pname">Account drill-in</span><span class="route">/account/:userId</span></td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+      </tbody>
+    </table>
+    <p class="footnote"><span class="spec">/admin</span> is one route with two surfaces: agency admins (and super admins in preview) get <strong>Agency Settings</strong> — project types, clients &amp; brand intelligence, agency KB, KB health, team. Super admins in normal mode get <strong>Platform Admin</strong> — all accounts, activation types, venues, image models, AI usage, invites.</p>
+
+    <!-- ── how preview mode works ── -->
+    <div class="slabel" style="color:#DB2777"><span class="sw" style="background:var(--pink)"></span>How preview mode works</div>
+    <div class="strip">
+      <div class="step">
+        <span class="numchip">1</span>
+        <h4>Enter</h4>
+        <p>“Preview as Agency Admin” — from the platform sidebar’s dashed button or any account drill-in — flips the shell to the agency nav and lands on /projects.</p>
+        <span class="mini-dashed"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>Preview as Agency Admin</span>
+      </div>
+      <div class="step">
+        <span class="numchip">2</span>
+        <h4>Browse</h4>
+        <p>An amber banner pins above the nav for the whole session. Every agency page renders read-only, and Admin Settings shows the agency surface — never platform data.</p>
+        <div class="mini-banner">
+          <div class="mb-top">
+            <div class="mb-left"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg><span>Preview Mode</span></div>
+            <span class="mb-exit">Exit</span>
+          </div>
+          <p class="mb-sub">Read-only agency view</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="numchip">3</span>
+        <h4>Exit</h4>
+        <p>The banner’s Exit link drops preview mode, returns to /admin, and restores the platform sidebar — crown identity, PLATFORM workspace label, five platform nav items.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- artboard 50 · Roles &amp; Navigation · role: design reference (all roles) -->
+</body>
+</html>

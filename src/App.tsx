@@ -50,6 +50,7 @@ const AgencyPricing = lazy(() => import("./pages/AgencyPricing"));
 const AdminIndustries = lazy(() => import("./pages/AdminIndustries"));
 const AdminIndustryDashboard = lazy(() => import("./pages/AdminIndustryDashboard"));
 const IndustryDetail = lazy(() => import("./pages/IndustryDetail"));
+const IntelligenceArchitecture = lazy(() => import("./pages/IntelligenceArchitecture"));
 // const Explore = lazy(() => import("./pages/Explore")); // Hidden — 360° Explorer
 
 const queryClient = new QueryClient();
@@ -211,6 +212,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/architecture" element={<IntelligenceArchitecture />} />
               <Route path="/projects" element={
                 <ProtectedRoute>
                   <Projects />

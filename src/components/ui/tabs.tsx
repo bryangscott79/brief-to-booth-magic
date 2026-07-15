@@ -12,7 +12,8 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // Flow C pill track: cloud ground, hairline, full radius
+      "inline-flex h-10 items-center justify-center gap-0.5 rounded-full border border-cloud-line bg-cloud p-1 text-slate",
       className,
     )}
     {...props}
@@ -27,7 +28,8 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      // Flow C pill: active = white pill w/ hairline + navy 600 text
+      "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium text-slate ring-offset-background transition-all hover:text-navy data-[state=active]:bg-white data-[state=active]:font-semibold data-[state=active]:text-navy data-[state=active]:shadow-[0_0_0_1px_hsl(var(--cloud-line))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
     {...props}

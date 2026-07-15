@@ -7,7 +7,8 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Plus, ChevronRight, Sparkles, Star, Filter } from "lucide-react";
+import { Loader2, Plus, Sparkles, Star, Filter } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ import { useAgency } from "@/hooks/useAgency";
 import { useIndustries, useVocabulary } from "@/hooks/useIndustries";
 import { PageHeader, EmptyState, SectionLabel } from "@/components/shell";
 import { cn } from "@/lib/utils";
+
+const FAVORITES_KEY = "canopy.activationTypes.favorites";
 
 const CATEGORIES = [
   { value: "engagement",   label: "Engagement" },
@@ -74,6 +77,28 @@ export default function ActivationTypes() {
   const [newLabel, setNewLabel] = useState("");
   const [newCategory, setNewCategory] = useState<string>("engagement");
   const [newDescription, setNewDescription] = useState("");
+
+  // Star = favorite. A local presentation preference (no schema change):
+  // favorited types sort to the front of their category group.
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      return new Set(JSON.parse(window.localStorage.getItem(FAVORITES_KEY) ?? "[]") as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleFavorite = (id: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(FAVORITES_KEY, JSON.stringify([...next]));
+      }
+      return next;
+    });
+  };
 
   // Filter types by the agency's industries. A type matches if any of its
   // industries[] tags overlaps the agency's industries list.
@@ -209,59 +234,97 @@ export default function ActivationTypes() {
             />
           </Card>
         ) : (
-          Object.entries(grouped).map(([category, list], groupIdx) => (
-            <div key={category}>
-              <SectionLabel
-                accent={(["sky", "blue", "violet", "purple", "pink"] as const)[groupIdx % 5]}
-                className="mb-2"
-              >
-                {CATEGORIES.find((c) => c.value === category)?.label || category}
-              </SectionLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {list!.map((type) => (
-                  <Link
-                    key={type.id}
-                    to={`/agency/activation-types/${type.id}`}
-                    className="group"
+          Object.entries(grouped).map(([category, list], groupIdx) => {
+            const sorted = [...list!].sort(
+              (a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)),
+            );
+            return (
+              <div key={category}>
+                <div className="mb-2.5 flex items-center gap-2">
+                  <SectionLabel
+                    accent={(["sky", "blue", "violet", "purple", "pink"] as const)[groupIdx % 5]}
                   >
-                    <Card className="p-4 hover:border-navy/30 transition-colors cursor-pointer h-full">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-navy truncate">{type.label}</div>
+                    {CATEGORIES.find((c) => c.value === category)?.label || category}
+                  </SectionLabel>
+                  <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-1.5 font-mono text-[10px] font-medium text-navy">
+                    {sorted.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {sorted.map((type) => {
+                    const isFav = favorites.has(type.id);
+                    return (
+                      <Link
+                        key={type.id}
+                        to={`/agency/activation-types/${type.id}`}
+                        className="group"
+                      >
+                        <Card className="flex h-full flex-col p-4 hover:border-navy/30 transition-colors cursor-pointer">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-navy truncate">
+                                {type.label}
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-faint mt-0.5 truncate">
+                                {type.slug}
+                              </div>
+                            </div>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    toggleFavorite(type.id);
+                                  }}
+                                  aria-label={isFav ? "Remove favorite" : "Mark as favorite"}
+                                  className="-mr-1 -mt-1 shrink-0 rounded-btn p-1 text-slate-faint transition-colors hover:bg-cloud hover:text-warn"
+                                >
+                                  <Star
+                                    className={cn(
+                                      "h-3.5 w-3.5",
+                                      isFav && "fill-amber-400 text-amber-500",
+                                    )}
+                                    strokeWidth={1.5}
+                                  />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {isFav ? "Favorited — shown first in its group" : "Mark as favorite"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          {type.description && (
+                            <p className="text-xs text-slate mt-1.5 line-clamp-1">
+                              {type.description}
+                            </p>
+                          )}
+                          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
+                            {type.defaultSqft && (
+                              <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-2 py-0.5 font-mono text-[10px] font-medium tracking-tight text-navy">
+                                ~{type.defaultSqft} sqft
+                              </span>
+                            )}
+                            {type.defaultScale && (
+                              <span className="inline-flex items-center rounded-full bg-cloud px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.04em] text-slate">
+                                {type.defaultScale}
+                              </span>
+                            )}
                             {type.isBuiltin && (
-                              <Star className="h-3 w-3 text-slate-faint shrink-0" />
+                              <span className="inline-flex items-center rounded-full bg-cloud px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-faint">
+                                Built-in
+                              </span>
                             )}
                           </div>
-                          <div className="font-mono text-[11px] text-slate-faint mt-0.5">
-                            {type.slug}
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-slate opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                      </div>
-                      {type.description && (
-                        <p className="text-xs text-slate mt-2 line-clamp-2">
-                          {type.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-3">
-                        {type.defaultSqft && (
-                          <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-2 py-0.5 font-mono text-[10px] font-medium tracking-tight text-navy">
-                            ~{type.defaultSqft} sqft
-                          </span>
-                        )}
-                        {type.defaultScale && (
-                          <span className="inline-flex items-center rounded-full bg-cloud px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate">
-                            {type.defaultScale}
-                          </span>
-                        )}
-                      </div>
-                    </Card>
-                  </Link>
-                ))}
+                        </Card>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
 
         {/* Create dialog */}

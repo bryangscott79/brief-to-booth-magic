@@ -32,15 +32,19 @@ function initialsFromName(name: string) {
     .join("");
 }
 
+// Counts projects per client. NOTE: deliberately NOT filtered by
+// projects.agency_id — that column is only backfilled when an agency is
+// created and is never stamped on new project inserts, so filtering on
+// it returned 0 for every client. RLS already scopes the rows to what
+// the user may see (same pattern as AgencyPricing's plan-item rollup).
 function useClientProjectCounts(agencyId: string | undefined) {
   return useQuery({
     queryKey: ["client-project-counts", agencyId],
     queryFn: async () => {
-      if (!agencyId) return {} as Record<string, number>;
       const { data, error } = await supabase
         .from("projects")
         .select("client_id")
-        .eq("agency_id", agencyId);
+        .not("client_id", "is", null);
       if (error) throw error;
       const counts: Record<string, number> = {};
       for (const row of data ?? []) {
@@ -62,8 +66,8 @@ function ClientCard({ client, projectCount }: { client: Client; projectCount: nu
           {/* Logo / fallback */}
           <div
             className={cn(
-              "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden",
-              client.logo_url ? "bg-muted" : "bg-primary/10"
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-square overflow-hidden bg-cloud",
+              client.logo_url && "border border-cloud-line bg-white p-1"
             )}
           >
             {client.logo_url ? (
@@ -73,7 +77,7 @@ function ClientCard({ client, projectCount }: { client: Client; projectCount: nu
                 className="h-full w-full object-contain"
               />
             ) : (
-              <span className="text-sm font-semibold text-primary">
+              <span className="text-sm font-semibold text-navy">
                 {initialsFromName(client.name) || "?"}
               </span>
             )}

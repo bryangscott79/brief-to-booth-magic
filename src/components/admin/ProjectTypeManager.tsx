@@ -1,16 +1,44 @@
 import { useState } from "react";
 import { PROJECT_TYPE_REGISTRY, ALL_PROJECT_TYPES, type ProjectTypeDef } from "@/lib/projectTypes";
 import { useProjectTypeConfigs, useUpsertProjectTypeConfig, type ProjectTypeConfig } from "@/hooks/useClients";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ChevronRight, Save, RotateCcw, Sparkles, Edit2, Check } from "lucide-react";
+import {
+  ChevronRight,
+  Save,
+  RotateCcw,
+  Edit2,
+  Check,
+  // Registry icon identifiers (projectTypes.ts stores lucide names as strings)
+  Landmark,
+  Zap,
+  Building2,
+  Clapperboard,
+  Gamepad2,
+  Building,
+  Shapes,
+  type LucideIcon,
+} from "lucide-react";
+import { SectionLabel, StatusChip, IconWell } from "@/components/shell";
 import { cn } from "@/lib/utils";
+
+// The registry stores icons as lucide identifier strings ("Landmark",
+// "Zap", …). Rendering that string directly showed the identifier as if
+// it were the type's title — resolve it to the actual icon component.
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  Landmark,
+  Zap,
+  Building2,
+  Clapperboard,
+  Gamepad2,
+  Building,
+};
+const resolveTypeIcon = (name: string): LucideIcon => TYPE_ICONS[name] ?? Shapes;
 
 interface EditingElement {
   key: string;
@@ -95,27 +123,26 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
     <div className="space-y-6">
       {/* Header info */}
       <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{typeDef.icon}</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <Input
-                  value={editing.label}
-                  onChange={e => update({ label: e.target.value })}
-                  className="text-lg font-semibold h-8 border-transparent hover:border-border focus:border-border px-1 w-64"
-                />
-                <Badge variant={editing.isEnabled ? "default" : "secondary"}>
-                  {editing.isEnabled ? "Active" : "Disabled"}
-                </Badge>
-              </div>
+        <div className="flex items-start gap-3 min-w-0">
+          <IconWell icon={resolveTypeIcon(typeDef.icon)} size={40} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
               <Input
-                value={editing.tagline}
-                onChange={e => update({ tagline: e.target.value })}
-                className="text-sm text-muted-foreground h-7 border-transparent hover:border-border focus:border-border px-1 mt-1"
-                placeholder="Tagline..."
+                value={editing.label}
+                onChange={e => update({ label: e.target.value })}
+                className="text-lg font-semibold text-navy h-8 border-transparent hover:border-border focus:border-border px-1 w-64"
               />
+              <StatusChip variant={editing.isEnabled ? "pass" : "neutral"}>
+                {editing.isEnabled ? "Active" : "Disabled"}
+              </StatusChip>
             </div>
+            <Input
+              value={editing.tagline}
+              onChange={e => update({ tagline: e.target.value })}
+              className="text-sm text-slate h-7 border-transparent hover:border-border focus:border-border px-1 mt-1"
+              placeholder="Tagline..."
+            />
+            <p className="mt-0.5 px-1 font-mono text-[10px] text-slate-faint">{typeDef.id}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -145,7 +172,7 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
 
       {/* Description */}
       <div className="space-y-2">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Description</Label>
+        <SectionLabel accent="sky">Description</SectionLabel>
         <Textarea
           value={editing.description}
           onChange={e => update({ description: e.target.value })}
@@ -154,17 +181,18 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
         />
       </div>
 
-      {/* Render context */}
+      {/* Render context — mono code-well: this text is injected verbatim
+          into every image-generation prompt, so it reads as code. */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Render Context</Label>
-          <span className="text-xs text-muted-foreground">(injected into every AI image generation prompt)</span>
+          <SectionLabel accent="violet">Render Context</SectionLabel>
+          <span className="text-xs text-slate-faint">injected into every AI image generation prompt</span>
         </div>
         <Textarea
           value={editing.renderContext}
           onChange={e => update({ renderContext: e.target.value })}
           rows={3}
-          className="resize-none text-sm font-mono"
+          className="resize-none rounded-square border-cloud-line bg-cloud font-mono text-xs leading-[18px] text-navy"
           placeholder="Describe the physical environment and visual setting for renders..."
         />
       </div>
@@ -174,9 +202,10 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
       {/* Strategic elements */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <Label className="text-sm font-semibold">Strategic Elements</Label>
-          <span className="text-xs text-muted-foreground">({editing.elements.length} elements — AI guidance controls generation quality)</span>
+          <SectionLabel accent="pink">Strategic Elements</SectionLabel>
+          <span className="text-xs text-slate-faint">
+            <span className="font-mono font-medium text-slate">{editing.elements.length}</span> elements — AI guidance controls generation quality
+          </span>
         </div>
 
         <div className="space-y-2">
@@ -184,8 +213,8 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
             <div
               key={el.key}
               className={cn(
-                "border rounded-lg transition-colors",
-                editingEl === el.key ? "border-primary/50 bg-primary/5" : "border-border"
+                "border rounded-square transition-colors",
+                editingEl === el.key ? "border-[#A78BFA] bg-violet-soft/40" : "border-cloud-line"
               )}
             >
               {editingEl === el.key ? (
@@ -231,21 +260,24 @@ function ProjectTypeEditor({ typeDef, config }: { typeDef: ProjectTypeDef; confi
                 </div>
               ) : (
                 <div
-                  className="flex items-start gap-3 p-3 cursor-pointer hover:bg-muted/50 rounded-lg"
+                  className="flex items-start gap-3 p-3 cursor-pointer hover:bg-cloud/60 rounded-square"
                   onClick={() => setEditingEl(el.key)}
                 >
-                  <span className="text-sm font-medium text-muted-foreground w-5 pt-0.5">{idx + 1}</span>
+                  {/* Navy number chip — the Flow C step/element index */}
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-navy font-mono text-[10px] font-semibold text-white">
+                    {idx + 1}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{el.title}</span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground truncate">{el.description}</span>
+                      <span className="text-sm font-semibold text-navy">{el.title}</span>
+                      <span className="text-xs text-slate-faint">·</span>
+                      <span className="text-xs text-slate truncate">{el.description}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 italic">
+                    <p className="text-xs italic text-slate mt-0.5 line-clamp-1">
                       {el.aiGuidance}
                     </p>
                   </div>
-                  <Edit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <Edit2 className="h-3.5 w-3.5 text-slate-faint shrink-0 mt-0.5" />
                 </div>
               )}
             </div>
@@ -281,7 +313,7 @@ export function ProjectTypeManager() {
       {/* Type list sidebar */}
       <Card className="sticky top-24">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Project Types</CardTitle>
+          <SectionLabel accent="blue">Project Types</SectionLabel>
           <CardDescription className="text-xs">Select a type to configure its AI instructions and element guidance</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -290,31 +322,44 @@ export function ProjectTypeManager() {
               const config = getConfig(type.id);
               const isEnabled = config?.is_enabled !== false;
               const hasOverrides = !!config;
+              const selected = selectedType === type.id;
+              const TypeIcon = resolveTypeIcon(type.icon);
 
               return (
                 <button
                   key={type.id}
                   onClick={() => setSelectedType(type.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
-                    selectedType === type.id
-                      ? "bg-primary/10 text-primary"
-                      : "hover:bg-muted text-foreground"
+                    "w-full flex items-center gap-3 border-l-2 px-3 py-2.5 rounded-r-btn text-left transition-colors",
+                    selected
+                      ? "border-navy bg-cloud text-navy"
+                      : "border-transparent text-slate hover:bg-cloud/70 hover:text-navy"
                   )}
                 >
-                  <span className="text-lg shrink-0">{type.icon}</span>
+                  <span
+                    className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-square",
+                      selected ? "bg-navy text-white" : "bg-cloud text-navy"
+                    )}
+                  >
+                    <TypeIcon className="h-3.5 w-3.5" strokeWidth={1.3} />
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium truncate">{config?.label ?? type.shortLabel}</span>
+                      <span className={cn("text-sm truncate", selected ? "font-semibold text-navy" : "font-medium")}>
+                        {config?.label ?? type.shortLabel}
+                      </span>
                       {hasOverrides && (
-                        <span className="text-[10px] bg-primary/15 text-primary px-1 rounded">custom</span>
+                        <span className="rounded-full bg-violet-soft px-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[#6D4BC7]">
+                          custom
+                        </span>
                       )}
                     </div>
                     {!isEnabled && (
-                      <span className="text-xs text-muted-foreground">Disabled</span>
+                      <span className="text-xs text-slate-faint">Disabled</span>
                     )}
                   </div>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-faint" />
                 </button>
               );
             })}

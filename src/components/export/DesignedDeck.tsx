@@ -469,24 +469,11 @@ export function DesignedDeck({
             </div>
           )}
 
-          {/* Diagnostic — costs zero tokens, tells the user exactly what's wrong */}
+          {/* Diagnostic readout. The developer-facing "Test connection"
+            * button was removed from the UI (owner call) — the status spans
+            * below only render if a ping was triggered programmatically. */}
           <div className="space-y-2 text-[11px]">
             <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[11px]"
-                onClick={handlePing}
-                disabled={pingState.status === "running"}
-              >
-                {pingState.status === "running" ? (
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                ) : (
-                  <Wand2 className="h-3 w-3 mr-1" />
-                )}
-                Test connection
-              </Button>
               {pingState.status === "ok" && (
                 <span
                   className={cn(

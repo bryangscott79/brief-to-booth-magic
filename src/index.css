@@ -493,19 +493,21 @@
     box-shadow: var(--shadow-glow-violet);
   }
 
+  /* Flow C: element cards are plain white sheets on the cloud ground —
+   * hairline border, no glass tint, no glow. Hover darkens the hairline. */
   .element-card {
-    background: var(--surface-glass);
-    border: 1px solid var(--border-subtle);
-    transition: all 0.2s ease;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--cloud-line));
+    transition: border-color 0.2s ease;
   }
 
   .element-card:hover {
-    border-color: rgba(167, 139, 250, 0.4);
-    box-shadow: var(--shadow-glow-violet);
+    border-color: rgba(11, 27, 43, 0.25);
+    box-shadow: none;
   }
 
   .element-card.active {
-    border-color: rgba(167, 139, 250, 0.8);
+    border-color: rgba(109, 75, 199, 0.7);
     box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15);
   }
 

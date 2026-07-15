@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>41 · Files &amp; Media · agency</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.side-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{margin-top:auto;border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy)}
+.side-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+
+/* project bar + step pills */
+.projbar{display:flex;align-items:center;gap:10px;padding:4px 0 16px}
+.crumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);white-space:nowrap}
+.crumb svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none}
+.crumb .sep{color:var(--slate-faint)}
+.projname{font-size:15px;font-weight:600;color:var(--navy);white-space:nowrap}
+.specpill{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;color:var(--charcoal);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:3px 10px;white-space:nowrap;letter-spacing:-.01em}
+.pills{margin-left:auto;display:flex;gap:2px;background:var(--cloud);border:1px solid var(--cloud-line);border-radius:999px;padding:3px}
+.pill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;color:var(--slate);white-space:nowrap}
+.pill .num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;color:var(--slate-faint)}
+.pill .ck{width:11px;height:11px;stroke:var(--navy);stroke-width:2.4;fill:none;flex-shrink:0}
+.pill.done{background:var(--white);border:1px solid var(--cloud-line);color:var(--navy);padding:4px 11px}
+
+/* page header */
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 0 22px}
+.pagehead h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+.pagehead .sub{font-size:13px;color:var(--slate);margin-top:6px}
+
+/* tabs + toolbar */
+.seg{display:flex;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-btn);padding:2px;width:fit-content}
+.seg span{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:4px;font-size:12px;font-weight:500;color:var(--slate)}
+.seg span.on{background:var(--navy);color:var(--white);font-weight:600}
+.seg .cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;background:rgba(255,255,255,.16);border-radius:999px;padding:0 6px}
+.seg span:not(.on) .cnt{background:var(--cloud);border:1px solid var(--cloud-line);color:var(--navy)}
+.seg svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.3;fill:none}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0 6px;flex-wrap:wrap}
+.fchips{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;border-radius:999px;border:1px solid var(--cloud-line);background:var(--white);color:var(--slate);padding:5px 12px}
+.fchip .cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;opacity:.75}
+.fchip.on{background:var(--navy);border-color:var(--navy);color:var(--white);font-weight:600}
+.toggles{display:flex;gap:8px}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;border-radius:var(--r-btn);border:1px solid var(--cloud-line);background:var(--white);color:var(--slate);padding:5px 10px}
+.toggle svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.3;fill:none}
+.toggle.on{background:var(--cloud);color:var(--navy);font-weight:600}
+
+/* groups + grid */
+.slabel{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 10px}
+.slabel .sw{width:8px;height:8px;border-radius:2px}
+.slabel .cnt{margin-left:2px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.igrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.icard{background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-well);overflow:hidden}
+.ithumb{aspect-ratio:16/10;background:var(--cloud);border-bottom:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;position:relative}
+.ithumb .cur{position:absolute;top:6px;right:6px;font-size:9px;font-weight:700;letter-spacing:.04em;background:var(--green-soft);color:var(--green);border-radius:999px;padding:2px 7px}
+.ithumb .cfg{position:absolute;top:6px;left:6px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:9px;font-weight:600;background:var(--navy);color:var(--white);border-radius:999px;padding:2px 7px}
+.imeta{padding:8px 10px}
+.imeta .fn{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;color:var(--navy);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.imeta .fs{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--slate);margin-top:2px;letter-spacing:-.01em}
+.hintline{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate);margin-top:22px}
+.hintline svg{width:13px;height:13px;stroke:var(--slate-faint);stroke-width:1.3;fill:none;flex-shrink:0}
+.hintline .u{text-decoration:underline;text-underline-offset:2px;font-weight:600;color:var(--navy)}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <svg width="26" height="26" viewBox="0 0 100 100">
+        <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+          <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+          <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+        <g fill="url(#cm)">
+          <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+          <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+          <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+          <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+        </g>
+        <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+        <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+        <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+        <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+      </svg>
+      <span class="side-word">CANOPY</span>
+    </div>
+    <p class="ws-label">Exhibitus</p>
+    <nav class="nav">
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">B</div>
+      <p>bryan@exhibitus.co</p>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="projbar">
+      <span class="crumb"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>Projects<span class="sep">›</span></span>
+      <span class="projname">Samsung — CES 2027</span>
+      <span class="specpill">20×40 · 20×20 · 10×20 · $185,000</span>
+      <nav class="pills">
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Brief</span>
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Review</span>
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Concept</span>
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Spatial</span>
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Render</span>
+        <span class="pill"><span class="num">6</span>Export</span>
+      </nav>
+    </div>
+
+    <div class="pagehead">
+      <div>
+        <p class="eyebrow">Project library · 17 assets</p>
+        <h1>Files &amp; Media</h1>
+        <p class="sub">Project images, 3D renders with AI polish, and video generation.</p>
+      </div>
+      <div class="seg">
+        <span class="on"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg>Images<span class="cnt">14</span></span>
+        <span><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5ZM3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>3D Renders<span class="cnt">2</span></span>
+        <span><svg viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3Z"/></svg>Video</span>
+      </div>
+    </div>
+
+    <!-- toolbar -->
+    <div class="toolbar">
+      <div class="fchips">
+        <span class="fchip on">All angles<span class="cnt">14</span></span>
+        <span class="fchip">3/4 Hero View<span class="cnt">2</span></span>
+        <span class="fchip">Top-Down<span class="cnt">2</span></span>
+        <span class="fchip">Front Elevation<span class="cnt">2</span></span>
+        <span class="fchip">Side Views<span class="cnt">4</span></span>
+        <span class="fchip">Details<span class="cnt">4</span></span>
+      </div>
+      <div class="toggles">
+        <span class="toggle on"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/></svg>Current only</span>
+        <span class="toggle"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Select</span>
+      </div>
+    </div>
+
+    <!-- 20×40 group -->
+    <p class="slabel" style="color:#1D4ED8"><span class="sw" style="background:var(--blue)"></span>20×40<span class="cnt">8</span></p>
+    <div class="igrid">
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">hero_34.png</p><p class="fs">2.8 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">top_down.png</p><p class="fs">2.1 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">front_elevation.png</p><p class="fs">2.4 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">left_side.png</p><p class="fs">2.3 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">right_side.png</p><p class="fs">2.2 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">back_view.png</p><p class="fs">2.0 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">hero_detail.png</p><p class="fs">3.1 MB · Jul 14</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×40</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">lounge_detail.png</p><p class="fs">2.9 MB · Jul 14</p></div>
+      </div>
+    </div>
+
+    <!-- 20×20 group -->
+    <p class="slabel" style="color:#6D28D9"><span class="sw" style="background:var(--violet)"></span>20×20<span class="cnt">6</span></p>
+    <div class="igrid">
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×20</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">hero_34.png</p><p class="fs">2.6 MB · Jul 13</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×20</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">top_down.png</p><p class="fs">1.9 MB · Jul 13</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×20</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">front_elevation.png</p><p class="fs">2.2 MB · Jul 13</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×20</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">back_view.png</p><p class="fs">1.8 MB · Jul 13</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×20</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">hero_detail.png</p><p class="fs">2.7 MB · Jul 13</p></div>
+      </div>
+      <div class="icard">
+        <div class="ithumb"><span class="cfg">20×20</span><span class="cur">Current</span>
+          <svg width="26" height="26" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="1.1" fill="none"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 4-4 5 5"/></svg></div>
+        <div class="imeta"><p class="fn">lounge_detail.png</p><p class="fs">2.5 MB · Jul 13</p></div>
+      </div>
+    </div>
+
+    <p class="hintline">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4M11 8v6M8 11h6"/></svg>
+      Click any render to open the lightbox — <span class="u">Download</span> and <span class="u">View prompt</span> live there, with prev / next across the whole grid.
+    </p>
+
+  </main>
+</div>
+<!-- artboard 41 · Files & Media · role: agency -->
+</body>
+</html>

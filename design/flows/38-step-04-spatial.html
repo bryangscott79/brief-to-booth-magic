@@ -1,0 +1,319 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>38 · Step 04 Spatial · agency</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --sky:#8FD3F4; --blue:#6FA8FF; --violet:#A78BFA; --purple:#C084FC; --pink:#F472B6;
+  --pink-deep:#DB2777; --pink-soft:#FDF2F8;
+  --red:#D2322A; --red-soft:#FEF2F2;
+  --amber:#B25E09; --amber-soft:#FFFBEB; --amber-on-ink:#F5B266;
+  --green:#0C7C3F; --green-soft:#F0FDF4; --green-on-ink:#34D399;
+  --grad-action:linear-gradient(90deg,#4F6BE8 0%,#7C3AED 55%,#DB2777 100%);
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --r-chip:4px; --r-btn:6px; --r-well:8px; --r-card:14px; --r-sheet:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{margin:0;font-family:'Inter',-apple-system,sans-serif;color:var(--charcoal)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.artboard{width:1440px;min-height:900px;display:flex;background:var(--cloud)}
+
+/* ── sidebar ── */
+.sidebar{width:224px;background:var(--white);border-right:1px solid var(--cloud-line);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;border-bottom:1px solid var(--cloud-line)}
+.side-word{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--navy)}
+.ws-label{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-faint);padding:14px 12px 8px}
+.nav a{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;border-left:2px solid transparent}
+.nav a.active{border-left-color:var(--navy);background:var(--cloud);color:var(--navy);font-weight:600}
+.nav svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none;flex-shrink:0}
+.side-foot{margin-top:auto;border-top:1px solid var(--cloud-line);padding:12px;display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--cloud);border:1px solid var(--cloud-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--navy)}
+.side-foot p{font-size:12px;color:var(--slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── main ── */
+.main{flex:1;padding:20px 40px;min-width:0}
+.eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+
+/* project bar + step pills */
+.projbar{display:flex;align-items:center;gap:10px;padding:4px 0 16px}
+.crumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);white-space:nowrap}
+.crumb svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none}
+.crumb .sep{color:var(--slate-faint)}
+.projname{font-size:15px;font-weight:600;color:var(--navy);white-space:nowrap}
+.specpill{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;color:var(--charcoal);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:3px 10px;white-space:nowrap;letter-spacing:-.01em}
+.pills{margin-left:auto;display:flex;gap:2px;background:var(--cloud);border:1px solid var(--cloud-line);border-radius:999px;padding:3px}
+.pill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;color:var(--slate);white-space:nowrap}
+.pill .num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;color:var(--slate-faint)}
+.pill .ck{width:11px;height:11px;stroke:var(--navy);stroke-width:2.4;fill:none;flex-shrink:0}
+.pill.done{background:var(--white);border:1px solid var(--cloud-line);color:var(--navy);padding:4px 11px}
+.pill.active{background:var(--white);border:1px solid var(--cloud-line);color:var(--navy);font-weight:600;padding:4px 11px}
+.pill.active .num{color:var(--navy)}
+.pill.active .lbl{position:relative}
+.pill.active .lbl::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:2px;border-radius:1px;background:var(--grad-brand)}
+
+/* sheet + rail */
+.work{display:flex;gap:20px;align-items:flex-start}
+.sheet{flex:1;min-width:0;background:var(--white);border:1px solid var(--cloud-line);border-radius:var(--r-sheet);overflow:hidden}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--cloud);border-bottom:1px solid var(--cloud-line);padding:18px 28px}
+.sheet-title{font-size:20px;font-weight:700;letter-spacing:-.01em;color:var(--navy);margin-top:3px}
+.sheet-sub{font-size:13px;color:var(--slate);margin-top:3px}
+.sheet-body{padding:28px}
+.rail{width:372px;flex-shrink:0;background:var(--navy);border-radius:var(--r-sheet);padding:26px 28px;color:var(--white);position:relative;align-self:flex-start}
+.rail-collapse{position:absolute;top:20px;right:16px}
+.rail-collapse svg{width:14px;height:14px;stroke:rgba(255,255,255,.55);stroke-width:1.5;fill:none}
+.rail-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--white)}
+.rail-hint{font-size:12px;line-height:17px;color:rgba(255,255,255,.56);margin-top:4px}
+.rail-sec{padding:16px 0;border-top:1px solid rgba(255,255,255,.14)}
+.rail-sec.first{border-top:none;margin-top:8px}
+.rail-label{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}
+.rail-label .sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.rrow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0;font-size:13px;line-height:19px}
+.rrow .k{color:rgba(255,255,255,.72);flex-shrink:0}
+.rrow .v{color:var(--white);font-weight:500;text-align:right;min-width:0;overflow-wrap:break-word}
+.rrow .v.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;letter-spacing:-.01em}
+.tone-pass{color:var(--green-on-ink) !important}
+.tone-warn{color:var(--amber-on-ink) !important}
+.tone-attn{color:var(--pink) !important}
+.rail-foot{margin-top:8px;border-top:1px solid rgba(255,255,255,.14);padding-top:14px;font-size:12px;line-height:17px;color:rgba(255,255,255,.56)}
+
+/* chips + buttons */
+.chip{font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap;display:inline-block}
+.chip-green{background:var(--green-soft);color:var(--green)}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-btn);padding:8px 16px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:var(--navy);color:var(--white)}
+.btn-ghost{background:var(--white);border-color:var(--cloud-line);color:var(--charcoal);font-weight:500}
+.btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.3;fill:none}
+
+/* spatial content */
+.factsrow{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.facts{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;font-weight:500;color:var(--slate);letter-spacing:-.01em}
+.facts b{color:var(--navy);font-weight:600}
+.sizechips{display:flex;gap:8px;margin-bottom:20px}
+.sizechip{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;font-weight:500;letter-spacing:-.01em;border-radius:999px;border:1px solid var(--cloud-line);background:var(--white);color:var(--charcoal);padding:7px 16px}
+.sizechip small{font-size:11px;opacity:.7;margin-left:6px}
+.sizechip.on{background:var(--navy);border-color:var(--navy);color:var(--white)}
+.matcard{border:1px solid var(--cloud-line);border-left:3px solid var(--purple);border-radius:var(--r-card);padding:14px 18px;margin-bottom:20px}
+.matcard .mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.matcard .mlabel{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9333EA}
+.matcard .mlabel .sw{width:8px;height:8px;border-radius:2px;background:var(--purple)}
+.cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--navy);background:var(--white);border:1px solid var(--cloud-line);border-radius:999px;padding:1px 8px}
+.matgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.mat{border:1px solid var(--cloud-line);border-radius:var(--r-well);background:var(--cloud);padding:9px 12px}
+.mat b{display:block;font-size:12px;font-weight:600;color:var(--navy)}
+.mat span{font-size:11px;line-height:15px;color:var(--slate);display:block;margin-top:2px}
+.canvaswrap{border:1px solid var(--cloud-line);border-radius:var(--r-well);background:var(--cloud);padding:18px;margin-bottom:20px}
+.zonerows{border:1px solid var(--cloud-line);border-radius:var(--r-card);overflow:hidden}
+.zrow{display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--cloud-line);font-size:13px}
+.zrow:first-child{border-top:none}
+.zrow .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.zrow .zn{font-weight:600;color:var(--navy);flex:1}
+.zrow .zs{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--charcoal);letter-spacing:-.01em}
+.zrow.total{background:var(--cloud)}
+.zrow.total .zn{font-weight:700}
+</style>
+</head>
+<body>
+<div class="artboard">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <svg width="26" height="26" viewBox="0 0 100 100">
+        <defs><linearGradient id="cm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#8FD3F4"/><stop offset=".28" stop-color="#6FA8FF"/>
+          <stop offset=".55" stop-color="#A78BFA"/><stop offset=".78" stop-color="#C084FC"/>
+          <stop offset="1" stop-color="#F472B6"/></linearGradient></defs>
+        <g fill="url(#cm)">
+          <path d="M50,50 L93.9,52.3 Q83,66 82.7,79.4 Z"/><path d="M50,50 L79.4,82.7 Q66,83 52.3,93.9 Z"/>
+          <path d="M50,50 L47.7,93.9 Q34,83 20.6,82.7 Z"/><path d="M50,50 L17.3,79.4 Q17,66 6.1,52.3 Z"/>
+          <path d="M50,50 L6.1,47.7 Q17,34 17.3,20.6 Z"/><path d="M50,50 L20.6,17.3 Q34,17 47.7,6.1 Z"/>
+          <path d="M50,50 L52.3,6.1 Q66,17 79.4,17.3 Z"/><path d="M50,50 L82.7,20.6 Q83,34 93.9,47.7 Z"/>
+        </g>
+        <g><circle cx="98" cy="50" r="3" fill="#F472B6"/><circle cx="84" cy="84" r="3" fill="#F472B6"/>
+        <circle cx="50" cy="98" r="3" fill="#C084FC"/><circle cx="16" cy="84" r="3" fill="#A78BFA"/>
+        <circle cx="2" cy="50" r="3" fill="#8FD3F4"/><circle cx="16" cy="16" r="3" fill="#8FD3F4"/>
+        <circle cx="50" cy="2" r="3" fill="#6FA8FF"/><circle cx="84" cy="16" r="3" fill="#6FA8FF"/></g>
+      </svg>
+      <span class="side-word">CANOPY</span>
+    </div>
+    <p class="ws-label">Exhibitus</p>
+    <nav class="nav">
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>All Projects</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.7c2.6.1 4.4 1.5 5 4.3"/></svg>Clients</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/></svg>Activation Types</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 0-2 2Z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2h-6"/></svg>Agency Knowledge</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M13 11h3M8 15h3M13 15h3"/></svg>Pricing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6v17M12 9h6a2 2 0 0 1 2 2v10M4 21h18"/></svg>Company Profile</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5"/></svg>Team</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">B</div>
+      <p>bryan@exhibitus.co</p>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="projbar">
+      <span class="crumb"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>Projects<span class="sep">›</span></span>
+      <span class="projname">Samsung — CES 2027</span>
+      <span class="specpill">20×40 · 20×20 · 10×20 · $185,000</span>
+      <nav class="pills">
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Brief</span>
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Review</span>
+        <span class="pill done"><svg class="ck" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Concept</span>
+        <span class="pill active"><span class="num">4</span><span class="lbl">Spatial</span></span>
+        <span class="pill"><span class="num">5</span>Render</span>
+        <span class="pill"><span class="num">6</span>Export</span>
+      </nav>
+    </div>
+
+    <div class="work">
+
+      <!-- ── work sheet ── -->
+      <section class="sheet">
+        <div class="sheet-head">
+          <div>
+            <p class="eyebrow">Step 04 / 06</p>
+            <h2 class="sheet-title">Spatial</h2>
+            <p class="sheet-sub">Zone the footprint — the canvas geometry drives every render</p>
+          </div>
+          <span class="mono" style="font-size:12px;color:var(--slate)">20×40 · 800 sqft</span>
+        </div>
+        <div class="sheet-body">
+
+          <div class="factsrow">
+            <p class="facts"><b>20×40 ft</b> · 800 sqft · <b>100%</b> zone coverage · 6 zones</p>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-ghost"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg>Export SVG</button>
+              <button class="btn btn-primary">Continue to Render<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+            </div>
+          </div>
+
+          <!-- config size chips -->
+          <div class="sizechips">
+            <span class="sizechip on">20×40<small>(800 sq ft)</small></span>
+            <span class="sizechip">20×20<small>(400 sq ft)</small></span>
+            <span class="sizechip">10×20<small>(200 sq ft)</small></span>
+          </div>
+
+          <!-- materials & mood -->
+          <div class="matcard">
+            <div class="mhead">
+              <p class="mlabel"><span class="sw"></span>Materials &amp; Mood</p>
+              <span class="cnt">6 entries</span>
+            </div>
+            <div class="matgrid">
+              <div class="mat"><b>Fluted oak</b><span>Lounge walls — warm counterpoint to the tech</span></div>
+              <div class="mat"><b>Matte white lacquer</b><span>Demo plinths — product stays the hero</span></div>
+              <div class="mat"><b>Brushed aluminum</b><span>Structural frame — precise, engineered feel</span></div>
+              <div class="mat"><b>LED mesh</b><span>Perimeter fascia — the light thread lives here</span></div>
+              <div class="mat"><b>Recycled acoustic felt</b><span>Meeting canopy — soft, quiet, sustainable</span></div>
+              <div class="mat"><b>Polished concrete</b><span>Floor — show-floor grade, low glare</span></div>
+            </div>
+          </div>
+
+          <!-- zone canvas -->
+          <div class="canvaswrap">
+            <svg viewBox="0 0 700 400" width="100%" style="display:block">
+              <!-- grid -->
+              <g stroke="#E2E8F0" stroke-width="1">
+                <path d="M110 30V350M190 30V350M270 30V350M350 30V350M430 30V350M510 30V350M590 30V350"/>
+                <path d="M30 110H670M30 190H670M30 270H670"/>
+              </g>
+              <!-- zones : booth 40×20 ft at 16px/ft, origin (30,30) -->
+              <g font-family="'Inter',sans-serif">
+                <!-- Storage back-left 8×10 -->
+                <rect x="30" y="30" width="128" height="160" fill="#E2E8F0" fill-opacity=".55" stroke="#94A3B8" stroke-width="1.2"/>
+                <text x="94" y="102" text-anchor="middle" font-size="11" font-weight="600" fill="#0B1B2B">Storage / BOH</text>
+                <text x="94" y="118" text-anchor="middle" font-size="10" fill="#64748B" font-family="'IBM Plex Mono',monospace">80 sqft</text>
+                <!-- Hero demo theater 16×15 -->
+                <rect x="158" y="30" width="256" height="240" fill="#8FD3F4" fill-opacity=".4" stroke="#0E7490" stroke-width="1.2"/>
+                <text x="286" y="130" text-anchor="middle" font-size="12" font-weight="600" fill="#0B1B2B">Hero Demo Theater</text>
+                <text x="286" y="146" text-anchor="middle" font-size="10" fill="#0E7490" font-family="'IBM Plex Mono',monospace">240 sqft · 30%</text>
+                <!-- hanging ring -->
+                <circle cx="286" cy="150" r="96" fill="none" stroke="#DB2777" stroke-width="1.4" stroke-dasharray="6 5"/>
+                <text x="286" y="230" text-anchor="middle" font-size="10" fill="#DB2777" font-family="'IBM Plex Mono',monospace">Ring · 12 ft Ø · 13 ft AFF</text>
+                <!-- Meeting lounge back-right 16×10 -->
+                <rect x="414" y="30" width="256" height="160" fill="#A78BFA" fill-opacity=".35" stroke="#6D28D9" stroke-width="1.2"/>
+                <text x="542" y="102" text-anchor="middle" font-size="11" font-weight="600" fill="#0B1B2B">Meeting Lounge</text>
+                <text x="542" y="118" text-anchor="middle" font-size="10" fill="#6D28D9" font-family="'IBM Plex Mono',monospace">160 sqft · 20%</text>
+                <!-- Connected home front-right 16×10 -->
+                <rect x="414" y="190" width="256" height="160" fill="#6FA8FF" fill-opacity=".3" stroke="#1D4ED8" stroke-width="1.2"/>
+                <text x="542" y="262" text-anchor="middle" font-size="11" font-weight="600" fill="#0B1B2B">Connected Home Experience</text>
+                <text x="542" y="278" text-anchor="middle" font-size="10" fill="#1D4ED8" font-family="'IBM Plex Mono',monospace">160 sqft · 20%</text>
+                <!-- Welcome front-left 8×10 -->
+                <rect x="30" y="190" width="128" height="160" fill="#C084FC" fill-opacity=".3" stroke="#9333EA" stroke-width="1.2"/>
+                <text x="94" y="262" text-anchor="middle" font-size="11" font-weight="600" fill="#0B1B2B">Welcome</text>
+                <text x="94" y="278" text-anchor="middle" font-size="10" fill="#9333EA" font-family="'IBM Plex Mono',monospace">80 sqft · 10%</text>
+                <!-- Demo bar front-center 16×5 -->
+                <rect x="158" y="270" width="256" height="80" fill="#F472B6" fill-opacity=".3" stroke="#DB2777" stroke-width="1.2"/>
+                <text x="286" y="305" text-anchor="middle" font-size="11" font-weight="600" fill="#0B1B2B">Demo Bar</text>
+                <text x="286" y="320" text-anchor="middle" font-size="10" fill="#DB2777" font-family="'IBM Plex Mono',monospace">80 sqft · 10%</text>
+                <!-- booth outline -->
+                <rect x="30" y="30" width="640" height="320" fill="none" stroke="#0B1B2B" stroke-width="2"/>
+                <!-- dimensions -->
+                <text x="350" y="20" text-anchor="middle" font-size="11" fill="#0B1B2B" font-family="'IBM Plex Mono',monospace">40 ft</text>
+                <text x="16" y="190" text-anchor="middle" font-size="11" fill="#0B1B2B" font-family="'IBM Plex Mono',monospace" transform="rotate(-90 16 190)">20 ft</text>
+                <text x="350" y="376" text-anchor="middle" font-size="10" letter-spacing="2" fill="#94A3B8" font-family="'IBM Plex Mono',monospace">FRONT · AISLE</text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- zone program rows -->
+          <div class="zonerows">
+            <div class="zrow"><span class="dot" style="background:var(--sky)"></span><span class="zn">Hero Demo Theater</span><span class="zs">240 sqft · 30%</span></div>
+            <div class="zrow"><span class="dot" style="background:var(--violet)"></span><span class="zn">Meeting Lounge</span><span class="zs">160 sqft · 20%</span></div>
+            <div class="zrow"><span class="dot" style="background:var(--blue)"></span><span class="zn">Connected Home Experience</span><span class="zs">160 sqft · 20%</span></div>
+            <div class="zrow"><span class="dot" style="background:var(--purple)"></span><span class="zn">Welcome</span><span class="zs">80 sqft · 10%</span></div>
+            <div class="zrow"><span class="dot" style="background:var(--pink)"></span><span class="zn">Demo Bar</span><span class="zs">80 sqft · 10%</span></div>
+            <div class="zrow"><span class="dot" style="background:var(--cloud-line)"></span><span class="zn">Storage / Back-of-House</span><span class="zs">80 sqft · 10%</span></div>
+            <div class="zrow total"><span class="dot" style="background:var(--navy)"></span><span class="zn">Total</span><span class="zs">800 sqft · 100%</span></div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── ink rail ── -->
+      <aside class="rail">
+        <span class="rail-collapse"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M8 10l2 2-2 2"/></svg></span>
+        <h3 class="rail-title">Spatial facts</h3>
+        <p class="rail-hint">Active config 20×40 · 800 sqft — computed from the canvas, not the prose.</p>
+
+        <div class="rail-sec first">
+          <p class="rail-label" style="color:var(--sky)"><span class="sw" style="background:var(--sky)"></span>Dimensions</p>
+          <div class="rrow"><span class="k">Footprint</span><span class="v mono">20×40 ft</span></div>
+          <div class="rrow"><span class="k">Area</span><span class="v mono">800 sqft</span></div>
+          <div class="rrow"><span class="k">Max build height</span><span class="v mono">16 ft</span></div>
+          <div class="rrow"><span class="k">Ring underside</span><span class="v mono">13 ft AFF</span></div>
+        </div>
+
+        <div class="rail-sec">
+          <p class="rail-label" style="color:var(--violet)"><span class="sw" style="background:var(--violet)"></span>Zone program</p>
+          <div class="rrow"><span class="k">Hero Demo Theater</span><span class="v mono">240 sqft · 30%</span></div>
+          <div class="rrow"><span class="k">Meeting Lounge</span><span class="v mono">160 sqft · 20%</span></div>
+          <div class="rrow"><span class="k">Connected Home</span><span class="v mono">160 sqft · 20%</span></div>
+          <div class="rrow"><span class="k">Welcome</span><span class="v mono">80 sqft · 10%</span></div>
+          <div class="rrow"><span class="k">Demo Bar</span><span class="v mono">80 sqft · 10%</span></div>
+          <div class="rrow"><span class="k">Storage / BOH</span><span class="v mono">80 sqft · 10%</span></div>
+        </div>
+
+        <div class="rail-sec">
+          <p class="rail-label" style="color:var(--pink)"><span class="sw" style="background:var(--pink)"></span>Validation</p>
+          <div class="rrow"><span class="k">Zone coverage</span><span class="v mono tone-pass">100%</span></div>
+          <div class="rrow"><span class="k">Errors</span><span class="v mono tone-pass">0</span></div>
+          <div class="rrow"><span class="k">Warnings</span><span class="v mono">0</span></div>
+          <div class="rrow"><span class="k">ADA clearances</span><span class="v tone-pass">PASS</span></div>
+        </div>
+
+        <div class="rail-foot">Geometry is ground truth — renders follow the canvas, not the prose.</div>
+      </aside>
+
+    </div>
+  </main>
+</div>
+<!-- artboard 38 · Step 04 Spatial · role: agency -->
+</body>
+</html>

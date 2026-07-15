@@ -111,6 +111,7 @@ export default function GeneratePage() {
         <div className="flex flex-col gap-5 lg:flex-row">
           <WorkSheet
             className="min-w-0 flex-1"
+            eyebrow="Step 03 / 06"
             title="Generate"
             subtitle="Eight concept elements, generated from the brief and weighted context"
             headerRight={

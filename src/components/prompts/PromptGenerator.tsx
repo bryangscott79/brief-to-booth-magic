@@ -1923,31 +1923,32 @@ export function PromptGenerator() {
       <div className="max-w-3xl mx-auto space-y-6">
         {versionsHeader}
 
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">Generate Booth Renders</h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
+        {/* Phase heading — demoted to a section title; the sheet band owns
+            the step title. */}
+        <div className="text-center space-y-1">
+          <h2 className="text-base font-semibold text-navy">Generate Booth Renders</h2>
+          <p className="text-[13px] text-slate max-w-xl mx-auto">
             Generating renders for {boothDimensions.footprintLabel} ({boothDimensions.totalAreaNative} {boothDimensions.measurementSystem === "metric" ? "sqm" : "sqft"}) booth with {normalizedZones.length} zones
           </p>
         </div>
 
-        {/* Booth Info Card */}
-        <Card className="element-card bg-muted/30">
+        {/* Booth Info Card — measured values in the mono spec face */}
+        <Card className="bg-cloud/50">
           <CardContent className="pt-4">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold">{boothDimensions.footprintLabel}</div>
-                <div className="text-xs text-muted-foreground">Dimensions</div>
+                <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{boothDimensions.footprintLabel}</div>
+                <div className="text-xs text-slate">Dimensions</div>
               </div>
               <div>
-                <div className="text-2xl font-bold">{boothDimensions.totalAreaNative}</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{boothDimensions.totalAreaNative}</div>
+                <div className="text-xs text-slate">
                   {boothDimensions.measurementSystem === "metric" ? "Square Meters" : "Square Feet"}
                 </div>
               </div>
               <div>
-                <div className="text-2xl font-bold">{normalizedZones.length}</div>
-                <div className="text-xs text-muted-foreground">Zones</div>
+                <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{normalizedZones.length}</div>
+                <div className="text-xs text-slate">Zones</div>
               </div>
             </div>
           </CardContent>
@@ -2101,9 +2102,9 @@ export function PromptGenerator() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         {versionsHeader}
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">Review Hero Image</h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
+        <div className="text-center space-y-1">
+          <h2 className="text-base font-semibold text-navy">Review Hero Image</h2>
+          <p className="text-[13px] text-slate max-w-xl mx-auto">
             Review the generated {boothDimensions.footprintLabel} booth. Provide feedback to refine it, or approve to generate all views.
           </p>
         </div>
@@ -2340,9 +2341,9 @@ export function PromptGenerator() {
       />
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Generated Renders</h2>
-          <p className="text-muted-foreground">
-            {isGenerating 
+          <h2 className="text-base font-semibold text-navy">Generated Renders</h2>
+          <p className="text-[13px] text-slate">
+            {isGenerating
               ? `Generating views... ${completedCount} of ${totalViews} complete`
               : `${completedCount} coordinated renders for ${boothDimensions.footprintLabel} booth`
             }

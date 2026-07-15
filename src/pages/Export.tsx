@@ -117,6 +117,7 @@ export default function ExportPage() {
         <div className="flex flex-col gap-5 lg:flex-row">
           <WorkSheet
             className="min-w-0 flex-1"
+            eyebrow="Step 06 / 06"
             title="Export"
             subtitle="Package renders, strategy, and specs for hand-off"
             headerRight={

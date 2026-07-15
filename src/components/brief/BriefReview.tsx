@@ -953,15 +953,10 @@ export function BriefReview({ projectId }: { projectId: string | null }) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Review Parsed Brief</h2>
-          <p className="text-muted-foreground">
-            Verify the extracted data before generating elements
-          </p>
-        </div>
-        <Button onClick={handleConfirm} className="btn-glow">
+      {/* Header action — the sheet band already carries the step title;
+          no second page-title inside the sheet. */}
+      <div className="flex items-center justify-end">
+        <Button onClick={handleConfirm}>
           Confirm & Generate Elements
           <ChevronRight className="ml-2 h-4 w-4" />
         </Button>

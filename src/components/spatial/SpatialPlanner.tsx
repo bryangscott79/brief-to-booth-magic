@@ -849,14 +849,13 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Spatial Strategy</h2>
-          <p className="text-muted-foreground">
-            {boothDimensions.footprintLabel} {boothDimensions.scaleDescription} • {validation.totalPercentage}% zone coverage
-          </p>
-        </div>
+      {/* Header — sheet band owns the step title; keep the measured facts
+          as a mono spec line + actions. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="font-mono text-[12px] font-medium tracking-tight text-slate">
+          <span className="text-navy">{boothDimensions.footprintLabel}</span>{" "}
+          {boothDimensions.scaleDescription} · <span className="text-navy">{validation.totalPercentage}%</span> zone coverage
+        </p>
         <div className="flex gap-3">
           <Button variant="outline" size="sm">
             <Download className="mr-2 h-4 w-4" />
@@ -890,22 +889,25 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
           the design language while authoring zones. Used to be buried
           at the bottom of the right rail. */}
       {spatialData.materialsAndMood && spatialData.materialsAndMood.length > 0 && (
-        <Card className="element-card">
+        <Card className="border-l-[3px] border-l-[#C084FC]">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Materials &amp; Mood</CardTitle>
-            <Badge variant="outline" className="text-[10px]">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8B34D3]">
+              <span aria-hidden="true" className="inline-block h-2 w-2 rounded-[2px] bg-[#C084FC]" />
+              Materials &amp; Mood
+            </CardTitle>
+            <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-2 py-0.5 font-mono text-[10px] font-medium tracking-tight text-navy">
               {spatialData.materialsAndMood.length} entries
-            </Badge>
+            </span>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {spatialData.materialsAndMood.map((mat: any, i: number) => (
                 <div
                   key={i}
-                  className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm"
+                  className="rounded-square border border-cloud-line bg-cloud/60 px-3 py-2 text-sm"
                 >
-                  <div className="font-medium">{mat.material}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  <div className="font-semibold text-navy">{mat.material}</div>
+                  <div className="text-xs text-slate mt-0.5 leading-snug">
                     {mat.use && <span className="block">{mat.use}</span>}
                     {mat.feel && <span className="block">{mat.feel}</span>}
                   </div>

@@ -529,8 +529,8 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
       <div className="max-w-2xl mx-auto space-y-6">
         <StepBar />
         <div className="text-center mb-6">
-          <h2 className="text-xl font-semibold mb-1">Upload your brief</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-base font-semibold text-navy mb-1">Upload your brief</h2>
+          <p className="text-[13px] text-slate">
             AI will extract all details automatically — project type, brand, objectives, budget, and more.
           </p>
         </div>
@@ -604,8 +604,8 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
             <Loader2 className="absolute -top-1 -right-1 h-7 w-7 text-primary animate-spin" />
           </div>
           <div className="text-center space-y-2">
-            <h2 className="text-xl font-semibold">Reading your brief…</h2>
-            <p className="text-sm text-muted-foreground max-w-xs">Extracting all strategic, spatial, and creative data</p>
+            <h2 className="text-base font-semibold text-navy">Reading your brief…</h2>
+            <p className="text-[13px] text-slate max-w-xs">Extracting all strategic, spatial, and creative data</p>
           </div>
           <div className="flex flex-col gap-2 w-64">
             {["Brand & identity", "Business objectives", "Spatial requirements", "Budget & deliverables", "Creative direction", "Audiences & timeline"].map((label, i) => (

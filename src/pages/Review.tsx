@@ -120,6 +120,7 @@ export default function ReviewPage() {
         <div className="flex flex-col gap-5 lg:flex-row">
           <WorkSheet
             className="min-w-0 flex-1"
+            eyebrow="Step 02 / 06"
             title="Review"
             subtitle="Confirm what the AI extracted before generating concepts"
             headerRight={

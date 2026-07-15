@@ -68,6 +68,7 @@ export default function UploadPage() {
         <div className="flex flex-col gap-5 lg:flex-row">
           <WorkSheet
             className="min-w-0 flex-1"
+            eyebrow="Step 01 / 06"
             title={isSuiteMode ? "Upload Suite Brief" : "Brief"}
             subtitle={
               mode === "choose"
@@ -165,8 +166,8 @@ export default function UploadPage() {
 
             <div className="max-w-5xl mx-auto">
               <div className="mb-4">
-                <h2 className="text-xl font-semibold tracking-tight">Project Knowledge Base</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+                <h2 className="text-base font-semibold text-navy">Project Knowledge Base</h2>
+                <p className="text-[13px] text-slate mt-1">
                   Add supporting docs — RFPs, inspiration, pricing, brand assets — so the AI can
                   reference them when generating strategy, prompts, and exports.
                 </p>

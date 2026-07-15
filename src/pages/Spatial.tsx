@@ -130,6 +130,7 @@ export default function SpatialPage() {
         <div className="flex flex-col gap-5 lg:flex-row">
           <WorkSheet
             className="min-w-0 flex-1"
+            eyebrow="Step 04 / 06"
             title="Spatial"
             subtitle="Zone the footprint — the canvas geometry drives every render"
             headerRight={

@@ -118,6 +118,7 @@ export default function PromptsPage() {
         <div className="flex flex-col gap-5 lg:flex-row">
           <WorkSheet
             className="min-w-0 flex-1"
+            eyebrow="Step 05 / 06"
             title="Prompts"
             subtitle="Hero first, then every view — each render carries its own prompt"
             headerRight={

@@ -371,13 +371,7 @@ export function ExportPackage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-semibold">Export Package</h2>
-        <p className="text-muted-foreground">
-          Generate materials lists, 3D modeling briefs, and download your complete project
-        </p>
-      </div>
+      {/* The sheet band owns the "Export" title — no duplicate inside. */}
 
       {/* AI-designed deck — primary path. Claude designs every slide as
        * HTML+CSS using the full project + agency context. */}
@@ -450,16 +444,16 @@ export function ExportPackage() {
         <CardContent>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <div className="text-2xl font-semibold">{brief.brand?.name || currentProject?.name}</div>
-              <div className="text-sm text-muted-foreground">Project</div>
+              <div className="text-2xl font-semibold text-navy truncate">{brief.brand?.name || currentProject?.name}</div>
+              <div className="text-sm text-slate">Project</div>
             </div>
             <div>
-              <div className="text-2xl font-semibold">{completedElements}/{totalElements}</div>
-              <div className="text-sm text-muted-foreground">Elements Complete</div>
+              <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{completedElements}/{totalElements}</div>
+              <div className="text-sm text-slate">Elements Complete</div>
             </div>
             <div>
-              <div className="text-2xl font-semibold">{images?.filter(i => i.is_current).length || 0}</div>
-              <div className="text-sm text-muted-foreground">Rendered Views</div>
+              <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{images?.filter(i => i.is_current).length || 0}</div>
+              <div className="text-sm text-slate">Rendered Views</div>
             </div>
           </div>
         </CardContent>

@@ -33,6 +33,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { useAgency } from "@/hooks/useAgency";
 import { useIsAdmin, useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { agency } = useAgency();
   const { data: isAdmin } = useIsAdmin();
   const { data: isSuperAdmin } = useIsSuperAdmin();
   const { previewMode, setPreviewMode } = usePlatformOwner();
@@ -100,13 +102,13 @@ export function AppSidebar() {
           <Link
             to={path}
             className={cn(
-              "flex items-center gap-3 rounded-r-btn border-l-2 px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-r-btn border-l-2 px-3 py-2 text-sm transition-colors",
               active
-                ? "border-navy bg-cloud text-navy"
-                : "border-transparent text-slate hover:bg-cloud/70 hover:text-navy"
+                ? "border-navy bg-cloud font-semibold text-navy"
+                : "border-transparent font-medium text-slate hover:bg-cloud/70 hover:text-navy"
             )}
           >
-            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.3} />
             {!collapsed && <span className="truncate">{label}</span>}
           </Link>
         </SidebarMenuButton>
@@ -218,10 +220,10 @@ export function AppSidebar() {
         )}
 
         <SidebarGroup className="px-2 pb-4">
-          {/* Section label for platform owner */}
-          {showPlatformNav && !collapsed && (
-            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-              Platform
+          {/* Workspace caps label — agency name (or PLATFORM for super admins) */}
+          {!collapsed && (
+            <p className="px-3 pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-faint">
+              {showPlatformNav ? "Platform" : agency?.name ?? "Workspace"}
             </p>
           )}
           <SidebarGroupContent>

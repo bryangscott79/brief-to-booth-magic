@@ -543,14 +543,15 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Strategic Elements</h2>
-          <p className="text-muted-foreground">
-            {completedCount} of {ELEMENT_ORDER.length} elements ready — click any to expand
-          </p>
-        </div>
+      {/* Header — the sheet band owns the step title; keep only the
+          progress spec + actions inside the sheet. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[13px] text-slate">
+          <span className="font-mono font-medium text-navy">
+            {completedCount}/{ELEMENT_ORDER.length}
+          </span>{" "}
+          elements ready — click any to expand
+        </p>
         <div className="flex gap-3">
           <Button
             onClick={() => generateAllElements(completedCount > 0)}

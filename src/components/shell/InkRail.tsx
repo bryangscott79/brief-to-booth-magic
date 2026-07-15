@@ -1,9 +1,17 @@
 // InkRail — the Flow C navy reference rail: r20, navy ink ground, caps section
 // labels colored by gradient stop with an 8px swatch, hairline dividers at
 // rgba(255,255,255,0.14), footer pinned with margin-top auto.
+//
+// The rail is a collapsible drawer: a chevron in its top-right corner
+// collapses it to a slim navy tab on the right edge ("REFERENCE"), and the
+// work sheet (flex-1) flexes into the reclaimed width. Open/closed persists
+// in localStorage (canopy.inkrail.open); default open.
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const OPEN_KEY = "canopy.inkrail.open";
 
 /** Gradient-stop accents for rail section labels */
 export type RailAccent = "sky" | "blue" | "violet" | "purple" | "pink";
@@ -24,14 +32,62 @@ interface InkRailProps {
 }
 
 export function InkRail({ children, footer, className }: InkRailProps) {
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(OPEN_KEY) !== "false";
+  });
+
+  const setOpenPersisted = (v: boolean) => {
+    setOpen(v);
+    try {
+      window.localStorage.setItem(OPEN_KEY, String(v));
+    } catch {
+      /* private mode — session-only */
+    }
+  };
+
+  if (!open) {
+    // Collapsed: slim navy tab on the right edge that reopens the rail.
+    return (
+      <button
+        type="button"
+        onClick={() => setOpenPersisted(true)}
+        aria-label="Open reference rail"
+        title="Open reference rail"
+        className={cn(
+          "flex h-fit shrink-0 items-center gap-2 self-start rounded-full bg-navy px-3 py-2 text-white/80 transition-colors animate-fade-in hover:text-white",
+          "lg:min-h-[148px] lg:w-10 lg:flex-col lg:items-center lg:rounded-sheet lg:px-0 lg:py-4",
+          className,
+        )}
+      >
+        <PanelRightOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+        <span
+          className="text-[10px] font-bold uppercase tracking-[0.12em] lg:[writing-mode:vertical-rl]"
+          aria-hidden="true"
+        >
+          Reference
+        </span>
+      </button>
+    );
+  }
+
   return (
     <aside
       className={cn(
-        "flex h-fit w-full shrink-0 flex-col self-start rounded-sheet bg-navy text-white lg:w-[372px]",
+        "relative flex h-fit w-full shrink-0 flex-col self-start rounded-sheet bg-navy text-white transition-[width] duration-300 animate-fade-in lg:w-[372px]",
         className,
       )}
       style={{ padding: "26px 28px" }}
     >
+      <button
+        type="button"
+        onClick={() => setOpenPersisted(false)}
+        aria-label="Collapse reference rail"
+        title="Collapse reference rail"
+        className="absolute right-4 top-5 rounded-btn p-1 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+      >
+        <PanelRightClose className="h-3.5 w-3.5" strokeWidth={1.5} />
+      </button>
       {children}
       {footer && (
         <div className="mt-auto border-t pt-4" style={{ borderColor: "rgba(255,255,255,0.14)" }}>

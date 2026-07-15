@@ -6,6 +6,8 @@ import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface WorkSheetProps {
+  /** Caps-mono contextual line above the title (step context, project facts) */
+  eyebrow?: ReactNode;
   title?: ReactNode;
   subtitle?: ReactNode;
   /** Right side of the header band — chips, counts, small actions */
@@ -17,6 +19,7 @@ interface WorkSheetProps {
 }
 
 export function WorkSheet({
+  eyebrow,
   title,
   subtitle,
   headerRight,
@@ -24,13 +27,18 @@ export function WorkSheet({
   className,
   bodyClassName,
 }: WorkSheetProps) {
-  const hasHeader = Boolean(title || subtitle || headerRight);
+  const hasHeader = Boolean(eyebrow || title || subtitle || headerRight);
 
   return (
     <section className={cn("rounded-sheet border border-cloud-line bg-card", className)}>
       {hasHeader && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-sheet border-b border-cloud-line bg-cloud px-6 py-5 md:px-8">
           <div className="min-w-0">
+            {eyebrow && (
+              <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                {eyebrow}
+              </p>
+            )}
             {title && (
               <h2 className="text-xl font-bold leading-[26px] tracking-[-0.01em] text-navy">
                 {title}

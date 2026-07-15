@@ -24,6 +24,7 @@ import {
   Square,
   Play,
 } from "lucide-react";
+import { PageHeader, EmptyState } from "@/components/shell";
 import { RenderPromptDialog } from "@/components/common/RenderPromptDialog";
 import { RhinoUploadPanel } from "@/components/rhino/RhinoUploadPanel";
 import { RhinoGallery } from "@/components/rhino/RhinoGallery";
@@ -174,19 +175,25 @@ export default function FilesPage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : !projectId ? (
-          <div className="text-center py-24">
-            <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-40" />
-            <p className="text-muted-foreground">Select a project to view files</p>
-          </div>
+          <EmptyState
+            icon={FolderOpen}
+            title="No project selected"
+            body="Select a project to view its files and media."
+            className="py-24"
+          />
         ) : (
           <div className="space-y-6">
             {/* Header */}
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Files & Media</h1>
-              <p className="text-muted-foreground text-sm mt-0.5">
-                Project images, 3D renders with AI polish, and video generation
-              </p>
-            </div>
+            <PageHeader
+              eyebrow={
+                <>
+                  Project library · {savedImages.length + rhinoRenders.length} asset
+                  {savedImages.length + rhinoRenders.length === 1 ? "" : "s"}
+                </>
+              }
+              title="Files &amp; Media"
+              subtitle="Project images, 3D renders with AI polish, and video generation."
+            />
 
             <Tabs defaultValue="images">
               <TabsList className="mb-2">
@@ -217,12 +224,13 @@ export default function FilesPage() {
               {/* ── IMAGES TAB ── */}
               <TabsContent value="images" className="space-y-5 mt-4">
                 {savedImages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-28 text-center border border-dashed rounded-xl border-border/60">
-                    <ImageIcon className="h-10 w-10 mb-4 text-muted-foreground opacity-30" />
-                    <h3 className="text-base font-medium mb-1">No images yet</h3>
-                    <p className="text-sm text-muted-foreground max-w-xs">
-                      Generate renders on the Prompts page — they'll appear here automatically.
-                    </p>
+                  <div className="border border-dashed rounded-media border-cloud-line">
+                    <EmptyState
+                      icon={ImageIcon}
+                      title="No images yet"
+                      body="Generate renders on the Prompts page — they'll appear here automatically."
+                      className="py-24"
+                    />
                   </div>
                 ) : (
                   <>

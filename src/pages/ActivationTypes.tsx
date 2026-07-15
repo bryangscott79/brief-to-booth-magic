@@ -11,7 +11,6 @@ import { Loader2, Plus, ChevronRight, Sparkles, Star, Filter } from "lucide-reac
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +36,7 @@ import {
 } from "@/hooks/useActivationTypes";
 import { useAgency } from "@/hooks/useAgency";
 import { useIndustries, useVocabulary } from "@/hooks/useIndustries";
+import { PageHeader, EmptyState, SectionLabel } from "@/components/shell";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -145,31 +145,22 @@ export default function ActivationTypes() {
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold">{vocab.project_types}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Define what kinds of {vocab.projects.toLowerCase()} your agency works on, and upload
-              reference material so the AI understands each format.
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Showing {visibleTypes.length} of {(types ?? []).length}
-              {agencyIndustries.length > 0 && (
-                <>
-                  {" "}for{" "}
-                  <span className="text-foreground/80">
-                    {agencyIndustries.join(", ")}
-                  </span>
-                </>
-              )}
-              . Built-in types are managed by super admins under Industries.
-            </p>
-          </div>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New {vocab.project_type.toLowerCase()}
-          </Button>
-        </div>
+        <PageHeader
+          eyebrow={
+            <>
+              Agency · {visibleTypes.length} of {(types ?? []).length} types
+              {agencyIndustries.length > 0 && <> · {agencyIndustries.join(", ")}</>}
+            </>
+          }
+          title={vocab.project_types}
+          subtitle={`Define what kinds of ${vocab.projects.toLowerCase()} your agency works on — reference material teaches the AI each format.`}
+          actions={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New {vocab.project_type.toLowerCase()}
+            </Button>
+          }
+        />
 
         {/* Industry filter — only show when agency works in 2+ industries */}
         {filterableIndustries.length > 1 && (
@@ -204,16 +195,28 @@ export default function ActivationTypes() {
         )}
 
         {Object.keys(grouped).length === 0 ? (
-          <Card className="p-10 text-center">
-            <Sparkles className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
-            <p className="text-muted-foreground">No {vocab.project_types.toLowerCase()} yet.</p>
+          <Card>
+            <EmptyState
+              icon={Sparkles}
+              title={`No ${vocab.project_types.toLowerCase()} yet`}
+              body="Create your first format so the AI understands what you build."
+              action={
+                <Button onClick={() => setShowCreate(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New {vocab.project_type.toLowerCase()}
+                </Button>
+              }
+            />
           </Card>
         ) : (
-          Object.entries(grouped).map(([category, list]) => (
+          Object.entries(grouped).map(([category, list], groupIdx) => (
             <div key={category}>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+              <SectionLabel
+                accent={(["sky", "blue", "violet", "purple", "pink"] as const)[groupIdx % 5]}
+                className="mb-2"
+              >
                 {CATEGORIES.find((c) => c.value === category)?.label || category}
-              </div>
+              </SectionLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {list!.map((type) => (
                   <Link
@@ -221,36 +224,36 @@ export default function ActivationTypes() {
                     to={`/agency/activation-types/${type.id}`}
                     className="group"
                   >
-                    <Card className="p-4 hover:border-primary/50 transition-colors cursor-pointer h-full">
+                    <Card className="p-4 hover:border-navy/30 transition-colors cursor-pointer h-full">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <div className="font-medium truncate">{type.label}</div>
+                            <div className="font-semibold text-navy truncate">{type.label}</div>
                             {type.isBuiltin && (
-                              <Star className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <Star className="h-3 w-3 text-slate-faint shrink-0" />
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
+                          <div className="font-mono text-[11px] text-slate-faint mt-0.5">
                             {type.slug}
                           </div>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        <ChevronRight className="h-4 w-4 text-slate opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
                       {type.description && (
-                        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                        <p className="text-xs text-slate mt-2 line-clamp-2">
                           {type.description}
                         </p>
                       )}
                       <div className="flex items-center gap-2 mt-3">
                         {type.defaultSqft && (
-                          <Badge variant="secondary" className="text-xs">
+                          <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-2 py-0.5 font-mono text-[10px] font-medium tracking-tight text-navy">
                             ~{type.defaultSqft} sqft
-                          </Badge>
+                          </span>
                         )}
                         {type.defaultScale && (
-                          <Badge variant="outline" className="text-xs">
+                          <span className="inline-flex items-center rounded-full bg-cloud px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate">
                             {type.defaultScale}
-                          </Badge>
+                          </span>
                         )}
                       </div>
                     </Card>

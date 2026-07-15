@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Loader2, Save, Plus, X, Star, RotateCcw } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Plus, X, RotateCcw } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader, StatusChip } from "@/components/shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -187,28 +188,17 @@ export default function ActivationTypeDashboard() {
           </Link>
         </Button>
 
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold">{type.label}</h1>
-              {isBuiltin && (
-                <Badge variant="secondary" className="gap-1">
-                  <Star className="h-3 w-3" />
-                  Built-in
-                </Badge>
-              )}
-              {hasOverride && (
-                <Badge className="bg-primary/15 text-primary border border-primary/30">
-                  Customized
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-              {type.description || "No description yet."}
-            </p>
-          </div>
-
-          {isBuiltin && hasOverride && (
+        <PageHeader
+          eyebrow="Agency · Activation type"
+          title={type.label}
+          titleAside={
+            <>
+              {isBuiltin && <StatusChip variant="neutral">Built-in</StatusChip>}
+              {hasOverride && <StatusChip variant="generating">Customized</StatusChip>}
+            </>
+          }
+          subtitle={type.description || "No description yet."}
+          actions={isBuiltin && hasOverride ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" disabled={deleteOverride.isPending}>
@@ -237,8 +227,8 @@ export default function ActivationTypeDashboard() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          )}
-        </div>
+          ) : undefined}
+        />
 
         <Tabs defaultValue="template">
           <TabsList>

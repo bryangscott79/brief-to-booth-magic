@@ -33,9 +33,9 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader, EmptyState, IconWell, SectionLabel, SpecMono, StatusChip } from "@/components/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjects } from "@/hooks/useProjects";
 
@@ -133,36 +133,26 @@ export default function AgencyPricing() {
     <AppLayout surface="light">
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">Pricing</h1>
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                Beta
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Build accurate cost estimates from your plans. Manage rate cards, regional
-              adjustments, and supplier feeds at the agency level — apply them to any project.
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow="Agency · Rate cards &amp; supplier feeds"
+          title="Pricing"
+          titleAside={<StatusChip variant="generating">Beta</StatusChip>}
+          subtitle="Rate cards, regional adjustments, and supplier feeds — applied to any project's bill of materials."
+        />
 
         {/* Overview card */}
         <Card>
           <CardContent className="flex flex-col sm:flex-row items-start gap-4 p-6">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Calculator className="h-6 w-6" />
-            </div>
+            <IconWell icon={Calculator} size={44} />
             <div className="flex-1 min-w-0">
-              <h2 className="text-base font-semibold mb-1">How it works</h2>
-              <p className="text-sm text-muted-foreground mb-3">
+              <h2 className="text-base font-semibold text-navy mb-1">How it works</h2>
+              <p className="text-[13px] leading-[19px] text-slate mb-3">
                 Add line items to a project's bill of materials, choose region and quality
                 tier, and the engine returns the best-available unit price for each line.
                 Per-project editing happens inside the project; everything below this header —
                 rate cards, supplier credentials, regional grids — lives at the agency.
               </p>
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-xs text-slate-faint">
                 Coverage today is strongest for architecture, construction, and exhibit
                 builds. CSI MasterFormat divisions are wired in; Uniformat support is partial.
               </p>
@@ -173,10 +163,10 @@ export default function AgencyPricing() {
         {/* Projects with active BOMs */}
         <section className="space-y-3">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-base font-semibold">Projects with a bill of materials</h2>
+            <SectionLabel accent="blue">Projects with a bill of materials</SectionLabel>
             <Link
               to="/projects"
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="text-xs font-medium text-link hover:underline"
             >
               View all projects →
             </Link>
@@ -190,20 +180,19 @@ export default function AgencyPricing() {
             </Card>
           ) : projectsWithBoms.length === 0 ? (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Calculator className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <h3 className="text-sm font-medium mb-1">No bills of materials yet</h3>
-                <p className="text-xs text-muted-foreground max-w-sm mb-4">
-                  Start a BOM from any project. Open a project, jump into the spatial planner,
-                  then add line items — region and quality tier carry through automatically.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/projects">
-                    <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
-                    Pick a project
-                  </Link>
-                </Button>
-              </CardContent>
+              <EmptyState
+                icon={Calculator}
+                title="No bills of materials yet"
+                body="Start a BOM from any project — region and quality tier carry through automatically."
+                action={
+                  <Button asChild size="sm">
+                    <Link to="/projects">
+                      Pick a project
+                      <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                    </Link>
+                  </Button>
+                }
+              />
             </Card>
           ) : (
             <div className="space-y-2">
@@ -211,30 +200,29 @@ export default function AgencyPricing() {
                 <Link
                   key={project.id}
                   to={`/pricing?project=${project.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-primary/30 transition-colors"
+                  className="flex items-center justify-between gap-3 rounded-media border border-cloud-line bg-card px-4 py-3 hover:border-navy/30 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-semibold text-navy truncate">
                       {project.name || "Untitled project"}
                     </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-slate">
+                      <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-2 py-0.5 font-mono text-[11px] font-medium tracking-tight text-navy">
                         {rollup.item_count} line item{rollup.item_count === 1 ? "" : "s"}
                       </span>
                       {rollup.last_updated && (
-                        <>
-                          <span className="text-muted-foreground/40">·</span>
-                          <span>
-                            Updated{" "}
+                        <span>
+                          Updated{" "}
+                          <SpecMono className="text-[11px]">
                             {formatDistanceToNow(new Date(rollup.last_updated), {
                               addSuffix: true,
                             })}
-                          </span>
-                        </>
+                          </SpecMono>
+                        </span>
                       )}
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <ChevronRight className="h-4 w-4 text-slate shrink-0" />
                 </Link>
               ))}
             </div>
@@ -243,26 +231,22 @@ export default function AgencyPricing() {
 
         {/* Roadmap */}
         <section className="space-y-3">
-          <h2 className="text-base font-semibold">Coming soon</h2>
-          <p className="text-xs text-muted-foreground">
+          <SectionLabel accent="violet">Coming soon</SectionLabel>
+          <p className="text-xs text-slate">
             We're building toward a full Xactimate-class pricing engine for this account.
             These capabilities are planned next:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {ROADMAP_ITEMS.map((item) => {
-              const Icon = item.icon;
+            {ROADMAP_ITEMS.map((item, i) => {
+              const isGenerative = item.title === "Estimate with AI";
               return (
-                <Card key={item.title}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <Icon className="h-3.5 w-3.5" />
-                      </div>
-                      <CardTitle className="text-sm font-medium">{item.title}</CardTitle>
+                <Card key={item.title} className="border-l-[3px]" style={{ borderLeftColor: ["#8FD3F4", "#A78BFA", "#C084FC", "#F472B6"][i % 4] }}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2.5">
+                      <IconWell icon={item.icon} size={28} generative={isGenerative} />
+                      <h3 className="text-sm font-semibold text-navy">{item.title}</h3>
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <CardDescription className="text-xs">{item.body}</CardDescription>
+                    <p className="mt-2 text-xs leading-[18px] text-slate">{item.body}</p>
                   </CardContent>
                 </Card>
               );

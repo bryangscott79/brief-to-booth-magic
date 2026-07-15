@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeader, IconWell } from "@/components/shell";
 import { useCompanyProfile, useShowCosts, type ShowCost } from "@/hooks/useCompanyProfile";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -357,29 +358,25 @@ export default function CompanyProfilePage() {
     <AppLayout>
       <div className="container py-8 max-w-5xl space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
-              <Building2 className="h-6 w-6" />
-              Company Settings
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Configure your company branding for proposals and exports
-            </p>
-          </div>
-          <Button 
-            onClick={handleSaveProfile} 
-            disabled={!profileDirty || upsertProfile.isPending}
-            className="btn-glow"
-          >
-            {upsertProfile.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save Changes
-          </Button>
-        </div>
+        <PageHeader
+          eyebrow="Agency · Branding &amp; exports"
+          title="Company Settings"
+          subtitle="Configure your company branding for proposals and exports."
+          leading={<IconWell icon={Building2} size={44} />}
+          actions={
+            <Button
+              onClick={handleSaveProfile}
+              disabled={!profileDirty || upsertProfile.isPending}
+            >
+              {upsertProfile.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save Changes
+            </Button>
+          }
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">

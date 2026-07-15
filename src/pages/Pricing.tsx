@@ -28,7 +28,8 @@ import {
   X,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader, EmptyState, SectionLabel, SpecMono } from "@/components/shell";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,17 +108,19 @@ const UNITS = ["each", "sqft", "sqm", "lf", "lm", "cy", "cm", "gallon", "lb", "k
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+// Light-surface Flow C grammar: green = priced from your own data,
+// violet = AI estimate, amber = external feed, red = unpriced.
 const SOURCE_BADGE: Record<string, { label: string; tone: string }> = {
-  override:              { label: "Override",          tone: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
-  agency_rate_card:      { label: "Rate card",         tone: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  agency_inventory:      { label: "Inventory",         tone: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  ai_estimate:           { label: "AI estimate",       tone: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
-  commodity_feed:        { label: "Commodity feed",    tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
-  vendor_api:            { label: "Vendor API",        tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
-  rsmeans:               { label: "RSMeans",           tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
-  subcontractor_quote:   { label: "Sub quote",         tone: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  manual:                { label: "Manual",            tone: "bg-cloud text-foreground/70 border-slate-300" },
-  no_quote:              { label: "Unpriced",          tone: "bg-red-500/15 text-red-300 border-red-500/30" },
+  override:              { label: "Override",          tone: "bg-violet-soft text-[#6D4BC7] border-transparent" },
+  agency_rate_card:      { label: "Rate card",         tone: "bg-green-soft text-pass border-transparent" },
+  agency_inventory:      { label: "Inventory",         tone: "bg-green-soft text-pass border-transparent" },
+  ai_estimate:           { label: "AI estimate",       tone: "bg-violet-soft text-[#6D4BC7] border-transparent" },
+  commodity_feed:        { label: "Commodity feed",    tone: "bg-amber-soft text-warn border-transparent" },
+  vendor_api:            { label: "Vendor API",        tone: "bg-amber-soft text-warn border-transparent" },
+  rsmeans:               { label: "RSMeans",           tone: "bg-amber-soft text-warn border-transparent" },
+  subcontractor_quote:   { label: "Sub quote",         tone: "bg-green-soft text-pass border-transparent" },
+  manual:                { label: "Manual",            tone: "bg-cloud text-slate border-transparent" },
+  no_quote:              { label: "Unpriced",          tone: "bg-red-soft text-blocking border-transparent" },
 };
 
 function formatCurrency(amount: number | null, currency = "USD"): string {
@@ -191,9 +194,11 @@ export default function PricingPage() {
       <AppLayout surface="light">
         <div className="container py-12">
           <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No project selected. Open a project to manage its pricing.
-            </CardContent>
+            <EmptyState
+              icon={Calculator}
+              title="No project selected"
+              body="Open a project to manage its bill of materials and pricing."
+            />
           </Card>
         </div>
       </AppLayout>
@@ -204,20 +209,16 @@ export default function PricingPage() {
     <AppLayout surface="light">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center">
-              <Calculator className="h-5 w-5 text-[#A78BFA]" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Pricing</h1>
-              <p className="text-sm text-muted-foreground">
-                Bill of materials with real-time pricing — agency rate cards, AI estimates,
-                commodity feeds, and overrides.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          eyebrow={
+            <>
+              Pricing engine · {items.length} line item{items.length === 1 ? "" : "s"}
+            </>
+          }
+          title="Pricing"
+          subtitle="Bill of materials with real-time pricing — rate cards, AI estimates, feeds, and overrides."
+          actions={
+            <div className="flex items-center gap-2">
             <Select value={qualityTier} onValueChange={(v) => setQualityTier(v as any)}>
               <SelectTrigger className="w-32">
                 <SelectValue />
@@ -239,8 +240,9 @@ export default function PricingPage() {
               <Plus className="h-4 w-4 mr-2" />
               Add line item
             </Button>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         {/* Summary tiles */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -257,7 +259,7 @@ export default function PricingPage() {
         {/* Line items grouped by CSI division */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Line items</CardTitle>
+            <SectionLabel accent="blue">Line items</SectionLabel>
             <CardDescription>
               Edit quantity inline. Click a row to override pricing or change details.
             </CardDescription>
@@ -268,14 +270,18 @@ export default function PricingPage() {
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : items.length === 0 ? (
-              <div className="text-center py-16">
-                <Sparkles className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground mb-4">No line items yet.</p>
-                <Button variant="outline" onClick={() => setShowAdd(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add your first line item
-                </Button>
-              </div>
+              <EmptyState
+                icon={Sparkles}
+                title="No line items yet"
+                body="Add materials, equipment, and labor — the engine prices each line from the best available source."
+                action={
+                  <Button onClick={() => setShowAdd(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add your first line item
+                  </Button>
+                }
+                className="py-16"
+              />
             ) : (
               <div className="divide-y divide-border">
                 {Object.entries(grouped).map(([division, rows]) => {
@@ -284,12 +290,12 @@ export default function PricingPage() {
                     <div key={division}>
                       {/* Division header */}
                       <div className="px-5 py-2 bg-cloud/50 flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-widest text-foreground/55 font-medium">
+                        <SectionLabel accent="sky" className="text-[10px]">
                           {division}
-                        </span>
-                        <span className="text-sm font-semibold text-foreground/85">
+                        </SectionLabel>
+                        <SpecMono className="text-navy">
                           {formatCurrency(divisionTotal)}
-                        </span>
+                        </SpecMono>
                       </div>
                       {rows.map((item) => {
                         const p = pricedById.get(item.id);
@@ -336,8 +342,8 @@ export default function PricingPage() {
 
                 {/* Grand total footer */}
                 <div className="px-5 py-4 bg-cloud flex items-center justify-between">
-                  <span className="text-sm font-semibold">Grand total</span>
-                  <span className="text-2xl font-bold canopy-text-gradient">
+                  <span className="text-sm font-semibold text-navy">Grand total</span>
+                  <span className="font-mono text-2xl font-semibold tracking-tight canopy-text-gradient">
                     {formatCurrency(grandTotal)}
                   </span>
                 </div>
@@ -350,7 +356,7 @@ export default function PricingPage() {
         {summary.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Roll-up</CardTitle>
+              <SectionLabel accent="violet">Roll-up</SectionLabel>
               <CardDescription>
                 Summary by CSI division. Region: <span className="font-mono">{region}</span> · Quality:{" "}
                 <span className="font-mono">{qualityTier}</span>
@@ -512,7 +518,7 @@ function ItemRow({
 
       {/* Total */}
       <div className="w-32 text-right">
-        <div className="text-sm font-semibold">
+        <div className="font-mono text-sm font-semibold tracking-tight text-navy">
           {priced?.total_price !== undefined && priced.total_price !== null
             ? formatCurrency(priced.total_price)
             : "—"}
@@ -814,18 +820,18 @@ function SummaryTile({
   tone?: "neutral" | "violet" | "emerald" | "amber" | "red";
 }) {
   const toneClass = {
-    neutral: "text-foreground",
+    neutral: "text-navy",
     violet:  "canopy-text-gradient",
-    emerald: "text-emerald-400",
-    amber:   "text-amber-300",
-    red:     "text-red-300",
+    emerald: "text-pass",
+    amber:   "text-warn",
+    red:     "text-blocking",
   }[tone];
 
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
-        <div className={cn("text-2xl font-semibold mt-1", toneClass)}>{value}</div>
+        <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</div>
+        <div className={cn("font-mono text-2xl font-semibold tracking-tight mt-1", toneClass)}>{value}</div>
       </CardContent>
     </Card>
   );

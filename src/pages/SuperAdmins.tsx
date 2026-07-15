@@ -8,7 +8,8 @@ import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Crown, Loader2, UserPlus, Mail, Trash2, Clock, Shield } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
+import { PageHeader, SectionLabel } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,28 +98,31 @@ export default function SuperAdminsPage() {
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Crown className="h-5 w-5 text-white" />
+        <PageHeader
+          eyebrow={
+            <>
+              Platform · {admins.length} account{admins.length === 1 ? "" : "s"}
+            </>
+          }
+          title="Super Admins"
+          subtitle="Platform-level administrators with access to every agency."
+          leading={
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-square bg-amber-500">
+              <Crown className="h-5 w-5 text-white" strokeWidth={1.5} />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Super Admins</h1>
-              <p className="text-sm text-muted-foreground">
-                Platform-level administrators with access to every agency.
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => setInviteOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Invite super admin
-          </Button>
-        </div>
+          }
+          actions={
+            <Button onClick={() => setInviteOpen(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Invite super admin
+            </Button>
+          }
+        />
 
         {/* Current super admins */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Active</CardTitle>
+            <SectionLabel accent="blue">Active</SectionLabel>
             <CardDescription>
               {admins.length} {admins.length === 1 ? "account" : "accounts"} with super admin access.
             </CardDescription>
@@ -172,7 +176,7 @@ export default function SuperAdminsPage() {
         {/* Pending invites */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Pending invites</CardTitle>
+            <SectionLabel accent="violet">Pending invites</SectionLabel>
             <CardDescription>
               Users become super admins automatically when they sign up with these emails.
             </CardDescription>

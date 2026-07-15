@@ -32,6 +32,7 @@ import {
   Save,
 } from "lucide-react";
 import { useDropzone } from "react-dropzone";
+import { PageHeader, EmptyState, IconWell } from "@/components/shell";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -94,21 +95,24 @@ export default function KnowledgeBasePage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : !projectId ? (
-          <div className="text-center py-24">
-            <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-40" />
-            <p className="text-muted-foreground">Select a project to manage its knowledge base</p>
-          </div>
+          <EmptyState
+            icon={FolderOpen}
+            title="No project selected"
+            body="Select a project to manage its knowledge base."
+            className="py-24"
+          />
         ) : (
           <div className="space-y-8">
-            <div>
-              <h1 className="text-2xl font-semibold flex items-center gap-2">
-                <BookOpen className="h-6 w-6" />
-                Knowledge Base
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Upload previous projects, inspiration, pricing docs, materials specs — anything to inform AI generation beyond the brief.
-              </p>
-            </div>
+            <PageHeader
+              eyebrow={
+                <>
+                  Project · {files.length} document{files.length === 1 ? "" : "s"}
+                </>
+              }
+              title="Knowledge Base"
+              subtitle="Previous projects, inspiration, pricing docs, specs — anything that should inform generation."
+              leading={<IconWell icon={BookOpen} size={44} />}
+            />
 
             {/* Upload Zone */}
             <div
@@ -133,15 +137,18 @@ export default function KnowledgeBasePage() {
 
             {/* File List */}
             {files.length === 0 ? (
-              <Card className="element-card">
-                <CardContent className="py-12 text-center">
-                  <BookOpen className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-40" />
-                  <p className="text-muted-foreground">No files uploaded yet. Add reference materials to enhance AI generation.</p>
-                </CardContent>
+              <Card>
+                <EmptyState
+                  icon={BookOpen}
+                  title="No files uploaded yet"
+                  body="Add reference materials to enhance AI generation."
+                />
               </Card>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{files.length} file{files.length !== 1 ? "s" : ""} uploaded</p>
+                <p className="text-sm text-slate">
+                  <span className="font-mono font-medium text-navy">{files.length}</span> file{files.length !== 1 ? "s" : ""} uploaded
+                </p>
                 {files.map((file) => {
                   const isExpanded = expandedFile === file.id;
                   const currentText = editingText[file.id] ?? file.extracted_text ?? "";
@@ -152,10 +159,10 @@ export default function KnowledgeBasePage() {
                           {getFileIcon(file.file_type)}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{file.file_name}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{formatBytes(file.file_size_bytes || 0)}</span>
+                            <div className="flex items-center gap-2 text-xs text-slate">
+                              <span className="font-mono">{formatBytes(file.file_size_bytes || 0)}</span>
                               <span>•</span>
-                              <span>{new Date(file.created_at).toLocaleDateString()}</span>
+                              <span className="font-mono">{new Date(file.created_at).toLocaleDateString()}</span>
                               {file.extracted_text && (
                                 <>
                                   <span>•</span>

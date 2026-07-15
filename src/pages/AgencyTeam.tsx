@@ -16,7 +16,8 @@ import {
   Clock,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader, SectionLabel } from "@/components/shell";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -151,25 +152,28 @@ export default function AgencyTeam() {
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold">Team</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Members of {agency.name}. Owners and admins can invite new teammates and assign roles.
-            </p>
-          </div>
-          {canManage && (
-            <Button onClick={() => setInviteOpen(true)}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Invite member
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          eyebrow={
+            <>
+              {agency.name} · {members.length} member{members.length === 1 ? "" : "s"}
+            </>
+          }
+          title="Team"
+          subtitle="Owners and admins can invite new teammates and assign roles."
+          actions={
+            canManage ? (
+              <Button onClick={() => setInviteOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Invite member
+              </Button>
+            ) : undefined
+          }
+        />
 
         {/* Members */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Members</CardTitle>
+            <SectionLabel accent="blue">Members</SectionLabel>
             <CardDescription>
               {members.length} {members.length === 1 ? "person" : "people"} in this agency.
             </CardDescription>
@@ -248,7 +252,7 @@ export default function AgencyTeam() {
         {canManage && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Pending invites</CardTitle>
+              <SectionLabel accent="violet">Pending invites</SectionLabel>
               <CardDescription>
                 Invitations apply automatically when the invitee signs up.
               </CardDescription>

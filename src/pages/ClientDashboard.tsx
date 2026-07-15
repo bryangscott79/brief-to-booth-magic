@@ -34,6 +34,7 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { KnowledgeBasePanel } from "@/components/knowledge/KnowledgeBasePanel";
 import { BrandIntelligencePanel } from "@/components/admin/BrandIntelligencePanel";
+import { PageHeader, SpecMono } from "@/components/shell";
 
 function initialsFromName(name: string) {
   return name
@@ -78,13 +79,25 @@ function ClientHeader({
   onEdit: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 flex-wrap">
-      <div className="flex items-start gap-4 min-w-0">
+    <PageHeader
+      eyebrow={<>Client{client.industry ? <> · {client.industry}</> : null}</>}
+      title={client.name}
+      subtitle={
+        client.website ? (
+          <a
+            href={client.website}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 hover:text-navy"
+          >
+            <Globe className="h-3 w-3" />
+            <span className="truncate max-w-[260px]">{client.website}</span>
+          </a>
+        ) : undefined
+      }
+      leading={
         <div
-          className={cn(
-            "flex h-16 w-16 shrink-0 items-center justify-center rounded-xl overflow-hidden",
-            client.logo_url ? "bg-muted" : "bg-primary/10"
-          )}
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-media overflow-hidden bg-cloud"
         >
           {client.logo_url ? (
             <img
@@ -93,35 +106,19 @@ function ClientHeader({
               className="h-full w-full object-contain"
             />
           ) : (
-            <span className="text-lg font-semibold text-primary">
+            <span className="text-lg font-semibold text-navy">
               {initialsFromName(client.name) || "?"}
             </span>
           )}
         </div>
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold leading-tight truncate">{client.name}</h1>
-          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-            {client.industry && <span>{client.industry}</span>}
-            {client.website && (
-              <a
-                href={client.website}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 hover:text-foreground"
-              >
-                <Globe className="h-3 w-3" />
-                <span className="truncate max-w-[260px]">{client.website}</span>
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <Button variant="outline" onClick={onEdit}>
-        <Edit className="mr-2 h-4 w-4" />
-        Edit client
-      </Button>
-    </div>
+      }
+      actions={
+        <Button variant="outline" onClick={onEdit}>
+          <Edit className="mr-2 h-4 w-4" />
+          Edit client
+        </Button>
+      }
+    />
   );
 }
 
@@ -273,8 +270,8 @@ function OverviewTab({ client, projectCount }: { client: Client; projectCount: n
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <p className="text-3xl font-bold">{projectCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="font-mono text-3xl font-semibold tracking-tight text-navy">{projectCount}</p>
+          <p className="text-xs text-slate mt-1">
             {projectCount === 0 ? "No projects yet" : `${projectCount} total`}
           </p>
         </CardContent>

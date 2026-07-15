@@ -1,4 +1,7 @@
 export { CanopyMark } from "./CanopyMark";
+export { PageHeader } from "./PageHeader";
+export { EmptyState, IconWell } from "./EmptyState";
+export { SectionLabel } from "./SectionLabel";
 export { StatusChip, type StatusChipVariant } from "./StatusChip";
 export { StatusSquare } from "./StatusSquare";
 export { SpecMono } from "./SpecMono";

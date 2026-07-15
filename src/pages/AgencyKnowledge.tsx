@@ -8,6 +8,7 @@
 import { Loader2 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/shell";
 import { useAgency } from "@/hooks/useAgency";
 import { KnowledgeBasePanel } from "@/components/knowledge/KnowledgeBasePanel";
 
@@ -39,13 +40,11 @@ export default function AgencyKnowledge() {
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Agency Knowledge</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Documents that inform how {agency.name} works — playbooks, rate standards,
-            style references, process notes. Used as context across every project.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow={<>{agency.name} · Shared context</>}
+          title="Agency Knowledge"
+          subtitle="Playbooks, rate standards, and style references — context for every project."
+        />
 
         <Card className="p-6">
           <KnowledgeBasePanel

@@ -14,6 +14,7 @@ import { AiUsageManager } from "@/components/admin/AiUsageManager";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { Settings2, Users, Layers, UserCog, Shield, BookOpen, Zap, MapPin, Crown, LayoutGrid, Activity, Sparkles, TrendingUp } from "lucide-react";
+import { PageHeader, IconWell } from "@/components/shell";
 
 export default function AdminSettings() {
   const { data: isSuperAdmin } = useIsSuperAdmin();
@@ -30,27 +31,25 @@ export default function AdminSettings() {
     <AppLayout>
       <div className="container max-w-7xl py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isPlatformView ? "bg-amber-500/10" : "bg-primary/10"}`}>
-              {isPlatformView
-                ? <Crown className="h-5 w-5 text-amber-600" />
-                : <Settings2 className="h-5 w-5 text-primary" />
-              }
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                {isPlatformView ? "Platform Admin" : "Agency Settings"}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {isPlatformView
-                  ? "Platform-wide accounts and shared defaults that every agency inherits"
-                  : "Configure project types, manage clients, and build brand intelligence"
-                }
-              </p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          className="mb-8"
+          eyebrow={isPlatformView ? "Platform · Accounts &amp; defaults" : "Agency · Configuration"}
+          title={isPlatformView ? "Platform Admin" : "Agency Settings"}
+          subtitle={
+            isPlatformView
+              ? "Platform-wide accounts and shared defaults that every agency inherits."
+              : "Configure project types, manage clients, and build brand intelligence."
+          }
+          leading={
+            isPlatformView ? (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-square bg-amber-500">
+                <Crown className="h-5 w-5 text-white" strokeWidth={1.5} />
+              </div>
+            ) : (
+              <IconWell icon={Settings2} size={44} />
+            )
+          }
+        />
 
         {isPlatformView ? (
           // ─── PLATFORM ADMIN VIEW ─────────────────────────────────────────

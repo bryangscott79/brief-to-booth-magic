@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader, StatusChip } from "@/components/shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { useToast } from "@/hooks/use-toast";
@@ -108,28 +109,17 @@ export default function AdminIndustryDashboard() {
         </Button>
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center shrink-0">
-              <Icon className="h-6 w-6 text-[#A78BFA]" />
+        <PageHeader
+          eyebrow={<>Platform · Industry · {industry.slug}</>}
+          title={industry.label}
+          titleAside={industry.is_builtin ? <StatusChip variant="neutral">Built-in</StatusChip> : undefined}
+          subtitle={industry.description || undefined}
+          leading={
+            <div className="h-14 w-14 rounded-media bg-gradient-to-br from-[#A78BFA]/20 to-[#F472B6]/20 border border-cloud-line flex items-center justify-center shrink-0">
+              <Icon className="h-6 w-6 text-[#6D4BC7]" strokeWidth={1.3} />
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold">{industry.label}</h1>
-                {industry.is_builtin && (
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    <Star className="h-3 w-3" />
-                    Built-in
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground font-mono mt-0.5">{industry.slug}</p>
-              {industry.description && (
-                <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{industry.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -538,16 +528,16 @@ function SummaryTile({
   tone?: "neutral" | "violet" | "emerald" | "amber" | "red";
 }) {
   const toneClass = {
-    neutral: "text-foreground",
-    violet: "text-[#A78BFA]",
-    emerald: "text-emerald-400",
-    amber: "text-amber-300",
-    red: "text-red-300",
+    neutral: "text-navy",
+    violet: "text-[#6D4BC7]",
+    emerald: "text-pass",
+    amber: "text-warn",
+    red: "text-blocking",
   }[tone];
   return (
-    <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4">
-      <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
-      <div className={`text-3xl font-semibold mt-1 ${toneClass}`}>{value}</div>
+    <div className="rounded-media border border-cloud-line bg-card p-4">
+      <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</div>
+      <div className={`font-mono text-3xl font-semibold tracking-tight mt-1 ${toneClass}`}>{value}</div>
     </div>
   );
 }

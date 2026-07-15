@@ -50,6 +50,8 @@ import {
   Share2,
 } from "lucide-react";
 import { useProjects, DBProject } from "@/hooks/useProjects";
+import { useAgency } from "@/hooks/useAgency";
+import { PageHeader, EmptyState, SectionLabel } from "@/components/shell";
 import { useProjectStore } from "@/store/projectStore";
 import { useIsAdmin } from "@/hooks/useAdminRole";
 import { useAuth } from "@/hooks/useAuth";
@@ -159,6 +161,7 @@ export default function ProjectsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: isAdmin } = useIsAdmin();
+  const { agency } = useAgency();
 
   // Admin mode fetches all projects; non-admin always fetches own
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("mine");
@@ -355,18 +358,20 @@ export default function ProjectsPage() {
     <AppLayout>
       <div className="container py-12">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">
-              {adminMode ? "All Projects" : "Your Projects"}
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              {adminMode
-                ? `${filtered.length} project${filtered.length !== 1 ? "s" : ""} across all users`
-                : "Manage your brief response projects"}
-            </p>
-          </div>
-
+        <PageHeader
+          className="mb-6"
+          eyebrow={
+            <>
+              {agency?.name ?? "Workspace"} · {filtered.length} {adminMode ? "projects · all users" : `active project${filtered.length !== 1 ? "s" : ""}`}
+            </>
+          }
+          title={adminMode ? "All Projects" : "Your Projects"}
+          subtitle={
+            adminMode
+              ? "Every project across the agency — open any to review or edit."
+              : "From brief to booth — pick up where you left off."
+          }
+          actions={
           <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setIsSuiteCreate(false); }}>
             <DialogTrigger asChild>
               <Button className="btn-glow">
@@ -442,7 +447,8 @@ export default function ProjectsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
 
         {/* Filter bar */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -569,27 +575,26 @@ export default function ProjectsPage() {
 
         {/* Empty state */}
         {filtered.length === 0 ? (
-          <Card className="element-card">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-              {search ? (
-                <>
-                  <h3 className="text-lg font-semibold mb-2">No results for "{search}"</h3>
-                  <p className="text-muted-foreground text-center text-sm">Try a different project name or user ID.</p>
-                </>
-              ) : (
-                <>
-                  <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
-                  <p className="text-muted-foreground text-center mb-6">
-                    Create your first project to start transforming briefs into booth designs.
-                  </p>
-                  <Button onClick={() => setIsDialogOpen(true)} className="btn-glow">
+          <Card>
+            {search ? (
+              <EmptyState
+                icon={Search}
+                title={`No results for "${search}"`}
+                body="Try a different project name or user ID."
+              />
+            ) : (
+              <EmptyState
+                icon={FolderOpen}
+                title="No projects yet"
+                body="Create your first project to start transforming briefs into booth designs."
+                action={
+                  <Button onClick={() => setIsDialogOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Create First Project
                   </Button>
-                </>
-              )}
-            </CardContent>
+                }
+              />
+            )}
           </Card>
         ) : viewMode === "table" ? (
           // ── Table view — grouped by client ─────────────────────────
@@ -597,13 +602,10 @@ export default function ProjectsPage() {
             {groupedByClient.map((group) => (
               <div key={group.key} className="space-y-2">
                 <div className="flex items-center gap-2 px-1">
-                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {group.name}
-                  </h3>
-                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                  <SectionLabel accent="blue">{group.name}</SectionLabel>
+                  <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-1.5 font-mono text-[10px] font-medium text-navy">
                     {group.projects.length}
-                  </Badge>
+                  </span>
                 </div>
                 <Card className="overflow-hidden">
                   <div className="divide-y divide-border">

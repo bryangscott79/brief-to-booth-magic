@@ -29,7 +29,8 @@ import {
   Database,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { PageHeader, SectionLabel } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -156,35 +157,37 @@ export default function AdminIndustries() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Crown className="h-5 w-5 text-white" />
+        <PageHeader
+          eyebrow={
+            <>
+              Platform · {industries.length} industr{industries.length === 1 ? "y" : "ies"}
+            </>
+          }
+          title="Industries"
+          subtitle="The verticals Canopy serves — each with its own vocabulary, taxonomy, and knowledge base."
+          leading={
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-square bg-amber-500">
+              <Crown className="h-5 w-5 text-white" strokeWidth={1.5} />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Industries</h1>
-              <p className="text-sm text-muted-foreground">
-                The verticals Canopy serves. Each industry has its own vocabulary, project-type
-                taxonomy, and global knowledge base.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or slug…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              New industry
-            </Button>
-          </div>
-        </div>
+          }
+          actions={
+            <>
+              <div className="relative w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or slug…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New industry
+              </Button>
+            </>
+          }
+        />
 
         {/* Schema-not-ready banner */}
         {!isSchemaReady && !isLoading && (
@@ -216,7 +219,7 @@ export default function AdminIndustries() {
         {/* List */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">All industries</CardTitle>
+            <SectionLabel accent="blue">All industries</SectionLabel>
             <CardDescription>
               Click an industry to manage its project types, knowledge, and vocabulary.
             </CardDescription>
@@ -595,16 +598,16 @@ function SummaryTile({
   tone?: "neutral" | "violet" | "emerald" | "amber" | "red";
 }) {
   const toneClass = {
-    neutral: "text-foreground",
-    violet: "text-[#A78BFA]",
-    emerald: "text-emerald-400",
-    amber: "text-amber-300",
-    red: "text-red-300",
+    neutral: "text-navy",
+    violet: "text-[#6D4BC7]",
+    emerald: "text-pass",
+    amber: "text-warn",
+    red: "text-blocking",
   }[tone];
   return (
-    <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4">
-      <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
-      <div className={`text-3xl font-semibold mt-1 ${toneClass}`}>{value}</div>
+    <div className="rounded-media border border-cloud-line bg-card p-4">
+      <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</div>
+      <div className={`font-mono text-3xl font-semibold tracking-tight mt-1 ${toneClass}`}>{value}</div>
     </div>
   );
 }

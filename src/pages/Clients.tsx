@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useClients, useUpsertClient, type Client } from "@/hooks/useClients";
 import { useAgency } from "@/hooks/useAgency";
+import { PageHeader, EmptyState } from "@/components/shell";
 import { cn } from "@/lib/utils";
 
 function initialsFromName(name: string) {
@@ -80,17 +80,17 @@ function ClientCard({ client, projectCount }: { client: Client; projectCount: nu
           </div>
 
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold leading-tight truncate">{client.name}</h3>
+            <h3 className="text-base font-semibold leading-tight truncate text-navy">{client.name}</h3>
             {client.industry && (
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{client.industry}</p>
+              <p className="text-xs text-slate mt-0.5 truncate">{client.industry}</p>
             )}
             <div className="mt-3 flex items-center justify-between gap-2">
-              <Badge variant="secondary" className="text-[10px]">
+              <span className="inline-flex items-center rounded-full border border-cloud-line bg-white px-2 py-0.5 font-mono text-[10px] font-medium tracking-tight text-navy">
                 {projectCount} project{projectCount === 1 ? "" : "s"}
-              </Badge>
+              </span>
               <Link
                 to={`/clients/${client.id}`}
-                className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                className="flex items-center gap-1 text-xs font-medium text-link hover:underline"
               >
                 Open
                 <ArrowRight className="h-3 w-3" />
@@ -145,14 +145,16 @@ export default function ClientsPage() {
     <AppLayout>
       <div className="container py-12">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">Clients</h1>
-            <p className="text-muted-foreground text-sm">
-              {sorted.length} client{sorted.length === 1 ? "" : "s"}
-            </p>
-          </div>
-
+        <PageHeader
+          className="mb-6"
+          eyebrow={
+            <>
+              {agency?.name ?? "Workspace"} · {sorted.length} client{sorted.length === 1 ? "" : "s"}
+            </>
+          }
+          title="Clients"
+          subtitle="Brands your agency designs for — each carries its own intelligence and projects."
+          actions={
           <Dialog
             open={open}
             onOpenChange={(v) => {
@@ -245,7 +247,8 @@ export default function ClientsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
 
         {/* Body */}
         {isLoading ? (
@@ -253,18 +256,18 @@ export default function ClientsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : sorted.length === 0 ? (
-          <Card className="element-card">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <Users className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No clients yet</h3>
-              <p className="text-muted-foreground text-center mb-6 text-sm">
-                Create your first client to organize projects and brand work.
-              </p>
-              <Button onClick={() => setOpen(true)} className="btn-glow">
-                <Plus className="mr-2 h-4 w-4" />
-                Add your first client
-              </Button>
-            </CardContent>
+          <Card>
+            <EmptyState
+              icon={Users}
+              title="No clients yet"
+              body="Create your first client to organize projects and brand work."
+              action={
+                <Button onClick={() => setOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add your first client
+                </Button>
+              }
+            />
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

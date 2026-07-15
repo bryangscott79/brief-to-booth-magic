@@ -26,7 +26,8 @@ import {
   Building2,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader, SectionLabel } from "@/components/shell";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -254,17 +255,17 @@ function AgencyDetailDrawer({
           {/* ── Status / suspend / trial ─────────────────────────────── */}
           <TabsContent value="status" className="space-y-6 mt-4">
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3">
-                <div className="text-xs text-foreground/55">Members</div>
-                <div className="text-2xl font-semibold mt-0.5">{agency.member_count}</div>
+              <div className="rounded-square border border-cloud-line bg-cloud/50 p-3">
+                <div className="text-xs text-slate">Members</div>
+                <div className="font-mono text-2xl font-semibold tracking-tight text-navy mt-0.5">{agency.member_count}</div>
               </div>
-              <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3">
-                <div className="text-xs text-foreground/55">Clients</div>
-                <div className="text-2xl font-semibold mt-0.5">{agency.client_count}</div>
+              <div className="rounded-square border border-cloud-line bg-cloud/50 p-3">
+                <div className="text-xs text-slate">Clients</div>
+                <div className="font-mono text-2xl font-semibold tracking-tight text-navy mt-0.5">{agency.client_count}</div>
               </div>
-              <div className="rounded-lg border border-cloud-line bg-cloud/50 p-3">
-                <div className="text-xs text-foreground/55">Projects</div>
-                <div className="text-2xl font-semibold mt-0.5">{agency.project_count}</div>
+              <div className="rounded-square border border-cloud-line bg-cloud/50 p-3">
+                <div className="text-xs text-slate">Projects</div>
+                <div className="font-mono text-2xl font-semibold tracking-tight text-navy mt-0.5">{agency.project_count}</div>
               </div>
             </div>
 
@@ -694,28 +695,31 @@ export default function AdminAgencies() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Crown className="h-5 w-5 text-white" />
+        <PageHeader
+          eyebrow={
+            <>
+              Platform · {agencies?.length ?? 0} agenc{(agencies?.length ?? 0) === 1 ? "y" : "ies"}
+            </>
+          }
+          title="Agencies"
+          subtitle="Suspend, disable, set trial windows, and feature-flag every agency on the platform."
+          leading={
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-square bg-amber-500">
+              <Crown className="h-5 w-5 text-white" strokeWidth={1.5} />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Agencies</h1>
-              <p className="text-sm text-muted-foreground">
-                Suspend, disable, set trial windows, and feature-flag every agency on the platform.
-              </p>
+          }
+          actions={
+            <div className="relative w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, slug, or owner email…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
             </div>
-          </div>
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, slug, or owner email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats summary */}
         {agencies && (
@@ -747,7 +751,7 @@ export default function AdminAgencies() {
         {/* List */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">All agencies</CardTitle>
+            <SectionLabel accent="blue">All agencies</SectionLabel>
             <CardDescription>
               Click an agency to open its access controls.
             </CardDescription>
@@ -873,17 +877,17 @@ function SummaryCard({
   tone?: "neutral" | "emerald" | "sky" | "amber" | "red";
 }) {
   const toneClass = {
-    neutral: "text-foreground",
-    emerald: "text-emerald-400",
-    sky: "text-sky-300",
-    amber: "text-amber-300",
-    red: "text-red-300",
+    neutral: "text-navy",
+    emerald: "text-pass",
+    sky: "text-[#22729C]",
+    amber: "text-warn",
+    red: "text-blocking",
   }[tone];
 
   return (
-    <div className="rounded-xl border border-cloud-line bg-cloud/50 p-4">
-      <div className="text-[10px] uppercase tracking-widest text-foreground/55">{label}</div>
-      <div className={cn("text-3xl font-semibold mt-1", toneClass)}>{value}</div>
+    <div className="rounded-media border border-cloud-line bg-card p-4">
+      <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</div>
+      <div className={cn("font-mono text-3xl font-semibold tracking-tight mt-1", toneClass)}>{value}</div>
     </div>
   );
 }

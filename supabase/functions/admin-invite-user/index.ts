@@ -104,7 +104,9 @@ Deno.serve(async (req) => {
     const { data: inviteData, error: inviteError } =
       await adminClient.auth.admin.inviteUserByEmail(email, {
         data: { invited_role: role },
-        redirectTo: `${req.headers.get("origin") ?? supabaseUrl}/auth`,
+        // ?type=invite lands the invitee in Auth's set-password mode —
+        // a bare /auth shows a sign-in form they have no password for.
+        redirectTo: `${req.headers.get("origin") ?? supabaseUrl}/auth?type=invite`,
       });
 
     if (inviteError) {

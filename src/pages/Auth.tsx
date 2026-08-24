@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,40 @@ export default function AuthPage() {
   const [showBetaRequest, setShowBetaRequest] = useState(false);
   const [betaSubmitted, setBetaSubmitted] = useState(false);
 
-  const isRecovery = searchParams.get("type") === "recovery";
+  // "Set a password" mode serves two flows that arrive by email link:
+  //   ?type=recovery — password reset
+  //   ?type=invite   — first sign-in from an admin invite (no password exists yet)
+  // Supabase also announces recovery links via the PASSWORD_RECOVERY auth
+  // event (the tokens ride the URL hash and are consumed by the client), so
+  // we listen for that too in case the query param was lost in a redirect.
+  const typeParam = searchParams.get("type");
+  const [recoveryEvent, setRecoveryEvent] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const isSetPassword = typeParam === "recovery" || typeParam === "invite" || recoveryEvent;
+  const isInvite = typeParam === "invite";
+
+  useEffect(() => {
+    // Email links that failed verification come back with the reason in the
+    // URL hash (e.g. #error_code=otp_expired). Corporate mail scanners often
+    // "pre-click" one-time links, which burns the token before the human
+    // opens it — surface that clearly instead of a dead form.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const errorCode = hash.get("error_code");
+    if (errorCode) {
+      setLinkError(
+        errorCode === "otp_expired"
+          ? "That link has expired or was already used (some email systems pre-open links). Request a fresh one below — and open it directly in your browser."
+          : hash.get("error_description")?.replace(/\+/g, " ") ?? "This sign-in link is no longer valid. Request a fresh one below.",
+      );
+      // Clean the error out of the URL so a refresh doesn't re-toast.
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryEvent(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -153,11 +186,29 @@ export default function AuthPage() {
       return;
     }
 
+    // The email link must have established a session for updateUser to work.
+    // If it didn't (expired link, opened in a different browser, or a mail
+    // scanner consumed the one-time token), fail with a way forward instead
+    // of a cryptic "Auth session missing".
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      toast({
+        title: "This link is no longer valid",
+        description:
+          "It may have expired or already been used. Request a fresh link and open it directly in your browser.",
+        variant: "destructive",
+      });
+      setShowForgotPassword(true);
+      setIsLoading(false);
+      navigate("/auth", { replace: true });
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
       toast({ title: "Update failed", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Password updated" });
+      toast({ title: isInvite ? "Welcome to Canopy" : "Password updated" });
       navigate("/projects");
     }
     setIsLoading(false);
@@ -189,12 +240,21 @@ export default function AuthPage() {
         </Link>
 
         <div className="canopy-panel overflow-hidden">
-          {isRecovery ? (
-            /* ─── RECOVERY (new password) ──────────────────────────── */
+          {linkError && (
+            <div className="border-b border-amber-500/30 bg-amber-500/10 px-6 py-3 text-xs leading-relaxed text-amber-200">
+              {linkError}
+            </div>
+          )}
+          {isSetPassword ? (
+            /* ─── SET PASSWORD (recovery or first-time invite) ─────── */
             <form onSubmit={handleUpdatePassword}>
               <CardHeader>
-                <CardTitle>Set a new password</CardTitle>
-                <CardDescription>Enter a new password for your account.</CardDescription>
+                <CardTitle>{isInvite ? "Welcome to Canopy" : "Set a new password"}</CardTitle>
+                <CardDescription>
+                  {isInvite
+                    ? "You've been invited — choose a password to finish setting up your account."
+                    : "Enter a new password for your account."}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">

@@ -75,8 +75,12 @@ export default function AgencyTeam() {
 
   const handleInvite = async () => {
     try {
-      await invite.mutateAsync({ email: inviteEmail, role: inviteRole });
-      toast({ title: "Invite sent", description: `Invitation created for ${inviteEmail}.` });
+      const result = await invite.mutateAsync({ email: inviteEmail, role: inviteRole });
+      toast(
+        result?.attached
+          ? { title: "Member added", description: `${inviteEmail} already had an account and has joined the team.` }
+          : { title: "Invite sent", description: `${inviteEmail} will get an email link to set up their account.` },
+      );
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("member");

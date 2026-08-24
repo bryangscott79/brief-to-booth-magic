@@ -5,7 +5,7 @@
 // brand colors, and become its owner. Backfills any orphaned data (existing
 // projects/clients/KB docs the user owned before creating the agency).
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Loader2,
@@ -68,6 +68,34 @@ export default function OnboardingCreateAgency() {
       navigate("/projects", { replace: true });
     }
   }, [hasAgency, isLoading, navigate]);
+
+  // Smart join: an invited user with exactly ONE pending agency invite was
+  // clearly invited to that team — apply it automatically instead of letting
+  // them wander into creating a duplicate solo agency. Multiple invites (or
+  // none) still show the chooser / create form.
+  const autoJoinRef = useRef(false);
+  useEffect(() => {
+    if (autoJoinRef.current) return;
+    if (isLoading || invitesLoading || hasAgency) return;
+    const agencyInvites = pendingInvites.filter((i) => i.invite_type === "agency_member");
+    if (agencyInvites.length !== 1) return;
+    autoJoinRef.current = true;
+    const invite = agencyInvites[0];
+    acceptInvite
+      .mutateAsync(invite.id)
+      .then(() => {
+        toast({
+          title: invite.agency_name ? `Welcome to ${invite.agency_name}` : "Welcome aboard",
+          description: "Your invitation was applied automatically.",
+        });
+        navigate("/projects", { replace: true });
+      })
+      .catch(() => {
+        // Fall back to the manual chooser — the invite row is still listed.
+        autoJoinRef.current = false;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, invitesLoading, hasAgency, pendingInvites]);
 
   const agencyInvites = pendingInvites.filter((i) => i.invite_type === "agency_member");
 

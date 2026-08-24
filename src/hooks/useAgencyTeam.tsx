@@ -67,22 +67,21 @@ export function useInviteAgencyMember(agencyId: string | null | undefined) {
       const trimmed = email.trim().toLowerCase();
       if (!trimmed || !trimmed.includes("@")) throw new Error("Invalid email");
 
-      const { data, error } = await supabase
-        .from("pending_invites")
-        .insert({
-          email: trimmed,
-          invite_type: "agency_member",
-          agency_id: agencyId,
-          role,
-          invited_by: user.id,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      // The edge function does the whole job: existing accounts are attached
+      // to the agency immediately; new ones get a real invite email (landing
+      // on /auth?type=invite) plus a pending invite that onboarding applies.
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await supabase.functions.invoke("admin-invite-user", {
+        body: { email: trimmed, role, agency_id: agencyId },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      return res.data as { message: string; attached?: boolean };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agency-invites", agencyId] });
+      qc.invalidateQueries({ queryKey: ["agency-team", agencyId] });
     },
   });
 }

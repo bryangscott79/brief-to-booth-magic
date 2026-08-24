@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAdminProfiles, useInviteUser, usePlatformInvites, useManageAdminRole, useIsSuperAdmin, UserProfile } from "@/hooks/useAdminRole";
+import { useAdminAgencies } from "@/hooks/useAccessControl";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useAiUsageByUser,
@@ -66,15 +67,31 @@ function InviteDialog({
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
+  const [agencyId, setAgencyId] = useState<string>("none");
   const invite = useInviteUser();
+  // Agency targeting: the invitee lands directly on this agency's roster
+  // (existing accounts immediately; new ones on first sign-in).
+  const { data: agencies } = useAdminAgencies();
+
+  const targetsAgency = agencyId !== "none";
 
   const handleSubmit = async () => {
     if (!email.trim()) return;
     try {
-      await invite.mutateAsync({ email: email.trim(), role });
-      toast.success(`Invitation sent to ${email}`);
+      const result = await invite.mutateAsync({
+        email: email.trim(),
+        // super_admin is a platform grant — never an agency role
+        role: targetsAgency && role === "super_admin" ? "member" : role,
+        agencyId: targetsAgency ? agencyId : null,
+      });
+      toast.success(
+        result?.attached
+          ? `${email} already had an account — added to the agency.`
+          : `Invitation sent to ${email}`,
+      );
       setEmail("");
       setRole("member");
+      setAgencyId("none");
       onClose();
     } catch (err: any) {
       toast.error(err.message ?? "Failed to send invitation");
@@ -107,6 +124,33 @@ function InviteDialog({
             />
           </div>
 
+          {isSuperAdmin && (
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-agency">Agency</Label>
+              <Select value={agencyId} onValueChange={setAgencyId}>
+                <SelectTrigger id="invite-agency">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">No agency (platform only)</span>
+                      <span className="text-xs text-muted-foreground">They'll create or join an agency at onboarding</span>
+                    </div>
+                  </SelectItem>
+                  {(agencies ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">{a.name}</span>
+                        <span className="text-xs text-muted-foreground">{a.member_count} members · joins this team automatically</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="invite-role">Role</Label>
             <Select value={role} onValueChange={setRole}>
@@ -126,7 +170,7 @@ function InviteDialog({
                     <span className="text-xs text-muted-foreground">Manages their agency team and projects</span>
                   </div>
                 </SelectItem>
-                {isSuperAdmin && (
+                {isSuperAdmin && !targetsAgency && (
                   <SelectItem value="super_admin">
                     <div className="flex flex-col items-start">
                       <span className="font-medium">Platform Owner</span>

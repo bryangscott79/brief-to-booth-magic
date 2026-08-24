@@ -20,11 +20,41 @@ import {
   User,
   Clock,
   Building2,
+  Trash2,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { usePlatformOwner } from "@/contexts/PlatformOwnerContext";
 import { toast } from "sonner";
+import { useState } from "react";
+import {
+  useIsSuperAdmin,
+  useUserMemberships,
+  useInviteUser,
+  useRemoveAgencyMember,
+  useDeleteUserAccount,
+} from "@/hooks/useAdminRole";
+import { useAdminAgencies } from "@/hooks/useAccessControl";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -64,6 +94,172 @@ function StatCard({
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/8">
             <Icon className="h-4 w-4 text-primary" />
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Super-admin controls: which agencies this user belongs to, plus account
+ *  deletion. Members/agency admins never see this card. */
+function MembershipCard({ userId, userEmail }: { userId: string; userEmail: string | null }) {
+  const navigate = useNavigate();
+  const { data: isSuperAdmin } = useIsSuperAdmin();
+  const { data: memberships, isLoading } = useUserMemberships(userId, !!isSuperAdmin);
+  const { data: agencies } = useAdminAgencies();
+  const addToAgency = useInviteUser();
+  const removeMember = useRemoveAgencyMember();
+  const deleteAccount = useDeleteUserAccount();
+  const [addAgencyId, setAddAgencyId] = useState("");
+  const [addRole, setAddRole] = useState("member");
+
+  if (!isSuperAdmin) return null;
+
+  const memberAgencyIds = new Set((memberships ?? []).map((m) => m.agency_id));
+  const addable = (agencies ?? []).filter((a) => !memberAgencyIds.has(a.id));
+
+  const handleAdd = async () => {
+    if (!addAgencyId || !userEmail) return;
+    try {
+      await addToAgency.mutateAsync({ email: userEmail, role: addRole, agencyId: addAgencyId });
+      toast.success("Added to agency");
+      setAddAgencyId("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add to agency");
+    }
+  };
+
+  const handleRemove = async (agencyId: string, agencyName: string | null) => {
+    try {
+      await removeMember.mutateAsync({ agencyId, userId });
+      toast.success(`Removed from ${agencyName ?? "agency"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't remove member");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteAccount.mutateAsync(userId);
+      toast.success("Account deleted");
+      navigate("/admin");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete account");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          Agency Membership
+          <Badge variant="outline" className="ml-auto text-xs font-normal">
+            {memberships?.length ?? 0} agenc{(memberships?.length ?? 0) === 1 ? "y" : "ies"}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : (memberships ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Not a member of any agency — they'll be forced to create one at sign-in unless you add them below.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {(memberships ?? []).map((m) => (
+              <div key={m.membership_id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{m.agency_name ?? m.agency_slug ?? m.agency_id}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {m.role}
+                    {m.is_primary_owner && " · primary owner"}
+                  </p>
+                </div>
+                {!m.is_primary_owner && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleRemove(m.agency_id, m.agency_name)}
+                    disabled={removeMember.isPending}
+                    title="Remove from agency"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[220px] flex-1 space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Add to agency</p>
+            <Select value={addAgencyId} onValueChange={setAddAgencyId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose an agency…" />
+              </SelectTrigger>
+              <SelectContent>
+                {addable.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Select value={addRole} onValueChange={setAddRole}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="member">Member</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="viewer">Viewer</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handleAdd} disabled={!addAgencyId || !userEmail || addToAgency.isPending} className="gap-2">
+            {addToAgency.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            Add
+          </Button>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            Deleting the account removes their login, roles, and memberships. Their projects are preserved. Blocked while they still own an agency.
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 text-destructive hover:text-destructive shrink-0">
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete account
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {userEmail ?? "this account"}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently deletes their login and removes them from every agency. Projects they created are preserved. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete account
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </CardContent>
     </Card>
@@ -294,6 +490,9 @@ export default function AgencyAccountPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Agency membership management (super admin) */}
+        <MembershipCard userId={profile.user_id} userEmail={profile.email} />
 
         {/* Team roster */}
         <Card>

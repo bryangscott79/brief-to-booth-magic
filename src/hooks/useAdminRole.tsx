@@ -137,21 +137,77 @@ export function useAdminUsers() {
 }
 
 // ─── Invite user (admin/super_admin only) ─────────────────────────────────────
+/** Shared caller for the admin-invite-user function (invite + membership ops). */
+async function invokeInviteFunction(body: Record<string, unknown>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await supabase.functions.invoke("admin-invite-user", {
+    body,
+    headers: { Authorization: `Bearer ${session?.access_token}` },
+  });
+  if (res.error) throw new Error(res.error.message);
+  if (res.data?.error) throw new Error(res.data.error);
+  return res.data;
+}
+
 export function useInviteUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await supabase.functions.invoke("admin-invite-user", {
-        body: { email, role },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      if (res.error) throw new Error(res.error.message);
-      return res.data;
-    },
+    mutationFn: async ({ email, role, agencyId }: { email: string; role: string; agencyId?: string | null }) =>
+      invokeInviteFunction({ email, role, agency_id: agencyId ?? null }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-all-profiles"] });
       qc.invalidateQueries({ queryKey: ["admin-platform-invites"] });
+      qc.invalidateQueries({ queryKey: ["admin-user-memberships"] });
+      qc.invalidateQueries({ queryKey: ["agency-invites"] });
+    },
+  });
+}
+
+export interface UserMembership {
+  membership_id: string;
+  agency_id: string;
+  role: string;
+  joined_at: string | null;
+  agency_name: string | null;
+  agency_slug: string | null;
+  is_primary_owner: boolean;
+}
+
+/** A user's agency memberships (super admin only — served by the edge fn). */
+export function useUserMemberships(userId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["admin-user-memberships", userId],
+    enabled: !!userId && enabled,
+    queryFn: async (): Promise<UserMembership[]> => {
+      const data = await invokeInviteFunction({ action: "memberships", user_id: userId });
+      return (data?.memberships ?? []) as UserMembership[];
+    },
+  });
+}
+
+/** Remove a member from an agency (super admin, or owner/admin of that agency). */
+export function useRemoveAgencyMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ agencyId, userId }: { agencyId: string; userId: string }) =>
+      invokeInviteFunction({ action: "remove_member", agency_id: agencyId, user_id: userId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-user-memberships"] });
+      qc.invalidateQueries({ queryKey: ["agency-team"] });
+      qc.invalidateQueries({ queryKey: ["admin", "agencies"] });
+    },
+  });
+}
+
+/** Delete an auth account entirely (super admin only; blocked while they own an agency). */
+export function useDeleteUserAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) =>
+      invokeInviteFunction({ action: "delete_user", user_id: userId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-all-profiles"] });
+      qc.invalidateQueries({ queryKey: ["admin-user-memberships"] });
     },
   });
 }

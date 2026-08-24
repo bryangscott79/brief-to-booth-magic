@@ -144,7 +144,27 @@ async function invokeInviteFunction(body: Record<string, unknown>) {
     body,
     headers: { Authorization: `Bearer ${session?.access_token}` },
   });
-  if (res.error) throw new Error(res.error.message);
+  if (res.error) {
+    // supabase-js hides the response body behind error.context — dig the
+    // function's real message out instead of "non-2xx status code".
+    let detail: { error?: unknown; fn_version?: unknown } | null = null;
+    const ctx = (res.error as { context?: Response }).context;
+    if (ctx && typeof ctx.clone === "function") {
+      try {
+        detail = await ctx.clone().json();
+      } catch {
+        /* non-JSON body — fall back to the generic message */
+      }
+    }
+    if (detail?.error) {
+      throw new Error(
+        detail.fn_version
+          ? String(detail.error)
+          : `${String(detail.error)} — an older version of the invite function is still deployed; wait for the deploy (or redeploy it) and retry.`,
+      );
+    }
+    throw new Error(res.error.message);
+  }
   if (res.data?.error) throw new Error(res.data.error);
   return res.data;
 }

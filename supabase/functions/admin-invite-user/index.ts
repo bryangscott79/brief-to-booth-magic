@@ -33,8 +33,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const FN_VERSION = 2;
+
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
+  new Response(JSON.stringify({ ...(body as Record<string, unknown>), fn_version: FN_VERSION }), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
@@ -99,20 +101,24 @@ Deno.serve(async (req) => {
       if (!userId) return json({ error: "user_id required" }, 400);
       const { data, error } = await adminClient
         .from("agency_members")
-        .select("id, agency_id, role, joined_at, agencies:agency_id(name, slug, owner_user_id)")
+        .select("id, agency_id, role, joined_at")
         .eq("user_id", userId);
       if (error) return json({ error: error.message }, 500);
+      const agencyIds = [...new Set((data ?? []).map((m: Record<string, unknown>) => m.agency_id))];
+      const { data: agencyRows } = agencyIds.length
+        ? await adminClient.from("agencies").select("id, name, slug, owner_user_id").in("id", agencyIds)
+        : { data: [] };
+      const agencyById = new Map((agencyRows ?? []).map((a: Record<string, unknown>) => [a.id, a]));
       const memberships = (data ?? []).map((m: Record<string, unknown>) => {
-        const agency = Array.isArray(m.agencies) ? m.agencies[0] : m.agencies;
+        const agency = agencyById.get(m.agency_id) as Record<string, unknown> | undefined;
         return {
           membership_id: m.id,
           agency_id: m.agency_id,
           role: m.role,
           joined_at: m.joined_at,
-          agency_name: (agency as Record<string, unknown>)?.name ?? null,
-          agency_slug: (agency as Record<string, unknown>)?.slug ?? null,
-          is_primary_owner:
-            (agency as Record<string, unknown>)?.owner_user_id === userId,
+          agency_name: agency?.name ?? null,
+          agency_slug: agency?.slug ?? null,
+          is_primary_owner: agency?.owner_user_id === userId,
         };
       });
       return json({ memberships });
@@ -125,18 +131,22 @@ Deno.serve(async (req) => {
       if (!isSuper) return json({ error: "Forbidden: super admin only" }, 403);
       const { data, error } = await adminClient
         .from("agency_members")
-        .select("user_id, agency_id, role, agencies:agency_id(name, slug, owner_user_id)");
+        .select("user_id, agency_id, role");
       if (error) return json({ error: error.message }, 500);
+      const { data: agencyRows, error: agencyErr } = await adminClient
+        .from("agencies")
+        .select("id, name, slug, owner_user_id");
+      if (agencyErr) return json({ error: agencyErr.message }, 500);
+      const agencyById = new Map((agencyRows ?? []).map((a: Record<string, unknown>) => [a.id, a]));
       const memberships = (data ?? []).map((m: Record<string, unknown>) => {
-        const agency = Array.isArray(m.agencies) ? m.agencies[0] : m.agencies;
+        const agency = agencyById.get(m.agency_id) as Record<string, unknown> | undefined;
         return {
           user_id: m.user_id,
           agency_id: m.agency_id,
           role: m.role,
-          agency_name: (agency as Record<string, unknown>)?.name ?? null,
-          agency_slug: (agency as Record<string, unknown>)?.slug ?? null,
-          is_primary_owner:
-            (agency as Record<string, unknown>)?.owner_user_id === m.user_id,
+          agency_name: agency?.name ?? null,
+          agency_slug: agency?.slug ?? null,
+          is_primary_owner: agency?.owner_user_id === m.user_id,
         };
       });
       return json({ memberships });

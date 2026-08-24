@@ -669,7 +669,6 @@ export type Database = {
       feedback: {
         Row: {
           admin_notes: string | null
-          attachments: Json
           agency_id: string | null
           created_at: string
           description: string | null
@@ -688,7 +687,6 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
-          attachments?: Json
           agency_id?: string | null
           created_at?: string
           description?: string | null
@@ -707,7 +705,6 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
-          attachments?: Json
           agency_id?: string | null
           created_at?: string
           description?: string | null

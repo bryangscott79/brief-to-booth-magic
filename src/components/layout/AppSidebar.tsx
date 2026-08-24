@@ -16,6 +16,7 @@ import {
   BookOpen,
   Sparkles,
   Calculator,
+  MessageSquarePlus,
 } from "lucide-react";
 import { CanopyMark } from "@/components/shell";
 import {
@@ -47,6 +48,7 @@ const agencyNavItems = [
   { path: "/agency/pricing",           label: "Pricing",           icon: Calculator },
   { path: "/company",                  label: "Company Profile",   icon: Building2 },
   { path: "/agency/team",              label: "Team",              icon: Users },
+  { path: "/feedback",                 label: "Feedback",          icon: MessageSquarePlus },
 ];
 
 const platformOwnerNavItems = [
@@ -55,6 +57,7 @@ const platformOwnerNavItems = [
   { path: "/admin/industries",    label: "Industries",   icon: Sparkles },
   { path: "/admin/super-admins",  label: "Super Admins", icon: Crown },
   { path: "/platform-invites",    label: "Invites",      icon: Mail },
+  { path: "/feedback",            label: "Feedback",     icon: MessageSquarePlus },
 ];
 
 export function AppSidebar() {

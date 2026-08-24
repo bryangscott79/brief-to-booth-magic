@@ -20,7 +20,7 @@ import {
   Trash2,
   FileText,
   Code2,
-  Wand2,
+  
   Pencil,
   Presentation as PresentationIcon,
 } from "lucide-react";
@@ -100,7 +100,7 @@ export function DesignedDeck({
     removeSlide,
     updateSlideHtml,
     reset,
-    ping,
+    
   } = useDesignedDeck(projectId);
 
   // Pre-flight inputs — surfaced in the checklist so the user can confirm
@@ -184,36 +184,7 @@ export function DesignedDeck({
     });
   };
   const [draftHtml, setDraftHtml] = useState<string>("");
-  const [pingState, setPingState] = useState<
-    | { status: "idle" }
-    | { status: "running" }
-    | {
-        status: "ok";
-        anthropicKey?: "valid" | "invalid" | "configured" | "missing";
-        anthropicKeyError?: string | null;
-        validKeySource?: string | null;
-        deployToken?: string;
-        alternativeKeysFound?: string[];
-      }
-    | { status: "fail"; message: string }
-  >({ status: "idle" });
 
-  const handlePing = async () => {
-    setPingState({ status: "running" });
-    const res = await ping();
-    if (res.ok) {
-      setPingState({
-        status: "ok",
-        anthropicKey: res.anthropicKey,
-        anthropicKeyError: res.anthropicKeyError,
-        validKeySource: res.validKeySource,
-        deployToken: res.deployToken,
-        alternativeKeysFound: res.alternativeKeysFound,
-      });
-    } else {
-      setPingState({ status: "fail", message: res.error ?? "Unknown error" });
-    }
-  };
 
   // Filter the rendered-image set by the user's featured-selection
   // before sending to the deck designer. The deck only features what
@@ -469,115 +440,6 @@ export function DesignedDeck({
             </div>
           )}
 
-          {/* Diagnostic readout. The developer-facing "Test connection"
-            * button was removed from the UI (owner call) — the status spans
-            * below only render if a ping was triggered programmatically. */}
-          <div className="space-y-2 text-[11px]">
-            <div className="flex items-center gap-3">
-              {pingState.status === "ok" && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1",
-                    pingState.anthropicKey === "valid"
-                      ? "text-green-600"
-                      : pingState.anthropicKey === "invalid"
-                        ? "text-destructive"
-                        : pingState.anthropicKey === "configured"
-                          ? "text-green-600"
-                          : "text-amber-600",
-                  )}
-                >
-                  {pingState.anthropicKey === "valid" &&
-                    (pingState.validKeySource && pingState.validKeySource !== "ANTHROPIC_API_KEY"
-                      ? `✓ Key validated against Anthropic (using ${pingState.validKeySource} — fallback worked).`
-                      : "✓ Key validated against Anthropic — ready to generate.")}
-                  {pingState.anthropicKey === "invalid" &&
-                    "✗ Anthropic rejected the key — see fix below."}
-                  {pingState.anthropicKey === "configured" &&
-                    "✓ Function reachable, key set (not deep-validated)."}
-                  {pingState.anthropicKey === "missing" &&
-                    "⚠ Function reachable but ANTHROPIC_API_KEY is missing."}
-                </span>
-              )}
-              {pingState.status === "fail" && (
-                <span className="text-destructive">✗ {pingState.message}</span>
-              )}
-            </div>
-
-            {pingState.status === "ok" && pingState.deployToken && (
-              <p className="text-muted-foreground/70">
-                Deploy token: <span className="font-mono">{pingState.deployToken}</span>
-              </p>
-            )}
-
-            {/* Key VALUE is wrong — Anthropic rejected it. Most actionable
-              * case: the secret exists but the value is bad. */}
-            {pingState.status === "ok" && pingState.anthropicKey === "invalid" && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-2 text-destructive space-y-1.5">
-                <p className="font-medium">Anthropic rejected your API key.</p>
-                {pingState.anthropicKeyError && (
-                  <p className="text-[11px] font-mono opacity-80">
-                    {pingState.anthropicKeyError}
-                  </p>
-                )}
-                <p className="text-foreground/80">
-                  The secret named <code className="font-mono">ANTHROPIC_API_KEY</code>{" "}
-                  exists in Supabase, but the value isn't valid. Common causes:
-                </p>
-                <ul className="list-disc pl-4 text-foreground/80 space-y-0.5">
-                  <li>Trailing whitespace pasted with the key</li>
-                  <li>Key was revoked (e.g. you rotated it but Lovable kept the old value)</li>
-                  <li>Key belongs to a different Anthropic workspace / account</li>
-                </ul>
-                <p className="text-foreground/80">
-                  Fix:{" "}
-                  <a
-                    href="https://console.anthropic.com/settings/keys"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline hover:no-underline"
-                  >
-                    create a fresh key
-                  </a>
-                  , copy the entire string (no trailing space), then update{" "}
-                  <code className="font-mono">ANTHROPIC_API_KEY</code> in Lovable →
-                  Project Settings → Supabase → Edge Function Secrets. Run Test
-                  connection again — you should see "Key validated."
-                </p>
-              </div>
-            )}
-
-            {pingState.status === "ok" &&
-              pingState.anthropicKey === "missing" &&
-              (pingState.alternativeKeysFound?.length ?? 0) > 0 && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-2 text-amber-700">
-                  <p className="font-medium">Looks like a naming mismatch.</p>
-                  <p className="mt-1">
-                    The function expects{" "}
-                    <code className="font-mono text-[10px] bg-amber-500/10 px-1 py-0.5 rounded">
-                      ANTHROPIC_API_KEY
-                    </code>{" "}
-                    but found these instead:{" "}
-                    <span className="font-mono">
-                      {pingState.alternativeKeysFound!.join(", ")}
-                    </span>
-                    . Rename your secret to <code className="font-mono">ANTHROPIC_API_KEY</code>{" "}
-                    in Supabase → Edge Function Secrets.
-                  </p>
-                </div>
-              )}
-
-            {pingState.status === "ok" && pingState.anthropicKey === "missing" &&
-              (pingState.alternativeKeysFound?.length ?? 0) === 0 && (
-                <p className="text-amber-600">
-                  Set a secret named exactly{" "}
-                  <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">
-                    ANTHROPIC_API_KEY
-                  </code>{" "}
-                  in Lovable → Project Settings → Supabase → Edge Function Secrets.
-                </p>
-              )}
-          </div>
         </CardContent>
       </Card>
     );

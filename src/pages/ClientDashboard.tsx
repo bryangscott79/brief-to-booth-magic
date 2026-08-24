@@ -31,10 +31,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useClient, useUpsertClient, type Client } from "@/hooks/useClients";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
-import { cn } from "@/lib/utils";
 import { KnowledgeBasePanel } from "@/components/knowledge/KnowledgeBasePanel";
 import { BrandIntelligencePanel } from "@/components/admin/BrandIntelligencePanel";
-import { PageHeader, SpecMono } from "@/components/shell";
+import { PageHeader } from "@/components/shell";
 
 function initialsFromName(name: string) {
   return name

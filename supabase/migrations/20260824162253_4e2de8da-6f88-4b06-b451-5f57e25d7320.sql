@@ -1,0 +1,68 @@
+CREATE TABLE IF NOT EXISTS public.feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  submitter_email text,
+  agency_id uuid REFERENCES public.agencies(id) ON DELETE SET NULL,
+  project_id uuid REFERENCES public.projects(id) ON DELETE SET NULL,
+  type text NOT NULL DEFAULT 'bug' CHECK (type IN ('bug', 'feature', 'improvement')),
+  title text NOT NULL CHECK (char_length(title) BETWEEN 3 AND 200),
+  description text,
+  page_path text,
+  status text NOT NULL DEFAULT 'new'
+    CHECK (status IN ('new', 'under_review', 'planned', 'in_progress', 'shipped', 'declined')),
+  priority text CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+  admin_notes text,
+  reviewed_by uuid,
+  reviewed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.feedback TO authenticated;
+GRANT ALL ON public.feedback TO service_role;
+
+CREATE INDEX IF NOT EXISTS idx_feedback_agency ON public.feedback (agency_id, status);
+CREATE INDEX IF NOT EXISTS idx_feedback_user ON public.feedback (user_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON public.feedback (created_at DESC);
+
+CREATE TRIGGER update_feedback_updated_at
+  BEFORE UPDATE ON public.feedback
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY feedback_insert_own ON public.feedback
+  FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY feedback_select_own ON public.feedback
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
+
+CREATE POLICY feedback_select_review ON public.feedback
+  FOR SELECT TO authenticated
+  USING (
+    public.is_super_admin(auth.uid())
+    OR EXISTS (SELECT 1 FROM public.agency_members am
+               WHERE am.agency_id = feedback.agency_id
+                 AND am.user_id = auth.uid()
+                 AND am.role IN ('owner', 'admin'))
+  );
+
+CREATE POLICY feedback_update_review ON public.feedback
+  FOR UPDATE TO authenticated
+  USING (
+    public.is_super_admin(auth.uid())
+    OR EXISTS (SELECT 1 FROM public.agency_members am
+               WHERE am.agency_id = feedback.agency_id
+                 AND am.user_id = auth.uid()
+                 AND am.role IN ('owner', 'admin'))
+  )
+  WITH CHECK (
+    public.is_super_admin(auth.uid())
+    OR EXISTS (SELECT 1 FROM public.agency_members am
+               WHERE am.agency_id = feedback.agency_id
+                 AND am.user_id = auth.uid()
+                 AND am.role IN ('owner', 'admin'))
+  );
+
+CREATE POLICY feedback_delete_super ON public.feedback
+  FOR DELETE TO authenticated USING (public.is_super_admin(auth.uid()));

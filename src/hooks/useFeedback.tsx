@@ -12,6 +12,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgency } from "@/hooks/useAgency";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
@@ -25,6 +26,14 @@ export type FeedbackStatus =
   | "shipped"
   | "declined";
 export type FeedbackPriority = "low" | "medium" | "high" | "critical";
+
+export interface FeedbackAttachment {
+  /** Public URL in the feedback-attachments bucket */
+  url: string;
+  /** Storage path (for later cleanup) */
+  path: string;
+  name: string;
+}
 
 export interface FeedbackItem {
   id: string;
@@ -41,9 +50,16 @@ export interface FeedbackItem {
   admin_notes: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
+  attachments: FeedbackAttachment[];
   created_at: string;
   updated_at: string;
 }
+
+/** attachments is jsonb — normalize defensively (pre-migration rows lack it). */
+const normalizeItem = (row: Record<string, unknown>): FeedbackItem => ({
+  ...(row as unknown as FeedbackItem),
+  attachments: Array.isArray(row.attachments) ? (row.attachments as FeedbackAttachment[]) : [],
+});
 
 const isMissingTable = (message: string) =>
   /does not exist|could not find the table|schema cache/i.test(message);
@@ -76,7 +92,7 @@ export function useFeedback() {
         if (isMissingTable(error.message)) return { items: [], schemaReady: false };
         throw error;
       }
-      return { items: (data ?? []) as FeedbackItem[], schemaReady: true };
+      return { items: (data ?? []).map((r) => normalizeItem(r as Record<string, unknown>)), schemaReady: true };
     },
   });
 }
@@ -87,7 +103,11 @@ export interface SubmitFeedbackInput {
   description?: string;
   pagePath?: string | null;
   projectId?: string | null;
+  /** Screenshot files — uploaded to the feedback-attachments bucket first. */
+  files?: File[];
 }
+
+const ATTACHMENT_BUCKET = "feedback-attachments";
 
 export function useSubmitFeedback() {
   const { user } = useAuth();
@@ -97,6 +117,22 @@ export function useSubmitFeedback() {
   return useMutation({
     mutationFn: async (input: SubmitFeedbackInput) => {
       if (!user) throw new Error("Not signed in");
+
+      // Upload screenshots before the insert so the row carries final URLs.
+      const attachments: FeedbackAttachment[] = [];
+      for (const file of input.files ?? []) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
+        const path = `${user.id}/${Date.now()}_${attachments.length}_${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from(ATTACHMENT_BUCKET)
+          .upload(path, file, { contentType: file.type || "image/png" });
+        if (uploadError) {
+          throw new Error(`Screenshot upload failed (${file.name}): ${uploadError.message}`);
+        }
+        const { data: pub } = supabase.storage.from(ATTACHMENT_BUCKET).getPublicUrl(path);
+        attachments.push({ url: pub.publicUrl, path, name: file.name });
+      }
+
       const { data, error } = await supabase
         .from("feedback")
         .insert({
@@ -108,11 +144,12 @@ export function useSubmitFeedback() {
           title: input.title.trim(),
           description: input.description?.trim() || null,
           page_path: input.pagePath ?? null,
+          attachments: attachments as unknown as Json,
         })
         .select()
         .single();
       if (error) throw error;
-      return data as FeedbackItem;
+      return normalizeItem(data as Record<string, unknown>);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feedback"] }),
   });

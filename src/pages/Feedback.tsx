@@ -45,7 +45,8 @@ import {
 } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
-import { Bug, Lightbulb, MessageSquarePlus, Sparkles, ChevronDown, Loader2 } from "lucide-react";
+import { Bug, Lightbulb, MessageSquarePlus, Sparkles, ChevronDown, Loader2, ImagePlus, Paperclip, X } from "lucide-react";
+import { useDropzone } from "react-dropzone";
 import { cn } from "@/lib/utils";
 
 // ── vocabulary ────────────────────────────────────────────────────────────────
@@ -116,6 +117,14 @@ function PriorityChip({ priority }: { priority: FeedbackPriority | null }) {
 
 // ── submit dialog ─────────────────────────────────────────────────────────────
 
+const MAX_SHOTS = 5;
+const MAX_SHOT_MB = 10;
+
+interface PendingShot {
+  file: File;
+  preview: string;
+}
+
 function SubmitDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { toast } = useToast();
   const submit = useSubmitFeedback();
@@ -123,12 +132,49 @@ function SubmitDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [pagePath, setPagePath] = useState("");
+  const [shots, setShots] = useState<PendingShot[]>([]);
+
+  const addShots = (files: File[]) => {
+    setShots((prev) => {
+      const room = MAX_SHOTS - prev.length;
+      if (room <= 0) {
+        toast({ title: `Up to ${MAX_SHOTS} screenshots`, variant: "destructive" });
+        return prev;
+      }
+      const accepted: PendingShot[] = [];
+      for (const file of files.slice(0, room)) {
+        if (file.size > MAX_SHOT_MB * 1024 * 1024) {
+          toast({ title: `${file.name} is too large`, description: `Screenshots up to ${MAX_SHOT_MB} MB.`, variant: "destructive" });
+          continue;
+        }
+        accepted.push({ file, preview: URL.createObjectURL(file) });
+      }
+      return [...prev, ...accepted];
+    });
+  };
+
+  const removeShot = (preview: string) => {
+    setShots((prev) => {
+      const gone = prev.find((s) => s.preview === preview);
+      if (gone) URL.revokeObjectURL(gone.preview);
+      return prev.filter((s) => s.preview !== preview);
+    });
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: addShots,
+    accept: { "image/png": [], "image/jpeg": [], "image/webp": [], "image/gif": [] },
+    maxFiles: MAX_SHOTS,
+    noKeyboard: false,
+  });
 
   const reset = () => {
     setType("bug");
     setTitle("");
     setDescription("");
     setPagePath("");
+    shots.forEach((s) => URL.revokeObjectURL(s.preview));
+    setShots([]);
   };
 
   const handleSubmit = async () => {
@@ -142,6 +188,7 @@ function SubmitDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
         title,
         description,
         pagePath: pagePath.trim() || null,
+        files: shots.map((s) => s.file),
       });
       toast({ title: "Feedback submitted", description: "You can follow its status on this page." });
       reset();
@@ -225,6 +272,42 @@ function SubmitDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
               placeholder="/prompts, Spatial step, Files lightbox…"
             />
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[12px] font-semibold text-navy">
+              Screenshots <span className="font-normal text-slate">(optional · up to {MAX_SHOTS})</span>
+            </label>
+            <div
+              {...getRootProps()}
+              className={cn(
+                "flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-4 text-[12px] transition-colors",
+                isDragActive
+                  ? "border-navy bg-cloud text-navy"
+                  : "border-border text-slate hover:border-navy/40 hover:text-navy",
+              )}
+            >
+              <input {...getInputProps()} />
+              <ImagePlus className="h-4 w-4" strokeWidth={1.5} />
+              {isDragActive ? "Drop screenshots here" : "Drag & drop screenshots, or click to upload"}
+            </div>
+            {shots.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {shots.map((shot) => (
+                  <div key={shot.preview} className="group relative h-16 w-24 overflow-hidden rounded-md border border-border bg-cloud">
+                    <img src={shot.preview} alt={shot.file.name} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeShot(shot.preview)}
+                      aria-label={`Remove ${shot.file.name}`}
+                      className="absolute right-1 top-1 rounded-full bg-navy/80 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" strokeWidth={2} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
@@ -233,7 +316,7 @@ function SubmitDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
           </Button>
           <Button onClick={handleSubmit} disabled={submit.isPending}>
             {submit.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-            Submit feedback
+            {submit.isPending && shots.length > 0 ? "Uploading…" : "Submit feedback"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -286,6 +369,12 @@ function ReviewRow({
             strokeWidth={1.5}
           />
         </button>
+        {item.attachments.length > 0 && (
+          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-slate">
+            <Paperclip className="h-3 w-3" strokeWidth={1.5} />
+            {item.attachments.length}
+          </span>
+        )}
         <PriorityChip priority={item.priority} />
         <span className="hidden font-mono text-[11px] text-slate-faint lg:inline">
           {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
@@ -337,6 +426,22 @@ function ReviewRow({
             </p>
           ) : (
             <p className="text-[13px] italic text-slate-faint">No details provided.</p>
+          )}
+          {item.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {item.attachments.map((att) => (
+                <a
+                  key={att.url}
+                  href={att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={att.name}
+                  className="block h-24 w-36 overflow-hidden rounded-md border border-border bg-white transition-opacity hover:opacity-80"
+                >
+                  <img src={att.url} alt={att.name} loading="lazy" className="h-full w-full object-cover" />
+                </a>
+              ))}
+            </div>
           )}
           <div className="max-w-3xl space-y-1.5">
             <label className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate">
@@ -502,6 +607,12 @@ const Feedback = () => {
                             <p className="truncate text-[12px] text-slate">{item.description}</p>
                           )}
                         </div>
+                        {item.attachments.length > 0 && (
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-slate">
+                            <Paperclip className="h-3 w-3" strokeWidth={1.5} />
+                            {item.attachments.length}
+                          </span>
+                        )}
                         <PriorityChip priority={item.priority} />
                         <span className="hidden font-mono text-[11px] text-slate-faint sm:inline">
                           {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}

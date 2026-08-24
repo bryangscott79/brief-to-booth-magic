@@ -158,6 +158,7 @@ export function useInviteUser() {
       qc.invalidateQueries({ queryKey: ["admin-all-profiles"] });
       qc.invalidateQueries({ queryKey: ["admin-platform-invites"] });
       qc.invalidateQueries({ queryKey: ["admin-user-memberships"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-memberships"] });
       qc.invalidateQueries({ queryKey: ["agency-invites"] });
     },
   });
@@ -178,9 +179,35 @@ export function useUserMemberships(userId: string | null | undefined, enabled = 
   return useQuery({
     queryKey: ["admin-user-memberships", userId],
     enabled: !!userId && enabled,
+    // One retry only — if the deployed function predates the memberships
+    // action, surface the error instead of spinning through backoff retries.
+    retry: 1,
     queryFn: async (): Promise<UserMembership[]> => {
       const data = await invokeInviteFunction({ action: "memberships", user_id: userId });
       return (data?.memberships ?? []) as UserMembership[];
+    },
+  });
+}
+
+export interface PlatformMembershipRow {
+  user_id: string;
+  agency_id: string;
+  role: string;
+  agency_name: string | null;
+  agency_slug: string | null;
+  is_primary_owner: boolean;
+}
+
+/** Every membership on the platform, for grouping accounts by agency (super admin only). */
+export function useAllMemberships(enabled = true) {
+  return useQuery({
+    queryKey: ["admin-all-memberships"],
+    enabled,
+    retry: 1,
+    staleTime: 60_000,
+    queryFn: async (): Promise<PlatformMembershipRow[]> => {
+      const data = await invokeInviteFunction({ action: "all_memberships" });
+      return (data?.memberships ?? []) as PlatformMembershipRow[];
     },
   });
 }
@@ -193,6 +220,7 @@ export function useRemoveAgencyMember() {
       invokeInviteFunction({ action: "remove_member", agency_id: agencyId, user_id: userId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-user-memberships"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-memberships"] });
       qc.invalidateQueries({ queryKey: ["agency-team"] });
       qc.invalidateQueries({ queryKey: ["admin", "agencies"] });
     },
@@ -208,6 +236,7 @@ export function useDeleteUserAccount() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-all-profiles"] });
       qc.invalidateQueries({ queryKey: ["admin-user-memberships"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-memberships"] });
     },
   });
 }

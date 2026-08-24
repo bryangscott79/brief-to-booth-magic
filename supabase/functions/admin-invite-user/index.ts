@@ -118,6 +118,30 @@ Deno.serve(async (req) => {
       return json({ memberships });
     }
 
+    // ── all_memberships ─────────────────────────────────────────────────────
+    // Every membership on the platform — lets the accounts list group users
+    // by agency. Super admin only.
+    if (action === "all_memberships") {
+      if (!isSuper) return json({ error: "Forbidden: super admin only" }, 403);
+      const { data, error } = await adminClient
+        .from("agency_members")
+        .select("user_id, agency_id, role, agencies:agency_id(name, slug, owner_user_id)");
+      if (error) return json({ error: error.message }, 500);
+      const memberships = (data ?? []).map((m: Record<string, unknown>) => {
+        const agency = Array.isArray(m.agencies) ? m.agencies[0] : m.agencies;
+        return {
+          user_id: m.user_id,
+          agency_id: m.agency_id,
+          role: m.role,
+          agency_name: (agency as Record<string, unknown>)?.name ?? null,
+          agency_slug: (agency as Record<string, unknown>)?.slug ?? null,
+          is_primary_owner:
+            (agency as Record<string, unknown>)?.owner_user_id === m.user_id,
+        };
+      });
+      return json({ memberships });
+    }
+
     // ── remove_member ───────────────────────────────────────────────────────
     if (action === "remove_member") {
       const { agency_id: agencyId, user_id: userId } = body;

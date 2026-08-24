@@ -105,7 +105,7 @@ function StatCard({
 function MembershipCard({ userId, userEmail }: { userId: string; userEmail: string | null }) {
   const navigate = useNavigate();
   const { data: isSuperAdmin } = useIsSuperAdmin();
-  const { data: memberships, isLoading } = useUserMemberships(userId, !!isSuperAdmin);
+  const { data: memberships, isLoading, isError, error } = useUserMemberships(userId, !!isSuperAdmin);
   const { data: agencies } = useAdminAgencies();
   const addToAgency = useInviteUser();
   const removeMember = useRemoveAgencyMember();
@@ -164,6 +164,11 @@ function MembershipCard({ userId, userEmail }: { userId: string; userEmail: stri
           <div className="flex justify-center py-4">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <p className="text-sm text-destructive">
+            Couldn't load memberships: {error instanceof Error ? error.message : "unknown error"}. If the invite
+            function was just updated, wait for the deploy to finish and reload.
+          </p>
         ) : (memberships ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Not a member of any agency — they'll be forced to create one at sign-in unless you add them below.
@@ -303,11 +308,28 @@ export default function AgencyAccountPage() {
       if (agencyError) console.error("[AgencyAccount] agency load error", agencyError);
 
       const ownedAgency = ((ownedAgencies as any[]) ?? [])[0] ?? null;
-      let agencyMembers: any[] = [];
 
-      if (ownedAgency?.id) {
+      // The roster agency: the one they own, or the one they belong to.
+      // (Members own nothing — the old owner-only lookup showed "No agency"
+      // for every non-owner, which read as a bug on the drill-in.)
+      let rosterAgency: { id: string; name: string } | null = ownedAgency
+        ? { id: ownedAgency.id, name: ownedAgency.name }
+        : null;
+      if (!rosterAgency) {
+        const { data: membershipRows } = await (supabase as any)
+          .from("agency_members")
+          .select("agency_id, agencies:agency_id(id, name)")
+          .eq("user_id", userId)
+          .limit(1);
+        const m = ((membershipRows as any[]) ?? [])[0];
+        const agency = Array.isArray(m?.agencies) ? m.agencies[0] : m?.agencies;
+        if (agency?.id) rosterAgency = { id: agency.id, name: agency.name };
+      }
+
+      let agencyMembers: any[] = [];
+      if (rosterAgency?.id) {
         const { data: members, error: membersError } = await (supabase.rpc as any)("list_agency_members", {
-          _agency_id: ownedAgency.id,
+          _agency_id: rosterAgency.id,
         });
         if (membersError) console.error("[AgencyAccount] agency members load error", membersError);
         agencyMembers = (members as any[]) ?? [];
@@ -317,6 +339,7 @@ export default function AgencyAccountPage() {
         profile,
         projects: projects ?? [],
         ownedAgency,
+        rosterAgency,
         agencyMembers,
       };
     },
@@ -351,7 +374,7 @@ export default function AgencyAccountPage() {
     );
   }
 
-  const { profile, projects, ownedAgency, agencyMembers } = account;
+  const { profile, projects, ownedAgency, rosterAgency, agencyMembers } = account;
   const displayName = profile.display_name || profile.email || `User …${profile.user_id.slice(-6)}`;
   const isAgencyOwner = !!ownedAgency && ownedAgency.owner_user_id === profile.user_id;
 
@@ -445,7 +468,7 @@ export default function AgencyAccountPage() {
             label="Team Members"
             value={agencyMembers.length}
             icon={Users}
-            sub={ownedAgency ? `${ownedAgency.name} roster` : "No agency"}
+            sub={rosterAgency ? `${rosterAgency.name} roster` : "No agency"}
           />
           <StatCard
             label="Last Active"
@@ -499,7 +522,7 @@ export default function AgencyAccountPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
-              Team Roster
+              {rosterAgency ? `${rosterAgency.name} Roster` : "Team Roster"}
               <Badge variant="outline" className="ml-auto text-xs font-normal">
                 {agencyMembers.length} member{agencyMembers.length !== 1 ? "s" : ""}
               </Badge>
@@ -526,7 +549,7 @@ export default function AgencyAccountPage() {
                           {member.email || `User …${member.user_id?.slice(-6) ?? ""}`}
                         </p>
                         {member.is_primary_owner && (
-                          <p className="text-xs text-muted-foreground truncate">Account owner for {ownedAgency?.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">Account owner for {rosterAgency?.name}</p>
                         )}
                       </div>
                     </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useAdminProfiles, useInviteUser, usePlatformInvites, useManageAdminRole, useIsSuperAdmin, UserProfile } from "@/hooks/useAdminRole";
+import { useAdminProfiles, useInviteUser, usePlatformInvites, useManageAdminRole, useIsSuperAdmin, useAllMemberships, UserProfile } from "@/hooks/useAdminRole";
 import { useAdminAgencies } from "@/hooks/useAccessControl";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -39,6 +39,7 @@ import {
   XCircle,
   Send,
   Crown,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -451,6 +452,8 @@ export function UserAccountsManager() {
   const { data: profiles, isLoading } = useAdminProfiles();
   const { user } = useAuth();
   const { data: isSuperAdmin } = useIsSuperAdmin();
+  // Groups the account list by agency (super admin only — served by the edge fn)
+  const { data: allMemberships } = useAllMemberships(!!isSuperAdmin);
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
 
@@ -573,26 +576,94 @@ export function UserAccountsManager() {
             </div>
           )}
 
-          {/* User list — platform owners first, then agency admins, then members */}
-          <div className="space-y-2">
-            {[...filtered]
-              .sort((a, b) => {
-                if (a.is_super_admin && !b.is_super_admin) return -1;
-                if (!a.is_super_admin && b.is_super_admin) return 1;
-                if (a.is_admin && !b.is_admin) return -1;
-                if (!a.is_admin && b.is_admin) return 1;
-                return 0;
-              })
-              .map((profile) => (
-                <UserRow
-                  key={profile.user_id}
-                  profile={profile}
-                  usage={usageByUser.get(profile.user_id)}
-                  currentUserId={user?.id}
-                  currentUserIsSuperAdmin={!!isSuperAdmin}
-                />
-              ))}
-          </div>
+          {/* User list — grouped by agency when memberships are available
+              (super admins), otherwise a flat role-sorted list. Within a
+              group: owners → admins → members. */}
+          {(() => {
+            const roleSort = (a: UserProfile, b: UserProfile) => {
+              if (a.is_super_admin && !b.is_super_admin) return -1;
+              if (!a.is_super_admin && b.is_super_admin) return 1;
+              if (a.is_admin && !b.is_admin) return -1;
+              if (!a.is_admin && b.is_admin) return 1;
+              return 0;
+            };
+
+            const renderRow = (profile: UserProfile) => (
+              <UserRow
+                key={profile.user_id}
+                profile={profile}
+                usage={usageByUser.get(profile.user_id)}
+                currentUserId={user?.id}
+                currentUserIsSuperAdmin={!!isSuperAdmin}
+              />
+            );
+
+            if (!allMemberships?.length) {
+              return <div className="space-y-2">{[...filtered].sort(roleSort).map(renderRow)}</div>;
+            }
+
+            // Primary agency per user: the one they own > first membership.
+            const primaryByUser = new Map<string, { agencyId: string; agencyName: string }>();
+            for (const m of allMemberships) {
+              const existing = primaryByUser.get(m.user_id);
+              if (!existing || m.is_primary_owner) {
+                primaryByUser.set(m.user_id, {
+                  agencyId: m.agency_id,
+                  agencyName: m.agency_name ?? m.agency_slug ?? "Agency",
+                });
+              }
+            }
+
+            const groups = new Map<string, { name: string; rows: UserProfile[] }>();
+            const unaffiliated: UserProfile[] = [];
+            for (const profile of filtered) {
+              const primary = primaryByUser.get(profile.user_id);
+              if (!primary) {
+                unaffiliated.push(profile);
+                continue;
+              }
+              const group = groups.get(primary.agencyId) ?? { name: primary.agencyName, rows: [] };
+              group.rows.push(profile);
+              groups.set(primary.agencyId, group);
+            }
+
+            const sortedGroups = [...groups.entries()].sort((a, b) =>
+              a[1].name.localeCompare(b[1].name),
+            );
+
+            return (
+              <div className="space-y-6">
+                {sortedGroups.map(([agencyId, group]) => (
+                  <div key={agencyId} className="space-y-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.name}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal">
+                        {group.rows.length}
+                      </Badge>
+                    </div>
+                    {[...group.rows].sort(roleSort).map(renderRow)}
+                  </div>
+                ))}
+                {unaffiliated.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        No agency
+                      </span>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal">
+                        {unaffiliated.length}
+                      </Badge>
+                    </div>
+                    {[...unaffiliated].sort(roleSort).map(renderRow)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </TabsContent>
 
         {/* ── Invites Tab ── */}

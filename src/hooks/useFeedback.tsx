@@ -184,7 +184,7 @@ export function useTriageFeedback() {
         .select()
         .single();
       if (error) throw error;
-      return data as FeedbackItem;
+      return normalizeItem(data as Record<string, unknown>);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feedback"] }),
   });

@@ -20,7 +20,7 @@ import {
   Trash2,
   FileText,
   Code2,
-  Wand2,
+  
   Pencil,
   Presentation as PresentationIcon,
 } from "lucide-react";
@@ -100,7 +100,7 @@ export function DesignedDeck({
     removeSlide,
     updateSlideHtml,
     reset,
-    ping,
+    
   } = useDesignedDeck(projectId);
 
   // Pre-flight inputs — surfaced in the checklist so the user can confirm
@@ -184,36 +184,7 @@ export function DesignedDeck({
     });
   };
   const [draftHtml, setDraftHtml] = useState<string>("");
-  const [pingState, setPingState] = useState<
-    | { status: "idle" }
-    | { status: "running" }
-    | {
-        status: "ok";
-        anthropicKey?: "valid" | "invalid" | "configured" | "missing";
-        anthropicKeyError?: string | null;
-        validKeySource?: string | null;
-        deployToken?: string;
-        alternativeKeysFound?: string[];
-      }
-    | { status: "fail"; message: string }
-  >({ status: "idle" });
 
-  const handlePing = async () => {
-    setPingState({ status: "running" });
-    const res = await ping();
-    if (res.ok) {
-      setPingState({
-        status: "ok",
-        anthropicKey: res.anthropicKey,
-        anthropicKeyError: res.anthropicKeyError,
-        validKeySource: res.validKeySource,
-        deployToken: res.deployToken,
-        alternativeKeysFound: res.alternativeKeysFound,
-      });
-    } else {
-      setPingState({ status: "fail", message: res.error ?? "Unknown error" });
-    }
-  };
 
   // Filter the rendered-image set by the user's featured-selection
   // before sending to the deck designer. The deck only features what

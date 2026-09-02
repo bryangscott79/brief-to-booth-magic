@@ -113,6 +113,10 @@ function LogoUploader({
     maxFiles: 1,
   });
 
+  // company-assets is a private bucket — resolve the stored URL to a signed
+  // one for preview (also covers the just-uploaded public URL form).
+  const previewUrl = useResolvedImageUrl(currentUrl);
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>

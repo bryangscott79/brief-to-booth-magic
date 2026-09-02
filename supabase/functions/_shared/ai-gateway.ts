@@ -765,7 +765,8 @@ async function callGeminiViaLovable(
 /**
  * Call Anthropic (Claude) Messages API.
  *
- * Uses claude-sonnet-4-20250514 by default. Designed for structured generation
+ * Uses claude-opus-5 by default (claude-sonnet-4-20250514 was retired and now
+ * returns 404). Designed for structured generation
  * tasks like presentation creation.
  *
  * @example Tool-based generation
@@ -809,6 +810,16 @@ function resolveAnthropicKey(): { key: string; sourceName: string } | null {
   return null;
 }
 
+/** Default Claude model for text/tool generation. Keep undated — dated
+ *  snapshots (e.g. claude-sonnet-4-20250514) get retired and 404. */
+export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5";
+
+/** Legacy dated snapshots + Haiku 4.5 accept temperature/top_p; the 4.6+
+ *  and 5-family models return 400 if sampling params are sent. */
+export function anthropicSupportsSampling(model: string): boolean {
+  return /-20\d{6}$/.test(model) || /haiku-4-5/.test(model);
+}
+
 export async function callAnthropic(options: AnthropicOptions): Promise<AIResponse> {
   const started = Date.now();
   try {
@@ -816,7 +827,7 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: options.model ?? "claude-sonnet-4-20250514",
+        model: options.model ?? DEFAULT_ANTHROPIC_MODEL,
         inputTokens: result.usage?.inputTokens,
         outputTokens: result.usage?.outputTokens,
         durationMs: Date.now() - started,
@@ -828,7 +839,7 @@ export async function callAnthropic(options: AnthropicOptions): Promise<AIRespon
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: options.model ?? "claude-sonnet-4-20250514",
+        model: options.model ?? DEFAULT_ANTHROPIC_MODEL,
         durationMs: Date.now() - started,
         status: "error",
         errorMessage: e instanceof Error ? e.message : String(e),
@@ -846,13 +857,16 @@ async function _callAnthropicInner(options: AnthropicOptions): Promise<AIRespons
     );
   }
 
+  const model = options.model ?? DEFAULT_ANTHROPIC_MODEL;
   const body: Record<string, any> = {
-    model: options.model ?? "claude-sonnet-4-20250514",
+    model,
     max_tokens: options.maxTokens ?? 8192,
     messages: options.messages,
   };
 
-  if (options.temperature !== undefined) {
+  // Current-generation Claude (Opus 5 / Sonnet 5 / 4.6+) rejects sampling
+  // params with a 400; only legacy dated snapshots and Haiku 4.5 accept them.
+  if (options.temperature !== undefined && anthropicSupportsSampling(model)) {
     body.temperature = options.temperature;
   }
 

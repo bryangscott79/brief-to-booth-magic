@@ -32,6 +32,9 @@ const PRICING: Record<string, ModelPricing> = {
   // Anthropic
   "anthropic/claude-sonnet-4": { inputPerMtok: 3.0, outputPerMtok: 15.0 },
   "claude-sonnet-4-20250514": { inputPerMtok: 3.0, outputPerMtok: 15.0 },
+  "claude-opus-5": { inputPerMtok: 5.0, outputPerMtok: 25.0 },
+  "claude-sonnet-5": { inputPerMtok: 2.0, outputPerMtok: 10.0 },
+  "claude-haiku-4-5": { inputPerMtok: 1.0, outputPerMtok: 5.0 },
   "claude-haiku-4": { inputPerMtok: 0.25, outputPerMtok: 1.25 },
 };
 

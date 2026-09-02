@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CANOPY — deck design system</title>
+<style>
+:root{
+  --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
+  --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
+  --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--cloud);color:var(--charcoal);padding:40px 48px 80px}
+header .eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+header h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
+header p{font-size:13px;color:var(--slate);margin-top:6px;max-width:680px}
+.rule{height:2px;background:var(--grad-brand);border-radius:1px;margin:22px 0 30px;max-width:220px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
+a.card{display:block;background:var(--white);border:1px solid var(--cloud-line);border-radius:14px;overflow:hidden;text-decoration:none;color:inherit}
+.frame{height:230px;overflow:hidden;position:relative;background:#E8EAED;border-bottom:1px solid var(--cloud-line)}
+.frame iframe{width:1348px;height:1000px;transform:scale(.245);transform-origin:0 0;border:0;pointer-events:none}
+.card .cap{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 14px}
+.card .cap b{font-size:13px;font-weight:600;color:var(--navy)}
+.card .cap span{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--slate-faint);letter-spacing:.06em;white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Canopy · Deck design system · 12 layouts × 2 brand kits</p>
+  <h1>The deck, slide by slide</h1>
+  <p>Every layout in the typed slide system (src/lib/deckSpec.ts), rendered with real demo content — Samsung · CES 2027 · Exhibitus — in an agency kit (Exhibitus navy) and a client kit (Samsung blue). Each board shows the exact HTML the preview renderer emits; the PPTX builder draws the same geometry in PowerPoint. Click a card to open a board at full size.</p>
+  <div class="rule"></div>
+</header>
+<div class="grid">
+  <a class="card" href="01-cover.html"><div class="frame"><iframe src="01-cover.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Cover</b><span>cover</span></div></a>
+  <a class="card" href="02-section.html"><div class="frame"><iframe src="02-section.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Section divider</b><span>section</span></div></a>
+  <a class="card" href="03-brief-summary.html"><div class="frame"><iframe src="03-brief-summary.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Brief summary</b><span>briefSummary</span></div></a>
+  <a class="card" href="04-concept.html"><div class="frame"><iframe src="04-concept.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Concept</b><span>concept</span></div></a>
+  <a class="card" href="05-element-grid.html"><div class="frame"><iframe src="05-element-grid.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Element grid</b><span>elementGrid</span></div></a>
+  <a class="card" href="06-spatial.html"><div class="frame"><iframe src="06-spatial.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Spatial</b><span>spatial</span></div></a>
+  <a class="card" href="07-render-full.html"><div class="frame"><iframe src="07-render-full.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Hero render</b><span>renderFull</span></div></a>
+  <a class="card" href="08-render-grid.html"><div class="frame"><iframe src="08-render-grid.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Render grid</b><span>renderGrid</span></div></a>
+  <a class="card" href="09-budget.html"><div class="frame"><iframe src="09-budget.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Budget</b><span>budget</span></div></a>
+  <a class="card" href="10-materials.html"><div class="frame"><iframe src="10-materials.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Materials</b><span>materials</span></div></a>
+  <a class="card" href="11-next-steps.html"><div class="frame"><iframe src="11-next-steps.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Next steps</b><span>nextSteps</span></div></a>
+  <a class="card" href="12-closing.html"><div class="frame"><iframe src="12-closing.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Closing</b><span>closing</span></div></a>
+</div>
+</body>
+</html>

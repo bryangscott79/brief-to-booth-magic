@@ -5,6 +5,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useClient } from "@/hooks/useClients";
 import { useProjectImages } from "@/hooks/useProjectImages";
+import { useActiveSpatialConfig } from "@/hooks/useActiveSpatialConfig";
 import { Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import {
@@ -41,6 +42,7 @@ function PackageRail({ projectId }: { projectId: string | null }) {
   const { profile } = useCompanyProfile();
   const { data: client } = useClient(clientId);
   const { data: images } = useProjectImages(projectId);
+  const { activeConfigLabel } = useActiveSpatialConfig(projectId);
 
   const elements = currentProject?.elements;
   const completedCount = elements
@@ -80,6 +82,12 @@ function PackageRail({ projectId }: { projectId: string | null }) {
 
       <RailSection label="Completeness" accent="violet">
         <RailRow
+          label="Active booth size"
+          mono
+          tone={activeConfigLabel ? "pass" : "default"}
+          value={activeConfigLabel ?? undefined}
+        />
+        <RailRow
           label="Concept elements"
           mono
           tone={completedCount === totalCount && totalCount > 0 ? "pass" : "default"}
@@ -99,6 +107,9 @@ function PackageRail({ projectId }: { projectId: string | null }) {
 export default function ExportPage() {
   const { projectId, isLoading } = useProjectSync();
   const { data: images } = useProjectImages(projectId);
+  const { activeConfigLabel } = useActiveSpatialConfig(projectId);
+  // Total current renders across all booth sizes — this matches what the
+  // asset ZIP actually contains (organized per size inside renders/).
   const renderCount = (images ?? []).filter((img) => img.is_current).length;
 
   if (isLoading) {
@@ -122,6 +133,7 @@ export default function ExportPage() {
             subtitle="Package renders, strategy, and specs for hand-off"
             headerRight={
               <SpecMono className="text-slate">
+                {activeConfigLabel ? `${activeConfigLabel} · ` : ""}
                 {renderCount} {renderCount === 1 ? "render" : "renders"}
               </SpecMono>
             }

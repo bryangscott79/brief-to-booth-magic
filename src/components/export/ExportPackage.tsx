@@ -14,19 +14,25 @@ import {
   FolderArchive,
 } from "lucide-react";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
-import { useProjectImages } from "@/hooks/useProjectImages";
+import { useProjectImages, type ProjectImage } from "@/hooks/useProjectImages";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
 import { supabase } from "@/integrations/supabase/client";
 import { ProposalExport } from "./ProposalExport";
 import { DesignedDeck } from "./DesignedDeck";
+import { DeckStudio } from "./DeckStudio";
 import { FigmaExportPanel } from "./FigmaExportPanel";
 import { SaveLearningsButton } from "./SaveLearningsButton";
 import { useRhinoRenders } from "@/hooks/useRhinoRenders";
-import { useBrandIntelligence } from "@/hooks/useClients";
+import { useBrandIntelligence, useClient } from "@/hooks/useClients";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useAgency } from "@/hooks/useAgency";
+import { useProject } from "@/hooks/useProjects";
+import { useActiveSpatialConfig } from "@/hooks/useActiveSpatialConfig";
+import { parseVersionedAngleId, sanitizeConfigKey } from "@/lib/promptVersions";
+import { markProjectExported } from "@/lib/markProjectExported";
 
 interface MaterialItem {
   name: string;
@@ -73,6 +79,34 @@ function formatCurrency(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
+/** File-name-safe token — used for zip entry names and the zip itself. */
+function sanitizeName(s: string): string {
+  return (
+    s
+      .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "") || "file"
+  );
+}
+
+/** Best-effort extension sniff from a storage URL. */
+function extOf(url: string, fallback: string): string {
+  const lower = url.toLowerCase();
+  if (lower.includes(".png")) return "png";
+  if (lower.includes(".webp")) return "webp";
+  if (lower.includes(".svg")) return "svg";
+  if (lower.includes(".jpeg") || lower.includes(".jpg")) return "jpg";
+  if (lower.includes(".pdf")) return "pdf";
+  return fallback;
+}
+
+interface ZipProgress {
+  done: number;
+  total: number;
+  current: string;
+}
+
 function downloadTextFile(filename: string, content: string) {
   const blob = new Blob([content], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -93,8 +127,12 @@ export function ExportPackage() {
   const projectId = currentProject?.id;
   const { data: images } = useProjectImages(projectId);
   const { data: rhinoRenders = [] } = useRhinoRenders(projectId);
+  // DB row (brief_file_url/name, status) — same query useProjectSync warms.
+  const { data: dbProject } = useProject(projectId ?? undefined);
+  const queryClient = useQueryClient();
 
   const clientId = currentProject?.clientId ?? null;
+  const { data: client } = useClient(clientId);
   const { data: brandIntelligence = [] } = useBrandIntelligence(clientId);
   const approvedIntel = brandIntelligence.filter((e: any) => e.is_approved);
   const { profile } = useCompanyProfile();
@@ -102,11 +140,24 @@ export function ExportPackage() {
   const agencyId = agency?.id ?? null;
   const activationTypeId = (currentProject as any)?.activation_type_id ?? (currentProject as any)?.activationTypeId ?? null;
 
+  // Active booth size (footprint config) — same shared selection the
+  // Spatial and Prompts steps use, so the export reflects the size the
+  // user is actually working in instead of hardcoding configs[0].
+  const {
+    configs: spatialConfigs,
+    activeConfig,
+    activeConfigKey,
+    activeConfigLabel,
+    defaultConfigKey,
+  } = useActiveSpatialConfig(projectId ?? null);
+
   const [materials, setMaterials] = useState<MaterialsData | null>(null);
   const [threeDData, setThreeDData] = useState<ThreeDData | null>(null);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [loading3D, setLoading3D] = useState(false);
   const [loadingZip, setLoadingZip] = useState(false);
+  const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
+  const [zipSkipped, setZipSkipped] = useState<string[]>([]);
 
   const brief = currentProject?.parsedBrief;
   const elements = currentProject?.elements;
@@ -125,6 +176,44 @@ export function ExportPackage() {
   const completedElements = Object.values(elements).filter(e => e.status === "complete").length;
   const totalElements = Object.keys(elements).length;
 
+  // ── Active-config derivations ─────────────────────────────────────────
+  // Spatial config is the source of truth once the Spatial step has run;
+  // the brief footprint is the fallback for early projects.
+  const activeBoothSize =
+    activeConfigLabel || brief.spatial?.footprints?.[0]?.size || "30x30";
+  const activeBoothSqft =
+    (typeof activeConfig?.totalSqft === "number" ? activeConfig.totalSqft : undefined) ??
+    brief.spatial?.footprints?.[0]?.sqft;
+
+  // Which booth size does a render belong to? Mirrors the Files page rule:
+  // __cfg__ suffix on angle_id first, prompt_artifacts.configKey fallback,
+  // and untagged/legacy renders belong to configs[0] (the old hardcoded
+  // pipeline only ever rendered the first config).
+  const renderConfigKey = (img: ProjectImage): string | null => {
+    const parsed = parseVersionedAngleId(img.angle_id).configKey;
+    if (parsed) return parsed;
+    const artifactKey =
+      typeof img.prompt_artifacts?.configKey === "string" ? img.prompt_artifacts.configKey : null;
+    if (artifactKey) return artifactKey;
+    return defaultConfigKey;
+  };
+
+  /** Human label ("20x40") for a sanitized config key, falling back to the key. */
+  const configLabelOf = (key: string | null): string | null => {
+    if (!key) return null;
+    const cfg = spatialConfigs.find(
+      (c) => c.footprintSize && sanitizeConfigKey(String(c.footprintSize)) === key,
+    );
+    return cfg?.footprintSize ? String(cfg.footprintSize) : key;
+  };
+
+  const currentImages = (images || []).filter((i) => i.is_current);
+  // Renders scoped to the ACTIVE booth size — used everywhere a payload or
+  // stat refers to "the" booth (3D brief references, summary labels).
+  const activeConfigImages = activeConfigKey
+    ? currentImages.filter((img) => renderConfigKey(img) === activeConfigKey)
+    : currentImages;
+
   const handleGenerateMaterials = async () => {
     setLoadingMaterials(true);
     try {
@@ -133,7 +222,7 @@ export function ExportPackage() {
           parsedBrief: brief,
           spatialStrategy: elements.spatialStrategy?.data,
           budgetLogic: elements.budgetLogic?.data,
-          boothSize: brief.spatial?.footprints?.[0]?.size || "30x30",
+          boothSize: activeBoothSize,
           agency_id: agencyId,
           client_id: clientId,
           activation_type_id: activationTypeId,
@@ -154,7 +243,9 @@ export function ExportPackage() {
   const handleGenerate3D = async () => {
     setLoading3D(true);
     try {
-      const imageUrls = (images || []).filter(i => i.is_current).map(i => ({
+      // Only reference renders of the ACTIVE booth size — a 10x10 view
+      // must not steer the modeling brief for a 100x60 build.
+      const imageUrls = activeConfigImages.map(i => ({
         angle: i.angle_name,
         url: i.public_url,
       }));
@@ -164,7 +255,7 @@ export function ExportPackage() {
           spatialStrategy: elements.spatialStrategy?.data,
           renderPrompts: currentProject?.renderPrompts,
           imageUrls,
-          boothSize: brief.spatial?.footprints?.[0]?.size || "30x30",
+          boothSize: activeBoothSize,
           agency_id: agencyId,
           client_id: clientId,
           activation_type_id: activationTypeId,
@@ -223,28 +314,107 @@ export function ExportPackage() {
 
   const handleDownloadZip = async () => {
     setLoadingZip(true);
+    setZipSkipped([]);
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       const brandName = brief.brand?.name || currentProject?.name || "Project";
-      const currentImages = (images || []).filter(i => i.is_current);
 
-      // ── 1. Download and add all rendered images ──
-      const imgFolder = zip.folder("renders")!;
+      // ── 1. Assemble every fetchable asset up front (real progress) ──
+      // Renders are organized per booth size: renders/{configKey}/{angle}_{ts}.ext
+      const renderPathOf = (img: ProjectImage) => {
+        const cfg = renderConfigKey(img) ?? "default";
+        const ts = new Date(img.created_at).getTime();
+        return `renders/${cfg}/${sanitizeName(img.angle_name)}_${ts}.${extOf(img.public_url, "jpg")}`;
+      };
+
+      interface FetchTask { label: string; url: string; path: string }
+      const tasks: FetchTask[] = [];
+
       for (const img of currentImages) {
-        try {
-          const response = await fetch(img.public_url);
-          if (response.ok) {
-            const blob = await response.blob();
-            const ext = img.public_url.includes(".png") ? "png" : "jpg";
-            imgFolder.file(`${img.angle_name.replace(/[^a-zA-Z0-9_\- ]/g, "_")}.${ext}`, blob);
-          }
-        } catch {
-          console.warn(`Failed to fetch image: ${img.angle_name}`);
-        }
+        tasks.push({ label: img.angle_name, url: img.public_url, path: renderPathOf(img) });
       }
 
-      // ── 2. Build structured content markdown ──
+      const polishedRhino = rhinoRenders.filter(
+        r => r.polish_status === "complete" && r.polished_public_url,
+      );
+      for (const r of polishedRhino) {
+        const viewName = sanitizeName(r.view_name || "untitled");
+        tasks.push({
+          label: `${r.view_name || "Untitled"} (original)`,
+          url: r.original_public_url,
+          path: `rhino-renders/${viewName}_original.jpg`,
+        });
+        tasks.push({
+          label: `${r.view_name || "Untitled"} (polished)`,
+          url: r.polished_public_url!,
+          path: `rhino-renders/${viewName}_polished.jpg`,
+        });
+      }
+
+      // Original brief file — brief_file_url may be an expired signed URL;
+      // a failed fetch just lands in the skipped manifest.
+      const briefFileName = dbProject?.brief_file_name
+        ? dbProject.brief_file_name.replace(/[^a-zA-Z0-9._\- ]/g, "_")
+        : dbProject?.brief_file_url
+          ? `brief.${extOf(dbProject.brief_file_url, "pdf")}`
+          : null;
+      if (dbProject?.brief_file_url && briefFileName) {
+        tasks.push({
+          label: "Original brief",
+          url: dbProject.brief_file_url,
+          path: `brief/${briefFileName}`,
+        });
+      }
+
+      // Brand logos — agency logo off the agencies row, client logo off the
+      // linked client record. Both optional; both skip gracefully.
+      if (agency?.logo_url) {
+        tasks.push({
+          label: "Agency logo",
+          url: agency.logo_url,
+          path: `brand/agency-logo.${extOf(agency.logo_url, "png")}`,
+        });
+      }
+      if (client?.logo_url) {
+        tasks.push({
+          label: "Client logo",
+          url: client.logo_url,
+          path: `brand/client-logo.${extOf(client.logo_url, "png")}`,
+        });
+      }
+
+      // ── 2. Fetch in parallel (concurrency 4) with a skip manifest ──
+      const skipped: string[] = [];
+      const fetchedByPath = new Map<string, Blob>();
+      let done = 0;
+      let cursor = 0;
+      setZipProgress({ done: 0, total: tasks.length, current: "" });
+      const worker = async () => {
+        while (cursor < tasks.length) {
+          const task = tasks[cursor++];
+          setZipProgress({ done, total: tasks.length, current: task.label });
+          try {
+            const res = await fetch(task.url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            fetchedByPath.set(task.path, await res.blob());
+          } catch {
+            skipped.push(`${task.path} — ${task.label}`);
+          }
+          done += 1;
+          setZipProgress({ done, total: tasks.length, current: task.label });
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(4, Math.max(tasks.length, 1)) }, worker),
+      );
+      // Keep zip entry order stable (task order), whatever finished first.
+      for (const task of tasks) {
+        const blob = fetchedByPath.get(task.path);
+        if (blob) zip.file(task.path, blob);
+      }
+
+      // ── 3. Build structured content markdown ──
       let content = `# ${brandName} — Trade Show Booth Proposal\n\n---\n\n`;
 
       const brand = (brief as any).brand || {};
@@ -275,7 +445,14 @@ export function ExportPackage() {
         content += `\n`;
       }
 
-      content += `## Spatial\n- **Booth Size:** ${brief.spatial?.footprints?.[0]?.size || "TBD"} (${brief.spatial?.footprints?.[0]?.sqft || "TBD"} sqft)\n\n`;
+      content += `## Spatial\n- **Active Booth Size:** ${activeBoothSize}${activeBoothSqft ? ` (${activeBoothSqft} sqft)` : ""}\n`;
+      if (spatialConfigs.length > 1) {
+        content += `- **All Configurations:** ${spatialConfigs
+          .map((c) => c.footprintSize)
+          .filter(Boolean)
+          .join(", ")}\n`;
+      }
+      content += `\n`;
 
       const budget = (brief as any).budget || {};
       content += `## Budget\n- ${budget.perShow ? `$${budget.perShow.toLocaleString()} per show` : budget.range ? `$${budget.range.min.toLocaleString()} - $${budget.range.max.toLocaleString()}` : "TBD"}\n\n`;
@@ -298,32 +475,28 @@ export function ExportPackage() {
         }
       }
 
-      // Rhino renders
-      const polishedRhino = rhinoRenders.filter(r => r.polish_status === "complete" && r.polished_public_url);
+      // Rhino renders (already fetched into the zip above — just document them).
       if (polishedRhino.length > 0) {
-        const rhinoFolder = zip.folder("rhino-renders")!;
         content += `---\n\n# 3D Design Renders\n\n`;
         for (const r of polishedRhino) {
-          const viewName = (r.view_name || "untitled").replace(/[^a-zA-Z0-9_\- ]/g, "_");
-          try {
-            const origRes = await fetch(r.original_public_url);
-            if (origRes.ok) rhinoFolder.file(`${viewName}_original.jpg`, await origRes.blob());
-            if (r.polished_public_url) {
-              const polRes = await fetch(r.polished_public_url);
-              if (polRes.ok) rhinoFolder.file(`${viewName}_polished.jpg`, await polRes.blob());
-            }
-          } catch {
-            console.warn(`Failed to fetch rhino render: ${viewName}`);
-          }
+          const viewName = sanitizeName(r.view_name || "untitled");
           content += `- **${r.view_name || "Untitled"}**: rhino-renders/${viewName}_original.jpg → rhino-renders/${viewName}_polished.jpg\n`;
         }
         content += `\n`;
       }
 
+      // Rendered views, grouped per booth size the way the zip is organized.
       content += `---\n\n# Rendered Views\n\n`;
       for (const img of currentImages) {
-        const ext = img.public_url.includes(".png") ? "png" : "jpg";
-        content += `- **${img.angle_name}**: renders/${img.angle_name.replace(/[^a-zA-Z0-9_\- ]/g, "_")}.${ext}\n`;
+        const sizeLabel = configLabelOf(renderConfigKey(img));
+        content += `- **${img.angle_name}**${sizeLabel ? ` (${sizeLabel})` : ""}: ${renderPathOf(img)}\n`;
+      }
+
+      // Skipped-asset manifest — visible in the package itself.
+      if (skipped.length > 0) {
+        content += `\n---\n\n# Skipped Assets\n\n`;
+        content += `These assets could not be fetched (expired URL or network error) and are NOT in this package:\n\n`;
+        for (const s of skipped) content += `- ${s}\n`;
       }
 
       zip.file("content.md", content);
@@ -331,6 +504,8 @@ export function ExportPackage() {
       // ── 3. JSON version for structured import ──
       const jsonData = {
         project: brandName,
+        activeBoothSize,
+        activeConfigKey,
         brand: brief.brand,
         objectives: brief.objectives,
         audiences: brief.audiences,
@@ -348,24 +523,47 @@ export function ExportPackage() {
         images: currentImages.map(img => ({
           angleId: img.angle_id,
           angleName: img.angle_name,
-          filename: `renders/${img.angle_name.replace(/[^a-zA-Z0-9_\- ]/g, "_")}.${img.public_url.includes(".png") ? "png" : "jpg"}`,
+          boothSize: configLabelOf(renderConfigKey(img)),
+          configKey: renderConfigKey(img),
+          filename: renderPathOf(img),
         })),
+        skipped,
       };
       zip.file("content.json", JSON.stringify(jsonData, null, 2));
 
+      setZipProgress({ done: tasks.length, total: tasks.length, current: "Packaging zip…" });
       const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${brandName}_Export_Package.zip`;
+      // {Client}_{Project}_Export.zip — client record first, brand fallback.
+      const clientPart = sanitizeName(client?.name || brief.brand?.name || "Client");
+      const projectPart = sanitizeName(currentProject?.name || brandName);
+      a.download = `${clientPart}_${projectPart}_Export.zip`;
       a.click();
       URL.revokeObjectURL(url);
 
-      toast({ title: "Package downloaded", description: `${currentImages.length} images + content files zipped` });
+      setZipSkipped(skipped);
+      const included = tasks.length - skipped.length;
+      if (skipped.length > 0) {
+        toast({
+          title: "Package downloaded — some assets skipped",
+          description: `${included} of ${tasks.length} assets included; ${skipped.length} skipped (listed in content.md and below).`,
+        });
+      } else {
+        toast({
+          title: "Package downloaded",
+          description: `${included} of ${tasks.length} assets + content.md/content.json zipped.`,
+        });
+      }
+
+      // The hand-off left the building — light the final pipeline segment.
+      if (projectId) await markProjectExported(projectId, queryClient);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setLoadingZip(false);
+      setZipProgress(null);
     }
   };
 
@@ -373,7 +571,11 @@ export function ExportPackage() {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* The sheet band owns the "Export" title — no duplicate inside. */}
 
-      {/* AI-designed deck — primary path. Claude designs every slide as
+      {/* Client deck — the flagship path: brand-mode choice + designed
+       * slide system compiled deterministically → editable PPTX / PDF. */}
+      <DeckStudio projectId={projectId ?? null} clientId={currentProject?.clientId ?? null} />
+
+      {/* AI-designed deck — legacy alternate. Claude designs every slide as
        * HTML+CSS using the full project + agency context. */}
       <DesignedDeck
         projectId={projectId ?? null}
@@ -423,13 +625,42 @@ export function ExportPackage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Downloads all rendered images, strategic content (Markdown + JSON), and slide structure into a single .zip file you can take to Google Slides, Keynote, Canva, or any presentation tool.
+            Downloads every rendered view (organized per booth size), 3D renders, the original brief, brand logos, and strategic content (Markdown + JSON) into a single .zip you can take to Google Slides, Keynote, Canva, or any presentation tool.
           </p>
-          <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><Folder className="h-3 w-3" /> renders/</span>
+          <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><Folder className="h-3 w-3" /> renders/{"{size}"}/</span>
+            <span className="flex items-center gap-1"><Folder className="h-3 w-3" /> rhino-renders/</span>
+            <span className="flex items-center gap-1"><Folder className="h-3 w-3" /> brief/</span>
+            <span className="flex items-center gap-1"><Folder className="h-3 w-3" /> brand/</span>
             <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> content.md</span>
             <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> content.json</span>
           </div>
+          {loadingZip && zipProgress && (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="truncate pr-2">{zipProgress.current || "Preparing…"}</span>
+                <span className="font-mono shrink-0">
+                  {zipProgress.done}/{zipProgress.total} assets
+                </span>
+              </div>
+              <Progress
+                value={zipProgress.total > 0 ? (zipProgress.done / zipProgress.total) * 100 : 0}
+                className="h-2"
+              />
+            </div>
+          )}
+          {!loadingZip && zipSkipped.length > 0 && (
+            <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2.5">
+              <p className="text-xs font-medium text-destructive mb-1">
+                {zipSkipped.length} asset{zipSkipped.length === 1 ? "" : "s"} skipped in the last package (also listed in content.md):
+              </p>
+              <ul className="text-xs text-muted-foreground space-y-0.5 max-h-24 overflow-y-auto">
+                {zipSkipped.map((s) => (
+                  <li key={s} className="truncate">{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -442,17 +673,21 @@ export function ExportPackage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <div className="text-2xl font-semibold text-navy truncate">{brief.brand?.name || currentProject?.name}</div>
               <div className="text-sm text-slate">Project</div>
+            </div>
+            <div>
+              <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{activeBoothSize}</div>
+              <div className="text-sm text-slate">Active Booth Size</div>
             </div>
             <div>
               <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{completedElements}/{totalElements}</div>
               <div className="text-sm text-slate">Elements Complete</div>
             </div>
             <div>
-              <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{images?.filter(i => i.is_current).length || 0}</div>
+              <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{currentImages.length}</div>
               <div className="text-sm text-slate">Rendered Views</div>
             </div>
           </div>

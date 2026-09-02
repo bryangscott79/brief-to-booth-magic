@@ -1357,6 +1357,44 @@ export type Database = {
         }
         Relationships: []
       }
+      project_decks: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string
+          id: string
+          project_id: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          created_by: string
+          id?: string
+          project_id: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string
+          id?: string
+          project_id?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_decks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_images: {
         Row: {
           angle_id: string

@@ -1,9 +1,12 @@
-// deckSlideHtml — DeckSpec + BrandKit → self-contained HTML artboards.
+// deckSlideHtml — DeckSpec + BrandKit (+ DeckStyle) → self-contained HTML
+// artboards.
 //
 // Mirrors the pptxgenjs layouts in deckBuilder.ts 1:1 (same geometry in
 // inches, rendered at 96px/in on a 1280×720 artboard) so the on-screen
 // preview and the PDF path show exactly what the .pptx will look like.
-// If you change slide geometry in deckBuilder.ts, change it here too.
+// If you change slide geometry in deckBuilder.ts, change it here too. Style
+// tokens (deckStyle.ts) flow through the same T/B/C/S scale helpers, so the
+// resolved sizes are identical in both renderers.
 //
 // Output is a plain HTML string with inline CSS — no scripts, no external
 // requests except the Google-font <link> (screen preview only; the PPTX
@@ -28,6 +31,15 @@ import type {
   RenderFullSlide,
   DeckMeta,
 } from "./deckSpec";
+import {
+  closingOnPaper,
+  coverOnPaper,
+  deckScale,
+  resolveDeckStyle,
+  sectionOnPaper,
+  type DeckStyleId,
+  type DeckStyleTokens,
+} from "./deckStyle";
 
 // ── Unit + color helpers (kept local so this module stays pptx-free) ─────────
 
@@ -36,6 +48,9 @@ const px = (inches: number): string => `${Math.round(inches * IN * 10) / 10}px`;
 const fs = (pt: number): string => `${Math.round(pt * (IN / 72) * 10) / 10}px`;
 /** pptx charSpacing (pt) → CSS letter-spacing */
 const ls = (pt: number): string => `${Math.round(pt * (IN / 72) * 100) / 100}px`;
+/** pptx fill transparency (%) → CSS hex alpha suffix ("0D" for 95). */
+const alpha = (transparency: number): string =>
+  Math.round((100 - transparency) * 2.55).toString(16).padStart(2, "0").toUpperCase();
 
 const cssHex = (input: string | null | undefined, fallback: string): string => {
   if (!input) return fallback;
@@ -71,8 +86,31 @@ const abs = (x: number, y: number, w: number, h: number): string =>
 // ── Shared geometry (must match deckBuilder.ts) ──────────────────────────────
 
 const PAGE = { w: 13.333, h: 7.5 };
-const M = 0.6;
-const CW = PAGE.w - M * 2;
+
+/** Content helpers shared with deckBuilder.ts (kept as local copies so this
+ *  module never imports pptxgenjs). Keep the bodies identical. */
+const coverMetaCells = (meta: DeckMeta): Array<[string, string]> => {
+  const cells: Array<[string, string | undefined]> = [
+    ["Client", meta.clientName],
+    ["Show", meta.showName],
+    ["Footprint", meta.boothSize],
+    ["Date", meta.dateLabel],
+  ];
+  return cells.filter((c): c is [string, string] => !!c[1] && c[1].trim().length > 0);
+};
+const sectionMetaLine = (meta: DeckMeta): string =>
+  [meta.projectName, meta.boothSize, meta.showName]
+    .filter((v): v is string => !!v && v.trim().length > 0)
+    .join("   ·   ")
+    .toUpperCase();
+const proseJoin = (items: string[]): string =>
+  items
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => (/[.!?…]$/.test(s) ? s : s + "."))
+    .join(" ");
+const figureCaption = (label: string, i: number, on: boolean): string =>
+  on ? `${String(i + 1).padStart(2, "0")} — ${label}` : label;
 
 interface Theme {
   primary: string;
@@ -83,11 +121,22 @@ interface Theme {
   line: string;
   head: string;
   body: string;
+  /** style tokens + resolved scale (deckStyle.deckScale) */
+  tok: DeckStyleTokens;
+  T: (pt: number) => number;
+  B: (pt: number) => number;
+  C: (pt: number) => number;
+  S: (inches: number) => number;
+  M: number;
+  CW: number;
+  hairline: boolean;
+  field: boolean;
 }
 
-function themeFrom(kit: BrandKit): Theme {
+function themeFrom(kit: BrandKit, tok: DeckStyleTokens): Theme {
   const ink = cssHex(kit.ink, "#101418");
   const paper = cssHex(kit.paper, "#FFFFFF");
+  const scale = deckScale(tok);
   return {
     primary: cssHex(kit.primary, "#0B1B2B"),
     secondary: cssHex(kit.secondary, "#4F6BE8"),
@@ -97,6 +146,10 @@ function themeFrom(kit: BrandKit): Theme {
     line: mix(ink, paper, 0.14),
     head: `'${kit.heading.family}','${kit.heading.pptxFallback}',sans-serif`,
     body: `'${kit.body.family}','${kit.body.pptxFallback}',sans-serif`,
+    tok,
+    ...scale,
+    hairline: tok.accent.intensity === "hairline",
+    field: tok.accent.intensity === "field",
   };
 }
 
@@ -113,74 +166,174 @@ const fontLink = (kit: BrandKit): string => {
 const imgCover = (slot: ImageSlot, x: number, y: number, w: number, h: number, t: Theme): string =>
   slot.url
     ? `<img src="${esc(slot.url)}" alt="${esc(slot.label)}" style="${abs(x, y, w, h)}object-fit:cover;display:block;">`
-    : `<div style="${abs(x, y, w, h)}background:${t.primary}0D;border:1px solid ${t.line};display:flex;align-items:center;justify-content:center;font-size:${fs(10)};color:${t.muted};">${esc(slot.label)}</div>`;
+    : `<div style="${abs(x, y, w, h)}background:${t.primary}0D;border:1px solid ${t.line};display:flex;align-items:center;justify-content:center;font-size:${fs(t.C(10))};color:${t.muted};">${esc(slot.label)}</div>`;
+
+const logo = (url: string | null, x: number, y: number, w: number, h: number, side: "left" | "right"): string =>
+  url ? `<img src="${esc(url)}" alt="" style="${abs(x, y, w, h)}object-fit:contain;object-position:${side} center;">` : "";
 
 const kickerStyle = (t: Theme, color?: string): string =>
-  `font-family:${t.body};font-size:${fs(8.5)};font-weight:700;letter-spacing:${ls(2)};text-transform:uppercase;color:${color ?? t.muted};`;
+  `font-family:${t.body};font-size:${fs(t.C(8.5))};font-weight:700;letter-spacing:${ls(2)};text-transform:uppercase;color:${color ?? t.muted};`;
 
 /** Content-slide title block (matches deckBuilder.addTitle). */
 const titleBlock = (kicker: string, title: string, t: Theme): string =>
-  `<div style="${abs(M, 0.42, CW, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(9)};letter-spacing:${ls(3)};">${esc(kicker)}</div>` +
-  `<div style="${abs(M - 0.03, 0.68, CW, 0.65)}font-family:${t.head};font-size:${fs(24)};font-weight:700;color:${t.primary};line-height:1.1;overflow:hidden;">${esc(title)}</div>`;
+  `<div style="${abs(t.M, 0.42, t.CW, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(9))};letter-spacing:${ls(3)};">${esc(kicker)}</div>` +
+  `<div style="${abs(t.M - 0.03, 0.68, t.CW, 0.65)}font-family:${t.head};font-size:${fs(t.T(24))};font-weight:700;color:${t.primary};line-height:1.1;overflow:hidden;">${esc(title)}</div>`;
 
-/** Body-master furniture: top brand bar + footer. */
+/** Body-master furniture: (optional) top brand bar + footer. */
 const bodyChrome = (meta: DeckMeta, kit: BrandKit, index: number, t: Theme): string => {
   const co = kit.coLogoUrl
     ? `<img src="${esc(kit.coLogoUrl)}" alt="" style="${abs(11.35, 7.06, 1.0, 0.3)}object-fit:contain;">`
     : "";
   return (
-    `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.primary};"></div>` +
-    `<div style="${abs(M, 7.02, CW, 0.01)}background:${t.line};"></div>` +
-    `<div style="${abs(M, 7.08, 6, 0.3)}${kickerStyle(t)}font-size:${fs(8)};display:flex;align-items:center;">${esc((kit.leadName ?? meta.agencyName).toUpperCase())}</div>` +
+    (t.tok.accent.topBar ? `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.primary};"></div>` : "") +
+    `<div style="${abs(t.M, 7.02, t.CW, 0.01)}background:${t.line};"></div>` +
+    `<div style="${abs(t.M, 7.08, 6, 0.3)}${kickerStyle(t)}font-size:${fs(t.C(8))};display:flex;align-items:center;">${esc((kit.leadName ?? meta.agencyName).toUpperCase())}</div>` +
     co +
-    `<div style="${abs(12.35, 7.08, 0.6, 0.3)}font-family:${t.body};font-size:${fs(8)};color:${t.muted};text-align:right;display:flex;align-items:center;justify-content:flex-end;">${index + 1}</div>`
+    `<div style="${abs(12.35, 7.08, 0.6, 0.3)}font-family:${t.body};font-size:${fs(t.C(8))};color:${t.muted};text-align:right;display:flex;align-items:center;justify-content:flex-end;">${index + 1}</div>`
   );
 };
+
+/** Cover / closing field geometry (matches the pptx cover masters). */
+const fieldGeometry = (t: Theme): string =>
+  t.tok.accent.geometry
+    ? `<div style="${abs(9.1, -2.9, 7.6, 7.6)}border-radius:50%;background:${t.secondary};opacity:.28;"></div>` +
+      `<div style="${abs(10.6, -1.4, 4.6, 4.6)}border-radius:50%;background:${t.secondary};opacity:.45;"></div>` +
+      `<div style="${abs(-2.2, 5.6, 5.2, 5.2)}border-radius:50%;background:${t.paper};opacity:.08;"></div>`
+    : "";
 
 // ── Layout renderers (geometry mirrors deckBuilder.ts) ───────────────────────
 
 function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): string {
-  const lead = kit.leadLogoUrl
-    ? `<img src="${esc(kit.leadLogoUrl)}" alt="" style="${abs(M, 0.55, 2.2, 0.62)}object-fit:contain;object-position:left center;">`
-    : "";
-  const co = kit.coLogoUrl
-    ? `<img src="${esc(kit.coLogoUrl)}" alt="" style="${abs(11.0, 6.62, 1.73, 0.55)}object-fit:contain;object-position:right center;">`
-    : "";
-  return (
-    `<div style="${abs(9.1, -2.9, 7.6, 7.6)}border-radius:50%;background:${t.secondary};opacity:.28;"></div>` +
-    `<div style="${abs(10.6, -1.4, 4.6, 4.6)}border-radius:50%;background:${t.secondary};opacity:.45;"></div>` +
-    `<div style="${abs(-2.2, 5.6, 5.2, 5.2)}border-radius:50%;background:${t.paper};opacity:.08;"></div>` +
-    lead +
-    `<div style="${abs(M + 0.02, 2.62, 0.9, 0.05)}background:${t.secondary};"></div>` +
-    `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, mix(t.paper, t.primary, 0.78))}font-size:${fs(11)};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
-    `<div style="${abs(M - 0.05, 3.12, 10.6, 1.95)}font-family:${t.head};font-size:${fs(48)};font-weight:700;color:${t.paper};line-height:${px(52 / 72)};overflow:hidden;">${esc(d.title)}</div>` +
-    `<div style="${abs(M, 5.1, 9.5, 0.5)}font-family:${t.body};font-size:${fs(16)};color:${mix(t.paper, t.primary, 0.9)};">${esc(d.subtitle)}</div>` +
-    `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(10)};letter-spacing:${ls(1)};color:${mix(t.paper, t.primary, 0.65)};">${esc(meta.agencyName)}&nbsp;&nbsp;·&nbsp;&nbsp;${esc(meta.dateLabel)}</div>` +
-    co
-  );
+  const { M, CW } = t;
+  const footerText = `${esc(meta.agencyName)}&nbsp;&nbsp;·&nbsp;&nbsp;${esc(meta.dateLabel)}`;
+  const co = logo(kit.coLogoUrl, 11.0, 6.62, 1.73, 0.55, "right");
+  const footerMuted = `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(t.C(10))};letter-spacing:${ls(1)};color:${t.muted};">${footerText}</div>`;
+  const bottomRule = `<div style="${abs(M, 6.55, CW, 0.008)}background:${t.line};"></div>`;
+  switch (t.tok.cover) {
+    case "quiet":
+      return (
+        logo(kit.leadLogoUrl, M, 0.55, 2.2, 0.62, "left") +
+        `<div style="${abs(M, 1.42, CW, 0.02)}background:${t.primary};"></div>` +
+        `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, t.muted)}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
+        `<div style="${abs(M - 0.05, 3.12, 10.6, 1.95)}font-family:${t.head};font-size:${fs(t.T(44))};font-weight:700;color:${t.primary};line-height:${px(t.T(48) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
+        `<div style="${abs(M, 5.1, 9.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(16))};color:${t.ink};">${esc(d.subtitle)}</div>` +
+        bottomRule +
+        footerMuted +
+        co
+      );
+    case "editorial":
+      return (
+        `<div style="${abs(M, 0.6, 8, 0.3)}${kickerStyle(t, t.muted)}font-size:${fs(t.C(9))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
+        logo(kit.leadLogoUrl, PAGE.w - M - 2.2, 0.42, 2.2, 0.62, "right") +
+        `<div style="${abs(M, 0.98, CW, 0.012)}background:${t.ink};"></div>` +
+        `<div style="${abs(M - 0.06, 1.3, CW, 3.7)}font-family:${t.head};font-size:${fs(t.T(64))};font-weight:700;color:${t.ink};line-height:${px(t.T(66) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
+        `<div style="${abs(M + 0.02, 5.2, 0.9, 0.05)}background:${t.secondary};"></div>` +
+        `<div style="${abs(M, 5.35, 9.5, 0.6)}font-family:${t.body};font-size:${fs(t.B(18))};font-style:italic;color:${mix(t.ink, t.paper, 0.72)};">${esc(d.subtitle)}</div>` +
+        bottomRule +
+        footerMuted +
+        co
+      );
+    case "grid": {
+      const cellW = CW / 4;
+      const cells = coverMetaCells(meta)
+        .map(([label, value], i) => {
+          const x = M + i * cellW;
+          return (
+            (i > 0 ? `<div style="${abs(x - 0.12, 5.48, 0.008, 0.85)}background:${t.line};"></div>` : "") +
+            `<div style="${abs(x, 5.48, cellW - 0.24, 0.26)}${kickerStyle(t)}">${esc(label)}</div>` +
+            `<div style="${abs(x, 5.74, cellW - 0.24, 0.5)}font-family:${t.head};font-size:${fs(t.T(14))};font-weight:700;color:${t.primary};line-height:1.2;overflow:hidden;">${esc(value)}</div>`
+          );
+        })
+        .join("");
+      return (
+        `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.primary};"></div>` +
+        logo(kit.leadLogoUrl, M, 0.55, 2.2, 0.62, "left") +
+        `<div style="${abs(M, 1.95, 10.5, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(10))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
+        `<div style="${abs(M - 0.05, 2.3, 10.6, 1.6)}font-family:${t.head};font-size:${fs(t.T(40))};font-weight:700;color:${t.primary};line-height:${px(t.T(44) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
+        `<div style="${abs(M, 3.95, 9.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(14))};color:${t.ink};">${esc(d.subtitle)}</div>` +
+        `<div style="${abs(M, 5.3, CW, 0.014)}background:${t.primary};"></div>` +
+        cells +
+        bottomRule +
+        footerMuted +
+        co
+      );
+    }
+    case "field":
+    default:
+      return (
+        fieldGeometry(t) +
+        logo(kit.leadLogoUrl, M, 0.55, 2.2, 0.62, "left") +
+        `<div style="${abs(M + 0.02, 2.62, 0.9, 0.05)}background:${t.secondary};"></div>` +
+        `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, mix(t.paper, t.primary, 0.78))}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
+        `<div style="${abs(M - 0.05, 3.12, 10.6, 1.95)}font-family:${t.head};font-size:${fs(t.T(48))};font-weight:700;color:${t.paper};line-height:${px(t.T(52) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
+        `<div style="${abs(M, 5.1, 9.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(16))};color:${mix(t.paper, t.primary, 0.9)};">${esc(d.subtitle)}</div>` +
+        `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(t.C(10))};letter-spacing:${ls(1)};color:${mix(t.paper, t.primary, 0.65)};">${footerText}</div>` +
+        co
+      );
+  }
 }
 
-function renderSection(d: SectionSlide, t: Theme): string {
+function renderSection(d: SectionSlide, meta: DeckMeta, t: Theme): string {
+  const { M, CW } = t;
   const num = String(d.number).padStart(2, "0");
-  return (
-    `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.secondary};"></div>` +
-    `<div style="${abs(6.6, 0.7, 6.4, 6.4)}font-family:${t.head};font-size:${fs(250)};font-weight:700;color:${mix(t.secondary, t.ink, 0.42)};display:flex;align-items:center;justify-content:flex-end;line-height:1;">${num}</div>` +
-    `<div style="${abs(M + 0.02, 3.02, 0.9, 0.05)}background:${t.secondary};"></div>` +
-    `<div style="${abs(M, 3.18, 5, 0.35)}${kickerStyle(t, t.secondary)}font-size:${fs(10)};letter-spacing:${ls(4)};">SECTION ${num}</div>` +
-    `<div style="${abs(M - 0.03, 3.5, 8.2, 1.1)}font-family:${t.head};font-size:${fs(34)};font-weight:700;color:${t.paper};line-height:1.15;overflow:hidden;">${esc(d.title)}</div>` +
-    (d.subtitle
-      ? `<div style="${abs(M, 4.6, 7.4, 0.6)}font-family:${t.body};font-size:${fs(13)};color:${mix(t.paper, t.ink, 0.62)};">${esc(d.subtitle)}</div>`
-      : "")
-  );
+  const bar =
+    t.tok.section === "number" || t.tok.section === "index"
+      ? `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.secondary};"></div>`
+      : "";
+  switch (t.tok.section) {
+    case "rule":
+      return (
+        `<div style="${abs(PAGE.w - M - 2.4, 3.42, 2.4, 1.2)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${mix(t.primary, t.paper, 0.3)};display:flex;align-items:center;justify-content:flex-end;">${num}</div>` +
+        `<div style="${abs(M, 3.02, 5, 0.3)}${kickerStyle(t, t.muted)}font-size:${fs(t.C(10))};letter-spacing:${ls(4)};">SECTION ${num}</div>` +
+        `<div style="${abs(M, 3.38, CW, 0.012)}background:${t.primary};"></div>` +
+        `<div style="${abs(M - 0.03, 3.5, 8.2, 1.1)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${t.primary};line-height:1.15;overflow:hidden;">${esc(d.title)}</div>` +
+        (d.subtitle
+          ? `<div style="${abs(M, 4.6, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${t.muted};">${esc(d.subtitle)}</div>`
+          : "")
+      );
+    case "display":
+      return (
+        `<div style="${abs(M, 1.2, 5, 0.35)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(10))};letter-spacing:${ls(4)};">SECTION ${num}</div>` +
+        `<div style="${abs(M - 0.06, 1.6, CW, 3.6)}font-family:${t.head};font-size:${fs(t.T(64))};font-weight:700;color:${t.paper};line-height:${px(t.T(66) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
+        `<div style="${abs(M + 0.02, 5.32, 0.9, 0.05)}background:${t.secondary};"></div>` +
+        (d.subtitle
+          ? `<div style="${abs(M, 5.48, 9, 0.7)}font-family:${t.body};font-size:${fs(t.B(15))};font-style:italic;color:${mix(t.paper, t.ink, 0.7)};">${esc(d.subtitle)}</div>`
+          : "")
+      );
+    case "index":
+      return (
+        bar +
+        `<div style="${abs(M, 2.85, 0.95, 0.95)}background:${t.secondary};color:${t.paper};font-family:${t.head};font-size:${fs(t.T(28))};font-weight:700;display:flex;align-items:center;justify-content:center;">${num}</div>` +
+        `<div style="${abs(M + 1.2, 2.85, 8.5, 0.95)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${t.paper};line-height:1.15;overflow:hidden;display:flex;align-items:center;">${esc(d.title)}</div>` +
+        (d.subtitle
+          ? `<div style="${abs(M + 1.2, 3.85, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${mix(t.paper, t.ink, 0.62)};">${esc(d.subtitle)}</div>`
+          : "") +
+        `<div style="${abs(M, 6.3, CW, 0.008)}background:${mix(t.paper, t.ink, 0.25)};"></div>` +
+        `<div style="${abs(M, 6.42, CW, 0.35)}${kickerStyle(t, mix(t.paper, t.ink, 0.6))}font-size:${fs(t.C(9))};">${esc(sectionMetaLine(meta))}</div>`
+      );
+    case "number":
+    default:
+      return (
+        bar +
+        `<div style="${abs(6.6, 0.7, 6.4, 6.4)}font-family:${t.head};font-size:${fs(250)};font-weight:700;color:${mix(t.secondary, t.ink, 0.42)};display:flex;align-items:center;justify-content:flex-end;line-height:1;">${num}</div>` +
+        `<div style="${abs(M + 0.02, 3.02, 0.9, 0.05)}background:${t.secondary};"></div>` +
+        `<div style="${abs(M, 3.18, 5, 0.35)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(10))};letter-spacing:${ls(4)};">SECTION ${num}</div>` +
+        `<div style="${abs(M - 0.03, 3.5, 8.2, 1.1)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${t.paper};line-height:1.15;overflow:hidden;">${esc(d.title)}</div>` +
+        (d.subtitle
+          ? `<div style="${abs(M, 4.6, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${mix(t.paper, t.ink, 0.62)};">${esc(d.subtitle)}</div>`
+          : "")
+      );
+  }
 }
 
 function renderBriefSummary(d: BriefSummarySlide, t: Theme): string {
+  const { M, S } = t;
   let out = titleBlock("The Ask", d.title, t);
   let y = 1.75;
   for (const f of d.facts.slice(0, 5)) {
     out += `<div style="${abs(M, y, 4.2, 0.26)}${kickerStyle(t)}">${esc(f.label)}</div>`;
-    out += `<div style="${abs(M, y + 0.24, 4.2, 0.55)}font-family:${t.body};font-size:${fs(13.5)};font-weight:700;color:${t.ink};overflow:hidden;">${esc(f.value)}</div>`;
-    y += 0.92;
+    out += `<div style="${abs(M, y + 0.24, 4.2, 0.55)}font-family:${t.body};font-size:${fs(t.B(13.5))};font-weight:700;color:${t.ink};overflow:hidden;">${esc(f.value)}</div>`;
+    y += S(0.92);
     out += `<div style="${abs(M, y - 0.12, 4.2, 0.01)}background:${t.line};"></div>`;
   }
   const rx = 5.55;
@@ -189,10 +342,16 @@ function renderBriefSummary(d: BriefSummarySlide, t: Theme): string {
   if (d.objectives.length) {
     out += `<div style="${abs(rx, ry, rw, 0.26)}${kickerStyle(t, t.secondary)}">Objectives</div>`;
     ry += 0.32;
-    for (const o of d.objectives) {
-      out += `<div style="${abs(rx + 0.02, ry + 0.09, 0.14, 0.045)}background:${t.secondary};"></div>`;
-      out += `<div style="${abs(rx + 0.3, ry, rw - 0.3, 0.52)}font-family:${t.body};font-size:${fs(11.5)};color:${t.ink};line-height:1.3;overflow:hidden;">${esc(o)}</div>`;
-      ry += 0.56;
+    if (t.tok.prose) {
+      const h = S(0.56) * d.objectives.length;
+      out += `<div style="${abs(rx, ry, rw, h)}font-family:${t.body};font-size:${fs(t.B(12.5))};color:${t.ink};line-height:${px(t.B(19) / 72)};overflow:hidden;">${esc(proseJoin(d.objectives))}</div>`;
+      ry += h;
+    } else {
+      for (const o of d.objectives) {
+        out += `<div style="${abs(rx + 0.02, ry + 0.09, 0.14, 0.045)}background:${t.secondary};"></div>`;
+        out += `<div style="${abs(rx + 0.3, ry, rw - 0.3, 0.52)}font-family:${t.body};font-size:${fs(t.B(11.5))};color:${t.ink};line-height:1.3;overflow:hidden;">${esc(o)}</div>`;
+        ry += S(0.56);
+      }
     }
     ry += 0.18;
   }
@@ -200,58 +359,70 @@ function renderBriefSummary(d: BriefSummarySlide, t: Theme): string {
     out += `<div style="${abs(rx, ry, rw, 0.26)}${kickerStyle(t, t.secondary)}">Who we're designing for</div>`;
     ry += 0.34;
     for (const a of d.audiences) {
-      out += `<div style="${abs(rx, ry, rw, 0.5)}font-family:${t.body};font-size:${fs(10.5)};line-height:1.35;overflow:hidden;"><b style="color:${t.primary};">${esc(a.name)}</b><span style="color:${t.muted};">${a.description ? "&nbsp;&nbsp;—&nbsp;&nbsp;" + esc(a.description) : ""}</span></div>`;
-      ry += 0.5;
+      out += `<div style="${abs(rx, ry, rw, 0.5)}font-family:${t.body};font-size:${fs(t.B(10.5))};line-height:1.35;overflow:hidden;"><b style="color:${t.primary};">${esc(a.name)}</b><span style="color:${t.muted};">${a.description ? "&nbsp;&nbsp;—&nbsp;&nbsp;" + esc(a.description) : ""}</span></div>`;
+      ry += S(0.5);
     }
   }
   return out;
 }
 
 function renderConcept(d: ConceptSlide, t: Theme): string {
-  let out = `<div style="${abs(M, 0.55, CW, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(9)};letter-spacing:${ls(3)};">The Big Idea</div>`;
-  out += `<div style="${abs(M - 0.04, 0.9, 9.2, 1.7)}font-family:${t.head};font-size:${fs(32)};font-weight:700;color:${t.primary};line-height:${px(36 / 72)};overflow:hidden;">${esc(d.headline)}</div>`;
+  const { M, CW, S } = t;
+  let out = `<div style="${abs(M, 0.55, CW, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(9))};letter-spacing:${ls(3)};">The Big Idea</div>`;
+  out += `<div style="${abs(M - 0.04, 0.9, 9.2, 1.7)}font-family:${t.head};font-size:${fs(t.T(32))};font-weight:700;color:${t.primary};line-height:${px(t.T(36) / 72)};overflow:hidden;">${esc(d.headline)}</div>`;
   let ny = 2.7;
   if (d.subheadline) {
-    out += `<div style="${abs(M, ny, 7.2, 0.55)}font-family:${t.body};font-size:${fs(14)};font-style:italic;color:${t.secondary};overflow:hidden;">${esc(d.subheadline)}</div>`;
+    out += `<div style="${abs(M, ny, 7.2, 0.55)}font-family:${t.body};font-size:${fs(t.B(14))};font-style:italic;color:${t.secondary};overflow:hidden;">${esc(d.subheadline)}</div>`;
     ny += 0.62;
   }
-  out += `<div style="${abs(M, ny, 7.2, 6.55 - ny)}font-family:${t.body};font-size:${fs(12.5)};color:${t.ink};line-height:${px(19 / 72)};overflow:hidden;">${esc(d.narrative)}</div>`;
+  out += `<div style="${abs(M, ny, 7.2, 6.55 - ny)}font-family:${t.body};font-size:${fs(t.B(12.5))};color:${t.ink};line-height:${px(t.B(19) / 72)};overflow:hidden;">${esc(d.narrative)}</div>`;
   const pxCol = 8.35;
   const pw = PAGE.w - M - pxCol;
   let py = 2.7;
   d.points.forEach((point, i) => {
-    out += `<div style="${abs(pxCol, py, 0.34, 0.34)}border-radius:50%;background:${t.primary};color:${t.paper};font-family:${t.head};font-size:${fs(11)};font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</div>`;
-    out += `<div style="${abs(pxCol + 0.5, py - 0.03, pw - 0.5, 1.15)}font-family:${t.body};font-size:${fs(10.5)};color:${t.ink};line-height:1.35;overflow:hidden;">${esc(point)}</div>`;
-    py += 1.28;
+    if (t.tok.prose) {
+      out += `<div style="${abs(pxCol, py, pw, 0.008)}background:${t.line};"></div>`;
+      out += `<div style="${abs(pxCol, py + 0.1, 0.5, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(9))};">${String(i + 1).padStart(2, "0")}</div>`;
+      out += `<div style="${abs(pxCol + 0.5, py + 0.08, pw - 0.5, 1.05)}font-family:${t.body};font-size:${fs(t.B(11.5))};color:${t.ink};line-height:1.35;overflow:hidden;">${esc(point)}</div>`;
+    } else {
+      out += `<div style="${abs(pxCol, py, 0.34, 0.34)}border-radius:50%;background:${t.primary};color:${t.paper};font-family:${t.head};font-size:${fs(t.T(11))};font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</div>`;
+      out += `<div style="${abs(pxCol + 0.5, py - 0.03, pw - 0.5, 1.15)}font-family:${t.body};font-size:${fs(t.B(10.5))};color:${t.ink};line-height:1.35;overflow:hidden;">${esc(point)}</div>`;
+    }
+    py += S(1.28);
   });
   return out;
 }
 
 function renderElementGrid(d: ElementGridSlide, t: Theme): string {
+  const { M, CW, S } = t;
   let out = titleBlock("The Concept", d.title, t);
   const cards = d.cards.slice(0, 6);
   const cols = cards.length <= 4 ? 2 : 3;
   const rows = Math.ceil(cards.length / cols);
-  const gap = 0.26;
+  const gap = S(0.26);
   const cw = (CW - gap * (cols - 1)) / cols;
   const chAvail = 6.85 - 1.62;
   const ch = Math.min(2.42, (chAvail - gap * (rows - 1)) / rows);
   cards.forEach((card, i) => {
     const cx = M + (i % cols) * (cw + gap);
     const cy = 1.62 + Math.floor(i / cols) * (ch + gap);
-    out += `<div style="${abs(cx, cy, cw, ch)}background:${t.primary}0D;border:1px solid ${t.line};border-radius:${px(0.08)};"></div>`;
+    out += t.hairline
+      ? `<div style="${abs(cx, cy, cw, 0.008)}background:${t.line};"></div>`
+      : `<div style="${abs(cx, cy, cw, ch)}background:${t.primary}${alpha(t.tok.accent.panelTransparency)};border:1px solid ${t.line};border-radius:${px(0.08)};"></div>`;
     out += `<div style="${abs(cx + 0.24, cy + 0.28, 0.42, 0.05)}background:${t.secondary};"></div>`;
-    out += `<div style="${abs(cx + 0.2, cy + 0.38, cw - 0.44, 0.5)}font-family:${t.head};font-size:${fs(13)};font-weight:700;color:${t.primary};line-height:1.2;overflow:hidden;">${esc(card.title)}</div>`;
-    out += `<div style="${abs(cx + 0.2, cy + 0.88, cw - 0.44, ch - 1.05)}font-family:${t.body};font-size:${fs(9.5)};color:${mix(t.ink, t.paper, 0.82)};line-height:${px(13 / 72)};overflow:hidden;">${esc(card.body)}</div>`;
+    out += `<div style="${abs(cx + 0.2, cy + 0.38, cw - 0.44, 0.5)}font-family:${t.head};font-size:${fs(t.T(13))};font-weight:700;color:${t.primary};line-height:1.2;overflow:hidden;">${esc(card.title)}</div>`;
+    out += `<div style="${abs(cx + 0.2, cy + 0.88, cw - 0.44, ch - 1.05)}font-family:${t.body};font-size:${fs(t.B(9.5))};color:${mix(t.ink, t.paper, 0.82)};line-height:${px(t.B(13) / 72)};overflow:hidden;">${esc(card.body)}</div>`;
   });
   return out;
 }
 
 function renderSpatial(d: SpatialSlide, t: Theme): string {
+  const { M, S } = t;
   let out = titleBlock("The Space", d.title, t);
   const hasImage = !!d.image;
   const tableX = hasImage ? 7.5 : M;
   const tableW = PAGE.w - M - tableX;
+  const lead = t.tok.tables.numbersLead;
 
   if (d.image) {
     const box = { x: M, y: 1.62, w: 6.55, h: 4.75 };
@@ -263,49 +434,79 @@ function renderSpatial(d: SpatialSlide, t: Theme): string {
   }
 
   let y = 1.62;
-  out += `<div style="${abs(tableX, y, tableW - 1.4, 0.26)}${kickerStyle(t)}">Zone</div>`;
-  out += `<div style="${abs(tableX + tableW - 1.4, y, 1.4, 0.26)}${kickerStyle(t)}text-align:right;">Sq Ft</div>`;
+  if (lead) {
+    out += `<div style="${abs(tableX, y, 1.4, 0.26)}${kickerStyle(t)}">Sq Ft</div>`;
+    out += `<div style="${abs(tableX + 1.4, y, tableW - 1.4, 0.26)}${kickerStyle(t)}">Zone</div>`;
+  } else {
+    out += `<div style="${abs(tableX, y, tableW - 1.4, 0.26)}${kickerStyle(t)}">Zone</div>`;
+    out += `<div style="${abs(tableX + tableW - 1.4, y, 1.4, 0.26)}${kickerStyle(t)}text-align:right;">Sq Ft</div>`;
+  }
   y += 0.32;
   out += `<div style="${abs(tableX, y, tableW, 0.014)}background:${t.primary};"></div>`;
   y += 0.08;
-  const rowH = d.zones.length > 6 ? 0.5 : 0.58;
+  const rowH = S(d.zones.length > 6 ? 0.5 : 0.58);
   for (const z of d.zones) {
-    out += `<div style="${abs(tableX, y, tableW - 1.4, rowH)}font-family:${t.body};display:flex;flex-direction:column;justify-content:center;overflow:hidden;"><b style="font-size:${fs(11)};color:${t.ink};">${esc(z.name)}</b>${z.note ? `<span style="font-size:${fs(8.5)};color:${t.muted};">${esc(z.note)}</span>` : ""}</div>`;
-    out += `<div style="${abs(tableX + tableW - 1.4, y, 1.4, rowH)}font-family:${t.body};font-size:${fs(11)};font-weight:700;color:${t.ink};display:flex;align-items:center;justify-content:flex-end;">${z.sqft.toLocaleString("en-US")}</div>`;
+    const name = (x: number, w: number) =>
+      `<div style="${abs(x, y, w, rowH)}font-family:${t.body};display:flex;flex-direction:column;justify-content:center;overflow:hidden;"><b style="font-size:${fs(t.B(11))};color:${t.ink};">${esc(z.name)}</b>${z.note ? `<span style="font-size:${fs(t.C(8.5))};color:${t.muted};">${esc(z.note)}</span>` : ""}</div>`;
+    const sqft = z.sqft.toLocaleString("en-US");
+    if (lead) {
+      out += `<div style="${abs(tableX, y, 1.4, rowH)}font-family:${t.head};font-size:${fs(t.T(13))};font-weight:700;color:${t.primary};display:flex;align-items:center;">${sqft}</div>`;
+      out += name(tableX + 1.4, tableW - 1.4);
+    } else {
+      out += name(tableX, tableW - 1.4);
+      out += `<div style="${abs(tableX + tableW - 1.4, y, 1.4, rowH)}font-family:${t.body};font-size:${fs(t.B(11))};font-weight:700;color:${t.ink};display:flex;align-items:center;justify-content:flex-end;">${sqft}</div>`;
+    }
     y += rowH;
     out += `<div style="${abs(tableX, y, tableW, 0.008)}background:${t.line};"></div>`;
     y += 0.02;
   }
   if (typeof d.totalSqft === "number") {
     y += 0.06;
-    out += `<div style="${abs(tableX, y, tableW - 1.6, 0.4)}${kickerStyle(t, t.primary)}font-size:${fs(10)};letter-spacing:${ls(1)};display:flex;align-items:center;">${esc(d.boothSize)} TOTAL</div>`;
-    out += `<div style="${abs(tableX + tableW - 1.6, y, 1.6, 0.4)}font-family:${t.head};font-size:${fs(14)};font-weight:700;color:${t.primary};display:flex;align-items:center;justify-content:flex-end;">${d.totalSqft.toLocaleString("en-US")}</div>`;
+    const totalText = d.totalSqft.toLocaleString("en-US");
+    if (lead) {
+      out += `<div style="${abs(tableX, y, 1.6, 0.4)}font-family:${t.head};font-size:${fs(t.T(14))};font-weight:700;color:${t.primary};display:flex;align-items:center;">${totalText}</div>`;
+      out += `<div style="${abs(tableX + 1.6, y, tableW - 1.6, 0.4)}${kickerStyle(t, t.primary)}font-size:${fs(t.C(10))};letter-spacing:${ls(1)};display:flex;align-items:center;">${esc(d.boothSize)} TOTAL</div>`;
+    } else {
+      out += `<div style="${abs(tableX, y, tableW - 1.6, 0.4)}${kickerStyle(t, t.primary)}font-size:${fs(t.C(10))};letter-spacing:${ls(1)};display:flex;align-items:center;">${esc(d.boothSize)} TOTAL</div>`;
+      out += `<div style="${abs(tableX + tableW - 1.6, y, 1.6, 0.4)}font-family:${t.head};font-size:${fs(t.T(14))};font-weight:700;color:${t.primary};display:flex;align-items:center;justify-content:flex-end;">${totalText}</div>`;
+    }
   }
   return out;
 }
 
 function renderRenderFull(d: RenderFullSlide, meta: DeckMeta, t: Theme): string {
+  const { M, CW } = t;
+  if (t.tok.images.framing === "inset") {
+    return (
+      imgCover(d.image, M, 0.95, CW, 5.4, t) +
+      `<div style="${abs(M, 6.58, 0.5, 0.045)}background:${t.secondary};"></div>` +
+      `<div style="${abs(M + 0.62, 6.46, 9.5, 0.3)}${kickerStyle(t, t.primary)}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};display:flex;align-items:center;">${esc(d.caption)}</div>` +
+      `<div style="${abs(9.2, 6.46, 3.5, 0.3)}font-family:${t.body};font-size:${fs(t.C(8.5))};letter-spacing:${ls(1)};color:${t.muted};display:flex;align-items:center;justify-content:flex-end;">${esc(meta.projectName)}</div>`
+    );
+  }
   return (
     imgCover(d.image, 0, 0, PAGE.w, PAGE.h, t) +
     `<div style="${abs(0, 6.72, PAGE.w, 0.78)}background:${t.ink}B8;"></div>` +
     `<div style="${abs(M, 6.98, 0.5, 0.045)}background:${t.secondary};"></div>` +
-    `<div style="${abs(M + 0.62, 6.86, 9.5, 0.3)}${kickerStyle(t, t.paper)}font-size:${fs(11)};letter-spacing:${ls(3)};display:flex;align-items:center;">${esc(d.caption)}</div>` +
-    `<div style="${abs(9.2, 6.86, 3.5, 0.3)}font-family:${t.body};font-size:${fs(8.5)};letter-spacing:${ls(1)};color:${mix(t.paper, t.ink, 0.7)};display:flex;align-items:center;justify-content:flex-end;">${esc(meta.projectName)}</div>`
+    `<div style="${abs(M + 0.62, 6.86, 9.5, 0.3)}${kickerStyle(t, t.paper)}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};display:flex;align-items:center;">${esc(d.caption)}</div>` +
+    `<div style="${abs(9.2, 6.86, 3.5, 0.3)}font-family:${t.body};font-size:${fs(t.C(8.5))};letter-spacing:${ls(1)};color:${mix(t.paper, t.ink, 0.7)};display:flex;align-items:center;justify-content:flex-end;">${esc(meta.projectName)}</div>`
   );
 }
 
 function renderRenderGrid(d: RenderGridSlide, t: Theme): string {
+  const { M, CW, S } = t;
   let out = titleBlock("The Space", d.title, t);
   const imgs = d.images.slice(0, 4);
-  const gap = 0.26;
+  const gap = S(0.26);
   const capH = 0.3;
+  const fig = t.tok.images.figureNumbers;
   if (imgs.length <= 2) {
     const fw = (CW - gap) / 2;
     const fh = 4.55;
     imgs.forEach((slot, i) => {
       const x = M + i * (fw + gap);
       out += imgCover(slot, x, 1.62, fw, fh, t);
-      out += `<div style="${abs(x, 1.62 + fh + 0.08, fw, capH)}${kickerStyle(t)}">${esc(slot.label)}</div>`;
+      out += `<div style="${abs(x, 1.62 + fh + 0.08, fw, capH)}${kickerStyle(t)}">${esc(figureCaption(slot.label, i, fig))}</div>`;
     });
   } else {
     const fw = (CW - gap) / 2;
@@ -314,50 +515,82 @@ function renderRenderGrid(d: RenderGridSlide, t: Theme): string {
       const x = M + (i % 2) * (fw + gap);
       const y = 1.58 + Math.floor(i / 2) * (fh + capH + 0.18);
       out += imgCover(slot, x, y, fw, fh, t);
-      out += `<div style="${abs(x, y + fh + 0.04, fw, capH)}${kickerStyle(t)}">${esc(slot.label)}</div>`;
+      out += `<div style="${abs(x, y + fh + 0.04, fw, capH)}${kickerStyle(t)}">${esc(figureCaption(slot.label, i, fig))}</div>`;
     });
   }
   return out;
 }
 
 function renderBudget(d: BudgetSlide, t: Theme): string {
+  const { M, CW, S } = t;
   let out = titleBlock("The Investment", d.title, t);
+  const lead = t.tok.tables.numbersLead;
+  const headColor = t.field ? t.paper : undefined;
+  const headBg = t.field ? `background:${t.primary};` : "";
+  // When numbers lead, the category cell follows the right-aligned share
+  // cell; the pptx table separates them with its 0.08in cell margins, so
+  // give the category cell the same breathing room here.
+  const catPad = lead ? `padding-left:${px(0.16)};` : "";
+  const cellCategory = (r: BudgetSlide["rows"][number]) =>
+    `<div style="flex:1;${catPad}font-size:${fs(t.B(11))};color:${t.ink};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"><b>${esc(r.category)}</b>${r.description ? `<span style="font-size:${fs(t.C(9))};color:${t.muted};">&nbsp;&nbsp;&nbsp;${esc(r.description)}</span>` : ""}</div>`;
+  const cellShare = (r: BudgetSlide["rows"][number]) =>
+    `<div style="width:${px(1.2)};text-align:right;font-size:${fs(t.C(10))};color:${t.muted};">${typeof r.percentage === "number" ? r.percentage + "%" : ""}</div>`;
+  const cellAmount = (r: BudgetSlide["rows"][number]) =>
+    lead
+      ? `<div style="width:${px(2.0)};text-align:left;font-family:${t.head};font-size:${fs(t.T(12))};font-weight:700;color:${t.primary};">$${r.amount.toLocaleString("en-US")}</div>`
+      : `<div style="width:${px(2.0)};text-align:right;font-size:${fs(t.B(11))};font-weight:700;color:${t.ink};">$${r.amount.toLocaleString("en-US")}</div>`;
+  const SEP = "\n        ";
   const rowsHtml = d.rows
     .map(
       (r, i) => `
-      <div style="display:flex;align-items:center;min-height:${px(0.42)};background:${i % 2 === 1 ? t.primary + "0A" : "transparent"};border-bottom:1px solid ${t.line};padding:0 ${px(0.08)};">
-        <div style="flex:1;font-size:${fs(11)};color:${t.ink};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"><b>${esc(r.category)}</b>${r.description ? `<span style="font-size:${fs(9)};color:${t.muted};">&nbsp;&nbsp;&nbsp;${esc(r.description)}</span>` : ""}</div>
-        <div style="width:${px(1.2)};text-align:right;font-size:${fs(10)};color:${t.muted};">${typeof r.percentage === "number" ? r.percentage + "%" : ""}</div>
-        <div style="width:${px(2.0)};text-align:right;font-size:${fs(11)};font-weight:700;color:${t.ink};">$${r.amount.toLocaleString("en-US")}</div>
+      <div style="display:flex;align-items:center;min-height:${px(S(0.42))};background:${t.tok.accent.zebra && i % 2 === 1 ? t.primary + alpha(96) : "transparent"};border-bottom:1px solid ${t.line};padding:0 ${px(0.08)};">
+        ${(lead ? [cellAmount(r), cellShare(r), cellCategory(r)] : [cellCategory(r), cellShare(r), cellAmount(r)]).join(SEP)}
       </div>`,
     )
     .join("");
+  const headCategory = `<div style="flex:1;${catPad}${kickerStyle(t, headColor)}">Category</div>`;
+  const headShare = `<div style="width:${px(1.2)};text-align:right;${kickerStyle(t, headColor)}">Share</div>`;
+  const headAmount = `<div style="width:${px(2.0)};text-align:${lead ? "left" : "right"};${kickerStyle(t, headColor)}">Amount</div>`;
+  const totalLabel = `<div style="flex:1;${catPad}${kickerStyle(t, t.primary)}font-size:${fs(t.C(10))};">${esc(d.totalLabel)}</div>`;
+  const totalAmount = lead
+    ? `<div style="width:${px(2.0)};text-align:left;font-family:${t.head};font-size:${fs(t.T(15))};font-weight:700;color:${t.primary};">$${d.total.toLocaleString("en-US")}</div><div style="width:${px(1.2)};"></div>`
+    : `<div style="width:${px(3.2)};text-align:right;font-family:${t.head};font-size:${fs(t.T(15))};font-weight:700;color:${t.primary};">$${d.total.toLocaleString("en-US")}</div>`;
   out += `
     <div style="${abs(M, 1.6, CW, 5.3)}font-family:${t.body};">
-      <div style="display:flex;align-items:center;min-height:${px(0.42)};border-bottom:2px solid ${t.primary};padding:0 ${px(0.08)};">
-        <div style="flex:1;${kickerStyle(t)}">Category</div>
-        <div style="width:${px(1.2)};text-align:right;${kickerStyle(t)}">Share</div>
-        <div style="width:${px(2.0)};text-align:right;${kickerStyle(t)}">Amount</div>
+      <div style="display:flex;align-items:center;min-height:${px(S(0.42))};${headBg}border-bottom:2px solid ${t.primary};padding:0 ${px(0.08)};">
+        ${(lead ? [headAmount, headShare, headCategory] : [headCategory, headShare, headAmount]).join(SEP)}
       </div>
       ${rowsHtml}
-      <div style="display:flex;align-items:center;min-height:${px(0.52)};background:${t.primary}14;border-top:2px solid ${t.primary};padding:0 ${px(0.08)};">
-        <div style="flex:1;${kickerStyle(t, t.primary)}font-size:${fs(10)};">${esc(d.totalLabel)}</div>
-        <div style="width:${px(3.2)};text-align:right;font-family:${t.head};font-size:${fs(15)};font-weight:700;color:${t.primary};">$${d.total.toLocaleString("en-US")}</div>
+      <div style="display:flex;align-items:center;min-height:${px(0.52)};background:${t.primary}${alpha(92)};border-top:2px solid ${t.primary};padding:0 ${px(0.08)};">
+        ${(lead ? [totalAmount, totalLabel] : [totalLabel, totalAmount]).join(SEP)}
       </div>
     </div>`;
   return out;
 }
 
 function renderMaterials(d: MaterialsSlide, t: Theme): string {
+  const { M, CW, S } = t;
   let out = titleBlock("The Investment", d.title, t);
+  const lead = t.tok.tables.numbersLead;
   let y = 1.65;
   out += `<div style="${abs(M, y, CW, 0.014)}background:${t.primary};"></div>`;
   y += 0.1;
-  const rowH = d.rows.length > 6 ? 0.52 : 0.62;
+  const rowH = S(d.rows.length > 6 ? 0.52 : 0.62);
   for (const r of d.rows) {
-    out += `<div style="${abs(M, y, CW - 1.8, rowH)}font-family:${t.body};display:flex;flex-direction:column;justify-content:center;overflow:hidden;"><b style="font-size:${fs(11.5)};color:${t.ink};">${esc(r.category)}</b>${r.summary ? `<span style="font-size:${fs(8.5)};color:${t.muted};white-space:nowrap;text-overflow:ellipsis;overflow:hidden;">${esc(r.summary)}</span>` : ""}</div>`;
-    if (typeof r.subtotal === "number") {
-      out += `<div style="${abs(M + CW - 1.8, y, 1.8, rowH)}font-family:${t.body};font-size:${fs(11.5)};font-weight:700;color:${t.ink};display:flex;align-items:center;justify-content:flex-end;">$${r.subtotal.toLocaleString("en-US")}</div>`;
+    const text = (x: number, w: number) =>
+      `<div style="${abs(x, y, w, rowH)}font-family:${t.body};display:flex;flex-direction:column;justify-content:center;overflow:hidden;"><b style="font-size:${fs(t.B(11.5))};color:${t.ink};">${esc(r.category)}</b>${r.summary ? `<span style="font-size:${fs(t.C(8.5))};color:${t.muted};white-space:nowrap;text-overflow:ellipsis;overflow:hidden;">${esc(r.summary)}</span>` : ""}</div>`;
+    const hasSub = typeof r.subtotal === "number";
+    const sub = hasSub ? "$" + (r.subtotal as number).toLocaleString("en-US") : "";
+    if (lead) {
+      if (hasSub) {
+        out += `<div style="${abs(M, y, 1.8, rowH)}font-family:${t.head};font-size:${fs(t.T(13))};font-weight:700;color:${t.primary};display:flex;align-items:center;">${sub}</div>`;
+      }
+      out += text(M + 1.8, CW - 1.8);
+    } else {
+      out += text(M, CW - 1.8);
+      if (hasSub) {
+        out += `<div style="${abs(M + CW - 1.8, y, 1.8, rowH)}font-family:${t.body};font-size:${fs(t.B(11.5))};font-weight:700;color:${t.ink};display:flex;align-items:center;justify-content:flex-end;">${sub}</div>`;
+      }
     }
     y += rowH;
     out += `<div style="${abs(M, y, CW, 0.008)}background:${t.line};"></div>`;
@@ -365,17 +598,24 @@ function renderMaterials(d: MaterialsSlide, t: Theme): string {
   }
   if (typeof d.total === "number") {
     y += 0.08;
-    out += `<div style="${abs(M, y, CW - 2.2, 0.45)}${kickerStyle(t, t.primary)}font-size:${fs(10)};display:flex;align-items:center;">Estimated materials total</div>`;
-    out += `<div style="${abs(M + CW - 2.2, y, 2.2, 0.45)}font-family:${t.head};font-size:${fs(16)};font-weight:700;color:${t.primary};display:flex;align-items:center;justify-content:flex-end;">$${d.total.toLocaleString("en-US")}</div>`;
+    const totalText = "$" + d.total.toLocaleString("en-US");
+    if (lead) {
+      out += `<div style="${abs(M, y, 2.2, 0.45)}font-family:${t.head};font-size:${fs(t.T(16))};font-weight:700;color:${t.primary};display:flex;align-items:center;">${totalText}</div>`;
+      out += `<div style="${abs(M + 2.2, y, CW - 2.2, 0.45)}${kickerStyle(t, t.primary)}font-size:${fs(t.C(10))};display:flex;align-items:center;">Estimated materials total</div>`;
+    } else {
+      out += `<div style="${abs(M, y, CW - 2.2, 0.45)}${kickerStyle(t, t.primary)}font-size:${fs(t.C(10))};display:flex;align-items:center;">Estimated materials total</div>`;
+      out += `<div style="${abs(M + CW - 2.2, y, 2.2, 0.45)}font-family:${t.head};font-size:${fs(t.T(16))};font-weight:700;color:${t.primary};display:flex;align-items:center;justify-content:flex-end;">${totalText}</div>`;
+    }
     y += 0.5;
   }
   if (d.note) {
-    out += `<div style="${abs(M, Math.min(y + 0.05, 6.4), CW, 0.5)}font-family:${t.body};font-size:${fs(9)};font-style:italic;color:${t.muted};">${esc(d.note)}</div>`;
+    out += `<div style="${abs(M, Math.min(y + 0.05, 6.4), CW, 0.5)}font-family:${t.body};font-size:${fs(t.C(9))};font-style:italic;color:${t.muted};">${esc(d.note)}</div>`;
   }
   return out;
 }
 
 function renderNextSteps(d: NextStepsSlide, t: Theme): string {
+  const { M, CW } = t;
   let out = titleBlock("Next Steps", d.title, t);
   const steps = d.steps.slice(0, 5);
   const startY = 1.7;
@@ -386,39 +626,39 @@ function renderNextSteps(d: NextStepsSlide, t: Theme): string {
     if (i < steps.length - 1) {
       out += `<div style="${abs(M + 0.185, y + 0.42, 0.012, stepH - 0.42)}background:${t.line};"></div>`;
     }
-    out += `<div style="${abs(M, y, 0.38, 0.38)}border-radius:50%;background:${t.primary};color:${t.paper};font-family:${t.head};font-size:${fs(12)};font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</div>`;
-    out += `<div style="${abs(M + 0.6, y - 0.02, 5.4, 0.4)}font-family:${t.head};font-size:${fs(14)};font-weight:700;color:${t.primary};overflow:hidden;">${esc(step.title)}</div>`;
+    out += `<div style="${abs(M, y, 0.38, 0.38)}border-radius:50%;background:${t.primary};color:${t.paper};font-family:${t.head};font-size:${fs(t.T(12))};font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</div>`;
+    out += `<div style="${abs(M + 0.6, y - 0.02, 5.4, 0.4)}font-family:${t.head};font-size:${fs(t.T(14))};font-weight:700;color:${t.primary};overflow:hidden;">${esc(step.title)}</div>`;
     if (step.detail) {
-      out += `<div style="${abs(6.4, y, PAGE.w - M - 6.4, stepH - 0.1)}font-family:${t.body};font-size:${fs(10.5)};color:${mix(t.ink, t.paper, 0.8)};line-height:1.4;overflow:hidden;">${esc(step.detail)}</div>`;
+      out += `<div style="${abs(6.4, y, PAGE.w - M - 6.4, stepH - 0.1)}font-family:${t.body};font-size:${fs(t.B(10.5))};color:${mix(t.ink, t.paper, 0.8)};line-height:1.4;overflow:hidden;">${esc(step.detail)}</div>`;
     }
   });
   if (d.timelineNote) {
-    out += `<div style="${abs(M, 6.15, CW, 0.55)}background:${t.secondary}14;border-radius:${px(0.08)};display:flex;align-items:center;padding:0 ${px(0.25)};box-sizing:border-box;${kickerStyle(t, mix(t.secondary, t.ink, 0.85))}font-size:${fs(10)};">${esc(d.timelineNote)}</div>`;
+    const noteStyle = `${kickerStyle(t, mix(t.secondary, t.ink, 0.85))}font-size:${fs(t.C(10))};`;
+    out += t.hairline
+      ? `<div style="${abs(M, 6.15, CW, 0.008)}background:${t.line};"></div>` +
+        `<div style="${abs(M, 6.15, CW, 0.55)}display:flex;align-items:center;${noteStyle}">${esc(d.timelineNote)}</div>`
+      : `<div style="${abs(M, 6.15, CW, 0.55)}background:${t.secondary}${alpha(92)};border-radius:${px(0.08)};display:flex;align-items:center;padding:0 ${px(0.25)};box-sizing:border-box;${noteStyle}">${esc(d.timelineNote)}</div>`;
   }
   return out;
 }
 
 function renderClosing(d: ClosingSlide, kit: BrandKit, t: Theme): string {
-  const lead = kit.leadLogoUrl
-    ? `<img src="${esc(kit.leadLogoUrl)}" alt="" style="${abs(M, 6.55, 1.9, 0.55)}object-fit:contain;object-position:left center;">`
-    : "";
-  const co = kit.coLogoUrl
-    ? `<img src="${esc(kit.coLogoUrl)}" alt="" style="${abs(10.85, 6.55, 1.88, 0.55)}object-fit:contain;object-position:right center;">`
-    : "";
+  const { M, S } = t;
+  const onPaper = closingOnPaper(t.tok);
+  const lead = logo(kit.leadLogoUrl, M, 6.55, 1.9, 0.55, "left");
+  const co = logo(kit.coLogoUrl, 10.85, 6.55, 1.88, 0.55, "right");
   let out =
-    `<div style="${abs(9.1, -2.9, 7.6, 7.6)}border-radius:50%;background:${t.secondary};opacity:.28;"></div>` +
-    `<div style="${abs(10.6, -1.4, 4.6, 4.6)}border-radius:50%;background:${t.secondary};opacity:.45;"></div>` +
-    `<div style="${abs(-2.2, 5.6, 5.2, 5.2)}border-radius:50%;background:${t.paper};opacity:.08;"></div>` +
-    `<div style="${abs(M - 0.04, 2.35, 9.6, 1.4)}font-family:${t.head};font-size:${fs(44)};font-weight:700;color:${t.paper};overflow:hidden;">${esc(d.headline)}</div>`;
+    fieldGeometry(t) +
+    `<div style="${abs(M - 0.04, 2.35, 9.6, 1.4)}font-family:${t.head};font-size:${fs(t.T(44))};font-weight:700;color:${onPaper ? t.primary : t.paper};overflow:hidden;">${esc(d.headline)}</div>`;
   if (d.subline) {
     out += `<div style="${abs(M + 0.02, 3.85, 0.9, 0.05)}background:${t.secondary};"></div>`;
-    out += `<div style="${abs(M, 3.98, 8.5, 0.5)}font-family:${t.body};font-size:${fs(15)};color:${mix(t.paper, t.primary, 0.88)};">${esc(d.subline)}</div>`;
+    out += `<div style="${abs(M, 3.98, 8.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(15))};color:${onPaper ? t.ink : mix(t.paper, t.primary, 0.88)};">${esc(d.subline)}</div>`;
   }
   let y = 4.85;
   for (const c of d.contacts.slice(0, 3)) {
     const rest = [c.email, c.phone].filter(Boolean).join("&nbsp;&nbsp;·&nbsp;&nbsp;");
-    out += `<div style="${abs(M, y, 10.5, 0.38)}font-family:${t.body};font-size:${fs(12)};"><b style="color:${t.paper};">${esc(c.name)}</b><span style="color:${mix(t.paper, t.primary, 0.72)};">${rest ? "&nbsp;&nbsp;·&nbsp;&nbsp;" + rest : ""}</span></div>`;
-    y += 0.42;
+    out += `<div style="${abs(M, y, 10.5, 0.38)}font-family:${t.body};font-size:${fs(t.B(12))};"><b style="color:${onPaper ? t.primary : t.paper};">${esc(c.name)}</b><span style="color:${onPaper ? t.muted : mix(t.paper, t.primary, 0.72)};">${rest ? "&nbsp;&nbsp;·&nbsp;&nbsp;" + rest : ""}</span></div>`;
+    y += S(0.42);
   }
   return out + lead + co;
 }
@@ -428,13 +668,30 @@ function renderClosing(d: ClosingSlide, kit: BrandKit, t: Theme): string {
 const groundFor = (slide: SlideSpec, t: Theme): string => {
   switch (slide.layout) {
     case "cover":
+      return coverOnPaper(t.tok) ? t.paper : t.primary;
     case "closing":
-      return t.primary;
+      return closingOnPaper(t.tok) ? t.paper : t.primary;
     case "section":
+      return sectionOnPaper(t.tok) ? t.paper : t.ink;
     case "renderFull":
-      return t.ink;
+      return t.tok.images.framing === "inset" ? t.paper : t.ink;
     default:
       return t.paper;
+  }
+};
+
+/** Does this slide sit on the body master (paper + chrome)? Mirrors
+ *  deckBuilder.masterFor. */
+const onBodyMaster = (slide: SlideSpec, t: Theme): boolean => {
+  switch (slide.layout) {
+    case "cover":
+    case "closing":
+    case "section":
+      return false;
+    case "renderFull":
+      return t.tok.images.framing === "inset";
+    default:
+      return true;
   }
 };
 
@@ -445,8 +702,10 @@ export function renderSlideHtml(
   index: number,
   total: number,
   meta?: DeckMeta,
+  style?: DeckStyleId | DeckStyleTokens | null,
 ): string {
-  const t = themeFrom(kit);
+  const tok = typeof style === "object" && style ? style : resolveDeckStyle(style);
+  const t = themeFrom(kit, tok);
   const m: DeckMeta = meta ?? {
     projectName: "",
     clientName: kit.client.name ?? "",
@@ -457,7 +716,7 @@ export function renderSlideHtml(
   let inner = "";
   switch (slide.layout) {
     case "cover": inner = renderCover(slide, m, kit, t); break;
-    case "section": inner = renderSection(slide, t); break;
+    case "section": inner = renderSection(slide, m, t); break;
     case "briefSummary": inner = renderBriefSummary(slide, t); break;
     case "concept": inner = renderConcept(slide, t); break;
     case "elementGrid": inner = renderElementGrid(slide, t); break;
@@ -470,8 +729,7 @@ export function renderSlideHtml(
     case "closing": inner = renderClosing(slide, kit, t); break;
   }
   // Body-master chrome for content layouts (matches MASTER.body in the pptx).
-  const isBody = !["cover", "closing", "section", "renderFull"].includes(slide.layout);
-  const chrome = isBody ? bodyChrome(m, kit, index, t) : "";
+  const chrome = onBodyMaster(slide, t) ? bodyChrome(m, kit, index, t) : "";
   void total;
   return (
     fontLink(kit) +
@@ -483,9 +741,13 @@ export function renderSlideHtml(
 }
 
 /** Whole deck → one HTML document body (for preview scroll / print-to-PDF). */
-export function renderDeckHtml(spec: DeckSpec, kit: BrandKit): string {
+export function renderDeckHtml(
+  spec: DeckSpec,
+  kit: BrandKit,
+  style?: DeckStyleId | DeckStyleTokens | null,
+): string {
   const slides = spec.slides
-    .map((s, i) => renderSlideHtml(s, kit, i, spec.slides.length, spec.meta))
+    .map((s, i) => renderSlideHtml(s, kit, i, spec.slides.length, spec.meta, style))
     .join('\n<div style="height:24px"></div>\n');
   return (
     fontLink(kit) +

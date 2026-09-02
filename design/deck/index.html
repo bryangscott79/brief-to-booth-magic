@@ -8,13 +8,22 @@
   --navy:#0B1B2B; --charcoal:#1F2937; --slate:#64748B; --slate-faint:#94A3B8;
   --cloud-line:#E2E8F0; --cloud:#F6F8FA; --white:#FFFFFF;
   --grad-brand:linear-gradient(90deg,#8FD3F4,#6FA8FF,#A78BFA,#C084FC,#F472B6);
+  --grad-action:linear-gradient(135deg,#4F6BE8,#7C3AED,#DB2777);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',-apple-system,sans-serif;background:var(--cloud);color:var(--charcoal);padding:40px 48px 80px}
 header .eyebrow{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
 header h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em;color:var(--navy);margin-top:6px}
-header p{font-size:13px;color:var(--slate);margin-top:6px;max-width:680px}
+header p{font-size:13px;color:var(--slate);margin-top:6px;max-width:720px}
 .rule{height:2px;background:var(--grad-brand);border-radius:1px;margin:22px 0 30px;max-width:220px}
+h2{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin:0 0 12px}
+.styles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:34px}
+.style{background:var(--white);border:1px solid var(--cloud-line);border-radius:12px;padding:14px 16px}
+.style .name{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--navy)}
+.style .name .sw{width:10px;height:10px;border-radius:3px;background:var(--grad-action)}
+.style .name .sw.base{background:var(--navy)}
+.style p{font-size:12px;color:var(--slate);margin-top:4px}
+.style code{display:block;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;line-height:15px;color:var(--charcoal);margin-top:8px;white-space:pre-wrap}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
 a.card{display:block;background:var(--white);border:1px solid var(--cloud-line);border-radius:14px;overflow:hidden;text-decoration:none;color:inherit}
 .frame{height:230px;overflow:hidden;position:relative;background:#E8EAED;border-bottom:1px solid var(--cloud-line)}
@@ -26,11 +35,45 @@ a.card{display:block;background:var(--white);border:1px solid var(--cloud-line);
 </head>
 <body>
 <header>
-  <p class="eyebrow">Canopy · Deck design system · 12 layouts × 2 brand kits</p>
+  <p class="eyebrow">Canopy · Deck design system · 12 layouts × 2 brand kits × 4 style presets</p>
   <h1>The deck, slide by slide</h1>
-  <p>Every layout in the typed slide system (src/lib/deckSpec.ts), rendered with real demo content — Samsung · CES 2027 · Exhibitus — in an agency kit (Exhibitus navy) and a client kit (Samsung blue). Each board shows the exact HTML the preview renderer emits; the PPTX builder draws the same geometry in PowerPoint. Click a card to open a board at full size.</p>
+  <p>Every layout in the typed slide system (src/lib/deckSpec.ts), rendered with real demo content — Samsung · CES 2027 · Exhibitus. Each board shows two rows: the <b>Pitch</b> style in an agency kit (Exhibitus navy) and a client kit (Samsung blue), then the <b>Executive</b>, <b>Editorial</b>, and <b>Tactical</b> presets on the agency kit. Same DeckSpec, same brand kit — only the style tokens (src/lib/deckStyle.ts) change, and both renderers (deckSlideHtml.ts for preview/PDF, deckBuilder.ts for .pptx) resolve the same tokens to the same geometry. Click a card to open a board at full size.</p>
   <div class="rule"></div>
 </header>
+
+<h2>Style presets</h2>
+<div class="styles">
+  <div class="style">
+    <div class="name"><span class="sw base"></span>Pitch deck <span style="font-weight:500;color:var(--slate-faint)">· default</span></div>
+    <p>Bold, brand-color-forward — for new business. Today's design, verbatim.</p>
+    <code>cover field · section number · tint accents
+type ×1 / ×1 / ×1 · margin 0.6″ · spacing ×1
+hero bleed · tables trail numbers</code>
+  </div>
+  <div class="style">
+    <div class="name"><span class="sw"></span>Executive</div>
+    <p>Restrained, high-whitespace — for C-suite reviews.</p>
+    <code>cover quiet · section rule · hairline accents
+type ×0.92 / ×0.96 / ×1 · margin 0.85″ · spacing ×1.08
+hero inset · no top bar · no zebra</code>
+  </div>
+  <div class="style">
+    <div class="name"><span class="sw"></span>Editorial</div>
+    <p>Magazine-style typography, prose over bullets — for storytelling.</p>
+    <code>cover editorial · section display · hairline accents
+type ×1.18 / ×1.04 / ×0.95 · margin 0.75″ · spacing ×1.04
+hero bleed · objectives + points as prose / deks</code>
+  </div>
+  <div class="style">
+    <div class="name"><span class="sw"></span>Tactical</div>
+    <p>Numbers + diagrams forward — for production reviews.</p>
+    <code>cover grid (meta strip) · section index · field accents
+type ×0.9 / ×0.95 / ×1 · margin 0.6″ · spacing ×0.92
+hero inset · figure numbers · numbers lead tables</code>
+  </div>
+</div>
+
+<h2>Layouts</h2>
 <div class="grid">
   <a class="card" href="01-cover.html"><div class="frame"><iframe src="01-cover.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Cover</b><span>cover</span></div></a>
   <a class="card" href="02-section.html"><div class="frame"><iframe src="02-section.html" loading="lazy" scrolling="no"></iframe></div><div class="cap"><b>Section divider</b><span>section</span></div></a>

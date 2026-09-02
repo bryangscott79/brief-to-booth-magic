@@ -9,12 +9,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { BrandMode } from "@/lib/brandKit";
+import type { DeckStyleId } from "@/lib/deckStyle";
 
 // ─── SHAPES ──────────────────────────────────────────────────────────────────
 
 export interface DeckSettings {
   /** Which brand the deck renders in (agency / client / blend). */
   brandMode?: BrandMode;
+  /** Style preset (pitch / executive / editorial / tactical). Missing → pitch. */
+  style?: DeckStyleId;
   [key: string]: unknown;
 }
 

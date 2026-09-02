@@ -26,6 +26,7 @@ import { resolveBrandKit, type BrandKit, type BrandMode } from "@/lib/brandKit";
 import { compileDeckSpec, type DeckRenderImage } from "@/lib/compileDeckSpec";
 import { buildDeckPptx } from "@/lib/deckBuilder";
 import { renderSlideHtml, renderDeckHtml } from "@/lib/deckSlideHtml";
+import { DECK_STYLES, DEFAULT_DECK_STYLE, isDeckStyleId, type DeckStyleId } from "@/lib/deckStyle";
 import type { DeckSpec } from "@/lib/deckSpec";
 import { parseVersionedAngleId } from "@/lib/promptVersions";
 import { markProjectExported } from "@/lib/markProjectExported";
@@ -51,6 +52,7 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
   const [showBrandPanel, setShowBrandPanel] = useState(false);
   const [spec, setSpec] = useState<DeckSpec | null>(null);
   const [kit, setKit] = useState<BrandKit | null>(null);
+  const [style, setStyle] = useState<DeckStyleId | null>(null);
   const [buildingPptx, setBuildingPptx] = useState(false);
   const brandPanelRef = useRef<HTMLDivElement>(null);
 
@@ -68,8 +70,10 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
     });
   }, [images, activeConfigKey, defaultConfigKey]);
 
-  // Rehydrate a previously compiled deck (settings.brandMode + saved spec).
+  // Rehydrate a previously compiled deck (settings.brandMode + settings.style
+  // + saved spec). Decks saved before styles existed carry no style → pitch.
   const savedMode = (deck?.settings as { brandMode?: BrandMode } | undefined)?.brandMode;
+  const savedStyle = (deck?.settings as { style?: unknown } | undefined)?.style;
   const savedSpec = (deck?.content as { spec?: DeckSpec } | undefined)?.spec;
   const effectiveSpec = spec ?? savedSpec ?? null;
   const effectiveKit = useMemo(() => {
@@ -77,8 +81,10 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
     if (savedMode) return resolveBrandKit(savedMode, agency, client);
     return null;
   }, [kit, savedMode, agency, client]);
+  const effectiveStyle: DeckStyleId = style ?? (isDeckStyleId(savedStyle) ? savedStyle : DEFAULT_DECK_STYLE);
+  const styleLabel = DECK_STYLES.find((s) => s.id === effectiveStyle)?.label ?? effectiveStyle;
 
-  const compile = (chosenKit: BrandKit) => {
+  const compile = (chosenKit: BrandKit, chosenStyle: DeckStyleId) => {
     const compiled = compileDeckSpec({
       project: { name: currentProject?.name ?? null },
       parsedBrief: (currentProject?.parsedBrief ?? null) as Record<string, unknown> | null,
@@ -88,11 +94,13 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
       boothSizeLabel: activeConfigLabel ?? undefined,
     });
     setKit(chosenKit);
+    setStyle(chosenStyle);
     setSpec(compiled);
     saveDeck.mutate({ content: { spec: compiled } });
+    const label = DECK_STYLES.find((s) => s.id === chosenStyle)?.label ?? chosenStyle;
     toast({
       title: "Deck compiled",
-      description: `${compiled.slides.length} slides in ${chosenKit.mode === "blend" ? "blended" : chosenKit.mode} brand.`,
+      description: `${compiled.slides.length} slides in ${chosenKit.mode === "blend" ? "blended" : chosenKit.mode} brand · ${label} style.`,
     });
   };
 
@@ -102,6 +110,7 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
     let skipped = 0;
     try {
       const blob = await buildDeckPptx(effectiveSpec, effectiveKit, {
+        style: effectiveStyle,
         onImageSkipped: () => {
           skipped += 1;
         },
@@ -130,7 +139,7 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
 
   const handlePrintPdf = () => {
     if (!effectiveSpec || !effectiveKit) return;
-    const html = renderDeckHtml(effectiveSpec, effectiveKit);
+    const html = renderDeckHtml(effectiveSpec, effectiveKit, effectiveStyle);
     const win = window.open("", "_blank");
     if (!win) {
       toast({ title: "Popup blocked", description: "Allow popups to export the PDF.", variant: "destructive" });
@@ -170,6 +179,7 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
             {effectiveKit.mode === "blend" ? "Blended brand" : `${effectiveKit.mode} brand`}
           </StatusChip>
         )}
+        {effectiveSpec && effectiveKit && <StatusChip variant="neutral">{styleLabel}</StatusChip>}
         {activeConfigLabel && <SpecMono className="text-[11px] text-slate">{activeConfigLabel}</SpecMono>}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={openFixGaps} className="gap-1.5">
@@ -219,7 +229,7 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
               >
                 <iframe
                   title={`Slide ${i + 1}`}
-                  srcDoc={renderSlideHtml(slide, effectiveKit, i, effectiveSpec.slides.length)}
+                  srcDoc={renderSlideHtml(slide, effectiveKit, i, effectiveSpec.slides.length, effectiveSpec.meta, effectiveStyle)}
                   className="pointer-events-none absolute left-0 top-0 origin-top-left border-0"
                   style={{ width: 1280, height: 720, transform: "scale(0.19)" }}
                   scrolling="no"

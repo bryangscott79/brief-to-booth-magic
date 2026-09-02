@@ -1,11 +1,16 @@
-// BrandModeDialog — choose which brand the deck renders in.
+// BrandModeDialog — choose which brand the deck renders in, and in which
+// style.
 //
-// Three option cards (Agency / Client / Blend), each with a live mini-preview
-// built by resolveBrandKit for that mode: lead logo, the two palette swatches,
-// and an "Aa" sample in the deck heading face. Modes with blocking gaps
-// (gapsBlockingMode) are disabled with a "Missing: …" note and a Fix-now
-// affordance that hands off to the brand kit panel. Confirming persists
-// { brandMode } into the project deck settings and returns the resolved kit.
+// Three brand-mode cards (Agency / Client / Blend), each with a live
+// mini-preview built by resolveBrandKit for that mode: lead logo, the two
+// palette swatches, and an "Aa" sample in the deck heading face. Modes with
+// blocking gaps (gapsBlockingMode) are disabled with a "Missing: …" note and a
+// Fix-now affordance that hands off to the brand kit panel.
+//
+// Beneath them, a row of four compact style cards (deckStyle.DECK_STYLES) —
+// Pitch / Executive / Editorial / Tactical — each with a tiny CSS-drawn cover
+// silhouette. Confirming persists { brandMode, style } into the project deck
+// settings and returns the resolved kit + style id.
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -28,6 +33,7 @@ import {
   type BrandKit,
   type BrandMode,
 } from "@/lib/brandKit";
+import { DECK_STYLES, DEFAULT_DECK_STYLE, isDeckStyleId, type DeckStyleId } from "@/lib/deckStyle";
 import { cn } from "@/lib/utils";
 
 // ─── option metadata ─────────────────────────────────────────────────────────
@@ -81,6 +87,60 @@ function PreviewStrip({ kit }: { kit: BrandKit }) {
   );
 }
 
+// ─── style thumbnails ────────────────────────────────────────────────────────
+
+/** Abstract cover silhouette per style, drawn with CSS in the chosen kit's
+ *  palette (64×36, 16:9). Reads as the cover treatment each style uses:
+ *  field / quiet / editorial / grid — see deckStyle.ts. */
+function StyleThumb({ id, primary, secondary }: { id: DeckStyleId; primary: string; secondary: string }) {
+  const frame = "relative h-9 w-16 shrink-0 overflow-hidden rounded-[3px]";
+  switch (id) {
+    case "pitch":
+      return (
+        <div aria-hidden="true" className={frame} style={{ background: primary }}>
+          <span className="absolute -right-3 -top-4 h-9 w-9 rounded-full" style={{ background: secondary, opacity: 0.45 }} />
+          <span className="absolute left-[7px] top-[13px] h-[2px] w-[9px]" style={{ background: secondary }} />
+          <span className="absolute left-[7px] top-[18px] h-[5px] w-[30px] rounded-[1px] bg-white" />
+          <span className="absolute left-[7px] top-[26px] h-[2px] w-[20px] bg-white/60" />
+        </div>
+      );
+    case "executive":
+      return (
+        <div aria-hidden="true" className={cn(frame, "border border-border bg-white")}>
+          <span className="absolute left-[7px] right-[7px] top-[9px] h-px" style={{ background: primary }} />
+          <span className="absolute left-[7px] top-[17px] h-[4px] w-[26px] rounded-[1px]" style={{ background: primary }} />
+          <span className="absolute left-[7px] top-[24px] h-[2px] w-[18px] bg-slate-faint/70" />
+        </div>
+      );
+    case "editorial":
+      return (
+        <div aria-hidden="true" className={cn(frame, "border border-border bg-white")}>
+          <span className="absolute left-[7px] top-[5px] h-[1.5px] w-[10px] bg-slate-faint/80" />
+          <span className="absolute left-[7px] right-[7px] top-[9px] h-px bg-navy" />
+          <span className="absolute left-[7px] top-[13px] h-[7px] w-[44px] rounded-[1px] bg-navy" />
+          <span className="absolute left-[7px] top-[22px] h-[7px] w-[32px] rounded-[1px] bg-navy" />
+          <span className="absolute left-[7px] top-[31px] h-[1.5px] w-[6px]" style={{ background: secondary }} />
+        </div>
+      );
+    case "tactical":
+    default:
+      return (
+        <div aria-hidden="true" className={cn(frame, "border border-border bg-white")}>
+          <span className="absolute inset-x-0 top-0 h-[2px]" style={{ background: primary }} />
+          <span className="absolute left-[7px] top-[9px] h-[4px] w-[26px] rounded-[1px]" style={{ background: primary }} />
+          <span className="absolute left-[7px] right-[7px] top-[19px] h-px" style={{ background: primary }} />
+          {[0, 1, 2, 3].map((i) => (
+            <span
+              key={i}
+              className="absolute top-[23px] h-[7px] w-[10px] rounded-[1px]"
+              style={{ left: 7 + i * 13, background: primary, opacity: 0.16 }}
+            />
+          ))}
+        </div>
+      );
+  }
+}
+
 // ─── dialog ──────────────────────────────────────────────────────────────────
 
 export interface BrandModeDialogProps {
@@ -88,8 +148,8 @@ export interface BrandModeDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: string | null | undefined;
   clientId: string | null | undefined;
-  /** Called with the resolved kit after the choice is persisted. */
-  onConfirm: (kit: BrandKit) => void;
+  /** Called with the resolved kit + chosen style after the choice is persisted. */
+  onConfirm: (kit: BrandKit, style: DeckStyleId) => void;
   /** "Fix now" on a blocked card — open the brand kit panel. */
   onFixGaps?: () => void;
 }
@@ -109,10 +169,13 @@ export function BrandModeDialog({
   const saveDeck = useSaveProjectDeck(projectId);
 
   const [mode, setMode] = useState<BrandMode>("agency");
+  const [style, setStyle] = useState<DeckStyleId>(DEFAULT_DECK_STYLE);
 
-  // Preselect the persisted choice (or the first non-blocked mode) on open.
+  // Preselect the persisted choices (or the first non-blocked mode) on open.
   useEffect(() => {
     if (!open) return;
+    const savedStyle = deck?.settings?.style;
+    setStyle(isDeckStyleId(savedStyle) ? savedStyle : DEFAULT_DECK_STYLE);
     const saved = deck?.settings?.brandMode;
     if (saved && MODE_ORDER.includes(saved) && gapsBlockingMode(gaps, saved).length === 0) {
       setMode(saved);
@@ -121,21 +184,22 @@ export function BrandModeDialog({
     const firstOpen = MODE_ORDER.find((m) => gapsBlockingMode(gaps, m).length === 0);
     if (firstOpen) setMode(firstOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, deck?.settings?.brandMode, isLoading]);
+  }, [open, deck?.settings?.brandMode, deck?.settings?.style, isLoading]);
 
   const blockingFor = (m: BrandMode): BrandGap[] => gapsBlockingMode(gaps, m);
   const selectedBlocked = blockingFor(mode).length > 0;
+  const selectedKit = resolveBrandKit(mode, agency, client);
 
   const handleConfirm = async () => {
     if (selectedBlocked) return;
     const kit = resolveBrandKit(mode, agency, client);
     try {
-      await saveDeck.mutateAsync({ settings: { brandMode: mode } });
-      onConfirm(kit);
+      await saveDeck.mutateAsync({ settings: { brandMode: mode, style } });
+      onConfirm(kit, style);
       onOpenChange(false);
     } catch (err) {
       toast({
-        title: "Couldn't save brand choice",
+        title: "Couldn't save deck settings",
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
@@ -146,9 +210,9 @@ export function BrandModeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Deck brand</DialogTitle>
+          <DialogTitle>Deck brand &amp; style</DialogTitle>
           <DialogDescription>
-            Choose whose identity the deck renders in — logos, palette, and typefaces follow.
+            Choose whose identity the deck renders in — logos, palette, and typefaces follow — and the style it's set in.
           </DialogDescription>
         </DialogHeader>
 
@@ -224,6 +288,36 @@ export function BrandModeDialog({
                 </button>
               );
             })}
+
+            {/* Style row */}
+            <div className="pt-1.5">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">Style</span>
+                <span className="text-[11px] text-slate-faint">Same content, same brand — different dress.</span>
+              </div>
+              <div role="radiogroup" aria-label="Deck style" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {DECK_STYLES.map((s) => {
+                  const active = style === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setStyle(s.id)}
+                      className={cn(
+                        "flex flex-col gap-2 rounded-lg border px-2.5 py-2.5 text-left transition-colors",
+                        active ? "border-navy bg-cloud" : "border-border bg-white hover:border-navy/40",
+                      )}
+                    >
+                      <StyleThumb id={s.id} primary={selectedKit.primary} secondary={selectedKit.secondary} />
+                      <span className="text-[12px] font-semibold leading-[15px] text-navy">{s.label}</span>
+                      <span className="text-[11px] leading-[14px] text-slate">{s.blurb}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 

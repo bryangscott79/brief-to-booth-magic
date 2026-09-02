@@ -32,26 +32,30 @@ import type {
   VideoSlide,
   DeckMeta,
 } from "./deckSpec";
-import {
-  closingOnPaper,
-  coverOnPaper,
-  deckScale,
-  resolveDeckStyle,
-  sectionOnPaper,
-  type DeckStyleId,
-  type DeckStyleTokens,
-} from "./deckStyle";
+import { deckScale, resolveDeckStyle, type DeckStyleId, type DeckStyleTokens } from "./deckStyle";
 import {
   LOCKUP_RADIUS,
   NO_LOGO_TREATMENTS,
   PLATE_RADIUS,
   fitLogoBox,
   lockupBox,
+  logoTreatmentAt,
   plateBox,
   type Box,
   type LogoGround,
   type LogoTreatments,
 } from "./logoContrast";
+import {
+  groundPalette,
+  kitGrounds,
+  onBodyMaster,
+  resolveSlide,
+  topBarHex,
+  usesGroundPalette,
+  type BasePalette,
+  type SlideResolution,
+} from "./deckGround";
+import type { SlideOverrides } from "./deckOps";
 
 // ── Unit + color helpers (kept local so this module stays pptx-free) ─────────
 
@@ -170,26 +174,54 @@ interface Theme {
   field: boolean;
   /** Logo plate decisions (logoContrast). NO_LOGO_TREATMENTS = bare marks. */
   treat: LogoTreatments;
+  /** The slide's effective ground hex (deckGround.resolveSlide). */
+  ground: string;
+  /** Body-master top bar colour (primary on paper, secondary on dark). */
+  topBar: string;
+  /** Absolute kit paper / ink — logo plates and letterbox frames never
+   *  follow a swapped palette. */
+  platePaper: string;
+  plateInk: string;
+  hideLogo: boolean;
+  /** Per-slide resolution: effective cover / section / framing / ground. */
+  res: SlideResolution;
 }
 
-function themeFrom(kit: BrandKit, tok: DeckStyleTokens, treat: LogoTreatments): Theme {
-  const ink = cssHex(kit.ink, "#101418");
-  const paper = cssHex(kit.paper, "#FFFFFF");
+/** Theme for ONE slide: the kit palette (swapped to ground-relative roles
+ *  when a paper-native layout sits on a dark override ground), the slide's
+ *  accent-adjusted tokens and scale, and the logo treatments. */
+function themeFor(kit: BrandKit, res: SlideResolution, treat: LogoTreatments): Theme {
+  const base: BasePalette = {
+    primary: cssHex(kit.primary, "#0B1B2B"),
+    secondary: cssHex(kit.secondary, "#4F6BE8"),
+    ink: cssHex(kit.ink, "#101418"),
+    paper: cssHex(kit.paper, "#FFFFFF"),
+  };
+  const gp = usesGroundPalette(res)
+    ? groundPalette(base, res.groundHex)
+    : { ...base, muted: mix(base.ink, base.paper, 0.55), line: mix(base.ink, base.paper, 0.14), ground: base.paper, darkGround: false };
+  const tok = res.tok;
   const scale = deckScale(tok);
   return {
     treat,
-    primary: cssHex(kit.primary, "#0B1B2B"),
-    secondary: cssHex(kit.secondary, "#4F6BE8"),
-    ink,
-    paper,
-    muted: mix(ink, paper, 0.55),
-    line: mix(ink, paper, 0.14),
+    primary: gp.primary,
+    secondary: gp.secondary,
+    ink: gp.ink,
+    paper: gp.paper,
+    muted: gp.muted,
+    line: gp.line,
     head: `'${kit.heading.family}','${kit.heading.pptxFallback}',sans-serif`,
     body: `'${kit.body.family}','${kit.body.pptxFallback}',sans-serif`,
     tok,
     ...scale,
     hairline: tok.accent.intensity === "hairline",
     field: tok.accent.intensity === "field",
+    ground: res.groundHex,
+    topBar: topBarHex(gp, base),
+    platePaper: base.paper,
+    plateInk: base.ink,
+    hideLogo: res.hideLogo,
+    res,
   };
 }
 
@@ -210,7 +242,9 @@ const imgCover = (slot: ImageSlot, x: number, y: number, w: number, h: number, t
 
 /** A brand mark in its logo box, plated when logoContrast decided the
  *  ground would swallow it (`lockup` = the field-cover tab). Same fitted
- *  rect + plate geometry as deckBuilder.addLogo. */
+ *  rect + plate geometry as deckBuilder.addLogo. The treatment is looked up
+ *  for the slide's EFFECTIVE ground (an override can move a mark onto a
+ *  different colour); hideLogo suppresses every mark on the slide. */
 const logo = (
   url: string | null,
   box: Box,
@@ -220,14 +254,14 @@ const logo = (
   t: Theme,
   lockup = false,
 ): string => {
-  if (!url) return "";
+  if (!url || t.hideLogo) return "";
   const aspect = which === "lead" ? t.treat.leadAspect : t.treat.coAspect;
-  const treatment = t.treat[which][ground];
+  const treatment = logoTreatmentAt(t.treat, which, ground, t.ground);
   const fitted = fitLogoBox(box, aspect, side);
   let plate = "";
   if (treatment !== "none") {
     const p = lockup ? lockupBox(fitted) : plateBox(fitted);
-    plate = `<div style="${abs(p.x, p.y, p.w, p.h)}background:${treatment === "plate-ink" ? t.ink : t.paper};border-radius:${px(lockup ? LOCKUP_RADIUS : PLATE_RADIUS)};"></div>`;
+    plate = `<div style="${abs(p.x, p.y, p.w, p.h)}background:${treatment === "plate-ink" ? t.plateInk : t.platePaper};border-radius:${px(lockup ? LOCKUP_RADIUS : PLATE_RADIUS)};"></div>`;
   }
   return (
     plate +
@@ -249,7 +283,7 @@ const bodyChrome = (meta: DeckMeta, kit: BrandKit, index: number, t: Theme): str
   // unknown → centred contain, matching pptx's own contain sizing.
   const co = logo(kit.coLogoUrl, FOOTER_CO_BOX, t.treat.coAspect ? "right" : "center", "co", "footer", t);
   return (
-    (t.tok.accent.topBar ? `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.primary};"></div>` : "") +
+    (t.tok.accent.topBar ? `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.topBar};"></div>` : "") +
     `<div style="${abs(t.M, 7.02, t.CW, 0.01)}background:${t.line};"></div>` +
     `<div style="${abs(t.M, 7.08, 6, 0.3)}${kickerStyle(t)}font-size:${fs(t.C(8))};display:flex;align-items:center;">${esc((kit.leadName ?? meta.agencyName).toUpperCase())}</div>` +
     co +
@@ -274,7 +308,7 @@ function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): st
   const co = logo(kit.coLogoUrl, COVER_CO_BOX, "right", "co", "cover", t);
   const footerMuted = `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(t.C(10))};letter-spacing:${ls(1)};color:${t.muted};">${footerText}</div>`;
   const bottomRule = `<div style="${abs(M, 6.55, CW, 0.008)}background:${t.line};"></div>`;
-  switch (t.tok.cover) {
+  switch (t.res.cover) {
     case "quiet":
       return (
         logo(kit.leadLogoUrl, leadBox, "left", "lead", "cover", t) +
@@ -330,10 +364,10 @@ function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): st
         // Field cover: a plated mark becomes a top-left lockup tab.
         logo(kit.leadLogoUrl, leadBox, "left", "lead", "cover", t, true) +
         `<div style="${abs(M + 0.02, 2.62, 0.9, 0.05)}background:${t.secondary};"></div>` +
-        `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, mix(t.paper, t.primary, 0.78))}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
+        `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, mix(t.paper, t.ground, 0.78))}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
         `<div style="${abs(M - 0.05, 3.12, 10.6, 1.95)}font-family:${t.head};font-size:${fs(t.T(48))};font-weight:700;color:${t.paper};line-height:${px(t.T(52) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
-        `<div style="${abs(M, 5.1, 9.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(16))};color:${mix(t.paper, t.primary, 0.9)};">${esc(d.subtitle)}</div>` +
-        `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(t.C(10))};letter-spacing:${ls(1)};color:${mix(t.paper, t.primary, 0.65)};">${footerText}</div>` +
+        `<div style="${abs(M, 5.1, 9.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(16))};color:${mix(t.paper, t.ground, 0.9)};">${esc(d.subtitle)}</div>` +
+        `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(t.C(10))};letter-spacing:${ls(1)};color:${mix(t.paper, t.ground, 0.65)};">${footerText}</div>` +
         co
       );
   }
@@ -343,10 +377,10 @@ function renderSection(d: SectionSlide, meta: DeckMeta, t: Theme): string {
   const { M, CW } = t;
   const num = String(d.number).padStart(2, "0");
   const bar =
-    t.tok.section === "number" || t.tok.section === "index"
+    t.res.section === "number" || t.res.section === "index"
       ? `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.secondary};"></div>`
       : "";
-  switch (t.tok.section) {
+  switch (t.res.section) {
     case "rule":
       return (
         `<div style="${abs(PAGE.w - M - 2.4, 3.42, 2.4, 1.2)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${mix(t.primary, t.paper, 0.3)};display:flex;align-items:center;justify-content:flex-end;">${num}</div>` +
@@ -363,7 +397,7 @@ function renderSection(d: SectionSlide, meta: DeckMeta, t: Theme): string {
         `<div style="${abs(M - 0.06, 1.6, CW, 3.6)}font-family:${t.head};font-size:${fs(t.T(64))};font-weight:700;color:${t.paper};line-height:${px(t.T(66) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
         `<div style="${abs(M + 0.02, 5.32, 0.9, 0.05)}background:${t.secondary};"></div>` +
         (d.subtitle
-          ? `<div style="${abs(M, 5.48, 9, 0.7)}font-family:${t.body};font-size:${fs(t.B(15))};font-style:italic;color:${mix(t.paper, t.ink, 0.7)};">${esc(d.subtitle)}</div>`
+          ? `<div style="${abs(M, 5.48, 9, 0.7)}font-family:${t.body};font-size:${fs(t.B(15))};font-style:italic;color:${mix(t.paper, t.ground, 0.7)};">${esc(d.subtitle)}</div>`
           : "")
       );
     case "index":
@@ -372,21 +406,21 @@ function renderSection(d: SectionSlide, meta: DeckMeta, t: Theme): string {
         `<div style="${abs(M, 2.85, 0.95, 0.95)}background:${t.secondary};color:${t.paper};font-family:${t.head};font-size:${fs(t.T(28))};font-weight:700;display:flex;align-items:center;justify-content:center;">${num}</div>` +
         `<div style="${abs(M + 1.2, 2.85, 8.5, 0.95)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${t.paper};line-height:1.15;overflow:hidden;display:flex;align-items:center;">${esc(d.title)}</div>` +
         (d.subtitle
-          ? `<div style="${abs(M + 1.2, 3.85, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${mix(t.paper, t.ink, 0.62)};">${esc(d.subtitle)}</div>`
+          ? `<div style="${abs(M + 1.2, 3.85, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${mix(t.paper, t.ground, 0.62)};">${esc(d.subtitle)}</div>`
           : "") +
-        `<div style="${abs(M, 6.3, CW, 0.008)}background:${mix(t.paper, t.ink, 0.25)};"></div>` +
-        `<div style="${abs(M, 6.42, CW, 0.35)}${kickerStyle(t, mix(t.paper, t.ink, 0.6))}font-size:${fs(t.C(9))};">${esc(sectionMetaLine(meta))}</div>`
+        `<div style="${abs(M, 6.3, CW, 0.008)}background:${mix(t.paper, t.ground, 0.25)};"></div>` +
+        `<div style="${abs(M, 6.42, CW, 0.35)}${kickerStyle(t, mix(t.paper, t.ground, 0.6))}font-size:${fs(t.C(9))};">${esc(sectionMetaLine(meta))}</div>`
       );
     case "number":
     default:
       return (
         bar +
-        `<div style="${abs(6.6, 0.7, 6.4, 6.4)}font-family:${t.head};font-size:${fs(250)};font-weight:700;color:${mix(t.secondary, t.ink, 0.42)};display:flex;align-items:center;justify-content:flex-end;line-height:1;">${num}</div>` +
+        `<div style="${abs(6.6, 0.7, 6.4, 6.4)}font-family:${t.head};font-size:${fs(250)};font-weight:700;color:${mix(t.secondary, t.ground, 0.42)};display:flex;align-items:center;justify-content:flex-end;line-height:1;">${num}</div>` +
         `<div style="${abs(M + 0.02, 3.02, 0.9, 0.05)}background:${t.secondary};"></div>` +
         `<div style="${abs(M, 3.18, 5, 0.35)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(10))};letter-spacing:${ls(4)};">SECTION ${num}</div>` +
         `<div style="${abs(M - 0.03, 3.5, 8.2, 1.1)}font-family:${t.head};font-size:${fs(t.T(34))};font-weight:700;color:${t.paper};line-height:1.15;overflow:hidden;">${esc(d.title)}</div>` +
         (d.subtitle
-          ? `<div style="${abs(M, 4.6, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${mix(t.paper, t.ink, 0.62)};">${esc(d.subtitle)}</div>`
+          ? `<div style="${abs(M, 4.6, 7.4, 0.6)}font-family:${t.body};font-size:${fs(t.B(13))};color:${mix(t.paper, t.ground, 0.62)};">${esc(d.subtitle)}</div>`
           : "")
       );
   }
@@ -542,7 +576,7 @@ function renderSpatial(d: SpatialSlide, t: Theme): string {
 
 function renderRenderFull(d: RenderFullSlide, meta: DeckMeta, t: Theme): string {
   const { M, CW } = t;
-  if (t.tok.images.framing === "inset") {
+  if (t.res.framing === "inset") {
     return (
       imgCover(d.image, M, 0.95, CW, 5.4, t) +
       `<div style="${abs(M, 6.58, 0.5, 0.045)}background:${t.secondary};"></div>` +
@@ -594,8 +628,8 @@ function renderVideo(d: VideoSlide, meta: DeckMeta, t: Theme): string {
   const { M, S } = t;
   let out = titleBlock("The Space", d.title, t);
   const frame = videoFrame(M);
-  out += `<div style="${abs(frame.x, frame.y, frame.w, frame.h)}background:${t.ink};"></div>`;
-  out += `<video controls preload="metadata" src="${esc(d.videoUrl)}"${d.posterUrl ? ` poster="${esc(d.posterUrl)}"` : ""} style="${abs(frame.x, frame.y, frame.w, frame.h)}object-fit:contain;background:${t.ink};display:block;"></video>`;
+  out += `<div style="${abs(frame.x, frame.y, frame.w, frame.h)}background:${t.plateInk};"></div>`;
+  out += `<video controls preload="metadata" src="${esc(d.videoUrl)}"${d.posterUrl ? ` poster="${esc(d.posterUrl)}"` : ""} style="${abs(frame.x, frame.y, frame.w, frame.h)}object-fit:contain;background:${t.plateInk};display:block;"></video>`;
   const capY = frame.y + frame.h + 0.08;
   out += `<div style="${abs(frame.x, capY, frame.w / 2, 0.28)}${kickerStyle(t)}">Walkthrough video</div>`;
   out += `<div style="${abs(frame.x + frame.w / 2, capY, frame.w / 2, 0.28)}font-family:${t.body};font-size:${fs(t.C(8.5))};letter-spacing:${ls(1)};color:${t.muted};text-align:right;">${esc(meta.projectName)}</div>`;
@@ -739,7 +773,7 @@ function renderNextSteps(d: NextStepsSlide, t: Theme): string {
 
 function renderClosing(d: ClosingSlide, kit: BrandKit, t: Theme): string {
   const { M, S } = t;
-  const onPaper = closingOnPaper(t.tok);
+  const onPaper = t.res.onPaper;
   const lead = logo(kit.leadLogoUrl, { x: M, y: 6.55, w: 1.9, h: 0.55 }, "left", "lead", "closing", t);
   const co = logo(kit.coLogoUrl, CLOSING_CO_BOX, "right", "co", "closing", t);
   let out =
@@ -747,12 +781,12 @@ function renderClosing(d: ClosingSlide, kit: BrandKit, t: Theme): string {
     `<div style="${abs(M - 0.04, 2.35, 9.6, 1.4)}font-family:${t.head};font-size:${fs(t.T(44))};font-weight:700;color:${onPaper ? t.primary : t.paper};overflow:hidden;">${esc(d.headline)}</div>`;
   if (d.subline) {
     out += `<div style="${abs(M + 0.02, 3.85, 0.9, 0.05)}background:${t.secondary};"></div>`;
-    out += `<div style="${abs(M, 3.98, 8.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(15))};color:${onPaper ? t.ink : mix(t.paper, t.primary, 0.88)};">${esc(d.subline)}</div>`;
+    out += `<div style="${abs(M, 3.98, 8.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(15))};color:${onPaper ? t.ink : mix(t.paper, t.ground, 0.88)};">${esc(d.subline)}</div>`;
   }
   let y = 4.85;
   for (const c of d.contacts.slice(0, 3)) {
     const rest = [c.email, c.phone].filter(Boolean).join("&nbsp;&nbsp;·&nbsp;&nbsp;");
-    out += `<div style="${abs(M, y, 10.5, 0.38)}font-family:${t.body};font-size:${fs(t.B(12))};"><b style="color:${onPaper ? t.primary : t.paper};">${esc(c.name)}</b><span style="color:${onPaper ? t.muted : mix(t.paper, t.primary, 0.72)};">${rest ? "&nbsp;&nbsp;·&nbsp;&nbsp;" + rest : ""}</span></div>`;
+    out += `<div style="${abs(M, y, 10.5, 0.38)}font-family:${t.body};font-size:${fs(t.B(12))};"><b style="color:${onPaper ? t.primary : t.paper};">${esc(c.name)}</b><span style="color:${onPaper ? t.muted : mix(t.paper, t.ground, 0.72)};">${rest ? "&nbsp;&nbsp;·&nbsp;&nbsp;" + rest : ""}</span></div>`;
     y += S(0.42);
   }
   return out + lead + co;
@@ -760,40 +794,12 @@ function renderClosing(d: ClosingSlide, kit: BrandKit, t: Theme): string {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-const groundFor = (slide: SlideSpec, t: Theme): string => {
-  switch (slide.layout) {
-    case "cover":
-      return coverOnPaper(t.tok) ? t.paper : t.primary;
-    case "closing":
-      return closingOnPaper(t.tok) ? t.paper : t.primary;
-    case "section":
-      return sectionOnPaper(t.tok) ? t.paper : t.ink;
-    case "renderFull":
-      return t.tok.images.framing === "inset" ? t.paper : t.ink;
-    default:
-      return t.paper;
-  }
-};
-
-/** Does this slide sit on the body master (paper + chrome)? Mirrors
- *  deckBuilder.masterFor. */
-const onBodyMaster = (slide: SlideSpec, t: Theme): boolean => {
-  switch (slide.layout) {
-    case "cover":
-    case "closing":
-    case "section":
-      return false;
-    case "renderFull":
-      return t.tok.images.framing === "inset";
-    default:
-      return true;
-  }
-};
-
 /** One slide → a self-contained 1280×720 artboard HTML string.
  *  `logoTreatments` (logoContrast.computeLogoTreatments) must be the same
  *  object handed to buildDeckPptx for the preview to match the download;
- *  omitted → bare marks, today's output. */
+ *  omitted → bare marks, today's output. `overrides` (deckOps
+ *  SlideOverrides) force the ground / logo / accent for this slide; omitted
+ *  → the style's own answer. */
 export function renderSlideHtml(
   slide: SlideSpec,
   kit: BrandKit,
@@ -802,9 +808,11 @@ export function renderSlideHtml(
   meta?: DeckMeta,
   style?: DeckStyleId | DeckStyleTokens | null,
   logoTreatments?: LogoTreatments | null,
+  overrides?: SlideOverrides | null,
 ): string {
   const tok = typeof style === "object" && style ? style : resolveDeckStyle(style);
-  const t = themeFrom(kit, tok, logoTreatments ?? NO_LOGO_TREATMENTS);
+  const res = resolveSlide(slide, tok, kitGrounds(kit), overrides);
+  const t = themeFor(kit, res, logoTreatments ?? NO_LOGO_TREATMENTS);
   const m: DeckMeta = meta ?? {
     projectName: "",
     clientName: kit.client.name ?? "",
@@ -829,26 +837,30 @@ export function renderSlideHtml(
     case "closing": inner = renderClosing(slide, kit, t); break;
   }
   // Body-master chrome for content layouts (matches MASTER.body in the pptx).
-  const chrome = onBodyMaster(slide, t) ? bodyChrome(m, kit, index, t) : "";
+  const chrome = onBodyMaster(slide.layout, res) ? bodyChrome(m, kit, index, t) : "";
   void total;
   return (
     fontLink(kit) +
-    `<div class="deck-slide" data-layout="${slide.layout}" style="position:relative;width:1280px;height:720px;overflow:hidden;background:${groundFor(slide, t)};font-family:${t.body};-webkit-font-smoothing:antialiased;">` +
+    `<div class="deck-slide" data-layout="${slide.layout}" data-ground="${res.ground}" style="position:relative;width:1280px;height:720px;overflow:hidden;background:${t.ground};font-family:${t.body};-webkit-font-smoothing:antialiased;">` +
     chrome +
     inner +
     `</div>`
   );
 }
 
-/** Whole deck → one HTML document body (for preview scroll / print-to-PDF). */
+/** Whole deck → one HTML document body (for preview scroll / print-to-PDF).
+ *  `overrides` is the deck's per-slide override map keyed by slide index. */
 export function renderDeckHtml(
   spec: DeckSpec,
   kit: BrandKit,
   style?: DeckStyleId | DeckStyleTokens | null,
   logoTreatments?: LogoTreatments | null,
+  overrides?: Record<string, SlideOverrides> | null,
 ): string {
   const slides = spec.slides
-    .map((s, i) => renderSlideHtml(s, kit, i, spec.slides.length, spec.meta, style, logoTreatments))
+    .map((s, i) =>
+      renderSlideHtml(s, kit, i, spec.slides.length, spec.meta, style, logoTreatments, overrides?.[String(i)] ?? null),
+    )
     .join('\n<div style="height:24px"></div>\n');
   return (
     fontLink(kit) +

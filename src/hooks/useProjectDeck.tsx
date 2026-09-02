@@ -13,6 +13,7 @@ import type { DeckStyleId } from "@/lib/deckStyle";
 import type { DeckSpec } from "@/lib/deckSpec";
 import type { RenderPresentation } from "@/lib/compileDeckSpec";
 import type { LogoTreatments } from "@/lib/logoContrast";
+import type { DeckChatMessage, DeckDesignSettings, DeckVersion, SlideOverrides } from "@/lib/deckOps";
 
 // ─── SHAPES ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,12 @@ export interface DeckSettings {
   /** Logo plate decisions (logoContrast) for the kit + style this deck was
    *  compiled with — persisted so a rehydrated preview matches the download. */
   logoTreatments?: LogoTreatments | null;
+  /** Deck-level design overrides from feedback (deckOps) — laid over the
+   *  saved brand at render time, never written back to it. */
+  paletteOverride?: DeckDesignSettings["paletteOverride"];
+  fontOverride?: DeckDesignSettings["fontOverride"];
+  /** Per-slide overrides keyed by slide index (as string). */
+  slideOverrides?: Record<string, SlideOverrides>;
   [key: string]: unknown;
 }
 
@@ -51,6 +58,11 @@ export interface DeckVideoContent {
 export interface DeckContent {
   spec?: DeckSpec;
   video?: DeckVideoContent | null;
+  /** Linear version history (compile + every feedback batch + restores). */
+  versions?: DeckVersion[];
+  currentVersionId?: string | null;
+  /** The feedback thread (last MAX_CHAT_MESSAGES). */
+  chat?: DeckChatMessage[];
   [key: string]: unknown;
 }
 

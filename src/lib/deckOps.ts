@@ -11,7 +11,7 @@
 // produced it) so users can flip between versions or restore one.
 
 import type { DeckSpec, SlideSpec, SlideLayout } from "@/lib/deckSpec";
-import type { BrandMode } from "@/lib/brandKit";
+import { fontById, type BrandKit, type BrandMode } from "@/lib/brandKit";
 import type { DeckStyleId } from "@/lib/deckStyle";
 
 // ── Settings the ops can touch ───────────────────────────────────────────────
@@ -146,7 +146,7 @@ export interface DeckState {
 
 /** Shift per-slide override keys when slides move, so overrides follow
  *  their slide instead of sticking to a position. */
-function remapOverrides(
+export function remapOverrides(
   overrides: Record<string, SlideOverrides> | undefined,
   mapping: (oldIndex: number) => number | null,
 ): Record<string, SlideOverrides> | undefined {
@@ -271,6 +271,43 @@ export function applyDeckOps(
   return { state: { spec, settings }, applied, skipped };
 }
 
+// ── Effective brand kit ──────────────────────────────────────────────────────
+
+/** The kit a deck actually renders with: the saved brand (agency / client /
+ *  blend, already resolved) with the deck's palette + font overrides laid on
+ *  top. Returns a NEW kit — the saved brand is never written to. */
+export function effectiveBrandKit(kit: BrandKit, settings: Pick<DeckDesignSettings, "paletteOverride" | "fontOverride">): BrandKit {
+  const primary = settings.paletteOverride?.primary;
+  const secondary = settings.paletteOverride?.secondary;
+  const headingId = settings.fontOverride?.headingFontId;
+  const bodyId = settings.fontOverride?.bodyFontId;
+  return {
+    ...kit,
+    primary: primary && HEX.test(primary) ? primary : kit.primary,
+    secondary: secondary && HEX.test(secondary) ? secondary : kit.secondary,
+    heading: headingId ? fontById(headingId) : kit.heading,
+    body: bodyId ? fontById(bodyId) : kit.body,
+  };
+}
+
+/** Carry per-slide overrides across a recompile: an override survives only
+ *  when the slide at its index still has the same layout (a recompile can
+ *  add or drop slides, and an "ink" ground meant for a section must never
+ *  land on a budget table). */
+export function carryOverridesAcrossCompile(
+  overrides: Record<string, SlideOverrides> | undefined,
+  previous: DeckSpec | null | undefined,
+  next: DeckSpec,
+): Record<string, SlideOverrides> | undefined {
+  if (!overrides || !previous) return undefined;
+  const kept: Record<string, SlideOverrides> = {};
+  for (const [k, v] of Object.entries(overrides)) {
+    const i = Number(k);
+    if (previous.slides[i] && next.slides[i] && previous.slides[i].layout === next.slides[i].layout) kept[k] = v;
+  }
+  return Object.keys(kept).length ? kept : undefined;
+}
+
 // ── Versions ─────────────────────────────────────────────────────────────────
 
 export interface DeckVersion {
@@ -285,6 +322,8 @@ export interface DeckVersion {
   settings: DeckDesignSettings;
   /** Optional user label ("Client review v2"). */
   label?: string;
+  /** Stable 1-based number shown as "v3" — survives the history cap. */
+  seq?: number;
 }
 
 export const MAX_VERSIONS = 40;
@@ -297,6 +336,147 @@ export function newVersionId(): string {
 export function pushVersion(versions: DeckVersion[], version: DeckVersion): DeckVersion[] {
   const next = [...versions, version];
   return next.length > MAX_VERSIONS ? next.slice(next.length - MAX_VERSIONS) : next;
+}
+
+/** "v3" number for a version: its stable seq, else its position. */
+export function versionNumber(versions: DeckVersion[], version: DeckVersion): number {
+  if (typeof version.seq === "number") return version.seq;
+  const i = versions.findIndex((v) => v.id === version.id);
+  return (i >= 0 ? i : versions.length) + 1;
+}
+
+/** Short chip text: "v3 · Make the cover navy" (label wins over message). */
+export function versionTitle(versions: DeckVersion[], version: DeckVersion, maxChars = 28): string {
+  const text = (version.label ?? version.message).trim();
+  const short = text.length > maxChars ? text.slice(0, maxChars - 1).trimEnd() + "…" : text;
+  return `v${versionNumber(versions, version)} · ${short}`;
+}
+
+export interface DeckHistory {
+  versions: DeckVersion[];
+  currentVersionId: string | null;
+}
+
+export interface NewVersionInput {
+  message: string;
+  summary?: string;
+  spec: DeckSpec;
+  settings: DeckDesignSettings;
+  label?: string;
+}
+
+/** Record a new version and make it current — pure. Snapshots are deep
+ *  copied so later spec patches never mutate history. */
+export function recordVersion(history: DeckHistory, input: NewVersionInput): { history: DeckHistory; version: DeckVersion } {
+  const seq = history.versions.reduce((max, v) => Math.max(max, v.seq ?? 0), 0) + 1;
+  const version: DeckVersion = {
+    id: newVersionId(),
+    createdAt: new Date().toISOString(),
+    message: input.message,
+    ...(input.summary ? { summary: input.summary } : {}),
+    ...(input.label ? { label: input.label } : {}),
+    spec: JSON.parse(JSON.stringify(input.spec)) as DeckSpec,
+    settings: JSON.parse(JSON.stringify(input.settings)) as DeckDesignSettings,
+    seq,
+  };
+  return {
+    history: { versions: pushVersion(history.versions, version), currentVersionId: version.id },
+    version,
+  };
+}
+
+/** Restore an older version: history stays LINEAR — a fresh "Restored vN"
+ *  version carrying that snapshot is appended and made current; nothing is
+ *  rewritten or dropped. Returns null when the id is unknown. */
+export function restoreVersion(history: DeckHistory, versionId: string): { history: DeckHistory; version: DeckVersion } | null {
+  const source = history.versions.find((v) => v.id === versionId);
+  if (!source) return null;
+  return recordVersion(history, {
+    message: `Restored v${versionNumber(history.versions, source)}`,
+    ...(source.summary ? { summary: source.summary } : {}),
+    spec: source.spec,
+    settings: source.settings,
+  });
+}
+
+/** Rename (label) a version in place — pure. An empty label clears it. */
+export function renameVersion(history: DeckHistory, versionId: string, label: string): DeckHistory {
+  const trimmed = label.trim();
+  return {
+    ...history,
+    versions: history.versions.map((v) => {
+      if (v.id !== versionId) return v;
+      const { label: _old, ...rest } = v;
+      return trimmed ? { ...rest, label: trimmed } : rest;
+    }),
+  };
+}
+
+/** Short mono tags for the overrides in play on a slide ("ink", "no logo"). */
+export function overrideTags(overrides: SlideOverrides | undefined | null): string[] {
+  if (!overrides) return [];
+  const tags: string[] = [];
+  if (overrides.ground) tags.push(overrides.ground);
+  if (overrides.hideLogo) tags.push("no logo");
+  if (overrides.accent && overrides.accent !== "normal") tags.push(overrides.accent);
+  if (overrides.notes) tags.push("notes");
+  return tags;
+}
+
+// ── Chat thread ──────────────────────────────────────────────────────────────
+
+/** Example asks — the composer's rotating placeholder and empty-state chips. */
+export const FEEDBACK_EXAMPLES: readonly string[] = [
+  "Make the cover navy",
+  "Shorten slide 5",
+  "Use a serif for headings",
+  "Put the concept slide on white",
+  "Show every render full-slide",
+] as const;
+
+export interface DeckChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  /** ISO timestamp */
+  createdAt: string;
+  /** User turns: the slide the feedback was aimed at (0-based), if any. */
+  targetSlide?: number | null;
+  /** Assistant turns: how many ops landed … */
+  appliedCount?: number;
+  /** … and human descriptions of the ones that couldn't. */
+  skipped?: string[];
+  /** The version this reply produced. */
+  versionId?: string;
+  /** The request failed — content is the error message. */
+  error?: boolean;
+}
+
+export const MAX_CHAT_MESSAGES = 50;
+
+export function newChatMessageId(): string {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Append a message, keeping the last MAX_CHAT_MESSAGES — pure. */
+export function pushChatMessage(messages: DeckChatMessage[], message: DeckChatMessage): DeckChatMessage[] {
+  const next = [...messages, message];
+  return next.length > MAX_CHAT_MESSAGES ? next.slice(next.length - MAX_CHAT_MESSAGES) : next;
+}
+
+/** Human line for an op the client refused ("remove_slide · slide 13"). */
+export function describeSkippedOp(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "an unreadable change";
+  const o = raw as Record<string, unknown>;
+  const name = typeof o.op === "string" ? o.op : "unknown op";
+  const parts: string[] = [name];
+  if (typeof o.index === "number") parts.push(`slide ${o.index + 1}`);
+  if (typeof o.style === "string") parts.push(o.style);
+  if (typeof o.mode === "string") parts.push(o.mode);
+  if (typeof o.primary === "string") parts.push(o.primary);
+  if (typeof o.secondary === "string") parts.push(o.secondary);
+  if (Array.isArray(o.order)) parts.push(`order ${o.order.join(",")}`);
+  return parts.join(" · ");
 }
 
 /** Compact, model-facing description of the deck for the revise prompt:

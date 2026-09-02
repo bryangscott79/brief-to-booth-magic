@@ -313,6 +313,12 @@ export const LOGO_GROUNDS: readonly LogoGround[] = ["cover", "footer", "closing"
 
 export type LogoTreatmentSet = Record<LogoGround, LogoTreatment>;
 
+/** Treatments for both marks on one specific ground colour. */
+export interface LogoTreatmentPair {
+  lead: LogoTreatment;
+  co: LogoTreatment;
+}
+
 export interface LogoTreatments {
   lead: LogoTreatmentSet;
   co: LogoTreatmentSet;
@@ -324,7 +330,44 @@ export interface LogoTreatments {
   coKey?: string | null;
   /** Grounds depend on the style (field cover vs paper cover). */
   styleId?: DeckStyleId;
+  /** Treatments keyed by ground hex ('#RRGGBB') for every ground a per-slide
+   *  override can put a mark on (kit paper / primary / ink). Renderers look
+   *  a slide's EFFECTIVE ground up here first and fall back to the
+   *  per-context sets above (treatments persisted before overrides existed
+   *  have no map). */
+  onGround?: Record<string, LogoTreatmentPair>;
+  /** `primary|ink|paper` these were computed against — a deck-level palette
+   *  override changes the grounds, so the treatments must be recomputed. */
+  paletteKey?: string;
 }
+
+/** Stable identity of the grounds a kit produces. */
+export function logoPaletteKey(kit: Pick<BrandKit, "primary" | "ink" | "paper">): string {
+  return [
+    normalizeHex(kit.primary) ?? "#0B1B2B",
+    normalizeHex(kit.ink) ?? DEFAULT_INK,
+    normalizeHex(kit.paper) ?? DEFAULT_PAPER,
+  ].join("|");
+}
+
+/** The treatment for a mark on a slide. With a ground hex the per-ground
+ *  map wins (it covers overridden grounds); otherwise — or for treatments
+ *  computed before the map existed — the per-context set answers, exactly
+ *  as before. */
+export function logoTreatmentAt(
+  treatments: LogoTreatments,
+  which: "lead" | "co",
+  ground: LogoGround,
+  groundHex?: string | null,
+): LogoTreatment {
+  const hex = normalizeHex(groundHex);
+  const pair = hex ? treatments.onGround?.[hex] : undefined;
+  return pair ? pair[which] : treatments[which][ground];
+}
+
+/** Do these treatments carry the per-ground map per-slide overrides need? */
+export const logoTreatmentsCoverOverrides = (treatments: LogoTreatments | null | undefined): boolean =>
+  !!treatments?.onGround;
 
 export const NONE_TREATMENT_SET: LogoTreatmentSet = Object.freeze({
   cover: "none",
@@ -383,6 +426,19 @@ export function treatmentsFromAnalyses(
   co: LogoAnalysis | null,
 ): LogoTreatments {
   const tok = typeof style === "object" && style ? style : resolveDeckStyle(style);
+  const plates = {
+    paper: normalizeHex(kit.paper) ?? DEFAULT_PAPER,
+    ink: normalizeHex(kit.ink) ?? DEFAULT_INK,
+  };
+  // Every ground a per-slide override can choose — the same rule as the
+  // per-context sets, so a default ground resolves to the same answer.
+  const onGround: Record<string, LogoTreatmentPair> = {};
+  for (const hex of [plates.paper, normalizeHex(kit.primary) ?? "#0B1B2B", plates.ink]) {
+    onGround[hex] = {
+      lead: logoTreatmentFor(lead, hex, plates),
+      co: logoTreatmentFor(co, hex, plates),
+    };
+  }
   return {
     lead: treatmentSetFor(lead, kit, tok),
     co: treatmentSetFor(co, kit, tok),
@@ -391,6 +447,8 @@ export function treatmentsFromAnalyses(
     leadKey: kit.leadLogoUrl ? logoCacheKey(kit.leadLogoUrl) : null,
     coKey: kit.coLogoUrl ? logoCacheKey(kit.coLogoUrl) : null,
     styleId: tok.id,
+    onGround,
+    paletteKey: logoPaletteKey(kit),
   };
 }
 
@@ -408,16 +466,23 @@ export async function computeLogoTreatments(
  *  Signed URLs rotate, so compare stable keys, never URLs. */
 export function logoTreatmentsMatch(
   treatments: LogoTreatments | null | undefined,
-  kit: Pick<BrandKit, "leadLogoUrl" | "coLogoUrl">,
+  kit: Pick<BrandKit, "leadLogoUrl" | "coLogoUrl"> & Partial<Pick<BrandKit, "primary" | "ink" | "paper">>,
   styleId: DeckStyleId,
 ): boolean {
   if (!treatments) return false;
   const leadKey = kit.leadLogoUrl ? logoCacheKey(kit.leadLogoUrl) : null;
   const coKey = kit.coLogoUrl ? logoCacheKey(kit.coLogoUrl) : null;
+  // A palette override moves the grounds; when both sides know their
+  // palette, they have to agree (legacy treatments carry no key → match).
+  const paletteOk =
+    !treatments.paletteKey || !kit.primary || !kit.ink || !kit.paper
+      ? true
+      : treatments.paletteKey === logoPaletteKey({ primary: kit.primary, ink: kit.ink, paper: kit.paper });
   return (
     (treatments.leadKey ?? null) === leadKey &&
     (treatments.coKey ?? null) === coKey &&
-    (treatments.styleId ?? "pitch") === styleId
+    (treatments.styleId ?? "pitch") === styleId &&
+    paletteOk
   );
 }
 

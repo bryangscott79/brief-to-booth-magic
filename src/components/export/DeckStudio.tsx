@@ -3,26 +3,37 @@
 // Flow: pick a brand mode (agency / client / blend — BrandModeDialog, with
 // inline gap-fixing via BrandKitPanel) → compile the designed slide system
 // deterministically from the project's real data (compileDeckSpec) → preview
-// the slides → download an EDITABLE .pptx (buildDeckPptx) or a print-perfect
-// PDF (renderDeckHtml + the browser's print dialog).
+// the slides → give feedback in plain language (deck-revise → DeckOps →
+// applyDeckOps, re-rendered instantly, every batch a version) → download an
+// EDITABLE .pptx (buildDeckPptx) or a print-perfect PDF (renderDeckHtml +
+// the browser's print dialog).
 //
-// No AI call, no edge function: the eight strategy elements and the brief
-// already carry the content; the design lives in the deterministic renderers,
-// so every deck is consistent, instant, and free.
+// Compilation is free and instant — no AI. Feedback IS an AI call, but the
+// model only emits structured ops over a closed vocabulary; the designed
+// renderers redraw, so accuracy and design consistency survive every round.
 //
-// Three controls sit between the header and the preview:
+// State model (all "local ?? saved", so a reload lands where you left off):
+//   · working deck  — spec + design settings (brand mode, style, palette /
+//     font overrides, render presentation, per-slide overrides). Feedback,
+//     recompiles and restores replace it.
+//   · history       — linear versions (compile / feedback / restore) +
+//     the chat thread. Never rewritten; restoring appends.
+//   · viewing       — a version being previewed. The grid, focus view and
+//     downloads follow it; the composer locks until it's restored.
+//   · focus         — the slide open in the focus view; it is ALSO the
+//     target for feedback (the chat's "Slide N" chip). One source of truth.
+//
+// Controls between the header and the preview:
 //   · Renders — which of the active booth size's renders go in, which are
-//     featured (own full-bleed slide), and how the rest are presented
-//     (one per slide / mixed / compact grids). Persisted in deck settings.
-//   · Walkthrough video — embed a clip generated in Files → Video. The mp4
-//     is copied into project storage (deckVideo.ts) because provider URLs
-//     expire; the deck references the durable copy.
+//     featured, and how the rest are presented. Persisted in deck settings.
+//   · Walkthrough video — embed a clip generated in Files → Video (copied
+//     into project storage by deckVideo.ts because provider URLs expire).
 //   · Logo contrast (invisible) — before every compile / download the kit's
 //     marks are analysed (logoContrast.ts) and plated where the ground
-//     would swallow them. The decision is stored with the deck so the
-//     rehydrated preview and the .pptx agree.
+//     would swallow them, for every ground an override can choose. Cached
+//     per kit + style + palette; the current deck's decision is persisted.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -40,6 +51,9 @@ import {
 import { useBrandSources } from "@/hooks/useBrandKit";
 import { BrandModeDialog } from "@/components/export/brand/BrandModeDialog";
 import { BrandKitPanel } from "@/components/export/brand/BrandKitPanel";
+import { DeckChat } from "@/components/export/DeckChat";
+import { DeckVersionRail } from "@/components/export/DeckVersionRail";
+import { DeckSlideFocus } from "@/components/export/DeckSlideFocus";
 import { SectionLabel, SpecMono, StatusChip } from "@/components/shell";
 import { resolveBrandKit, type BrandKit, type BrandMode } from "@/lib/brandKit";
 import {
@@ -47,6 +61,7 @@ import {
   DEFAULT_RENDER_PRESENTATION,
   RENDER_PRESENTATIONS,
   isRenderPresentation,
+  relayoutRenderSlides,
   type DeckRenderImage,
   type RenderPresentation,
 } from "@/lib/compileDeckSpec";
@@ -54,7 +69,35 @@ import { buildDeckPptx } from "@/lib/deckBuilder";
 import { renderSlideHtml, renderDeckHtml } from "@/lib/deckSlideHtml";
 import { DECK_STYLES, DEFAULT_DECK_STYLE, isDeckStyleId, type DeckStyleId } from "@/lib/deckStyle";
 import type { DeckSpec } from "@/lib/deckSpec";
-import { computeLogoTreatments, logoTreatmentsMatch, type LogoTreatments } from "@/lib/logoContrast";
+import {
+  applyDeckOps,
+  carryOverridesAcrossCompile,
+  describeSkippedOp,
+  effectiveBrandKit,
+  newChatMessageId,
+  overrideTags,
+  pushChatMessage,
+  recordVersion,
+  remapOverrides,
+  renameVersion,
+  restoreVersion,
+  summarizeDeckForModel,
+  versionNumber,
+  type DeckChatMessage,
+  type DeckDesignSettings,
+  type DeckState,
+  type DeckVersion,
+  type SlideOverrides,
+} from "@/lib/deckOps";
+import { requestDeckRevision } from "@/lib/deckRevise";
+import {
+  computeLogoTreatments,
+  logoCacheKey,
+  logoPaletteKey,
+  logoTreatmentsCoverOverrides,
+  logoTreatmentsMatch,
+  type LogoTreatments,
+} from "@/lib/logoContrast";
 import { persistWalkthroughVideo, removeWalkthroughVideo, walkthroughLabel } from "@/lib/deckVideo";
 import { useVideoStore, type GeneratedVideo } from "@/store/videoStore";
 import { parseVersionedAngleId } from "@/lib/promptVersions";
@@ -89,7 +132,44 @@ interface RenderPrefs {
   featured: string[];
 }
 
+/** The chat-editable design overrides that live beside brand mode / style. */
+interface DesignOverrides {
+  paletteOverride?: DeckDesignSettings["paletteOverride"];
+  fontOverride?: DeckDesignSettings["fontOverride"];
+  slideOverrides?: Record<string, SlideOverrides>;
+}
+
+interface DeckHistoryState {
+  versions: DeckVersion[];
+  currentVersionId: string | null;
+  chat: DeckChatMessage[];
+}
+
 const FLOOR_PLAN_IDS = new Set(["floor_plan_2d", "top"]);
+const EMPTY_HISTORY: DeckHistoryState = { versions: [], currentVersionId: null, chat: [] };
+const CHAT_CONTEXT_TURNS = 8;
+
+/** Cheap stable hash for keying srcdoc iframes on their content. */
+const hashStr = (s: string): string => {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
+
+/** Cache key for logo treatments: marks + style + the grounds they sit on. */
+const treatmentKey = (k: BrandKit, s: DeckStyleId): string =>
+  [
+    k.leadLogoUrl ? logoCacheKey(k.leadLogoUrl) : "",
+    k.coLogoUrl ? logoCacheKey(k.coLogoUrl) : "",
+    s,
+    logoPaletteKey(k),
+  ].join("|");
+
+const designSettingsOf = (settings: DeckDesignSettings): DesignOverrides => ({
+  paletteOverride: settings.paletteOverride,
+  fontOverride: settings.fontOverride,
+  slideOverrides: settings.slideOverrides,
+});
 
 export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
   const { toast } = useToast();
@@ -112,10 +192,16 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
   const [prefs, setPrefs] = useState<RenderPrefs | null>(null);
   /** undefined = untouched this session (fall through to the saved row). */
   const [video, setVideo] = useState<DeckVideoContent | null | undefined>(undefined);
-  const [treatments, setTreatments] = useState<LogoTreatments | null>(null);
+  const [design, setDesign] = useState<DesignOverrides | null>(null);
+  const [history, setHistory] = useState<DeckHistoryState | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  const [revising, setRevising] = useState(false);
+  const [treatmentsByKey, setTreatmentsByKey] = useState<Record<string, LogoTreatments>>({});
   const [buildingPptx, setBuildingPptx] = useState(false);
   const [embeddingId, setEmbeddingId] = useState<string | null>(null);
   const brandPanelRef = useRef<HTMLDivElement>(null);
+  const treatmentsInflight = useRef(new Set<string>());
 
   // Renders for the ACTIVE booth size (same rule as Files/ZIP: explicit
   // config suffix wins; untagged legacy renders belong to configs[0]).
@@ -143,19 +229,14 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
 
   // ── Rehydration ────────────────────────────────────────────────────────
   // A previously compiled deck (settings.brandMode / style / render prefs /
-  // logo treatments + saved spec + video). Decks saved before a field
-  // existed fall back to that field's default.
+  // overrides / logo treatments + saved spec + video + history). Decks saved
+  // before a field existed fall back to that field's default.
   const savedSettings = (deck?.settings ?? {}) as DeckSettings;
   const savedContent = (deck?.content ?? {}) as DeckContent;
   const savedMode = savedSettings.brandMode as BrandMode | undefined;
   const savedStyle = savedSettings.style;
   const savedSpec = savedContent.spec;
-  const effectiveSpec = spec ?? savedSpec ?? null;
-  const effectiveKit = useMemo(() => {
-    if (kit) return kit;
-    if (savedMode) return resolveBrandKit(savedMode, agency, client);
-    return null;
-  }, [kit, savedMode, agency, client]);
+  const currentSpec = spec ?? savedSpec ?? null;
   const effectiveStyle: DeckStyleId = style ?? (isDeckStyleId(savedStyle) ? savedStyle : DEFAULT_DECK_STYLE);
   const styleLabel = DECK_STYLES.find((s) => s.id === effectiveStyle)?.label ?? effectiveStyle;
   const effectivePrefs: RenderPrefs = prefs ?? {
@@ -166,45 +247,164 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
     featured: Array.isArray(savedSettings.featuredRenderIds) ? savedSettings.featuredRenderIds : [],
   };
   const effectiveVideo: DeckVideoContent | null = video !== undefined ? video : (savedContent.video ?? null);
-  // Saved treatments only count when they were computed for these marks in
-  // this style (signed logo URLs rotate — the match is by storage ref).
-  const effectiveTreatments: LogoTreatments | null = useMemo(() => {
-    if (treatments) return treatments;
-    if (effectiveKit && logoTreatmentsMatch(savedSettings.logoTreatments, effectiveKit, effectiveStyle)) {
-      return savedSettings.logoTreatments ?? null;
-    }
+  const effectiveDesign: DesignOverrides = design ?? {
+    paletteOverride: savedSettings.paletteOverride,
+    fontOverride: savedSettings.fontOverride,
+    slideOverrides: savedSettings.slideOverrides,
+  };
+  const effectiveHistory: DeckHistoryState = history ?? {
+    versions: Array.isArray(savedContent.versions) ? savedContent.versions : EMPTY_HISTORY.versions,
+    currentVersionId: savedContent.currentVersionId ?? null,
+    chat: Array.isArray(savedContent.chat) ? savedContent.chat : EMPTY_HISTORY.chat,
+  };
+
+  // Brand sources are rebuilt every render; key the kit on their content so
+  // downstream memos (rendered HTML, treatments) only move when they do.
+  const agencyKey = JSON.stringify(agency);
+  const clientKey = JSON.stringify(client);
+  const baseKit = useMemo<BrandKit | null>(() => {
+    if (kit) return kit;
+    if (savedMode) return resolveBrandKit(savedMode, agency, client);
     return null;
-  }, [treatments, effectiveKit, effectiveStyle, savedSettings.logoTreatments]);
-
-  // Decks compiled before logo intelligence existed: analyse on load so the
-  // preview (and the next download) never show a swallowed mark. The key
-  // guard keeps this to one run per kit + style.
-  const backfillKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!effectiveKit || !effectiveSpec || effectiveTreatments) return;
-    const key = `${effectiveKit.leadLogoUrl ?? ""}|${effectiveKit.coLogoUrl ?? ""}|${effectiveStyle}`;
-    if (backfillKeyRef.current === key) return;
-    backfillKeyRef.current = key;
-    void computeLogoTreatments(effectiveKit, effectiveStyle).then((t) => {
-      if (backfillKeyRef.current !== key) return;
-      setTreatments(t);
-      saveDeck.mutate({ settings: { logoTreatments: t } });
-    });
-    // saveDeck is a stable mutation object; listing it would re-run per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveKit, effectiveSpec, effectiveTreatments, effectiveStyle]);
+  }, [kit, savedMode, agencyKey, clientKey]);
 
-  // ── Compile ────────────────────────────────────────────────────────────
+  /** The working deck's design settings — what feedback edits and versions snapshot. */
+  const currentDesign = useMemo<DeckDesignSettings>(
+    () => ({
+      brandMode: baseKit?.mode,
+      style: effectiveStyle,
+      paletteOverride: effectiveDesign.paletteOverride,
+      fontOverride: effectiveDesign.fontOverride,
+      renderPresentation: effectivePrefs.presentation,
+      slideOverrides: effectiveDesign.slideOverrides,
+    }),
+    [
+      baseKit?.mode,
+      effectiveStyle,
+      effectiveDesign.paletteOverride,
+      effectiveDesign.fontOverride,
+      effectivePrefs.presentation,
+      effectiveDesign.slideOverrides,
+    ],
+  );
+
+  // ── Display projection: the viewed version, else the working deck ──────
+  const viewed = useMemo<DeckVersion | null>(() => {
+    if (!viewingId || viewingId === effectiveHistory.currentVersionId) return null;
+    return effectiveHistory.versions.find((v) => v.id === viewingId) ?? null;
+  }, [viewingId, effectiveHistory.versions, effectiveHistory.currentVersionId]);
+  const displaySpec = viewed?.spec ?? currentSpec;
+  const displayDesign = viewed?.settings ?? currentDesign;
+  const displayStyle: DeckStyleId = isDeckStyleId(displayDesign.style) ? displayDesign.style : effectiveStyle;
+  const displayOverrides = displayDesign.slideOverrides;
+  const displayKit = useMemo<BrandKit | null>(() => {
+    if (!baseKit) return null;
+    const base =
+      viewed && viewed.settings.brandMode && viewed.settings.brandMode !== baseKit.mode
+        ? resolveBrandKit(viewed.settings.brandMode, agency, client)
+        : baseKit;
+    return effectiveBrandKit(base, displayDesign);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseKit, viewed, displayDesign.paletteOverride, displayDesign.fontOverride, agencyKey, clientKey]);
+
+  // ── Logo treatments (cached per kit + style + palette) ─────────────────
+  const treatmentsFor = useCallback(
+    (k: BrandKit, s: DeckStyleId): LogoTreatments | null => {
+      const cached = treatmentsByKey[treatmentKey(k, s)];
+      if (cached) return cached;
+      const saved = savedSettings.logoTreatments;
+      // Saved treatments count when they were computed for these marks, this
+      // style and this palette — and carry the per-ground map overrides need.
+      if (saved && logoTreatmentsMatch(saved, k, s) && logoTreatmentsCoverOverrides(saved)) return saved;
+      return null;
+    },
+    [treatmentsByKey, savedSettings.logoTreatments],
+  );
+  const displayTreatments = displayKit ? treatmentsFor(displayKit, displayStyle) : null;
+
+  /** Compute (and cache) treatments for a kit + style; persist when they
+   *  belong to the working deck. Never throws — an unreadable logo is "none". */
+  const ensureTreatments = useCallback(
+    async (k: BrandKit, s: DeckStyleId, persist: boolean): Promise<LogoTreatments> => {
+      const hit = treatmentsFor(k, s);
+      if (hit) return hit;
+      const key = treatmentKey(k, s);
+      const t = await computeLogoTreatments(k, s);
+      setTreatmentsByKey((m) => ({ ...m, [key]: t }));
+      if (persist) saveDeck.mutate({ settings: { logoTreatments: t } });
+      return t;
+    },
+    // saveDeck is a stable mutation object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [treatmentsFor],
+  );
+
+  // Decks compiled before logo intelligence (or before per-ground plates)
+  // existed: analyse on load so the preview never shows a swallowed mark.
+  useEffect(() => {
+    if (!displayKit || !displaySpec || displayTreatments) return;
+    const key = treatmentKey(displayKit, displayStyle);
+    if (treatmentsInflight.current.has(key)) return;
+    treatmentsInflight.current.add(key);
+    void ensureTreatments(displayKit, displayStyle, !viewed).finally(() => treatmentsInflight.current.delete(key));
+  }, [displayKit, displaySpec, displayStyle, displayTreatments, viewed, ensureTreatments]);
+
+  // ── Rendered slides (thumbnails + focus) ───────────────────────────────
+  const slideHtml = useMemo<string[]>(() => {
+    if (!displaySpec || !displayKit) return [];
+    return displaySpec.slides.map((slide, i) =>
+      renderSlideHtml(
+        slide,
+        displayKit,
+        i,
+        displaySpec.slides.length,
+        displaySpec.meta,
+        displayStyle,
+        displayTreatments,
+        displayOverrides?.[String(i)] ?? null,
+      ),
+    );
+  }, [displaySpec, displayKit, displayStyle, displayTreatments, displayOverrides]);
+  const slideKeys = useMemo(() => slideHtml.map((h, i) => `${i}:${hashStr(h)}`), [slideHtml]);
+
+  // ── Persistence helpers ────────────────────────────────────────────────
   const prefsSettings = (p: RenderPrefs): Partial<DeckSettings> => ({
     renderPresentation: p.presentation,
     selectedRenderIds: p.selected,
     featuredRenderIds: p.featured,
   });
+  const designSettings = (d: DeckDesignSettings): Partial<DeckSettings> => ({
+    brandMode: d.brandMode,
+    style: d.style,
+    renderPresentation: d.renderPresentation,
+    paletteOverride: d.paletteOverride,
+    fontOverride: d.fontOverride,
+    slideOverrides: d.slideOverrides,
+  });
+  const historyContent = (h: DeckHistoryState): Partial<DeckContent> => ({
+    versions: h.versions,
+    currentVersionId: h.currentVersionId,
+    chat: h.chat,
+  });
 
+  /** Make a spec + design settings the working deck (feedback / restore). */
+  const adoptState = (nextSpec: DeckSpec, next: DeckDesignSettings) => {
+    setSpec(nextSpec);
+    if (isDeckStyleId(next.style)) setStyle(next.style);
+    if (next.brandMode && next.brandMode !== baseKit?.mode) setKit(resolveBrandKit(next.brandMode, agency, client));
+    if (isRenderPresentation(next.renderPresentation) && next.renderPresentation !== effectivePrefs.presentation) {
+      setPrefs({ ...effectivePrefs, presentation: next.renderPresentation });
+    }
+    setDesign(designSettingsOf(next));
+    setFocusIndex((f) => (f !== null && f >= nextSpec.slides.length ? null : f));
+  };
+
+  // ── Compile ────────────────────────────────────────────────────────────
   const compile = async (
     chosenKit: BrandKit,
     chosenStyle: DeckStyleId,
-    overrides: { prefs?: RenderPrefs; video?: DeckVideoContent | null; silent?: boolean } = {},
+    overrides: { prefs?: RenderPrefs; video?: DeckVideoContent | null; silent?: boolean; reason?: string } = {},
   ) => {
     const p = overrides.prefs ?? effectivePrefs;
     const v = overrides.video !== undefined ? overrides.video : effectiveVideo;
@@ -220,20 +420,36 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
       featuredRenderIds: p.featured,
       video: v,
     });
-    // Logo contrast is decided BEFORE the deck is shown, and reused while
-    // the marks + style are unchanged (analyses are cached per logo anyway).
-    const t = logoTreatmentsMatch(effectiveTreatments, chosenKit, chosenStyle)
-      ? (effectiveTreatments as LogoTreatments)
-      : await computeLogoTreatments(chosenKit, chosenStyle);
+    // Per-slide overrides follow their slides only where the structure held.
+    const carried = carryOverridesAcrossCompile(effectiveDesign.slideOverrides, currentSpec, compiled);
+    const nextDesign: DeckDesignSettings = {
+      brandMode: chosenKit.mode,
+      style: chosenStyle,
+      paletteOverride: effectiveDesign.paletteOverride,
+      fontOverride: effectiveDesign.fontOverride,
+      renderPresentation: p.presentation,
+      slideOverrides: carried,
+    };
+    // Logo contrast is decided BEFORE the deck is shown, for the kit it
+    // will actually render with (palette override included).
+    const t = await ensureTreatments(effectiveBrandKit(chosenKit, nextDesign), chosenStyle, false);
+    const { history: h } = recordVersion(
+      { versions: effectiveHistory.versions, currentVersionId: effectiveHistory.currentVersionId },
+      { message: overrides.reason ?? "Compiled", spec: compiled, settings: nextDesign },
+    );
+    const nextHistory: DeckHistoryState = { ...h, chat: effectiveHistory.chat };
     setKit(chosenKit);
     setStyle(chosenStyle);
     setSpec(compiled);
     setPrefs(p);
     setVideo(v);
-    setTreatments(t);
+    setDesign(designSettingsOf(nextDesign));
+    setHistory(nextHistory);
+    setViewingId(null);
+    setFocusIndex((f) => (f !== null && f >= compiled.slides.length ? null : f));
     saveDeck.mutate({
-      settings: { ...prefsSettings(p), logoTreatments: t },
-      content: { spec: compiled, video: v },
+      settings: { ...prefsSettings(p), ...designSettings(nextDesign), logoTreatments: t },
+      content: { spec: compiled, video: v, ...historyContent(nextHistory) },
     });
     if (!overrides.silent) {
       const label = DECK_STYLES.find((s) => s.id === chosenStyle)?.label ?? chosenStyle;
@@ -249,8 +465,8 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
   const updatePrefs = (patch: Partial<RenderPrefs>) => {
     const next: RenderPrefs = { ...effectivePrefs, ...patch };
     setPrefs(next);
-    if (effectiveKit && effectiveSpec) {
-      void compile(effectiveKit, effectiveStyle, { prefs: next, silent: true });
+    if (baseKit && currentSpec) {
+      void compile(baseKit, effectiveStyle, { prefs: next, silent: true, reason: "Render picker" });
     } else {
       saveDeck.mutate({ settings: prefsSettings(next) });
     }
@@ -278,9 +494,9 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
 
   // ── Walkthrough video ──────────────────────────────────────────────────
   const heroRenderUrl = useMemo(() => {
-    const hero = effectiveSpec?.slides.find((s) => s.layout === "renderFull");
+    const hero = currentSpec?.slides.find((s) => s.layout === "renderFull");
     return hero && hero.layout === "renderFull" ? hero.image.url : null;
-  }, [effectiveSpec]);
+  }, [currentSpec]);
 
   const handleEmbedVideo = async (v: GeneratedVideo) => {
     if (!projectId) return;
@@ -288,14 +504,14 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
     try {
       const content = await persistWalkthroughVideo(projectId, v, heroRenderUrl ?? v.sourceImageUrl);
       setVideo(content);
-      if (effectiveKit && effectiveSpec) {
-        await compile(effectiveKit, effectiveStyle, { video: content, silent: true });
+      if (baseKit && currentSpec) {
+        await compile(baseKit, effectiveStyle, { video: content, silent: true, reason: "Walkthrough embedded" });
       } else {
         saveDeck.mutate({ content: { video: content } });
       }
       toast({
         title: "Walkthrough embedded",
-        description: effectiveSpec
+        description: currentSpec
           ? "Added as its own slide right after the hero render."
           : "It will get its own slide after the hero render when you design the deck.",
       });
@@ -313,34 +529,132 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
   const handleRemoveVideo = async () => {
     const previous = effectiveVideo;
     setVideo(null);
-    if (effectiveKit && effectiveSpec) {
-      await compile(effectiveKit, effectiveStyle, { video: null, silent: true });
+    if (baseKit && currentSpec) {
+      await compile(baseKit, effectiveStyle, { video: null, silent: true, reason: "Walkthrough removed" });
     } else {
       saveDeck.mutate({ content: { video: null } });
     }
     void removeWalkthroughVideo(previous?.path);
   };
 
-  // ── Export ─────────────────────────────────────────────────────────────
-  /** Treatments must exist before anything ships — compute (and persist)
-   *  if a legacy deck still lacks them. */
-  const ensureTreatments = async (k: BrandKit): Promise<LogoTreatments> => {
-    if (effectiveTreatments) return effectiveTreatments;
-    const t = await computeLogoTreatments(k, effectiveStyle);
-    setTreatments(t);
-    saveDeck.mutate({ settings: { logoTreatments: t } });
-    return t;
+  // ── Feedback → ops → new version ───────────────────────────────────────
+  const applyFeedback = async (feedback: string, targetSlide: number | null) => {
+    if (!currentSpec || !baseKit || revising) return;
+    const state: DeckState = { spec: currentSpec, settings: currentDesign };
+    const now = new Date().toISOString();
+    let chat = pushChatMessage(effectiveHistory.chat, {
+      id: newChatMessageId(),
+      role: "user",
+      content: feedback,
+      createdAt: now,
+      targetSlide,
+    });
+    setHistory({ ...effectiveHistory, chat });
+    setRevising(true);
+    try {
+      const { ops, reply } = await requestDeckRevision({
+        summary: summarizeDeckForModel(state.spec, state.settings),
+        feedback,
+        selectedSlide: targetSlide,
+        history: effectiveHistory.chat
+          .slice(-CHAT_CONTEXT_TURNS)
+          .filter((m) => !m.error)
+          .map((m) => ({ role: m.role, content: m.content })),
+      });
+      const { state: next, applied, skipped } = applyDeckOps(state, ops);
+      let nextSpec = next.spec;
+      let nextSettings = next.settings;
+      // A render-presentation change re-lays the render block in place, so
+      // content edits elsewhere in the deck survive (no recompile).
+      if (
+        applied.some((op) => op.op === "set_render_presentation") &&
+        isRenderPresentation(nextSettings.renderPresentation)
+      ) {
+        const featuredUrls = new Set(
+          activeRenders.filter((r) => effectivePrefs.featured.includes(r.angle_id)).map((r) => r.public_url),
+        );
+        const relaid = relayoutRenderSlides(nextSpec, nextSettings.renderPresentation, featuredUrls);
+        nextSpec = relaid.spec;
+        nextSettings = { ...nextSettings, slideOverrides: remapOverrides(nextSettings.slideOverrides, relaid.indexMap) };
+      }
+      adoptState(nextSpec, nextSettings);
+      const { history: h, version } = recordVersion(
+        { versions: effectiveHistory.versions, currentVersionId: effectiveHistory.currentVersionId },
+        { message: feedback, summary: reply, spec: nextSpec, settings: nextSettings },
+      );
+      chat = pushChatMessage(chat, {
+        id: newChatMessageId(),
+        role: "assistant",
+        content: reply,
+        createdAt: new Date().toISOString(),
+        appliedCount: applied.length,
+        skipped: skipped.map(describeSkippedOp),
+        versionId: version.id,
+      });
+      const nextHistory: DeckHistoryState = { ...h, chat };
+      setHistory(nextHistory);
+      setViewingId(null);
+      saveDeck.mutate({
+        settings: designSettings(nextSettings),
+        content: { spec: nextSpec, ...historyContent(nextHistory) },
+      });
+    } catch (err) {
+      chat = pushChatMessage(chat, {
+        id: newChatMessageId(),
+        role: "assistant",
+        content: err instanceof Error ? err.message : "Unknown error",
+        createdAt: new Date().toISOString(),
+        error: true,
+      });
+      setHistory({ ...effectiveHistory, chat });
+      saveDeck.mutate({ content: { chat } });
+    } finally {
+      setRevising(false);
+    }
   };
 
+  // ── Versions ───────────────────────────────────────────────────────────
+  const handleRestore = (versionId: string) => {
+    const restored = restoreVersion(
+      { versions: effectiveHistory.versions, currentVersionId: effectiveHistory.currentVersionId },
+      versionId,
+    );
+    if (!restored) return;
+    adoptState(restored.version.spec, restored.version.settings);
+    const nextHistory: DeckHistoryState = { ...restored.history, chat: effectiveHistory.chat };
+    setHistory(nextHistory);
+    setViewingId(null);
+    saveDeck.mutate({
+      settings: designSettings(restored.version.settings),
+      content: { spec: restored.version.spec, ...historyContent(nextHistory) },
+    });
+    toast({ title: restored.version.message, description: "Restored as a new version — history stays linear." });
+  };
+
+  const handleRename = (versionId: string, label: string) => {
+    const nextHistory: DeckHistoryState = {
+      ...renameVersion(
+        { versions: effectiveHistory.versions, currentVersionId: effectiveHistory.currentVersionId },
+        versionId,
+        label,
+      ),
+      chat: effectiveHistory.chat,
+    };
+    setHistory(nextHistory);
+    saveDeck.mutate({ content: { versions: nextHistory.versions } });
+  };
+
+  // ── Export (always the DISPLAYED deck: the viewed version or current) ──
   const handleDownloadPptx = async () => {
-    if (!effectiveSpec || !effectiveKit) return;
+    if (!displaySpec || !displayKit) return;
     setBuildingPptx(true);
     let skipped = 0;
     try {
-      const t = await ensureTreatments(effectiveKit);
-      const blob = await buildDeckPptx(effectiveSpec, effectiveKit, {
-        style: effectiveStyle,
+      const t = await ensureTreatments(displayKit, displayStyle, !viewed);
+      const blob = await buildDeckPptx(displaySpec, displayKit, {
+        style: displayStyle,
         logoTreatments: t,
+        slideOverrides: displayOverrides,
         onImageSkipped: () => {
           skipped += 1;
         },
@@ -348,7 +662,8 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(effectiveSpec.meta.clientName || effectiveSpec.meta.projectName || "Canopy").replace(/[^a-zA-Z0-9]+/g, "_")}_Deck.pptx`;
+      const stem = (displaySpec.meta.clientName || displaySpec.meta.projectName || "Canopy").replace(/[^a-zA-Z0-9]+/g, "_");
+      a.download = viewed ? `${stem}_Deck_v${versionNumber(effectiveHistory.versions, viewed)}.pptx` : `${stem}_Deck.pptx`;
       a.click();
       URL.revokeObjectURL(url);
       toast({
@@ -368,9 +683,9 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
   };
 
   const handlePrintPdf = async () => {
-    if (!effectiveSpec || !effectiveKit) return;
-    const t = await ensureTreatments(effectiveKit);
-    const html = renderDeckHtml(effectiveSpec, effectiveKit, effectiveStyle, t);
+    if (!displaySpec || !displayKit) return;
+    const t = await ensureTreatments(displayKit, displayStyle, !viewed);
+    const html = renderDeckHtml(displaySpec, displayKit, displayStyle, t, displayOverrides);
     const win = window.open("", "_blank");
     if (!win) {
       toast({ title: "Popup blocked", description: "Allow popups to export the PDF.", variant: "destructive" });
@@ -393,6 +708,33 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
     setTimeout(() => brandPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   };
 
+  // ── Focus / selection ──────────────────────────────────────────────────
+  const slideCount = displaySpec?.slides.length ?? 0;
+  const focused = focusIndex !== null && focusIndex < slideCount ? focusIndex : null;
+  const stepFocus = useCallback(
+    (delta: number) => setFocusIndex((f) => (f === null ? f : Math.min(Math.max(0, f + delta), Math.max(0, slideCount - 1)))),
+    [slideCount],
+  );
+  const focusPrev = useCallback(() => stepFocus(-1), [stepFocus]);
+  const focusNext = useCallback(() => stepFocus(1), [stepFocus]);
+  const closeFocus = useCallback(() => setFocusIndex(null), []);
+  /** The last reply, when the last ask was aimed at the focused slide. */
+  const focusedReply = useMemo<DeckChatMessage | null>(() => {
+    if (focused === null) return null;
+    const chat = effectiveHistory.chat;
+    for (let i = chat.length - 1; i >= 0; i--) {
+      if (chat[i].role === "user") {
+        return chat[i].targetSlide === focused && chat[i + 1]?.role === "assistant" ? chat[i + 1] : null;
+      }
+    }
+    return null;
+  }, [focused, effectiveHistory.chat]);
+
+  const composerLocked = !!viewed;
+  const composerReason = viewed
+    ? `Viewing v${versionNumber(effectiveHistory.versions, viewed)} — restore it to keep editing from there.`
+    : undefined;
+
   return (
     <div className="rounded-[14px] border border-border bg-white">
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
@@ -405,12 +747,12 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
             Designed slide system, compiled from this project — editable PowerPoint first.
           </p>
         </div>
-        {effectiveKit && (
+        {displayKit && (
           <StatusChip variant="neutral">
-            {effectiveKit.mode === "blend" ? "Blended brand" : `${effectiveKit.mode} brand`}
+            {displayKit.mode === "blend" ? "Blended brand" : `${displayKit.mode} brand`}
           </StatusChip>
         )}
-        {effectiveSpec && effectiveKit && <StatusChip variant="neutral">{styleLabel}</StatusChip>}
+        {displaySpec && displayKit && <StatusChip variant="neutral">{styleLabel}</StatusChip>}
         {activeConfigLabel && <SpecMono className="text-[11px] text-slate">{activeConfigLabel}</SpecMono>}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={openFixGaps} className="gap-1.5">
@@ -418,8 +760,8 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
             Brand kit
           </Button>
           <Button size="sm" onClick={() => setModeDialogOpen(true)} className="gap-1.5">
-            {effectiveSpec ? <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.5} /> : null}
-            {effectiveSpec ? "Recompile" : "Design deck"}
+            {currentSpec ? <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.5} /> : null}
+            {currentSpec ? "Recompile" : "Design deck"}
           </Button>
         </div>
       </div>
@@ -629,47 +971,109 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
         )}
       </div>
 
-      {effectiveSpec && effectiveKit ? (
+      {displaySpec && displayKit ? (
         <div className="space-y-4 px-5 py-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <SpecMono className="text-[12px] text-charcoal">{effectiveSpec.slides.length} slides</SpecMono>
-            <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handlePrintPdf} className="gap-1.5">
-                <Printer className="h-3.5 w-3.5" strokeWidth={1.5} />
-                PDF
-              </Button>
-              <Button size="sm" onClick={handleDownloadPptx} disabled={buildingPptx} className="gap-1.5">
-                {buildingPptx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" strokeWidth={1.5} />}
-                Download .pptx
-              </Button>
-            </div>
-          </div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, 243px)" }}>
-            {effectiveSpec.slides.map((slide, i) => (
-              <div
-                key={`${slide.layout}-${i}`}
-                className={cn("relative overflow-hidden rounded-lg border border-border bg-cloud")}
-                style={{ width: 243, height: 137 }}
-              >
-                <iframe
-                  title={`Slide ${i + 1}`}
-                  srcDoc={renderSlideHtml(
-                    slide,
-                    effectiveKit,
-                    i,
-                    effectiveSpec.slides.length,
-                    effectiveSpec.meta,
-                    effectiveStyle,
-                    effectiveTreatments,
-                  )}
-                  className="pointer-events-none absolute left-0 top-0 origin-top-left border-0"
-                  style={{ width: 1280, height: 720, transform: "scale(0.19)" }}
-                  scrolling="no"
-                  loading="lazy"
-                />
-                <span className="absolute bottom-1 right-1.5 rounded bg-white/80 px-1 font-mono text-[9px] text-slate">{i + 1}</span>
+          <DeckVersionRail
+            versions={effectiveHistory.versions}
+            currentVersionId={effectiveHistory.currentVersionId}
+            viewingId={viewingId}
+            onView={setViewingId}
+            onRestore={handleRestore}
+            onRename={handleRename}
+          />
+
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
+            <div className="min-w-0 space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <SpecMono className="text-[12px] text-charcoal">{displaySpec.slides.length} slides</SpecMono>
+                {viewed && (
+                  <StatusChip variant="attention">v{versionNumber(effectiveHistory.versions, viewed)}</StatusChip>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handlePrintPdf} className="gap-1.5">
+                    <Printer className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    PDF
+                  </Button>
+                  <Button size="sm" onClick={handleDownloadPptx} disabled={buildingPptx} className="gap-1.5">
+                    {buildingPptx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" strokeWidth={1.5} />}
+                    Download .pptx
+                  </Button>
+                </div>
               </div>
-            ))}
+
+              {focused !== null && slideHtml[focused] !== undefined && (
+                <DeckSlideFocus
+                  html={slideHtml[focused]}
+                  renderKey={slideKeys[focused]}
+                  index={focused}
+                  total={displaySpec.slides.length}
+                  layout={displaySpec.slides[focused].layout}
+                  overrides={displayOverrides?.[String(focused)] ?? null}
+                  onPrev={focusPrev}
+                  onNext={focusNext}
+                  onClose={closeFocus}
+                  onSend={(feedback) => applyFeedback(feedback, focused)}
+                  busy={revising}
+                  lastReply={focusedReply}
+                  disabled={composerLocked}
+                  disabledReason={composerReason}
+                />
+              )}
+
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, 243px)" }}>
+                {displaySpec.slides.map((slide, i) => {
+                  const active = focused === i;
+                  const tags = overrideTags(displayOverrides?.[String(i)]);
+                  return (
+                    <button
+                      key={slideKeys[i]}
+                      type="button"
+                      onClick={() => setFocusIndex(active ? null : i)}
+                      aria-pressed={active}
+                      aria-label={`${active ? "Close" : "Open"} slide ${i + 1} (${slide.layout})`}
+                      className={cn(
+                        "relative overflow-hidden rounded-lg border bg-cloud text-left transition-shadow",
+                        active ? "border-navy ring-2 ring-navy ring-offset-1" : "border-border hover:border-navy/40",
+                      )}
+                      style={{ width: 243, height: 137 }}
+                    >
+                      <iframe
+                        title={`Slide ${i + 1}`}
+                        srcDoc={slideHtml[i]}
+                        className="pointer-events-none absolute left-0 top-0 origin-top-left border-0"
+                        style={{ width: 1280, height: 720, transform: "scale(0.19)" }}
+                        scrolling="no"
+                        loading="lazy"
+                      />
+                      {tags.length > 0 && (
+                        <span className="absolute bottom-1 left-1.5 rounded bg-white/85 px-1 font-mono text-[9px] text-slate">
+                          {tags.join(" · ")}
+                        </span>
+                      )}
+                      <span
+                        className={cn(
+                          "absolute bottom-1 right-1.5 rounded px-1 font-mono text-[9px]",
+                          active ? "bg-navy text-white" : "bg-white/80 text-slate",
+                        )}
+                      >
+                        {i + 1}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <DeckChat
+              className="mt-5 lg:sticky lg:top-4 lg:mt-0"
+              messages={effectiveHistory.chat}
+              selectedSlide={focused}
+              onClearSelection={closeFocus}
+              onSend={(feedback) => applyFeedback(feedback, focused)}
+              busy={revising}
+              disabled={composerLocked}
+              disabledReason={composerReason}
+            />
           </div>
         </div>
       ) : (

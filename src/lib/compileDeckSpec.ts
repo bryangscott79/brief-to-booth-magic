@@ -214,6 +214,79 @@ const GRID_ELEMENT_KEYS = [
 
 const FLOOR_PLAN_IDS = new Set(["floor_plan_2d", "top"]);
 
+/** Lay the non-hero, non-featured renders out per presentation: every one
+ *  full-bleed, 2-up grids, or 4-up grids. A lone leftover always gets its
+ *  own full slide — the grid stays honest, no stretching. */
+export function layoutRenderSlots(slots: ImageSlot[], presentation: RenderPresentation): SlideSpec[] {
+  const out: SlideSpec[] = [];
+  const full = (slot: ImageSlot) => out.push({ layout: "renderFull", image: slot, caption: slot.label });
+  const size: 0 | 2 | 4 = presentation === "full" ? 0 : presentation === "mixed" ? 2 : 4;
+  if (size === 0) {
+    for (const slot of slots) full(slot);
+    return out;
+  }
+  for (let i = 0; i < slots.length; i += size) {
+    const group = slots.slice(i, i + size);
+    if (group.length === 1) {
+      full(group[0]);
+    } else {
+      const grid: RenderGridSlide = { layout: "renderGrid", title: "Around the booth", images: group };
+      out.push(grid);
+    }
+  }
+  return out;
+}
+
+const RENDER_BLOCK_LAYOUTS = new Set<SlideSpec["layout"]>(["renderFull", "renderGrid", "video"]);
+
+/** Re-lay an already compiled deck's render block for a new presentation
+ *  WITHOUT recompiling (so feedback edits elsewhere survive). The hero (the
+ *  first full-bleed render) and the walkthrough keep their places; every
+ *  other render image in the block is pooled and laid out again —
+ *  `featuredUrls` go full-bleed first, as at compile time. Returns the new
+ *  spec plus an old→new index map (null = the slide no longer exists) so
+ *  per-slide overrides can follow their slides. */
+export function relayoutRenderSlides(
+  spec: DeckSpec,
+  presentation: RenderPresentation,
+  featuredUrls: ReadonlySet<string> = new Set<string>(),
+): { spec: DeckSpec; indexMap: (oldIndex: number) => number | null } {
+  const identity = { spec, indexMap: (i: number) => (i < spec.slides.length ? i : null) };
+  const start = spec.slides.findIndex((s) => s.layout === "renderFull");
+  if (start < 0) return identity;
+  let end = start;
+  while (end < spec.slides.length && RENDER_BLOCK_LAYOUTS.has(spec.slides[end].layout)) end += 1;
+
+  const block = spec.slides.slice(start, end);
+  const hero = block[0];
+  const video = block.find((s) => s.layout === "video") ?? null;
+  const videoOldIndex = video ? start + block.indexOf(video) : -1;
+  const pool: ImageSlot[] = [];
+  for (const s of block.slice(1)) {
+    if (s.layout === "renderFull") pool.push(s.image);
+    else if (s.layout === "renderGrid") pool.push(...s.images);
+  }
+  const featured = pool.filter((slot) => featuredUrls.has(slot.url));
+  const others = pool.filter((slot) => !featuredUrls.has(slot.url));
+  const rebuilt: SlideSpec[] = [
+    hero,
+    ...(video ? [video] : []),
+    ...featured.map((slot): SlideSpec => ({ layout: "renderFull", image: slot, caption: slot.label })),
+    ...layoutRenderSlots(others, presentation),
+  ];
+  const delta = rebuilt.length - block.length;
+  const next: DeckSpec = { ...spec, slides: [...spec.slides.slice(0, start), ...rebuilt, ...spec.slides.slice(end)] };
+  const indexMap = (i: number): number | null => {
+    if (i < start) return i;
+    if (i === start) return start;
+    if (i === videoOldIndex) return start + 1;
+    if (i < end) return null;
+    const moved = i + delta;
+    return moved < next.slides.length ? moved : null;
+  };
+  return { spec: next, indexMap };
+}
+
 const isHeroAngle = (id: string, name: string): boolean => {
   const hay = `${id} ${name}`.toLowerCase();
   return /hero|front|main|three.?quarter|3\/4/.test(hay);
@@ -422,22 +495,6 @@ export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
   });
   const pushFull = (slot: ImageSlot) =>
     slides.push({ layout: "renderFull", image: slot, caption: slot.label });
-  /** Group slots `size` at a time; a lone leftover gets its own full slide. */
-  const pushGrids = (slots: ImageSlot[], size: 2 | 4) => {
-    for (let i = 0; i < slots.length; i += size) {
-      const group = slots.slice(i, i + size);
-      if (group.length === 1) {
-        pushFull(group[0]);
-      } else {
-        const grid: RenderGridSlide = {
-          layout: "renderGrid",
-          title: "Around the booth",
-          images: group,
-        };
-        slides.push(grid);
-      }
-    }
-  };
 
   if (hasRenders) {
     // Hero first, full bleed (the walkthrough clip follows it), then
@@ -457,19 +514,7 @@ export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
     const others = rest.filter((r) => !featuredIds.has(r.angle_id));
     for (const r of featured) pushFull(toSlot(r));
 
-    const slots = others.map(toSlot);
-    switch (presentation) {
-      case "full":
-        for (const slot of slots) pushFull(slot);
-        break;
-      case "mixed":
-        pushGrids(slots, 2);
-        break;
-      case "grid":
-      default:
-        pushGrids(slots, 4);
-        break;
-    }
+    slides.push(...layoutRenderSlots(others.map(toSlot), presentation));
   } else if (videoSlide) {
     slides.push(videoSlide);
   }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolveImageUrl } from "@/lib/signedImageUrl";
 
 export type AgencyRole = "owner" | "admin" | "member" | "viewer";
 

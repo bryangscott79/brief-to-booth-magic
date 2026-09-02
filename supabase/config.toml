@@ -82,3 +82,8 @@ verify_jwt = true
 
 [functions.analyze-existing-space]
 verify_jwt = true
+
+[functions.deck-revise]
+verify_jwt = true
+# deck-revise: turns free-text deck feedback into structured DeckOps
+# (see src/lib/deckOps.ts) applied client-side to the deterministic deck.

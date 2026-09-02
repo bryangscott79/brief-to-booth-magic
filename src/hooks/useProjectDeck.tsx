@@ -74,7 +74,7 @@ export function useProjectDeck(projectId: string | null | undefined) {
     enabled: !!user && !!projectId,
     queryFn: async (): Promise<ProjectDeckState> => {
       const { data, error } = await supabase
-        .from("project_decks")
+        .from("project_decks" as any)
         .select("settings, content")
         .eq("project_id", projectId!)
         .maybeSingle();
@@ -84,9 +84,10 @@ export function useProjectDeck(projectId: string | null | undefined) {
         throw error;
       }
 
+      const row = data as any;
       return {
-        settings: ((data?.settings as DeckSettings | null) ?? {}) as DeckSettings,
-        content: ((data?.content as DeckContent | null) ?? {}) as DeckContent,
+        settings: (row?.settings ?? {}) as DeckSettings,
+        content: (row?.content ?? {}) as DeckContent,
         schemaReady: true,
       };
     },
@@ -116,14 +117,14 @@ export function useSaveProjectDeck(projectId: string | null | undefined) {
       const content: DeckContent = { ...current.content, ...(input.content ?? {}) };
 
       const { error } = await supabase
-        .from("project_decks")
+        .from("project_decks" as any)
         .upsert(
           {
             project_id: projectId,
             created_by: user.id,
             settings: settings as never,
             content: content as never,
-          },
+          } as any,
           { onConflict: "project_id" },
         );
 

@@ -57,7 +57,13 @@ export function useCompanyProfile() {
         .select("*")
         .maybeSingle();
       if (error) throw error;
-      return data as unknown as CompanyProfile | null;
+      if (!data) return null;
+      // company-assets bucket is private — swap stored refs for signed URLs.
+      return {
+        ...data,
+        logo_url: await resolveImageUrl((data as any).logo_url),
+        logo_dark_url: await resolveImageUrl((data as any).logo_dark_url),
+      } as unknown as CompanyProfile;
     },
     enabled: !!user,
   });

@@ -125,6 +125,14 @@ export function useAgency(): UseAgencyResult {
         agency = agencyRel as Tables<"agencies">;
       }
 
+      // company-assets bucket is private — swap the stored ref for a signed URL.
+      if (agency?.logo_url) {
+        agency = {
+          ...agency,
+          logo_url: await resolveImageUrl(agency.logo_url),
+        };
+      }
+
       return { agency, role } as const;
     },
     enabled: !!user,

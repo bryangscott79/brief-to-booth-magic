@@ -20,8 +20,6 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
 import { supabase } from "@/integrations/supabase/client";
-import { ProposalExport } from "./ProposalExport";
-import { DesignedDeck } from "./DesignedDeck";
 import { DeckStudio } from "./DeckStudio";
 import { FigmaExportPanel } from "./FigmaExportPanel";
 import { SaveLearningsButton } from "./SaveLearningsButton";
@@ -575,39 +573,6 @@ export function ExportPackage() {
        * slide system compiled deterministically → editable PPTX / PDF. */}
       <DeckStudio projectId={projectId ?? null} clientId={currentProject?.clientId ?? null} />
 
-      {/* AI-designed deck — legacy alternate. Claude designs every slide as
-       * HTML+CSS using the full project + agency context. */}
-      <DesignedDeck
-        projectId={projectId ?? null}
-        parsedBrief={brief}
-        elements={elements}
-        projectName={currentProject?.name || brief.brand?.name || 'Project'}
-        images={images || []}
-        brandColor={profile?.brand_color ?? undefined}
-        secondaryColor={profile?.secondary_color ?? undefined}
-        agencyName={profile?.company_name || (agency as any)?.name || undefined}
-      />
-
-      {/* Classic export — pptxgenjs path with inline DeckEditor. Kept as a
-       * secondary option for users who want a fast, structured export. */}
-      <ProposalExport
-        brief={brief}
-        elements={elements}
-        images={images || []}
-        projectName={currentProject?.name || brief.brand?.name || 'Project'}
-        rhinoRenders={rhinoRenders.map(r => ({
-          id: r.id,
-          view_name: r.view_name,
-          original_public_url: r.original_public_url,
-          polished_public_url: r.polished_public_url,
-          polish_status: r.polish_status,
-        }))}
-        brandIntelligence={approvedIntel.map((e: any) => ({
-          category: e.category,
-          title: e.title,
-          content: e.content,
-        }))}
-      />
 
       {/* Download All Assets ZIP */}
       <Card className="element-card border-primary/30">

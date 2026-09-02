@@ -203,9 +203,9 @@ export async function buildDeckPptx(
     title: MASTER.cover,
     background: { color: pal.primary },
     objects: [
-      { ellipse: { x: 9.1, y: -2.9, w: 7.6, h: 7.6, fill: { color: pal.secondary, transparency: 72 } } },
-      { ellipse: { x: 10.6, y: -1.4, w: 4.6, h: 4.6, fill: { color: pal.secondary, transparency: 55 } } },
-      { ellipse: { x: -2.2, y: 5.6, w: 5.2, h: 5.2, fill: { color: pal.paper, transparency: 92 } } },
+      { ellipse: { x: 9.1, y: -2.9, w: 7.6, h: 7.6, fill: { color: pal.secondary, transparency: 72 } } } as any,
+      { ellipse: { x: 10.6, y: -1.4, w: 4.6, h: 4.6, fill: { color: pal.secondary, transparency: 55 } } } as any,
+      { ellipse: { x: -2.2, y: 5.6, w: 5.2, h: 5.2, fill: { color: pal.paper, transparency: 92 } } } as any,
     ],
   });
 
@@ -582,7 +582,7 @@ export async function buildDeckPptx(
     addTitle(s, "The Investment", d.title);
     const rows: PptxGenJS.TableRow[] = [];
     const headOpts: PptxGenJS.TableCellProps = {
-      fontFace: BODY, fontSize: 8.5, bold: true, color: pal.muted, charSpacing: 2,
+      fontFace: BODY, fontSize: 8.5, bold: true, color: pal.muted, charSpacing: 2 as never,
       fill: { color: pal.paper }, border: [
         { type: "none" }, { type: "none" },
         { type: "solid", color: pal.primary, pt: 1.5 }, { type: "none" },
@@ -634,7 +634,7 @@ export async function buildDeckPptx(
       margin: [0.08, 0.08, 0.08, 0.08],
     };
     rows.push([
-      { text: d.totalLabel.toUpperCase(), options: { ...totalOpts, fontSize: 10, charSpacing: 2, align: "left" } },
+      { text: d.totalLabel.toUpperCase(), options: { ...totalOpts, fontSize: 10, charSpacing: 2 as never, align: "left" } },
       { text: "", options: totalOpts },
       { text: "$" + d.total.toLocaleString("en-US"), options: { ...totalOpts, fontFace: HEAD, fontSize: 15, align: "right" } },
     ]);

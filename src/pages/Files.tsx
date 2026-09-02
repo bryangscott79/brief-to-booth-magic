@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { useProjectImages } from "@/hooks/useProjectImages";
@@ -38,6 +39,11 @@ export default function FilesPage() {
   const { data: rhinoRenders = [], isLoading: rhinoLoading } = useRhinoRenders(projectId);
   const { currentProject } = useProjectStore();
   const clientId = currentProject?.clientId ?? null;
+  // Deep link into a tab (`/files?tab=video` from the Export step's deck
+  // studio → "Generate walkthrough").
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialTab = tabParam === "video" || tabParam === "renders" ? tabParam : "images";
 
   const [activeAngle, setActiveAngle] = useState<string>("all");
   const [currentOnly, setCurrentOnly] = useState(false);
@@ -195,7 +201,7 @@ export default function FilesPage() {
               subtitle="Project images, 3D renders with AI polish, and video generation."
             />
 
-            <Tabs defaultValue="images">
+            <Tabs defaultValue={initialTab}>
               <TabsList className="mb-2">
                 <TabsTrigger value="images" className="gap-2">
                   <ImageIcon className="h-3.5 w-3.5" />

@@ -29,6 +29,7 @@ import type {
   CoverSlide,
   SectionSlide,
   RenderFullSlide,
+  VideoSlide,
   DeckMeta,
 } from "./deckSpec";
 import {
@@ -40,6 +41,17 @@ import {
   type DeckStyleId,
   type DeckStyleTokens,
 } from "./deckStyle";
+import {
+  LOCKUP_RADIUS,
+  NO_LOGO_TREATMENTS,
+  PLATE_RADIUS,
+  fitLogoBox,
+  lockupBox,
+  plateBox,
+  type Box,
+  type LogoGround,
+  type LogoTreatments,
+} from "./logoContrast";
 
 // ── Unit + color helpers (kept local so this module stays pptx-free) ─────────
 
@@ -112,6 +124,31 @@ const proseJoin = (items: string[]): string =>
 const figureCaption = (label: string, i: number, on: boolean): string =>
   on ? `${String(i + 1).padStart(2, "0")} — ${label}` : label;
 
+/** Video slide geometry — keep identical to deckBuilder.videoFrame /
+ *  videoFacts / VIDEO_COL_GAP. */
+const VIDEO_FRAME_W = 8.6;
+const VIDEO_FRAME_Y = 1.62;
+const VIDEO_COL_GAP = 0.4;
+const videoFrame = (margin: number): Box => ({
+  x: margin,
+  y: VIDEO_FRAME_Y,
+  w: VIDEO_FRAME_W,
+  h: Math.round((VIDEO_FRAME_W * 9) / 16 * 1000) / 1000,
+});
+const videoFacts = (d: Pick<VideoSlide, "durationSec">): Array<[string, string]> => {
+  const facts: Array<[string, string]> = [];
+  if (typeof d.durationSec === "number" && d.durationSec > 0) {
+    facts.push(["Duration", `${d.durationSec} second${d.durationSec === 1 ? "" : "s"}`]);
+  }
+  facts.push(["Format", "MP4 · 16:9"]);
+  return facts;
+};
+
+/** Logo boxes — keep identical to the constants in deckBuilder.buildDeckPptx. */
+const FOOTER_CO_BOX: Box = { x: 11.35, y: 7.06, w: 1.0, h: 0.3 };
+const COVER_CO_BOX: Box = { x: 11.0, y: 6.62, w: 1.73, h: 0.55 };
+const CLOSING_CO_BOX: Box = { x: 10.85, y: 6.55, w: 1.88, h: 0.55 };
+
 interface Theme {
   primary: string;
   secondary: string;
@@ -131,13 +168,16 @@ interface Theme {
   CW: number;
   hairline: boolean;
   field: boolean;
+  /** Logo plate decisions (logoContrast). NO_LOGO_TREATMENTS = bare marks. */
+  treat: LogoTreatments;
 }
 
-function themeFrom(kit: BrandKit, tok: DeckStyleTokens): Theme {
+function themeFrom(kit: BrandKit, tok: DeckStyleTokens, treat: LogoTreatments): Theme {
   const ink = cssHex(kit.ink, "#101418");
   const paper = cssHex(kit.paper, "#FFFFFF");
   const scale = deckScale(tok);
   return {
+    treat,
     primary: cssHex(kit.primary, "#0B1B2B"),
     secondary: cssHex(kit.secondary, "#4F6BE8"),
     ink,
@@ -168,8 +208,32 @@ const imgCover = (slot: ImageSlot, x: number, y: number, w: number, h: number, t
     ? `<img src="${esc(slot.url)}" alt="${esc(slot.label)}" style="${abs(x, y, w, h)}object-fit:cover;display:block;">`
     : `<div style="${abs(x, y, w, h)}background:${t.primary}0D;border:1px solid ${t.line};display:flex;align-items:center;justify-content:center;font-size:${fs(t.C(10))};color:${t.muted};">${esc(slot.label)}</div>`;
 
-const logo = (url: string | null, x: number, y: number, w: number, h: number, side: "left" | "right"): string =>
-  url ? `<img src="${esc(url)}" alt="" style="${abs(x, y, w, h)}object-fit:contain;object-position:${side} center;">` : "";
+/** A brand mark in its logo box, plated when logoContrast decided the
+ *  ground would swallow it (`lockup` = the field-cover tab). Same fitted
+ *  rect + plate geometry as deckBuilder.addLogo. */
+const logo = (
+  url: string | null,
+  box: Box,
+  side: "left" | "right" | "center",
+  which: "lead" | "co",
+  ground: LogoGround,
+  t: Theme,
+  lockup = false,
+): string => {
+  if (!url) return "";
+  const aspect = which === "lead" ? t.treat.leadAspect : t.treat.coAspect;
+  const treatment = t.treat[which][ground];
+  const fitted = fitLogoBox(box, aspect, side);
+  let plate = "";
+  if (treatment !== "none") {
+    const p = lockup ? lockupBox(fitted) : plateBox(fitted);
+    plate = `<div style="${abs(p.x, p.y, p.w, p.h)}background:${treatment === "plate-ink" ? t.ink : t.paper};border-radius:${px(lockup ? LOCKUP_RADIUS : PLATE_RADIUS)};"></div>`;
+  }
+  return (
+    plate +
+    `<img src="${esc(url)}" alt="" style="${abs(fitted.x, fitted.y, fitted.w, fitted.h)}object-fit:contain;object-position:${side} center;">`
+  );
+};
 
 const kickerStyle = (t: Theme, color?: string): string =>
   `font-family:${t.body};font-size:${fs(t.C(8.5))};font-weight:700;letter-spacing:${ls(2)};text-transform:uppercase;color:${color ?? t.muted};`;
@@ -181,9 +245,9 @@ const titleBlock = (kicker: string, title: string, t: Theme): string =>
 
 /** Body-master furniture: (optional) top brand bar + footer. */
 const bodyChrome = (meta: DeckMeta, kit: BrandKit, index: number, t: Theme): string => {
-  const co = kit.coLogoUrl
-    ? `<img src="${esc(kit.coLogoUrl)}" alt="" style="${abs(11.35, 7.06, 1.0, 0.3)}object-fit:contain;">`
-    : "";
+  // Aspect known → right-aligned fitted mark (as the pptx places it);
+  // unknown → centred contain, matching pptx's own contain sizing.
+  const co = logo(kit.coLogoUrl, FOOTER_CO_BOX, t.treat.coAspect ? "right" : "center", "co", "footer", t);
   return (
     (t.tok.accent.topBar ? `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.primary};"></div>` : "") +
     `<div style="${abs(t.M, 7.02, t.CW, 0.01)}background:${t.line};"></div>` +
@@ -206,13 +270,14 @@ const fieldGeometry = (t: Theme): string =>
 function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): string {
   const { M, CW } = t;
   const footerText = `${esc(meta.agencyName)}&nbsp;&nbsp;·&nbsp;&nbsp;${esc(meta.dateLabel)}`;
-  const co = logo(kit.coLogoUrl, 11.0, 6.62, 1.73, 0.55, "right");
+  const leadBox: Box = { x: M, y: 0.55, w: 2.2, h: 0.62 };
+  const co = logo(kit.coLogoUrl, COVER_CO_BOX, "right", "co", "cover", t);
   const footerMuted = `<div style="${abs(M, 6.78, 8, 0.35)}font-family:${t.body};font-size:${fs(t.C(10))};letter-spacing:${ls(1)};color:${t.muted};">${footerText}</div>`;
   const bottomRule = `<div style="${abs(M, 6.55, CW, 0.008)}background:${t.line};"></div>`;
   switch (t.tok.cover) {
     case "quiet":
       return (
-        logo(kit.leadLogoUrl, M, 0.55, 2.2, 0.62, "left") +
+        logo(kit.leadLogoUrl, leadBox, "left", "lead", "cover", t) +
         `<div style="${abs(M, 1.42, CW, 0.02)}background:${t.primary};"></div>` +
         `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, t.muted)}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
         `<div style="${abs(M - 0.05, 3.12, 10.6, 1.95)}font-family:${t.head};font-size:${fs(t.T(44))};font-weight:700;color:${t.primary};line-height:${px(t.T(48) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
@@ -224,7 +289,7 @@ function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): st
     case "editorial":
       return (
         `<div style="${abs(M, 0.6, 8, 0.3)}${kickerStyle(t, t.muted)}font-size:${fs(t.C(9))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
-        logo(kit.leadLogoUrl, PAGE.w - M - 2.2, 0.42, 2.2, 0.62, "right") +
+        logo(kit.leadLogoUrl, { x: PAGE.w - M - 2.2, y: 0.42, w: 2.2, h: 0.62 }, "right", "lead", "cover", t) +
         `<div style="${abs(M, 0.98, CW, 0.012)}background:${t.ink};"></div>` +
         `<div style="${abs(M - 0.06, 1.3, CW, 3.7)}font-family:${t.head};font-size:${fs(t.T(64))};font-weight:700;color:${t.ink};line-height:${px(t.T(66) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
         `<div style="${abs(M + 0.02, 5.2, 0.9, 0.05)}background:${t.secondary};"></div>` +
@@ -247,7 +312,7 @@ function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): st
         .join("");
       return (
         `<div style="${abs(0, 0, PAGE.w, 0.09)}background:${t.primary};"></div>` +
-        logo(kit.leadLogoUrl, M, 0.55, 2.2, 0.62, "left") +
+        logo(kit.leadLogoUrl, leadBox, "left", "lead", "cover", t) +
         `<div style="${abs(M, 1.95, 10.5, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(10))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
         `<div style="${abs(M - 0.05, 2.3, 10.6, 1.6)}font-family:${t.head};font-size:${fs(t.T(40))};font-weight:700;color:${t.primary};line-height:${px(t.T(44) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
         `<div style="${abs(M, 3.95, 9.5, 0.5)}font-family:${t.body};font-size:${fs(t.B(14))};color:${t.ink};">${esc(d.subtitle)}</div>` +
@@ -262,7 +327,8 @@ function renderCover(d: CoverSlide, meta: DeckMeta, kit: BrandKit, t: Theme): st
     default:
       return (
         fieldGeometry(t) +
-        logo(kit.leadLogoUrl, M, 0.55, 2.2, 0.62, "left") +
+        // Field cover: a plated mark becomes a top-left lockup tab.
+        logo(kit.leadLogoUrl, leadBox, "left", "lead", "cover", t, true) +
         `<div style="${abs(M + 0.02, 2.62, 0.9, 0.05)}background:${t.secondary};"></div>` +
         `<div style="${abs(M, 2.78, 10.5, 0.4)}${kickerStyle(t, mix(t.paper, t.primary, 0.78))}font-size:${fs(t.C(11))};letter-spacing:${ls(3)};">${esc(d.eyebrow)}</div>` +
         `<div style="${abs(M - 0.05, 3.12, 10.6, 1.95)}font-family:${t.head};font-size:${fs(t.T(48))};font-weight:700;color:${t.paper};line-height:${px(t.T(52) / 72)};overflow:hidden;">${esc(d.title)}</div>` +
@@ -521,6 +587,35 @@ function renderRenderGrid(d: RenderGridSlide, t: Theme): string {
   return out;
 }
 
+/** Walkthrough video — mirrors deckBuilder.drawVideo. The frame holds a real
+ *  <video> (poster shown until play; the print/PDF path shows the poster);
+ *  the meta column carries the caption, facts and a link to the clip. */
+function renderVideo(d: VideoSlide, meta: DeckMeta, t: Theme): string {
+  const { M, S } = t;
+  let out = titleBlock("The Space", d.title, t);
+  const frame = videoFrame(M);
+  out += `<div style="${abs(frame.x, frame.y, frame.w, frame.h)}background:${t.ink};"></div>`;
+  out += `<video controls preload="metadata" src="${esc(d.videoUrl)}"${d.posterUrl ? ` poster="${esc(d.posterUrl)}"` : ""} style="${abs(frame.x, frame.y, frame.w, frame.h)}object-fit:contain;background:${t.ink};display:block;"></video>`;
+  const capY = frame.y + frame.h + 0.08;
+  out += `<div style="${abs(frame.x, capY, frame.w / 2, 0.28)}${kickerStyle(t)}">Walkthrough video</div>`;
+  out += `<div style="${abs(frame.x + frame.w / 2, capY, frame.w / 2, 0.28)}font-family:${t.body};font-size:${fs(t.C(8.5))};letter-spacing:${ls(1)};color:${t.muted};text-align:right;">${esc(meta.projectName)}</div>`;
+  const rx = frame.x + frame.w + VIDEO_COL_GAP;
+  const rw = PAGE.w - M - rx;
+  out += `<div style="${abs(rx, frame.y, rw, 0.26)}${kickerStyle(t, t.secondary)}">In motion</div>`;
+  out += `<div style="${abs(rx - 0.03, frame.y + 0.32, rw, 1.3)}font-family:${t.head};font-size:${fs(t.T(18))};font-weight:700;color:${t.primary};line-height:${px(t.T(22) / 72)};overflow:hidden;">${esc(d.caption)}</div>`;
+  let y = frame.y + 1.78;
+  out += `<div style="${abs(rx, y, rw, 0.008)}background:${t.line};"></div>`;
+  y += 0.16;
+  for (const [label, value] of videoFacts(d)) {
+    out += `<div style="${abs(rx, y, rw, 0.26)}${kickerStyle(t)}">${esc(label)}</div>`;
+    out += `<div style="${abs(rx, y + 0.24, rw, 0.4)}font-family:${t.body};font-size:${fs(t.B(13.5))};font-weight:700;color:${t.ink};overflow:hidden;">${esc(value)}</div>`;
+    y += S(0.82);
+    out += `<div style="${abs(rx, y - 0.12, rw, 0.008)}background:${t.line};"></div>`;
+  }
+  out += `<a href="${esc(d.videoUrl)}" target="_blank" rel="noopener" style="${abs(rx, frame.y + frame.h - 0.3, rw, 0.3)}${kickerStyle(t, t.secondary)}font-size:${fs(t.C(9))};letter-spacing:${ls(3)};display:flex;align-items:center;text-decoration:none;">Open video →</a>`;
+  return out;
+}
+
 function renderBudget(d: BudgetSlide, t: Theme): string {
   const { M, CW, S } = t;
   let out = titleBlock("The Investment", d.title, t);
@@ -645,8 +740,8 @@ function renderNextSteps(d: NextStepsSlide, t: Theme): string {
 function renderClosing(d: ClosingSlide, kit: BrandKit, t: Theme): string {
   const { M, S } = t;
   const onPaper = closingOnPaper(t.tok);
-  const lead = logo(kit.leadLogoUrl, M, 6.55, 1.9, 0.55, "left");
-  const co = logo(kit.coLogoUrl, 10.85, 6.55, 1.88, 0.55, "right");
+  const lead = logo(kit.leadLogoUrl, { x: M, y: 6.55, w: 1.9, h: 0.55 }, "left", "lead", "closing", t);
+  const co = logo(kit.coLogoUrl, CLOSING_CO_BOX, "right", "co", "closing", t);
   let out =
     fieldGeometry(t) +
     `<div style="${abs(M - 0.04, 2.35, 9.6, 1.4)}font-family:${t.head};font-size:${fs(t.T(44))};font-weight:700;color:${onPaper ? t.primary : t.paper};overflow:hidden;">${esc(d.headline)}</div>`;
@@ -695,7 +790,10 @@ const onBodyMaster = (slide: SlideSpec, t: Theme): boolean => {
   }
 };
 
-/** One slide → a self-contained 1280×720 artboard HTML string. */
+/** One slide → a self-contained 1280×720 artboard HTML string.
+ *  `logoTreatments` (logoContrast.computeLogoTreatments) must be the same
+ *  object handed to buildDeckPptx for the preview to match the download;
+ *  omitted → bare marks, today's output. */
 export function renderSlideHtml(
   slide: SlideSpec,
   kit: BrandKit,
@@ -703,9 +801,10 @@ export function renderSlideHtml(
   total: number,
   meta?: DeckMeta,
   style?: DeckStyleId | DeckStyleTokens | null,
+  logoTreatments?: LogoTreatments | null,
 ): string {
   const tok = typeof style === "object" && style ? style : resolveDeckStyle(style);
-  const t = themeFrom(kit, tok);
+  const t = themeFrom(kit, tok, logoTreatments ?? NO_LOGO_TREATMENTS);
   const m: DeckMeta = meta ?? {
     projectName: "",
     clientName: kit.client.name ?? "",
@@ -723,6 +822,7 @@ export function renderSlideHtml(
     case "spatial": inner = renderSpatial(slide, t); break;
     case "renderFull": inner = renderRenderFull(slide, m, t); break;
     case "renderGrid": inner = renderRenderGrid(slide, t); break;
+    case "video": inner = renderVideo(slide, m, t); break;
     case "budget": inner = renderBudget(slide, t); break;
     case "materials": inner = renderMaterials(slide, t); break;
     case "nextSteps": inner = renderNextSteps(slide, t); break;
@@ -745,9 +845,10 @@ export function renderDeckHtml(
   spec: DeckSpec,
   kit: BrandKit,
   style?: DeckStyleId | DeckStyleTokens | null,
+  logoTreatments?: LogoTreatments | null,
 ): string {
   const slides = spec.slides
-    .map((s, i) => renderSlideHtml(s, kit, i, spec.slides.length, spec.meta, style))
+    .map((s, i) => renderSlideHtml(s, kit, i, spec.slides.length, spec.meta, style, logoTreatments))
     .join('\n<div style="height:24px"></div>\n');
   return (
     fontLink(kit) +

@@ -10,12 +10,17 @@ import { renderDeckHtml, renderSlideHtml } from "./deckSlideHtml";
 import { buildDeckPptx } from "./deckBuilder";
 import { resolveBrandKit } from "./brandKit";
 import type { DeckSpec, SlideLayout } from "./deckSpec";
+import {
+  NO_LOGO_TREATMENTS,
+  fitLogoBox,
+  lockupBox,
+  plateBox,
+  type LogoTreatments,
+} from "./logoContrast";
 
-const kit = resolveBrandKit(
-  "blend",
-  { name: "Exhibitus", logoUrl: null, primary: "#0B1B2B", secondary: "#4F6BE8", headingFontId: "space-grotesk", bodyFontId: "inter" },
-  { name: "Samsung", logoUrl: null, primary: "#1428A0", secondary: "#5B8DEF", typographyNote: null },
-);
+const agencySource = { name: "Exhibitus", logoUrl: null, primary: "#0B1B2B", secondary: "#4F6BE8", headingFontId: "space-grotesk", bodyFontId: "inter" };
+const clientSource = { name: "Samsung", logoUrl: null, primary: "#1428A0", secondary: "#5B8DEF", typographyNote: null };
+const kit = resolveBrandKit("blend", agencySource, clientSource);
 
 /** One of every layout, with every optional field populated. */
 const spec: DeckSpec = {
@@ -36,6 +41,7 @@ const spec: DeckSpec = {
     { layout: "renderFull", image: { url: "https://x/hero.png", label: "Hero" }, caption: "Main aisle approach" },
     { layout: "renderGrid", title: "Around the booth", images: [{ url: "https://x/a.png", label: "Aisle Left" }, { url: "https://x/b.png", label: "Aisle Right" }, { url: "https://x/c.png", label: "Bar" }] },
     { layout: "renderGrid", title: "Inside", images: [{ url: "https://x/a.png", label: "Aisle Left" }, { url: "https://x/b.png", label: "Aisle Right" }] },
+    { layout: "video", title: "Walkthrough", videoUrl: "https://x/walk.mp4", posterUrl: "https://x/hero.png", caption: "Hero Front — Walkthrough", durationSec: 8 },
     { layout: "budget", title: "Budget", rows: [{ category: "Structure", amount: 70300, percentage: 38, description: "Walls" }, { category: "AV", amount: 44400, percentage: 24 }], total: 185000, totalLabel: "Total per show" },
     { layout: "materials", title: "Materials", rows: [{ category: "Walls", summary: "Panels", subtotal: 41200 }, { category: "Floor", summary: "" }], total: 90100, note: "Estimates." },
     { layout: "nextSteps", title: "Next", steps: [{ title: "Review", detail: "Walkthrough" }, { title: "Approve" }], timelineNote: "Targeting CES 2027" },
@@ -43,7 +49,7 @@ const spec: DeckSpec = {
   ],
 };
 
-const ALL_LAYOUTS: SlideLayout[] = ["cover", "section", "briefSummary", "concept", "elementGrid", "spatial", "renderFull", "renderGrid", "budget", "materials", "nextSteps", "closing"];
+const ALL_LAYOUTS: SlideLayout[] = ["cover", "section", "briefSummary", "concept", "elementGrid", "spatial", "renderFull", "renderGrid", "video", "budget", "materials", "nextSteps", "closing"];
 const STYLE_IDS = DECK_STYLES.map((s) => s.id);
 
 describe("deckStyle tokens", () => {
@@ -154,13 +160,111 @@ describe("deckSlideHtml with styles", () => {
   });
 });
 
+describe("video slide", () => {
+  const i = spec.slides.findIndex((s) => s.layout === "video");
+  it("renders a real <video> with the poster, the facts and a link, in every style", () => {
+    for (const id of STYLE_IDS) {
+      const html = renderSlideHtml(spec.slides[i], kit, i, spec.slides.length, spec.meta, id);
+      expect(html).toContain('data-layout="video"');
+      expect(html).toContain('<video controls preload="metadata" src="https://x/walk.mp4" poster="https://x/hero.png"');
+      expect(html).toContain("Hero Front — Walkthrough");
+      expect(html).toContain("8 seconds");
+      expect(html).toContain("MP4 · 16:9");
+      expect(html).toContain('<a href="https://x/walk.mp4" target="_blank" rel="noopener"');
+      // Body-master chrome (footer + page number) — the video sits on paper.
+      expect(html).toContain("background:#FFFFFF;font-family");
+    }
+  });
+
+  it("omits the duration fact when unknown", () => {
+    const html = renderSlideHtml({ ...spec.slides[i], durationSec: undefined } as any, kit, i, spec.slides.length, spec.meta);
+    expect(html).not.toContain("second");
+    expect(html).toContain("MP4 · 16:9");
+  });
+});
+
+describe("logo treatments in the renderers", () => {
+  const brandedKit = resolveBrandKit(
+    "blend",
+    { ...agencySource, logoUrl: "https://cdn.example.com/agency.png" },
+    { ...clientSource, logoUrl: "https://cdn.example.com/client.png" },
+  );
+  const treatments: LogoTreatments = {
+    lead: { cover: "plate-paper", footer: "none", closing: "plate-paper" },
+    co: { cover: "plate-ink", footer: "plate-ink", closing: "none" },
+    leadAspect: 4,
+    coAspect: 2,
+    leadKey: "https://cdn.example.com/client.png",
+    coKey: "https://cdn.example.com/agency.png",
+    styleId: "pitch",
+  };
+  const px = (v: number) => `${Math.round(v * 96 * 10) / 10}px`;
+  const at = (layout: SlideLayout, style: DeckStyleId, t?: LogoTreatments | null) => {
+    const i = spec.slides.findIndex((s) => s.layout === layout);
+    return renderSlideHtml(spec.slides[i], brandedKit, i, spec.slides.length, spec.meta, style, t);
+  };
+
+  it("no treatments (or the explicit NONE set) renders bare marks exactly as before", () => {
+    for (const layout of ["cover", "closing", "budget"] as SlideLayout[]) {
+      const legacy = at(layout, "pitch");
+      expect(at(layout, "pitch", NO_LOGO_TREATMENTS)).toBe(legacy);
+      expect(at(layout, "pitch", null)).toBe(legacy);
+      expect(legacy).not.toContain("border-radius:7.7px");
+      expect(legacy).not.toContain("border-radius:13.4px");
+    }
+  });
+
+  it("pitch (field) cover: the lead mark gets a paper lockup tab hanging from the top edge", () => {
+    const html = at("cover", "pitch", treatments);
+    const fitted = fitLogoBox({ x: 0.6, y: 0.55, w: 2.2, h: 0.62 }, 4, "left");
+    const tab = lockupBox(fitted);
+    expect(tab.y).toBeLessThan(0);
+    expect(html).toContain(
+      `<div style="position:absolute;left:${px(tab.x)};top:${px(tab.y)};width:${px(tab.w)};height:${px(tab.h)};background:#FFFFFF;border-radius:${px(0.14)};"></div>`,
+    );
+    // …and the mark itself sits at its fitted rect, not the whole logo box.
+    expect(html).toContain(`left:${px(fitted.x)};top:${px(fitted.y)};width:${px(fitted.w)};height:${px(fitted.h)};object-fit:contain;object-position:left center;`);
+    // Co mark bottom-right: hugging ink plate.
+    const coFit = fitLogoBox({ x: 11.0, y: 6.62, w: 1.73, h: 0.55 }, 2, "right");
+    const coPlate = plateBox(coFit);
+    expect(html).toContain(
+      `left:${px(coPlate.x)};top:${px(coPlate.y)};width:${px(coPlate.w)};height:${px(coPlate.h)};background:#101418;border-radius:${px(0.08)};`,
+    );
+  });
+
+  it("paper covers use a hugging plate, never the lockup", () => {
+    const html = at("cover", "executive", { ...treatments, styleId: "executive" });
+    expect(html).not.toContain(`top:${px(-0.3)}`);
+    const fitted = fitLogoBox({ x: 0.85, y: 0.55, w: 2.2, h: 0.62 }, 4, "left");
+    const plate = plateBox(fitted);
+    expect(html).toContain(`left:${px(plate.x)};top:${px(plate.y)};width:${px(plate.w)};height:${px(plate.h)};background:#FFFFFF;border-radius:${px(0.08)};`);
+  });
+
+  it("footer co plate appears on body slides only, and the closing honours its own set", () => {
+    const body = at("budget", "pitch", treatments);
+    const coFit = fitLogoBox({ x: 11.35, y: 7.06, w: 1.0, h: 0.3 }, 2, "right");
+    const coPlate = plateBox(coFit);
+    expect(body).toContain(`left:${px(coPlate.x)};top:${px(coPlate.y)};width:${px(coPlate.w)};height:${px(coPlate.h)};background:#101418;`);
+    const closing = at("closing", "pitch", treatments);
+    expect(closing).toContain("background:#FFFFFF;border-radius:7.7px"); // lead plate-paper
+    expect(closing).not.toContain("background:#101418;border-radius:7.7px"); // co none
+  });
+
+  it("builds a pptx with treatments (logos unreachable → skipped, never thrown)", async () => {
+    const blob = await buildDeckPptx(spec, brandedKit, { style: "pitch", logoTreatments: treatments });
+    expect(blob.size).toBeGreaterThan(10_000);
+  }, 30_000);
+});
+
 describe("deckBuilder with styles", () => {
-  it("builds a pptx for every style (images unreachable → skipped, never thrown)", async () => {
+  it("builds a pptx for every style (images + video unreachable → skipped, never thrown)", async () => {
     for (const id of STYLE_IDS) {
       let skipped = 0;
-      const blob = await buildDeckPptx(spec, kit, { style: id, onImageSkipped: () => { skipped += 1; } });
+      const labels: string[] = [];
+      const blob = await buildDeckPptx(spec, kit, { style: id, onImageSkipped: (_url, label) => { skipped += 1; labels.push(label); } });
       expect(blob.size).toBeGreaterThan(10_000);
       expect(skipped).toBeGreaterThan(0);
+      expect(labels).toContain("Hero Front — Walkthrough (video)");
     }
   }, 60_000);
 });

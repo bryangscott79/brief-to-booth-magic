@@ -139,6 +139,17 @@ export interface ClosingSlide {
   contacts: Array<{ name: string; email?: string; phone?: string }>;
 }
 
+/** Embedded walkthrough video (16:9 frame + poster) with a meta column.
+ *  pptx embeds the mp4 as media; HTML renders a <video> in the same frame. */
+export interface VideoSlide {
+  layout: "video";
+  title: string;
+  videoUrl: string;
+  posterUrl?: string;
+  caption: string;
+  durationSec?: number;
+}
+
 export type SlideSpec =
   | CoverSlide
   | SectionSlide
@@ -148,6 +159,7 @@ export type SlideSpec =
   | SpatialSlide
   | RenderFullSlide
   | RenderGridSlide
+  | VideoSlide
   | BudgetSlide
   | MaterialsSlide
   | NextStepsSlide

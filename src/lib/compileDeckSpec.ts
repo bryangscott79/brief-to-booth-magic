@@ -9,9 +9,22 @@
 //   cover
 //   section 01 "The Ask"        → briefSummary
 //   section 02 "The Concept"    → concept, elementGrid
-//   section 03 "The Space"      → spatial, renderFull, renderGrid(s)
+//   section 03 "The Space"      → spatial, renderFull (hero), video?,
+//                                  then the other renders per
+//                                  renderPresentation (see below)
 //   section 04 "The Investment" → budget, materials?, nextSteps
 //   closing
+//
+// Render presentation (owner feedback: "more full-slide images of the booth
+// vs 4-up"):
+//   full  (default) — hero + EVERY selected render as its own full-bleed
+//                     slide, captioned with its angle label.
+//   mixed           — hero full, featured renders full, the rest in 2-up
+//                     grids (a single leftover gets its own slide).
+//   grid            — the original behaviour: hero full, the rest 4-up
+//                     (2–3 leftovers → one grid, one leftover → full).
+// `featuredRenderIds` force a full-bleed slide in mixed / grid modes;
+// `selectedRenderIds` restrict which current renders are used at all.
 
 import type { BrandKit } from "./brandKit";
 import type {
@@ -20,6 +33,7 @@ import type {
   ImageSlot,
   FactRow,
   RenderGridSlide,
+  VideoSlide,
 } from "./deckSpec";
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
@@ -30,6 +44,27 @@ export interface DeckRenderImage {
   angle_name: string;
   public_url: string;
   is_current: boolean;
+}
+
+export type RenderPresentation = "full" | "mixed" | "grid";
+
+export const DEFAULT_RENDER_PRESENTATION: RenderPresentation = "full";
+
+export const RENDER_PRESENTATIONS: ReadonlyArray<{ id: RenderPresentation; label: string; blurb: string }> = [
+  { id: "full", label: "One per slide", blurb: "Every render full-bleed — the booth at its biggest." },
+  { id: "mixed", label: "Mixed", blurb: "Hero and featured renders full-bleed, the rest paired 2-up." },
+  { id: "grid", label: "Compact grids", blurb: "Hero full-bleed, the rest in 4-up grids." },
+] as const;
+
+export const isRenderPresentation = (v: unknown): v is RenderPresentation =>
+  v === "full" || v === "mixed" || v === "grid";
+
+/** A persisted walkthrough clip (see deckVideo.ts / DeckVideoContent). */
+export interface DeckVideoInput {
+  url: string;
+  posterUrl?: string | null;
+  label?: string | null;
+  durationSec?: number | null;
 }
 
 /** Optional materials estimate (from the generate-materials edge fn —
@@ -54,6 +89,14 @@ export interface CompileDeckInputs {
   kit: BrandKit;
   boothSizeLabel?: string;
   materials?: DeckMaterialsInput | null;
+  /** How the view renders are laid out. Omit → "full". */
+  renderPresentation?: RenderPresentation | null;
+  /** angle_ids to include. Omit / null → every current render. */
+  selectedRenderIds?: string[] | null;
+  /** angle_ids that get their own full-bleed slide even in mixed / grid. */
+  featuredRenderIds?: string[] | null;
+  /** Embedded walkthrough clip → one `video` slide after the hero render. */
+  video?: DeckVideoInput | null;
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -181,6 +224,11 @@ const isHeroAngle = (id: string, name: string): boolean => {
 export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
   const { project, parsedBrief, elements, renders, kit, materials } = inputs;
   const brief = parsedBrief ?? {};
+  const presentation: RenderPresentation = isRenderPresentation(inputs.renderPresentation)
+    ? inputs.renderPresentation
+    : DEFAULT_RENDER_PRESENTATION;
+  const selectedIds = inputs.selectedRenderIds ? new Set(inputs.selectedRenderIds) : null;
+  const featuredIds = new Set(inputs.featuredRenderIds ?? []);
 
   const clientName =
     kit.client.name ?? (nonEmpty(brief.brand?.name) ? brief.brand.name : "Client");
@@ -317,7 +365,9 @@ export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
 
   // ── The Space ──────────────────────────────────────────────────────────
   const spatial = elementData(elements, "spatialStrategy");
-  const currentRenders = renders.filter((r) => r.is_current && nonEmpty(r.public_url));
+  const currentRenders = renders.filter(
+    (r) => r.is_current && nonEmpty(r.public_url) && (!selectedIds || selectedIds.has(r.angle_id)),
+  );
   const floorPlan = currentRenders.find((r) => FLOOR_PLAN_IDS.has(r.angle_id));
   const viewRenders = currentRenders.filter((r) => !FLOOR_PLAN_IDS.has(r.angle_id));
 
@@ -336,7 +386,21 @@ export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
 
   const hasSpatial = zones.length > 0 || !!floorPlan;
   const hasRenders = viewRenders.length > 0;
-  if (hasSpatial || hasRenders) {
+  const videoInput = inputs.video && nonEmpty(inputs.video.url) ? inputs.video : null;
+  const videoSlide: VideoSlide | null = videoInput
+    ? {
+        layout: "video",
+        title: "Walkthrough",
+        videoUrl: videoInput.url,
+        posterUrl: nonEmpty(videoInput.posterUrl) ? videoInput.posterUrl : undefined,
+        caption: nonEmpty(videoInput.label) ? clamp(videoInput.label, 80) : "Booth walkthrough",
+        durationSec:
+          typeof videoInput.durationSec === "number" && videoInput.durationSec > 0
+            ? videoInput.durationSec
+            : undefined,
+      }
+    : null;
+  if (hasSpatial || hasRenders || videoSlide) {
     pushSection("The Space", boothSize !== "TBD" ? `${boothSize} footprint` : undefined);
   }
   if (hasSpatial) {
@@ -352,31 +416,18 @@ export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
     });
   }
 
-  if (hasRenders) {
-    // Hero first, full bleed; remaining views grouped 4-up (2–3 leftovers
-    // become a 2-up-style grid; a single leftover gets its own full slide).
-    const heroIdx = viewRenders.findIndex((r) => isHeroAngle(r.angle_id, r.angle_name));
-    const hero = viewRenders[heroIdx >= 0 ? heroIdx : 0];
-    const rest = viewRenders.filter((r) => r !== hero);
-
-    slides.push({
-      layout: "renderFull",
-      image: { url: hero.public_url, label: hero.angle_name || "Hero view" },
-      caption: hero.angle_name || "Hero view",
-    });
-
-    const slots: ImageSlot[] = rest.map((r) => ({
-      url: r.public_url,
-      label: r.angle_name || "View",
-    }));
-    for (let i = 0; i < slots.length; i += 4) {
-      const group = slots.slice(i, i + 4);
+  const toSlot = (r: DeckRenderImage): ImageSlot => ({
+    url: r.public_url,
+    label: r.angle_name || "View",
+  });
+  const pushFull = (slot: ImageSlot) =>
+    slides.push({ layout: "renderFull", image: slot, caption: slot.label });
+  /** Group slots `size` at a time; a lone leftover gets its own full slide. */
+  const pushGrids = (slots: ImageSlot[], size: 2 | 4) => {
+    for (let i = 0; i < slots.length; i += size) {
+      const group = slots.slice(i, i + size);
       if (group.length === 1) {
-        slides.push({
-          layout: "renderFull",
-          image: group[0],
-          caption: group[0].label,
-        });
+        pushFull(group[0]);
       } else {
         const grid: RenderGridSlide = {
           layout: "renderGrid",
@@ -386,6 +437,41 @@ export function compileDeckSpec(inputs: CompileDeckInputs): DeckSpec {
         slides.push(grid);
       }
     }
+  };
+
+  if (hasRenders) {
+    // Hero first, full bleed (the walkthrough clip follows it), then
+    // featured renders full bleed, then the rest per presentation.
+    const heroIdx = viewRenders.findIndex((r) => isHeroAngle(r.angle_id, r.angle_name));
+    const hero = viewRenders[heroIdx >= 0 ? heroIdx : 0];
+    const rest = viewRenders.filter((r) => r !== hero);
+
+    slides.push({
+      layout: "renderFull",
+      image: { url: hero.public_url, label: hero.angle_name || "Hero view" },
+      caption: hero.angle_name || "Hero view",
+    });
+    if (videoSlide) slides.push(videoSlide);
+
+    const featured = rest.filter((r) => featuredIds.has(r.angle_id));
+    const others = rest.filter((r) => !featuredIds.has(r.angle_id));
+    for (const r of featured) pushFull(toSlot(r));
+
+    const slots = others.map(toSlot);
+    switch (presentation) {
+      case "full":
+        for (const slot of slots) pushFull(slot);
+        break;
+      case "mixed":
+        pushGrids(slots, 2);
+        break;
+      case "grid":
+      default:
+        pushGrids(slots, 4);
+        break;
+    }
+  } else if (videoSlide) {
+    slides.push(videoSlide);
   }
 
   // ── The Investment ─────────────────────────────────────────────────────

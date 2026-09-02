@@ -10,6 +10,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { BrandMode } from "@/lib/brandKit";
 import type { DeckStyleId } from "@/lib/deckStyle";
+import type { DeckSpec } from "@/lib/deckSpec";
+import type { RenderPresentation } from "@/lib/compileDeckSpec";
+import type { LogoTreatments } from "@/lib/logoContrast";
 
 // ─── SHAPES ──────────────────────────────────────────────────────────────────
 
@@ -18,10 +21,38 @@ export interface DeckSettings {
   brandMode?: BrandMode;
   /** Style preset (pitch / executive / editorial / tactical). Missing → pitch. */
   style?: DeckStyleId;
+  /** How renders are laid out: one per slide (default) / mixed / compact grids. */
+  renderPresentation?: RenderPresentation;
+  /** angle_ids of the renders to include. null / missing → every current render. */
+  selectedRenderIds?: string[] | null;
+  /** angle_ids forced to their own full-bleed slide in mixed / grid modes. */
+  featuredRenderIds?: string[];
+  /** Logo plate decisions (logoContrast) for the kit + style this deck was
+   *  compiled with — persisted so a rehydrated preview matches the download. */
+  logoTreatments?: LogoTreatments | null;
   [key: string]: unknown;
 }
 
-export type DeckContent = Record<string, unknown>;
+/** A walkthrough video persisted for deck use (provider URLs expire, so the
+ *  mp4 is copied into the public project-images bucket first). */
+export interface DeckVideoContent {
+  /** Public URL of the copied mp4. */
+  url: string;
+  /** Storage path inside project-images — `{projectId}/walkthrough_{ts}.mp4`. */
+  path: string;
+  /** Poster frame (first selected render, or the video's source image). */
+  posterUrl?: string;
+  label: string;
+  durationSec?: number;
+  /** videoStore id the clip came from, for de-duping the picker. */
+  sourceVideoId?: string;
+}
+
+export interface DeckContent {
+  spec?: DeckSpec;
+  video?: DeckVideoContent | null;
+  [key: string]: unknown;
+}
 
 export interface ProjectDeckState {
   settings: DeckSettings;

@@ -20,6 +20,13 @@
 //    scale, density, accent intensity, image framing, number-led tables —
 //    and never changes content. Sizes go through the shared T/B/C/S scale
 //    helpers so the HTML mirror resolves the exact same numbers.
+//  · Logos (logoContrast.ts): a mark the ground would swallow gets a paper
+//    or ink plate (the field cover gets a top-left lockup tab instead). The
+//    decision + plate geometry are shared with the HTML mirror; with no
+//    treatments passed, output is byte-identical to before.
+//  · Video: the walkthrough clip embeds as real media with its poster as the
+//    cover; if the mp4 can't be fetched the slide degrades to the poster
+//    hyperlinked to the clip (onImageSkipped fires, like an image).
 
 import PptxGenJS from "pptxgenjs";
 import type { BrandKit } from "./brandKit";
@@ -39,6 +46,7 @@ import type {
   CoverSlide,
   SectionSlide,
   RenderFullSlide,
+  VideoSlide,
 } from "./deckSpec";
 import {
   closingOnPaper,
@@ -49,6 +57,18 @@ import {
   type DeckStyleId,
   type DeckStyleTokens,
 } from "./deckStyle";
+import { resolveImageUrl } from "./signedImageUrl";
+import {
+  LOCKUP_RADIUS,
+  NO_LOGO_TREATMENTS,
+  PLATE_RADIUS,
+  fitLogoBox,
+  lockupBox,
+  plateBox,
+  type Box,
+  type LogoGround,
+  type LogoTreatments,
+} from "./logoContrast";
 
 // ── Geometry constants (inches) — mirrored in deckSlideHtml.ts ───────────────
 
@@ -109,7 +129,12 @@ function paletteFrom(kit: BrandKit): Palette {
 
 async function urlToDataUrl(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url);
+    // Brand logos live in PRIVATE buckets — resolve a stored/public-form ref
+    // to a signed URL first. Renders, the walkthrough mp4 (public
+    // project-images) and external URLs pass through untouched.
+    const resolved = await resolveImageUrl(url);
+    if (!resolved) return null;
+    const res = await fetch(resolved);
     if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise<string | null>((resolve) => {
@@ -130,6 +155,10 @@ export interface DeckBuildOptions {
   onImageSkipped?: (url: string, label: string) => void;
   /** Style preset (deckStyle.ts). Omit → "pitch", today's design. */
   style?: DeckStyleId | DeckStyleTokens | null;
+  /** Logo plate decisions (logoContrast.computeLogoTreatments). Omit → no
+   *  plates, i.e. today's output. Pass the SAME object to renderSlideHtml
+   *  so the preview matches the download. */
+  logoTreatments?: LogoTreatments | null;
 }
 
 async function fetchAllImages(
@@ -174,11 +203,45 @@ function collectImageEntries(spec: DeckSpec, kit: BrandKit): Array<{ url: string
       case "spatial":
         if (slide.image) entries.push(slide.image);
         break;
+      case "video":
+        if (slide.posterUrl) entries.push({ url: slide.posterUrl, label: `${slide.caption} (poster)` });
+        break;
       default:
         break;
     }
   }
   return entries;
+}
+
+/** Every media (mp4) URL a spec references — fetched like images, but kept
+ *  in a separate map so a skipped clip is reported by name. */
+function collectMediaEntries(spec: DeckSpec): Array<{ url: string; label: string }> {
+  const entries: Array<{ url: string; label: string }> = [];
+  for (const slide of spec.slides) {
+    if (slide.layout === "video") entries.push({ url: slide.videoUrl, label: `${slide.caption} (video)` });
+  }
+  return entries;
+}
+
+// ── Video slide geometry (inches) — mirrored in deckSlideHtml.ts ─────────────
+
+/** 16:9 frame anchored at the page margin; meta column to its right. */
+export const VIDEO_FRAME_W = 8.6;
+export const VIDEO_FRAME_Y = 1.62;
+export const VIDEO_COL_GAP = 0.4;
+
+export function videoFrame(margin: number): Box {
+  return { x: margin, y: VIDEO_FRAME_Y, w: VIDEO_FRAME_W, h: Math.round((VIDEO_FRAME_W * 9) / 16 * 1000) / 1000 };
+}
+
+/** Facts for the video meta column. Mirrored in deckSlideHtml.ts. */
+export function videoFacts(d: Pick<VideoSlide, "durationSec">): Array<[string, string]> {
+  const facts: Array<[string, string]> = [];
+  if (typeof d.durationSec === "number" && d.durationSec > 0) {
+    facts.push(["Duration", `${d.durationSec} second${d.durationSec === 1 ? "" : "s"}`]);
+  }
+  facts.push(["Format", "MP4 · 16:9"]);
+  return facts;
 }
 
 // ── Master names ──────────────────────────────────────────────────────────────
@@ -242,6 +305,8 @@ export async function buildDeckPptx(
   const images = await fetchAllImages(collectImageEntries(spec, kit), opts);
   const leadLogo = kit.leadLogoUrl ? images.get(kit.leadLogoUrl) ?? null : null;
   const coLogo = kit.coLogoUrl ? images.get(kit.coLogoUrl) ?? null : null;
+  const media = await fetchAllImages(collectMediaEntries(spec), opts);
+  const treat = opts.logoTreatments ?? NO_LOGO_TREATMENTS;
 
   const pres = new PptxGenJS();
   pres.defineLayout({ name: "CANOPY_WIDE", width: DECK_PAGE.w, height: DECK_PAGE.h });
@@ -293,9 +358,14 @@ export async function buildDeckPptx(
       },
     },
   ];
-  if (coLogo) {
+  // Co-brand mark in the footer. A bare mark lives on the master; a plated
+  // one is drawn per slide (master objects can't carry rounded rects).
+  const FOOTER_CO_BOX: Box = { x: 11.35, y: 7.06, w: 1.0, h: 0.3 };
+  const coFooterPlated = !!coLogo && treat.co.footer !== "none";
+  if (coLogo && !coFooterPlated) {
+    const box = fitLogoBox(FOOTER_CO_BOX, treat.coAspect, "right");
     bodyObjects.push({
-      image: { x: 11.35, y: 7.06, w: 1.0, h: 0.3, data: coLogo, sizing: { type: "contain", w: 1.0, h: 0.3 } },
+      image: { ...box, data: coLogo, sizing: { type: "contain", w: box.w, h: box.h } },
     });
   }
   pres.defineSlideMaster({
@@ -344,9 +414,41 @@ export async function buildDeckPptx(
     }
   };
 
-  const addLogo = (slide: PptxGenJS.Slide, data: string | null, x: number, y: number, w: number, h: number) => {
-    if (data) slide.addImage({ data, x, y, w, h, sizing: { type: "contain", w, h } });
+  /** A brand mark in its logo box. When logoContrast decided the ground
+   *  would swallow it, a paper / ink plate hugs the fitted mark — or, for
+   *  `lockup` (the field cover), a tab hanging from the top edge. With a
+   *  known aspect the mark is placed at its exact fitted rect (aligned to
+   *  `side`) so both renderers agree; otherwise pptx's contain sizing runs
+   *  as before. Mirrors deckSlideHtml.logo. */
+  const addLogo = (
+    slide: PptxGenJS.Slide,
+    data: string | null,
+    box: Box,
+    side: "left" | "right",
+    which: "lead" | "co",
+    ground: LogoGround,
+    lockup = false,
+  ) => {
+    if (!data) return;
+    const aspect = which === "lead" ? treat.leadAspect : treat.coAspect;
+    const treatment = treat[which][ground];
+    const fitted = fitLogoBox(box, aspect, side);
+    if (treatment !== "none") {
+      const plate = lockup ? lockupBox(fitted) : plateBox(fitted);
+      slide.addShape("roundRect", {
+        ...plate,
+        rectRadius: lockup ? LOCKUP_RADIUS : PLATE_RADIUS,
+        fill: { color: treatment === "plate-ink" ? pal.ink : pal.paper },
+      });
+    }
+    slide.addImage({ data, ...fitted, sizing: { type: "contain", w: fitted.w, h: fitted.h } });
   };
+
+  const COVER_LEAD_BOX: Box = { x: M, y: 0.55, w: 2.2, h: 0.62 };
+  const COVER_LEAD_BOX_RIGHT: Box = { x: DECK_PAGE.w - M - 2.2, y: 0.42, w: 2.2, h: 0.62 };
+  const COVER_CO_BOX: Box = { x: 11.0, y: 6.62, w: 1.73, h: 0.55 };
+  const CLOSING_LEAD_BOX: Box = { x: M, y: 6.55, w: 1.9, h: 0.55 };
+  const CLOSING_CO_BOX: Box = { x: 10.85, y: 6.55, w: 1.88, h: 0.55 };
 
   /** Soft geometric accents for the field treatment: a large secondary
    *  circle cropping the top-right, a faint paper arc bottom-left. Drawn
@@ -364,7 +466,7 @@ export async function buildDeckPptx(
     const footer = `${spec.meta.agencyName}   ·   ${spec.meta.dateLabel}`;
     switch (tok.cover) {
       case "quiet": {
-        addLogo(s, leadLogo, M, 0.55, 2.2, 0.62);
+        addLogo(s, leadLogo, COVER_LEAD_BOX, "left", "lead", "cover");
         s.addShape("rect", { x: M, y: 1.42, w: CW, h: 0.02, fill: { color: pal.primary } });
         s.addText(d.eyebrow.toUpperCase(), {
           x: M, y: 2.78, w: 10.5, h: 0.4, fontFace: BODY, fontSize: C(11),
@@ -381,7 +483,7 @@ export async function buildDeckPptx(
         s.addText(footer, {
           x: M, y: 6.78, w: 8, h: 0.35, fontFace: BODY, fontSize: C(10), color: pal.muted, charSpacing: 1,
         });
-        addLogo(s, coLogo, 11.0, 6.62, 1.73, 0.55);
+        addLogo(s, coLogo, COVER_CO_BOX, "right", "co", "cover");
         return;
       }
       case "editorial": {
@@ -389,7 +491,7 @@ export async function buildDeckPptx(
           x: M, y: 0.6, w: 8, h: 0.3, fontFace: BODY, fontSize: C(9),
           color: pal.muted, charSpacing: 3, bold: true,
         });
-        addLogo(s, leadLogo, DECK_PAGE.w - M - 2.2, 0.42, 2.2, 0.62);
+        addLogo(s, leadLogo, COVER_LEAD_BOX_RIGHT, "right", "lead", "cover");
         s.addShape("rect", { x: M, y: 0.98, w: CW, h: 0.012, fill: { color: pal.ink } });
         s.addText(d.title, {
           x: M - 0.06, y: 1.3, w: CW, h: 3.7, fontFace: HEAD, fontSize: T(64),
@@ -404,11 +506,11 @@ export async function buildDeckPptx(
         s.addText(footer, {
           x: M, y: 6.78, w: 8, h: 0.35, fontFace: BODY, fontSize: C(10), color: pal.muted, charSpacing: 1,
         });
-        addLogo(s, coLogo, 11.0, 6.62, 1.73, 0.55);
+        addLogo(s, coLogo, COVER_CO_BOX, "right", "co", "cover");
         return;
       }
       case "grid": {
-        addLogo(s, leadLogo, M, 0.55, 2.2, 0.62);
+        addLogo(s, leadLogo, COVER_LEAD_BOX, "left", "lead", "cover");
         s.addText(d.eyebrow.toUpperCase(), {
           x: M, y: 1.95, w: 10.5, h: 0.3, fontFace: BODY, fontSize: C(10),
           color: pal.secondary, charSpacing: 3, bold: true,
@@ -438,13 +540,14 @@ export async function buildDeckPptx(
         s.addText(footer, {
           x: M, y: 6.78, w: 8, h: 0.35, fontFace: BODY, fontSize: C(10), color: pal.muted, charSpacing: 1,
         });
-        addLogo(s, coLogo, 11.0, 6.62, 1.73, 0.55);
+        addLogo(s, coLogo, COVER_CO_BOX, "right", "co", "cover");
         return;
       }
       case "field":
       default: {
         drawFieldGeometry(s);
-        addLogo(s, leadLogo, M, 0.55, 2.2, 0.62);
+        // Field cover: a plated mark becomes a top-left lockup tab.
+        addLogo(s, leadLogo, COVER_LEAD_BOX, "left", "lead", "cover", true);
         s.addShape("rect", { x: M + 0.02, y: 2.62, w: 0.9, h: 0.05, fill: { color: pal.secondary } });
         s.addText(d.eyebrow.toUpperCase(), {
           x: M, y: 2.78, w: 10.5, h: 0.4, fontFace: BODY, fontSize: C(11),
@@ -462,7 +565,7 @@ export async function buildDeckPptx(
           x: M, y: 6.78, w: 8, h: 0.35, fontFace: BODY, fontSize: C(10),
           color: mixHex(pal.paper, pal.primary, 0.65), charSpacing: 1,
         });
-        addLogo(s, coLogo, 11.0, 6.62, 1.73, 0.55);
+        addLogo(s, coLogo, COVER_CO_BOX, "right", "co", "cover");
         return;
       }
     }
@@ -1084,8 +1187,78 @@ export async function buildDeckPptx(
       );
       y += S(0.42);
     }
-    addLogo(s, leadLogo, M, 6.55, 1.9, 0.55);
-    addLogo(s, coLogo, 10.85, 6.55, 1.88, 0.55);
+    addLogo(s, leadLogo, CLOSING_LEAD_BOX, "left", "lead", "closing");
+    addLogo(s, coLogo, CLOSING_CO_BOX, "right", "co", "closing");
+  };
+
+  /** Walkthrough video: 16:9 frame on the left — the embedded mp4 with the
+   *  poster as its cover, or (clip unfetchable) the poster hyperlinked to
+   *  the clip with a play badge — and a meta column on the right. Body
+   *  master, every style. Mirrors deckSlideHtml.renderVideo. */
+  const drawVideo = (s: PptxGenJS.Slide, d: VideoSlide) => {
+    addTitle(s, "The Space", d.title);
+    const frame = videoFrame(M);
+    s.addShape("rect", { ...frame, fill: { color: pal.ink } });
+    const clip = media.get(d.videoUrl) ?? null;
+    const poster = d.posterUrl ? images.get(d.posterUrl) ?? null : null;
+    if (clip) {
+      s.addMedia({ type: "video", data: clip, ...frame, ...(poster ? { cover: poster } : {}) });
+    } else if (poster) {
+      s.addImage({
+        data: poster, ...frame, sizing: { type: "cover", w: frame.w, h: frame.h },
+        hyperlink: { url: d.videoUrl, tooltip: "Open walkthrough video" },
+      });
+      const cx = frame.x + frame.w / 2;
+      const cy = frame.y + frame.h / 2;
+      s.addShape("ellipse", { x: cx - 0.45, y: cy - 0.45, w: 0.9, h: 0.9, fill: { color: pal.paper, transparency: 12 } });
+      s.addShape("triangle", { x: cx - 0.12, y: cy - 0.2, w: 0.34, h: 0.4, rotate: 90, fill: { color: pal.ink } });
+    } else {
+      s.addText(d.caption, {
+        ...frame, fontFace: BODY, fontSize: C(10), color: mixHex(pal.paper, pal.ink, 0.7),
+        align: "center", valign: "middle", hyperlink: { url: d.videoUrl, tooltip: "Open walkthrough video" },
+      });
+    }
+    // Under the frame: figure kicker left, project name right (as on renders).
+    const capY = frame.y + frame.h + 0.08;
+    s.addText("WALKTHROUGH VIDEO", {
+      x: frame.x, y: capY, w: frame.w / 2, h: 0.28, fontFace: BODY, fontSize: C(8.5),
+      color: pal.muted, charSpacing: 2,
+    });
+    s.addText(spec.meta.projectName, {
+      x: frame.x + frame.w / 2, y: capY, w: frame.w / 2, h: 0.28, fontFace: BODY, fontSize: C(8.5),
+      color: pal.muted, align: "right", charSpacing: 1,
+    });
+    // Meta column.
+    const rx = frame.x + frame.w + VIDEO_COL_GAP;
+    const rw = DECK_PAGE.w - M - rx;
+    s.addText("IN MOTION", {
+      x: rx, y: frame.y, w: rw, h: 0.26, fontFace: BODY, fontSize: C(8.5),
+      color: pal.secondary, charSpacing: 2, bold: true,
+    });
+    s.addText(d.caption, {
+      x: rx - 0.03, y: frame.y + 0.32, w: rw, h: 1.3, fontFace: HEAD, fontSize: T(18),
+      color: pal.primary, bold: true, fit: "shrink", valign: "top", lineSpacing: T(22),
+    });
+    let y = frame.y + 1.78;
+    s.addShape("rect", { x: rx, y, w: rw, h: 0.008, fill: { color: pal.line } });
+    y += 0.16;
+    for (const [label, value] of videoFacts(d)) {
+      s.addText(label.toUpperCase(), {
+        x: rx, y, w: rw, h: 0.26, fontFace: BODY, fontSize: C(8.5),
+        color: pal.muted, charSpacing: 2, bold: true,
+      });
+      s.addText(value, {
+        x: rx, y: y + 0.24, w: rw, h: 0.4, fontFace: BODY, fontSize: B(13.5),
+        color: pal.ink, bold: true, fit: "shrink", valign: "top",
+      });
+      y += S(0.82);
+      s.addShape("rect", { x: rx, y: y - 0.12, w: rw, h: 0.008, fill: { color: pal.line } });
+    }
+    s.addText("OPEN VIDEO →", {
+      x: rx, y: frame.y + frame.h - 0.3, w: rw, h: 0.3, fontFace: BODY, fontSize: C(9),
+      color: pal.secondary, charSpacing: 3, bold: true, valign: "middle",
+      hyperlink: { url: d.videoUrl, tooltip: "Open walkthrough video" },
+    });
   };
 
   // ── Assemble ───────────────────────────────────────────────────────────
@@ -1114,10 +1287,15 @@ export async function buildDeckPptx(
       case "spatial": drawSpatial(slide, slideSpec); break;
       case "renderFull": drawRenderFull(slide, slideSpec); break;
       case "renderGrid": drawRenderGrid(slide, slideSpec); break;
+      case "video": drawVideo(slide, slideSpec); break;
       case "budget": drawBudget(slide, slideSpec); break;
       case "materials": drawMaterials(slide, slideSpec); break;
       case "nextSteps": drawNextSteps(slide, slideSpec); break;
       case "closing": drawClosing(slide, slideSpec); break;
+    }
+    // Plated footer co-brand mark (bare marks sit on the master instead).
+    if (coFooterPlated && masterFor(slideSpec) === MASTER.body) {
+      addLogo(slide, coLogo, FOOTER_CO_BOX, "right", "co", "footer");
     }
     opts.onProgress?.("Building slides", i + 1, total);
   });

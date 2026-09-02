@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader, IconWell } from "@/components/shell";
 import { useCompanyProfile, useShowCosts, type ShowCost } from "@/hooks/useCompanyProfile";
+import { useResolvedImageUrl } from "@/lib/signedImageUrl";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +114,10 @@ function LogoUploader({
     maxFiles: 1,
   });
 
+  // company-assets is a private bucket — resolve the stored URL to a signed
+  // one for preview (also covers the just-uploaded public URL form).
+  const previewUrl = useResolvedImageUrl(currentUrl);
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
@@ -129,8 +134,8 @@ function LogoUploader({
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
         ) : currentUrl ? (
           <div className="flex items-center justify-center gap-4">
-            <img 
-              src={currentUrl} 
+            <img
+              src={previewUrl ?? currentUrl}
               alt={label} 
               className="h-12 max-w-[150px] object-contain"
             />

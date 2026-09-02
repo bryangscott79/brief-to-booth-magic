@@ -16,6 +16,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgency } from "@/hooks/useAgency";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
+import { resolveImageUrl } from "@/lib/signedImageUrl";
 
 export type FeedbackType = "bug" | "feature" | "improvement";
 export type FeedbackStatus =
@@ -92,7 +93,20 @@ export function useFeedback() {
         if (isMissingTable(error.message)) return { items: [], schemaReady: false };
         throw error;
       }
-      return { items: (data ?? []).map((r) => normalizeItem(r as Record<string, unknown>)), schemaReady: true };
+      // feedback-attachments bucket is private — sign each attachment URL.
+      const items = await Promise.all(
+        (data ?? []).map(async (r) => {
+          const item = normalizeItem(r as Record<string, unknown>);
+          const attachments = await Promise.all(
+            item.attachments.map(async (a) => ({
+              ...a,
+              url: (await resolveImageUrl(a.path ? `feedback-attachments/${a.path}` : a.url)) ?? a.url,
+            })),
+          );
+          return { ...item, attachments };
+        }),
+      );
+      return { items, schemaReady: true };
     },
   });
 }

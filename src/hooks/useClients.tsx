@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgency } from "@/hooks/useAgency";
 import { useToast } from "@/hooks/use-toast";
+import { resolveImageUrl } from "@/lib/signedImageUrl";
 
 export interface Client {
   id: string;
@@ -67,7 +68,13 @@ export function useClients() {
       }
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as unknown as Client[];
+      // brand-assets bucket is private — swap stored refs for signed URLs.
+      return (await Promise.all(
+        (data ?? []).map(async (c) => ({
+          ...c,
+          logo_url: await resolveImageUrl(c.logo_url),
+        })),
+      )) as unknown as Client[];
     },
     enabled: !!user && !!agency?.id,
   });
@@ -83,7 +90,10 @@ export function useClient(clientId?: string | null) {
         .eq("id", clientId!)
         .single();
       if (error) throw error;
-      return data as unknown as Client;
+      return {
+        ...data,
+        logo_url: await resolveImageUrl(data.logo_url),
+      } as unknown as Client;
     },
     enabled: !!clientId,
   });

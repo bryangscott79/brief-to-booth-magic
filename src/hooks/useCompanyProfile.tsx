@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { resolveImageUrl } from "@/lib/signedImageUrl";
 
 export interface CompanyProfile {
   id: string;
@@ -57,7 +58,14 @@ export function useCompanyProfile() {
         .select("*")
         .maybeSingle();
       if (error) throw error;
-      return data as unknown as CompanyProfile | null;
+      if (!data) return null;
+      // company-assets bucket is private — swap stored refs for signed URLs.
+      const row = data as unknown as Record<string, unknown>;
+      return {
+        ...row,
+        logo_url: await resolveImageUrl(row.logo_url as string | null),
+        logo_dark_url: await resolveImageUrl(row.logo_dark_url as string | null),
+      } as unknown as CompanyProfile;
     },
     enabled: !!user,
   });

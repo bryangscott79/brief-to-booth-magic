@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolveImageUrl } from "@/lib/signedImageUrl";
 
 export type AgencyRole = "owner" | "admin" | "member" | "viewer";
 
@@ -123,6 +124,14 @@ export function useAgency(): UseAgencyResult {
         agency = (agencyRel[0] as Tables<"agencies"> | undefined) ?? null;
       } else if (agencyRel) {
         agency = agencyRel as Tables<"agencies">;
+      }
+
+      // company-assets bucket is private — swap the stored ref for a signed URL.
+      if (agency?.logo_url) {
+        agency = {
+          ...agency,
+          logo_url: await resolveImageUrl(agency.logo_url),
+        };
       }
 
       return { agency, role } as const;

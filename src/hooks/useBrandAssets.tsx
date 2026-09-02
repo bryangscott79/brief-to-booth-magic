@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { resolveImageUrl } from "@/lib/signedImageUrl";
 import type { BrandAsset } from "@/types/brief";
 
 // ─── DB ROW SHAPE ─────────────────────────────────────────────────────────────
@@ -46,7 +47,16 @@ export function useBrandAssets(clientId: string | null | undefined) {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return ((data ?? []) as unknown as BrandAssetRow[]).map(rowToAsset);
+      // brand-assets bucket is private — sign each stored path for display.
+      return await Promise.all(
+        ((data ?? []) as unknown as BrandAssetRow[]).map(async (r) => {
+          const asset = rowToAsset(r);
+          const signed = await resolveImageUrl(
+            r.storage_path ? `brand-assets/${r.storage_path}` : r.public_url,
+          );
+          return { ...asset, publicUrl: signed ?? asset.publicUrl };
+        }),
+      );
     },
   });
 }

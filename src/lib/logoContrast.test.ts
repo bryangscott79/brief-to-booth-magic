@@ -212,3 +212,34 @@ describe("plate geometry", () => {
     expect(tab.y + tab.h).toBeCloseTo(1.32, 3);
   });
 });
+
+describe("two-tone marks (regression: orange symbol + charcoal wordmark)", () => {
+  it("plates on paper even when perceived luminance calls the mark light", () => {
+    // Exhibitus-style: big orange symbol dominates pixels (reads "light"),
+    // thin charcoal wordmark would vanish on an ink tab.
+    const mark = {
+      dominantHex: "#FF7B00",
+      meanLuminance: 0.58,
+      isLightMark: true,
+      hasTransparency: true,
+      aspect: 3.2,
+      palette: [
+        { hex: "#FF7B00", share: 0.7 },
+        { hex: "#3A3A3A", share: 0.3 },
+      ],
+    };
+    expect(logoTreatmentFor(mark, "#FF7B00")).toBe("plate-paper");
+    expect(logoTreatmentFor(mark, "#101418")).toBe("plate-paper");
+  });
+  it("still picks ink for genuinely light marks", () => {
+    const light = {
+      dominantHex: "#FFFFFF",
+      meanLuminance: 0.95,
+      isLightMark: true,
+      hasTransparency: true,
+      aspect: 2,
+      palette: [{ hex: "#FFFFFF", share: 0.9 }, { hex: "#E5E7EB", share: 0.1 }],
+    };
+    expect(logoTreatmentFor(light, "#FFFFFF")).toBe("plate-ink");
+  });
+});

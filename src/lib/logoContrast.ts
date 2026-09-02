@@ -67,7 +67,7 @@ export const PLATE_MIN_GAIN = 1.15;
 /** Mean luminance at/above which a mark counts as light (ink plate). */
 export const LIGHT_MARK_LUMINANCE = 0.5;
 /** Colour clusters smaller than this share of the mark are ignored. */
-export const PALETTE_MIN_SHARE = 0.08;
+export const PALETTE_MIN_SHARE = 0.03;
 
 export const DEFAULT_PAPER = "#FFFFFF";
 export const DEFAULT_INK = "#101418";
@@ -124,13 +124,17 @@ export function logoTreatmentFor(
   if (onGround >= PLATE_MIN_CONTRAST) return "none";
   const onPaper = logoContrastOn(analysis, plates.paper);
   const onInk = logoContrastOn(analysis, plates.ink);
-  let chosen: LogoTreatment = analysis.isLightMark ? "plate-ink" : "plate-paper";
-  let chosenRatio = chosen === "plate-ink" ? onInk : onPaper;
-  const otherRatio = chosen === "plate-ink" ? onPaper : onInk;
-  if (chosenRatio < PLATE_SWAP_BELOW && otherRatio > chosenRatio) {
-    chosen = chosen === "plate-ink" ? "plate-paper" : "plate-ink";
-    chosenRatio = otherRatio;
-  }
+  // Preferred plate follows the mark's tone (light → ink, dark/colour →
+  // paper) — but only if EVERY significant colour in the mark clears
+  // PLATE_SWAP_BELOW on that plate. Two-tone marks are the trap: a big orange
+  // symbol reads "light" by perceived luminance, while its charcoal wordmark
+  // would vanish on ink. Worst-case contrast over the palette decides.
+  const paperOk = onPaper >= PLATE_SWAP_BELOW;
+  const inkOk = onInk >= PLATE_SWAP_BELOW;
+  let chosen: LogoTreatment;
+  if (analysis.isLightMark) chosen = inkOk ? "plate-ink" : onPaper > onInk ? "plate-paper" : "plate-ink";
+  else chosen = paperOk ? "plate-paper" : onInk > onPaper ? "plate-ink" : "plate-paper";
+  const chosenRatio = chosen === "plate-ink" ? onInk : onPaper;
   // The plate has to beat the bare ground, or it's decoration.
   if (chosenRatio < onGround * PLATE_MIN_GAIN) return "none";
   return chosen;
@@ -212,7 +216,7 @@ export function analyzePixels(data: Uint8ClampedArray | number[], w: number, h: 
       share: Math.round((bk.count / sample.count) * 1000) / 1000,
     }))
     .filter((p) => p.share >= PALETTE_MIN_SHARE)
-    .slice(0, 4);
+    .slice(0, 5);
   const dominantHex = palette[0]?.hex ?? (() => {
     const bk = sorted[0];
     return "#" + toHex(bk.r / bk.count) + toHex(bk.g / bk.count) + toHex(bk.b / bk.count);

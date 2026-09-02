@@ -84,9 +84,10 @@ export function useProjectDeck(projectId: string | null | undefined) {
         throw error;
       }
 
+      const row = data as any;
       return {
-        settings: ((data?.settings as DeckSettings | null) ?? {}) as DeckSettings,
-        content: ((data?.content as DeckContent | null) ?? {}) as DeckContent,
+        settings: (row?.settings ?? {}) as DeckSettings,
+        content: (row?.content ?? {}) as DeckContent,
         schemaReady: true,
       };
     },

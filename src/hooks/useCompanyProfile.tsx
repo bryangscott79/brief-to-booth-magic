@@ -60,7 +60,7 @@ export function useCompanyProfile() {
       if (error) throw error;
       if (!data) return null;
       // company-assets bucket is private — swap stored refs for signed URLs.
-      const row = data as Record<string, unknown>;
+      const row = data as unknown as Record<string, unknown>;
       return {
         ...row,
         logo_url: await resolveImageUrl(row.logo_url as string | null),

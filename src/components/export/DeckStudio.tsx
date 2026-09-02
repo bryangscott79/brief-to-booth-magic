@@ -1001,25 +1001,6 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
                 </div>
               </div>
 
-              {focused !== null && slideHtml[focused] !== undefined && (
-                <DeckSlideFocus
-                  html={slideHtml[focused]}
-                  renderKey={slideKeys[focused]}
-                  index={focused}
-                  total={displaySpec.slides.length}
-                  layout={displaySpec.slides[focused].layout}
-                  overrides={displayOverrides?.[String(focused)] ?? null}
-                  onPrev={focusPrev}
-                  onNext={focusNext}
-                  onClose={closeFocus}
-                  onSend={(feedback) => applyFeedback(feedback, focused)}
-                  busy={revising}
-                  lastReply={focusedReply}
-                  disabled={composerLocked}
-                  disabledReason={composerReason}
-                />
-              )}
-
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, 243px)" }}>
                 {displaySpec.slides.map((slide, i) => {
                   const active = focused === i;
@@ -1075,6 +1056,25 @@ export function DeckStudio({ projectId, clientId }: DeckStudioProps) {
               disabledReason={composerReason}
             />
           </div>
+          {/* Slide focus — a full-screen modal; feedback applies in place. */}
+          {focused !== null && slideHtml[focused] !== undefined && (
+            <DeckSlideFocus
+              html={slideHtml[focused]}
+              renderKey={slideKeys[focused]}
+              index={focused}
+              total={displaySpec.slides.length}
+              layout={displaySpec.slides[focused].layout}
+              overrides={displayOverrides?.[String(focused)] ?? null}
+              onPrev={focusPrev}
+              onNext={focusNext}
+              onClose={closeFocus}
+              onSend={(feedback) => applyFeedback(feedback, focused)}
+              busy={revising}
+              lastReply={focusedReply}
+              disabled={composerLocked}
+              disabledReason={composerReason}
+            />
+          )}
         </div>
       ) : (
         <div className="px-5 py-8 text-center">

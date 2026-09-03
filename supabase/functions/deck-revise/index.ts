@@ -26,19 +26,20 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-const HEX = { type: "string", pattern: "^#[0-9a-fA-F]{6}$" };
+const HEX = { type: "string", description: "6-digit hex colour, e.g. #0B1B2B" };
 const SLIDE_LAYOUTS = [
   "cover", "section", "briefSummary", "concept", "elementGrid", "spatial",
   "renderFull", "renderGrid", "budget", "materials", "nextSteps", "closing",
 ];
 
-/** Closed op vocabulary — mirrors src/lib/deckOps.ts. strict: true so the
- *  arguments always validate; the client re-validates anyway. */
+/** Closed op vocabulary — mirrors src/lib/deckOps.ts. Deliberately a plain
+ *  (non-strict) tool: the strict subset rejects JSON-Schema validation
+ *  keywords and requires every property to be required, which this
+ *  partial-op vocabulary can't satisfy. isValidDeckOp guards it instead. */
 const REVISE_TOOL = {
   name: "apply_deck_changes",
   description:
     "Apply the user's feedback to the deck as an ordered list of structured operations, then explain briefly what changed.",
-  strict: true,
   input_schema: {
     type: "object",
     additionalProperties: false,
@@ -70,8 +71,8 @@ const REVISE_TOOL = {
             secondary: HEX,
             headingFontId: { type: "string" },
             bodyFontId: { type: "string" },
-            index: { type: "integer", minimum: 0 },
-            order: { type: "array", items: { type: "integer", minimum: 0 } },
+            index: { type: "integer", description: "0-based slide index" },
+            order: { type: "array", items: { type: "integer" }, description: "Full permutation of the current 0-based slide indices" },
             patch: {
               type: "object",
               description:

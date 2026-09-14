@@ -3,7 +3,13 @@ import JSZip from "https://esm.sh/jszip@3.10.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
+import {
+  buildRagContext,
+  createRagClient,
+  knowledgeSummary,
+  EMPTY_RAG_CONTEXT,
+  type RagContext,
+} from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -577,7 +583,7 @@ serve(async (req) => {
 
       // Build RAG context for PDF path — use brandContext/suiteContext as the query proxy
       // since the PDF text isn't extracted yet.
-      let pdfRagContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+      let pdfRagContext: RagContext = EMPTY_RAG_CONTEXT;
       if (agency_id) {
         const ragQuery = [brandContext, suiteContext, "experiential design brief trade show booth activation"]
           .filter(Boolean)
@@ -636,7 +642,7 @@ serve(async (req) => {
         const pdfParsed = pdfResult.toolCalls?.[0]?.arguments;
         if (pdfParsed) {
           console.log("PDF parsed via vision, brand:", (pdfParsed as any).brand?.name);
-          return new Response(JSON.stringify({ data: pdfParsed }), {
+          return new Response(JSON.stringify({ data: pdfParsed, knowledge: knowledgeSummary(pdfRagContext) }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
@@ -660,7 +666,7 @@ serve(async (req) => {
     console.log(`Parsing brief: ${briefText.length} chars | brand intel: ${brandIntelligence?.length ?? 0} entries`);
 
     // ── RAG: Retrieve knowledge base context for the text path ──
-    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    let ragContext: RagContext = EMPTY_RAG_CONTEXT;
     if (agency_id) {
       ragContext = await buildRagContext(createRagClient(req), {
         query: briefText.slice(0, 4000),
@@ -678,7 +684,7 @@ serve(async (req) => {
 
     console.log("Final parsed brand:", (parsed.brand as any)?.name, "| deliverables:", (parsed.requiredDeliverables as string[])?.length ?? 0);
 
-    return new Response(JSON.stringify({ data: parsed }), {
+    return new Response(JSON.stringify({ data: parsed, knowledge: knowledgeSummary(ragContext) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

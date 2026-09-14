@@ -24,7 +24,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, knowledgeSummary } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -281,6 +281,9 @@ Deno.serve(async (req) => {
           ? `Rendering ${concepts.length} direction${concepts.length === 1 ? "" : "s"}.`
           : "Tell me a bit more and I'll put something on the board."),
       concepts,
+      // Named so the board can show WHICH of the agency's own documents
+      // shaped these directions, instead of asking anyone to take it on faith.
+      knowledge: knowledgeSummary(ragContext),
     });
   } catch (err) {
     console.error("[plan-concepts]", err);

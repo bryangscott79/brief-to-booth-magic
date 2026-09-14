@@ -10,6 +10,7 @@
 // returned concepts out to generate-hero, and persists the canvas.
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { KnowledgeUsedBadge } from "@/components/knowledge/KnowledgeUsedBadge";
 import { Loader2, SendHorizontal, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,11 +46,17 @@ function Bubble({ message, cardLabel }: { message: PlanningMessage; cardLabel?: 
           </span>
         )}
         <p className="whitespace-pre-wrap">{message.content}</p>
-        {!mine && (message.cardIds?.length ?? 0) > 0 && (
-          <span className="mt-1.5 inline-flex items-center rounded-tag bg-violet-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-tight text-[#7C3AED]">
-            {message.cardIds!.length} concept{message.cardIds!.length === 1 ? "" : "s"} on the board
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {!mine && (message.cardIds?.length ?? 0) > 0 && (
+            <span className="mt-1.5 inline-flex items-center rounded-tag bg-violet-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-tight text-[#7C3AED]">
+              {message.cardIds!.length} concept{message.cardIds!.length === 1 ? "" : "s"} on the board
+            </span>
+          )}
+          {/* Names the agency's own documents that shaped this turn. Renders
+              nothing when retrieval contributed nothing — an empty knowledge
+              base must not look like a working one. */}
+          {!mine && <KnowledgeUsedBadge knowledge={message.knowledge} />}
+        </div>
       </div>
       <span className="mt-0.5 font-mono text-[10px] text-slate-faint">{timeOf(message.createdAt)}</span>
     </div>

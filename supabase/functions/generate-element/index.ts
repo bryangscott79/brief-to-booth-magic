@@ -19,7 +19,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
+import {
+  buildRagContext,
+  createRagClient,
+  knowledgeSummary,
+  EMPTY_RAG_CONTEXT,
+  type RagContext,
+} from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -532,7 +538,7 @@ END UPSTREAM CONTEXT
     const toolSchema = getToolSchema(elementType);
 
     // ── RAG: Retrieve knowledge base context ──
-    let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+    let ragContext: RagContext = EMPTY_RAG_CONTEXT;
     if (agency_id) {
       // Characterize the generation: element type + brand/brief summary
       const briefSummary = [
@@ -655,12 +661,12 @@ END UPSTREAM CONTEXT
       }
       try {
         const parsed = JSON.parse(jsonStr);
-        return new Response(JSON.stringify({ data: parsed }), {
+        return new Response(JSON.stringify({ data: parsed, knowledge: knowledgeSummary(ragContext) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch {
         console.error("Failed to parse AI text as JSON");
-        return new Response(JSON.stringify({ data: { rawContent: result.text } }), {
+        return new Response(JSON.stringify({ data: { rawContent: result.text }, knowledge: knowledgeSummary(ragContext) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

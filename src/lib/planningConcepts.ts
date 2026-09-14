@@ -16,6 +16,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
+import { parseKnowledgeUsed, type KnowledgeUsed } from "@/lib/knowledgeUsed";
 import { STANDARD_NEGATIVE } from "@/lib/normalizedBrief";
 import type { ParsedBrief } from "@/types/brief";
 import { imageModelToProvider } from "@/lib/imageModels";
@@ -53,6 +54,9 @@ export interface PlannedConcept {
 export interface PlanConceptsResult {
   reply: string;
   concepts: PlannedConcept[];
+  /** Null when retrieval found nothing, or when the deployed edge function
+   *  predates the `knowledge` field. */
+  knowledge: KnowledgeUsed | null;
 }
 
 export interface PlanConceptsInput {
@@ -105,6 +109,7 @@ export async function planConcepts(input: PlanConceptsInput): Promise<PlanConcep
   return {
     reply: typeof data?.reply === "string" && data.reply.trim() ? data.reply.trim() : "",
     concepts,
+    knowledge: parseKnowledgeUsed(data),
   };
 }
 

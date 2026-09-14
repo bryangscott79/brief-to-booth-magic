@@ -22,7 +22,13 @@ import { createClient as createServiceClient } from "https://esm.sh/@supabase/su
 import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
 import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
+import {
+  buildRagContext,
+  createRagClient,
+  knowledgeSummary,
+  EMPTY_RAG_CONTEXT,
+  type RagContext,
+} from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -822,10 +828,7 @@ serve(async (req) => {
       void buildBrandIntelBlock;
 
       // ── RAG: Retrieve knowledge base context ──
-      let ragContext: { formatted: string; chunks: any[]; byScope?: any } = {
-        formatted: "",
-        chunks: [],
-      };
+      let ragContext: RagContext = EMPTY_RAG_CONTEXT;
       if (agency_id) {
         const ragQuery = [
           viewName,
@@ -1095,6 +1098,8 @@ serve(async (req) => {
           imageUrl: generatedImageUrl,
           message: responseText,
           modelUsed,
+          // What the agency's knowledge base contributed, named.
+          knowledge: knowledgeSummary(ragContext),
           // The EXACT prompt text sent to the image model — echoed back
           // so the client can persist it into prompt_artifacts for the
           // "View prompt" transparency surface.

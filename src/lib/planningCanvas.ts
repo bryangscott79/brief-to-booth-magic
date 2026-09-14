@@ -12,6 +12,8 @@
 // (`parentId`); the original is never mutated or replaced. Removal is the
 // only destructive op and it is always explicit.
 
+import type { KnowledgeUsed } from "@/lib/knowledgeUsed";
+
 // ─── SHAPES ──────────────────────────────────────────────────────────────────
 
 export type PlanningRole = "user" | "assistant";
@@ -26,6 +28,8 @@ export interface PlanningMessage {
   targetCardId?: string | null;
   /** The turn failed (the director or an image call errored). */
   error?: boolean;
+  /** Which of the agency's own documents shaped this turn. */
+  knowledge?: KnowledgeUsed | null;
   createdAt: string;
 }
 

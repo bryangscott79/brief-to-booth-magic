@@ -28,7 +28,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
 import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
+import {
+  buildRagContext,
+  createRagClient,
+  knowledgeSummary,
+  EMPTY_RAG_CONTEXT,
+  type RagContext,
+} from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -829,7 +835,7 @@ serve(async (req) => {
       // Kept because brand RAG / past-project learnings genuinely improve
       // outputs, but capped and appended at the END of the prompt where
       // it acts as refining context, not the leading instruction.
-      let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
+      let ragContext: RagContext = EMPTY_RAG_CONTEXT;
       if (agency_id) {
         const ragQuery = [
           prompt,
@@ -1082,6 +1088,8 @@ serve(async (req) => {
           imageUrl: generatedImageUrl,
           message: responseText,
           modelUsed,
+          // What the agency's knowledge base contributed, named.
+          knowledge: knowledgeSummary(ragContext),
           // The EXACT prompt text sent to the image model — echoed back
           // so the client can persist it for prompt transparency. This
           // matters most in EDIT MODE, where the prompt is assembled

@@ -129,6 +129,42 @@ export interface RagContext {
   reranked: boolean;
   /** Human-readable block suitable for injection into a system prompt. Empty string if no chunks. */
   formatted: string;
+  /**
+   * The DOCUMENTS behind the chunks, named. Retrieval used to report itself
+   * only to console.log, so from the outside a working knowledge layer and
+   * a dead one looked identical — which is how this one stayed dead for
+   * four months. Return this to the client so the answer is visible.
+   */
+  sources: RetrievedSource[];
+}
+
+export interface RetrievedSource {
+  document_id: string;
+  title: string;
+  scope: "agency" | "activation_type" | "client" | "project";
+  pinned: boolean;
+  /** How many chunks of this document made the cut. */
+  chunks: number;
+}
+
+/** A context that retrieved nothing. Call sites declare their `let` with
+ *  this so the shape stays in sync with RagContext automatically. */
+export const EMPTY_RAG_CONTEXT: RagContext = {
+  chunks: [],
+  byScope: { agency: [], activation_type: [], client: [], project: [] },
+  pinnedDocIds: [],
+  reranked: false,
+  formatted: "",
+  sources: [],
+};
+
+/** Compact, client-safe summary of what informed a generation. */
+export function knowledgeSummary(ctx: RagContext) {
+  return {
+    chunks: ctx.chunks.length,
+    reranked: ctx.reranked,
+    sources: ctx.sources,
+  };
 }
 
 /**
@@ -147,6 +183,7 @@ export async function buildRagContext(
     pinnedDocIds: [],
     reranked: false,
     formatted: "",
+    sources: [],
   };
 
   try {
@@ -305,6 +342,12 @@ export async function buildRagContext(
     // 10. Format for prompt injection
     const formatted = formatChunksForPrompt(top);
 
+    // 10b. Resolve document titles so the caller can say WHAT informed it.
+    //      Best-effort: a missing title degrades to the filename, and a
+    //      failed lookup to an empty source list — never to a failed
+    //      generation.
+    const sources = await namedSources(supabase, top);
+
     // 11. Fire-and-forget analytics
     void logRetrieval(
       supabase,
@@ -322,10 +365,53 @@ export async function buildRagContext(
       pinnedDocIds: Array.from(pinnedDocIds),
       reranked,
       formatted,
+      sources,
     };
   } catch (e) {
     console.warn("[rag-helper] retrieval failed:", e);
     return empty;
+  }
+}
+
+// ─── SOURCE NAMING ────────────────────────────────────────────────────────────
+
+async function namedSources(
+  supabase: SupabaseClient,
+  chunks: RetrievedChunk[],
+): Promise<RetrievedSource[]> {
+  if (chunks.length === 0) return [];
+  try {
+    const byDoc = new Map<string, { scope: RetrievedChunk["scope"]; pinned: boolean; chunks: number }>();
+    for (const c of chunks) {
+      const hit = byDoc.get(c.document_id);
+      if (hit) hit.chunks += 1;
+      else byDoc.set(c.document_id, { scope: c.scope, pinned: !!c.is_pinned, chunks: 1 });
+    }
+
+    const ids = Array.from(byDoc.keys());
+    const { data, error } = await supabase
+      .from("knowledge_documents")
+      .select("id, title, filename")
+      .in("id", ids);
+    if (error) return [];
+
+    const names = new Map<string, string>();
+    for (const d of (data ?? []) as Array<{ id: string; title: string | null; filename: string }>) {
+      names.set(d.id, d.title?.trim() || d.filename || "Untitled document");
+    }
+
+    return ids.map((id) => {
+      const meta = byDoc.get(id)!;
+      return {
+        document_id: id,
+        title: names.get(id) ?? "Untitled document",
+        scope: meta.scope,
+        pinned: meta.pinned,
+        chunks: meta.chunks,
+      };
+    });
+  } catch {
+    return [];
   }
 }
 

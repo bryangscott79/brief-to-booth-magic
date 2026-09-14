@@ -167,7 +167,7 @@ export default function Planning() {
               (created.length > 0
                 ? `Rendering ${created.length} direction${created.length === 1 ? "" : "s"}.`
                 : "Nothing to render yet."),
-            { cardIds: created.map((c) => c.id) },
+            { cardIds: created.map((c) => c.id), knowledge: result.knowledge },
           ),
         );
         if (created.length > 0) actions.addCards(created);

@@ -27,6 +27,8 @@ const Spatial = lazy(() => import("./pages/Spatial"));
 const Prompts = lazy(() => import("./pages/Prompts"));
 const Files = lazy(() => import("./pages/Files"));
 const Export = lazy(() => import("./pages/Export"));
+const Planning = lazy(() => import("./pages/Planning"));
+const ClientFeedback = lazy(() => import("./pages/ClientFeedback"));
 const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
 const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings"));
@@ -262,6 +264,16 @@ const App = () => (
               <Route path="/files" element={
                 <ProtectedRoute>
                   <Files />
+                </ProtectedRoute>
+              } />
+              <Route path="/planning" element={
+                <ProtectedRoute>
+                  <Planning />
+                </ProtectedRoute>
+              } />
+              <Route path="/client-feedback" element={
+                <ProtectedRoute>
+                  <ClientFeedback />
                 </ProtectedRoute>
               } />
               <Route path="/export" element={

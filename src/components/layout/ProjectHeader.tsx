@@ -1,5 +1,7 @@
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
+  Lightbulb,
+  MessageSquareQuote,
   Upload,
   FileSearch,
   Sparkles,
@@ -34,12 +36,14 @@ import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
 const PROJECT_STEPS = [
   { path: "/upload",   label: "Brief",    shortLabel: "Brief",    icon: Upload },
   { path: "/review",   label: "Review",   shortLabel: "Review",   icon: FileSearch },
+  { path: "/planning", label: "Plan",     shortLabel: "Plan",     icon: Lightbulb },
   { path: "/generate", label: "Generate", shortLabel: "Generate", icon: Sparkles },
   { path: "/spatial",  label: "Spatial",  shortLabel: "Spatial",  icon: Grid3X3 },
   { path: "/prompts",  label: "Prompts",  shortLabel: "Prompts",  icon: FileText },
   { path: "/files",    label: "Files",    shortLabel: "Files",    icon: ImageIcon },
   // { path: "/explore",  label: "360°",     shortLabel: "360°",     icon: Compass }, // Hidden — low value for now
   { path: "/export",   label: "Export",   shortLabel: "Export",   icon: Download },
+  { path: "/client-feedback", label: "Client Feedback", shortLabel: "Feedback", icon: MessageSquareQuote },
 ];
 
 const PROJECT_PATHS = PROJECT_STEPS.map((s) => s.path);

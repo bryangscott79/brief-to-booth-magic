@@ -99,30 +99,34 @@ export function useSavePlanningCanvas(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (
-      reduce: (current: PlanningCanvasSnapshot) => PlanningCanvasSnapshot,
-    ): Promise<PlanningCanvasState> => {
-      if (!projectId) throw new Error("No project selected");
-      if (!user) throw new Error("Not authenticated");
-
+    // The reducer runs HERE and only here. onMutate is invoked synchronously
+    // inside mutate(), so two actions fired back to back (append the chat
+    // turn, then add its cards) serialize: the second reduces a cache that
+    // already contains the first. Reducing inside mutationFn instead is
+    // async, so both would read the same pre-change snapshot and the later
+    // write would drop the earlier one.
+    onMutate: (reduce: (current: PlanningCanvasSnapshot) => PlanningCanvasSnapshot) => {
+      if (!projectId) return;
       const cached = queryClient.getQueryData<PlanningCanvasState>(QUERY_KEY(projectId));
       const current: PlanningCanvasSnapshot = cached
         ? { messages: cached.messages, cards: cached.cards, board: cached.board }
         : { ...EMPTY_PLANNING_CANVAS };
-      const next = reduce(current);
-
-      // Publish the reduced snapshot synchronously, before the network call,
-      // so a burst of updates (N images finishing at once) each build on the
-      // previous one instead of racing a stale read.
-      //
-      // This is the ONLY place the reducer runs. A React Query optimistic
-      // hook previously reduced the cache first, so this function then
-      // re-read an already-reduced cache and applied the same change twice,
-      // doubling every message and every card on every single action.
       queryClient.setQueryData<PlanningCanvasState>(QUERY_KEY(projectId), {
-        ...next,
+        ...reduce(current),
         schemaReady: cached?.schemaReady ?? true,
       });
+    },
+
+    // Persist whatever the cache now holds. It must NOT reduce again —
+    // applying the same change twice doubled every message and card.
+    mutationFn: async (): Promise<PlanningCanvasState> => {
+      if (!projectId) throw new Error("No project selected");
+      if (!user) throw new Error("Not authenticated");
+
+      const cached = queryClient.getQueryData<PlanningCanvasState>(QUERY_KEY(projectId));
+      const next: PlanningCanvasSnapshot = cached
+        ? { messages: cached.messages, cards: cached.cards, board: cached.board }
+        : { ...EMPTY_PLANNING_CANVAS };
 
       const { error } = await supabase.from("planning_canvas").upsert(
         {
@@ -145,8 +149,15 @@ export function useSavePlanningCanvas(projectId: string | null | undefined) {
 
       return { ...next, schemaReady: true };
     },
+
+    // Reconcile only the schema flag. The cache is already authoritative and
+    // may hold changes newer than this write — overwriting it wholesale here
+    // is what dropped the cards.
     onSuccess: (state) => {
-      if (projectId) queryClient.setQueryData(QUERY_KEY(projectId), state);
+      if (!projectId) return;
+      queryClient.setQueryData<PlanningCanvasState>(QUERY_KEY(projectId), (prev) =>
+        prev ? { ...prev, schemaReady: state.schemaReady } : state,
+      );
     },
   });
 }

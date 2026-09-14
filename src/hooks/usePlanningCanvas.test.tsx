@@ -74,4 +74,31 @@ describe("planning canvas save path", () => {
     expect(result.current.data?.messages).toHaveLength(3);
     expect(result.current.data?.cards).toHaveLength(0);
   });
+
+  it("keeps both changes when two actions fire back to back", async () => {
+    // The exact failure: a chat turn appended the assistant message and then
+    // added its cards without awaiting. Reducing asynchronously made both
+    // read the same pre-change snapshot, so the later write dropped the
+    // cards and the board came up empty while the message showed.
+    const { result } = renderHook(() => useSavePlanningCanvas("project-1"), { wrapper });
+
+    const cards = [
+      makeCard({ label: "A", prompt: "# SCENE a" }),
+      makeCard({ label: "B", prompt: "# SCENE b" }),
+      makeCard({ label: "C", prompt: "# SCENE c" }),
+    ];
+
+    await act(async () => {
+      result.current.mutate((s) => appendMessage(s, makeMessage("assistant", "3 concepts on the board")));
+      result.current.mutate((s) => addCards(s, cards));
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const written = upsert.mock.calls[upsert.mock.calls.length - 1][0] as {
+      messages: unknown[];
+      cards: unknown[];
+    };
+    expect(written.messages).toHaveLength(1);
+    expect(written.cards).toHaveLength(3);
+  });
 });

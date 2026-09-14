@@ -107,6 +107,19 @@ export function useSavePlanningCanvas(projectId: string | null | undefined) {
         : { ...EMPTY_PLANNING_CANVAS };
       const next = reduce(current);
 
+      // Publish the reduced snapshot synchronously, before the network call,
+      // so a burst of updates (N images finishing at once) each build on the
+      // previous one instead of racing a stale read.
+      //
+      // This is the ONLY place the reducer runs. A React Query optimistic
+      // hook previously reduced the cache first, so this function then
+      // re-read an already-reduced cache and applied the same change twice,
+      // doubling every message and every card on every single action.
+      queryClient.setQueryData<PlanningCanvasState>(QUERY_KEY(projectId), {
+        ...next,
+        schemaReady: cached?.schemaReady ?? true,
+      });
+
       const { error } = await supabase.from("planning_canvas").upsert(
         {
           project_id: projectId,
@@ -127,20 +140,6 @@ export function useSavePlanningCanvas(projectId: string | null | undefined) {
       }
 
       return { ...next, schemaReady: true };
-    },
-    // Write the reduced snapshot into the cache BEFORE the network call so
-    // a burst of card updates (N images finishing at once) each build on
-    // the previous one instead of racing a stale read.
-    onMutate: (reduce) => {
-      if (!projectId) return;
-      const cached = queryClient.getQueryData<PlanningCanvasState>(QUERY_KEY(projectId));
-      const current: PlanningCanvasSnapshot = cached
-        ? { messages: cached.messages, cards: cached.cards, board: cached.board }
-        : { ...EMPTY_PLANNING_CANVAS };
-      queryClient.setQueryData<PlanningCanvasState>(QUERY_KEY(projectId), {
-        ...reduce(current),
-        schemaReady: cached?.schemaReady ?? true,
-      });
     },
     onSuccess: (state) => {
       if (projectId) queryClient.setQueryData(QUERY_KEY(projectId), state);

@@ -29,6 +29,7 @@ import { WorkSheet, StatusChip } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { ConceptBoard } from "@/components/planning/ConceptBoard";
 import { ConceptCompare } from "@/components/planning/ConceptCompare";
+import { ConceptFocus } from "@/components/planning/ConceptFocus";
 import { PlanningChat } from "@/components/planning/PlanningChat";
 import { RenderPromptDialog } from "@/components/common/RenderPromptDialog";
 import { useProjectSync } from "@/hooks/useProjectSync";
@@ -39,10 +40,15 @@ import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
 import { useSaveRenderImage, type ProjectImage } from "@/hooks/useProjectImages";
 import { useToast } from "@/hooks/use-toast";
 import {
+  cardVersions,
+  currentVersion,
   historyForDirector,
   makeCard,
   makeMessage,
+  makeVersion,
+  sortedCards,
   starterPrompts,
+  type ConceptAnnotation,
   type PlanningCard,
   type PlanningMessage,
 } from "@/lib/planningCanvas";
@@ -51,7 +57,14 @@ import {
   conceptPromptArtifacts,
   planConcepts,
   renderConcept,
+  reviseConcept,
 } from "@/lib/planningConcepts";
+import {
+  annotationPolygons,
+  buildAnnotationEditInstruction,
+  summarizeAnnotations,
+} from "@/lib/conceptAnnotations";
+import { rasterizePolygonMask } from "@/lib/rasterizePolygonMask";
 
 export default function Planning() {
   const { projectId, isLoading } = useProjectSync();
@@ -72,6 +85,8 @@ export default function Planning() {
   const [promptCardId, setPromptCardId] = useState<string | null>(null);
   const [savingCardId, setSavingCardId] = useState<string | null>(null);
   const [draftSeed, setDraftSeed] = useState<string | null>(null);
+  const [focusCardId, setFocusCardId] = useState<string | null>(null);
+  const [revisingCardId, setRevisingCardId] = useState<string | null>(null);
 
   // Memoized so the empty-array fallbacks don't churn hook deps every render.
   const messages = useMemo<PlanningMessage[]>(() => canvas?.messages ?? [], [canvas?.messages]);
@@ -99,6 +114,11 @@ export default function Planning() {
         .filter((c): c is PlanningCard => Boolean(c)),
     [compareIds, cards],
   );
+
+  // The focus view's ← → walk the board in the order the board shows.
+  const orderedCards = useMemo(() => sortedCards(cards), [cards]);
+  const focusIndex = focusCardId ? orderedCards.findIndex((c) => c.id === focusCardId) : -1;
+  const focusCard = focusIndex >= 0 ? orderedCards[focusIndex]! : null;
 
   // ── The one real flow: a chat turn becomes N images ──────────────────────
   const handleSend = useCallback(
@@ -201,9 +221,17 @@ export default function Planning() {
 
   // ── Promote a card to a real project render ──────────────────────────────
   const handleAddToRenders = useCallback(
-    async (cardId: string) => {
+    async (cardId: string, versionId?: string) => {
       const card = cards.find((c) => c.id === cardId);
-      if (!card || !card.imageUrl || card.status !== "complete") return;
+      if (!card || card.status !== "complete") return;
+      // From the focus view a SPECIFIC version is promoted; from the board
+      // it's the card's cover.
+      const version = versionId
+        ? cardVersions(card).find((v) => v.id === versionId) ?? null
+        : null;
+      const imageUrl = version ? version.imageUrl : card.imageUrl;
+      const prompt = version ? version.prompt : card.prompt;
+      if (!imageUrl) return;
 
       // cards are stored newest-first — index from the tail gives the
       // card's creation order, so concept_1 stays concept_1 forever.
@@ -215,10 +243,10 @@ export default function Planning() {
         await saveImage.mutateAsync({
           angleId,
           angleName: card.label,
-          imageDataUrl: card.imageUrl,
+          imageDataUrl: imageUrl,
           modelUsed: card.modelUsed,
           promptArtifacts: conceptPromptArtifacts({
-            prompt: card.prompt,
+            prompt,
             negative: card.negative ?? "",
             label: card.label,
             rationale: card.rationale,
@@ -243,6 +271,110 @@ export default function Planning() {
       }
     },
     [cards, saveImage, actions, activeLogo?.publicUrl, toast],
+  );
+
+  // ── Concept focus: marks on the image → an EDIT of this version ─────────
+  //
+  // generate-hero EDIT MODE: previousImageUrl + feedback and NO
+  // composedPrompt (composedPrompt takes the top branch and would
+  // regenerate from scratch). Marked REGIONS additionally rasterize to an
+  // alpha mask so the model may only touch what was outlined.
+  const handleRunAnnotations = useCallback(
+    async (cardId: string, annotations: ConceptAnnotation[]) => {
+      if (!projectId) return;
+      const card = cards.find((c) => c.id === cardId);
+      if (!card) return;
+      const version = currentVersion(card);
+      if (!version.imageUrl) return;
+
+      const instruction = buildAnnotationEditInstruction(annotations);
+      if (!instruction) return;
+
+      setRevisingCardId(cardId);
+      try {
+        // Mask rasterization must never block the run — without it the
+        // instruction still names every location in prose.
+        let maskDataUrl: string | null = null;
+        const polygons = annotationPolygons(annotations);
+        if (polygons.length > 0) {
+          try {
+            maskDataUrl = await rasterizePolygonMask(version.imageUrl, polygons);
+          } catch (err) {
+            console.warn("[Planning] Mask rasterization failed; running without a mask:", err);
+            maskDataUrl = null;
+          }
+        }
+
+        const render = await reviseConcept({
+          previousImageUrl: version.imageUrl,
+          instruction,
+          projectId,
+          boothSize: boothSizeLabel,
+          imageModel,
+          maskDataUrl,
+        });
+
+        actions.addVersion(
+          cardId,
+          makeVersion({
+            imageUrl: render.imageUrl,
+            // An edit keeps its source version's GENERATIVE prompt so the
+            // prompt editor still has something runnable.
+            prompt: version.prompt,
+            source: "annotated",
+            note: summarizeAnnotations(annotations),
+            annotations,
+          }),
+        );
+      } catch (err) {
+        toast({
+          title: "Couldn't apply those marks",
+          description: err instanceof Error ? err.message : "Edit failed",
+          variant: "destructive",
+        });
+      } finally {
+        setRevisingCardId(null);
+      }
+    },
+    [projectId, cards, boothSizeLabel, imageModel, actions, toast],
+  );
+
+  // ── Concept focus: a hand-edited prompt → a FRESH generation ────────────
+  const handleRunPrompt = useCallback(
+    async (cardId: string, prompt: string) => {
+      if (!projectId) return;
+      const card = cards.find((c) => c.id === cardId);
+      if (!card) return;
+
+      setRevisingCardId(cardId);
+      try {
+        const render = await renderConcept({
+          prompt,
+          projectId,
+          boothSize: boothSizeLabel,
+          imageModel,
+          brandLogoUrl: activeLogo?.publicUrl ?? null,
+        });
+        actions.addVersion(
+          cardId,
+          makeVersion({
+            imageUrl: render.imageUrl,
+            prompt: render.promptUsed,
+            source: "prompt-edit",
+            note: "Edited prompt",
+          }),
+        );
+      } catch (err) {
+        toast({
+          title: "Couldn't run that prompt",
+          description: err instanceof Error ? err.message : "Render failed",
+          variant: "destructive",
+        });
+      } finally {
+        setRevisingCardId(null);
+      }
+    },
+    [projectId, cards, boothSizeLabel, imageModel, activeLogo?.publicUrl, actions, toast],
   );
 
   // The prompt dialog reads a ProjectImage; a board card isn't one yet, so
@@ -340,6 +472,7 @@ export default function Planning() {
               compareIds={compareIds}
               savingCardId={savingCardId}
               onTarget={(id) => setTargetCardId((cur) => (cur === id ? null : id))}
+              onOpenFocus={setFocusCardId}
               onToggleCompare={actions.toggleCompare}
               onClearCompare={actions.clearCompare}
               onOpenCompare={() => setCompareOpen(true)}
@@ -349,6 +482,7 @@ export default function Planning() {
               onAddToRenders={(id) => void handleAddToRenders(id)}
               onRemove={(id) => {
                 if (targetCardId === id) setTargetCardId(null);
+                if (focusCardId === id) setFocusCardId(null);
                 actions.removeCard(id);
               }}
               starters={starters}
@@ -373,6 +507,32 @@ export default function Planning() {
           />
         </div>
       </div>
+
+      {focusCard && (
+        <ConceptFocus
+          card={focusCard}
+          index={focusIndex}
+          total={orderedCards.length}
+          onPrev={() =>
+            setFocusCardId(orderedCards[Math.max(0, focusIndex - 1)]?.id ?? focusCard.id)
+          }
+          onNext={() =>
+            setFocusCardId(
+              orderedCards[Math.min(orderedCards.length - 1, focusIndex + 1)]?.id ?? focusCard.id,
+            )
+          }
+          onClose={() => setFocusCardId(null)}
+          onRunAnnotations={(annotations) => handleRunAnnotations(focusCard.id, annotations)}
+          onRunPrompt={(prompt) => handleRunPrompt(focusCard.id, prompt)}
+          onSelectVersion={(versionId) => actions.setVersion(focusCard.id, versionId)}
+          onMakeHero={(versionId) => actions.promoteVersion(focusCard.id, versionId)}
+          onAddToRenders={(versionId) => void handleAddToRenders(focusCard.id, versionId)}
+          busy={revisingCardId === focusCard.id}
+          savingRender={savingCardId === focusCard.id}
+          disabled={!projectId}
+          disabledReason={!projectId ? "Open a project to render new versions." : undefined}
+        />
+      )}
 
       <ConceptCompare
         cards={compareCards}

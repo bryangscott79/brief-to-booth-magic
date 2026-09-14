@@ -3,9 +3,17 @@ import {
   EMPTY_PLANNING_CANVAS,
   MAX_COMPARE,
   MAX_PLANNING_MESSAGES,
+  addCardVersion,
   addCards,
   appendMessage,
+  cardVersions,
   clearCompare,
+  currentVersion,
+  initialVersionId,
+  makeVersion,
+  migrateCard,
+  promoteVersionToCover,
+  setCurrentVersion,
   historyForDirector,
   makeCard,
   makeMessage,
@@ -19,6 +27,7 @@ import {
   toggleCompare,
   updateCard,
   type PlanningCanvasSnapshot,
+  type PlanningCard,
 } from "@/lib/planningCanvas";
 
 const empty = (): PlanningCanvasSnapshot => ({ ...EMPTY_PLANNING_CANVAS, cards: [], messages: [] });
@@ -187,7 +196,22 @@ describe("fallback persistence shape", () => {
     s = appendMessage(s, makeMessage("user", "three directions please"));
 
     const restored = normalizeSnapshot(JSON.parse(JSON.stringify(s)));
-    expect(restored).toEqual({ messages: s.messages, cards: s.cards, board: s.board });
+    expect(restored.messages).toEqual(s.messages);
+    expect(restored.board).toEqual(s.board);
+    // Cards come back identical apart from the version stack, which the
+    // read migrates in (one derived "initial" version each).
+    const bare = (cards: PlanningCard[]) =>
+      cards.map(({ versions, currentVersionId, ...rest }) => {
+        void versions;
+        void currentVersionId;
+        return rest;
+      });
+    expect(bare(restored.cards)).toEqual(bare(s.cards));
+    // The rendered card gets its derived stack; the one still generating
+    // keeps none until its image lands.
+    expect(restored.cards[0]!.versions).toHaveLength(1);
+    expect(restored.cards[0]!.currentVersionId).toBe(initialVersionId(s.cards[0]!.id));
+    expect(restored.cards[1]!.versions).toBeUndefined();
   });
 
   it("normalizeSnapshot degrades malformed blobs to empty instead of throwing", () => {
@@ -206,6 +230,144 @@ describe("fallback persistence shape", () => {
 
   it("uses the project-scoped localStorage key", () => {
     expect(planningLsKey("abc-123")).toBe("canopy:planning-canvas:abc-123");
+  });
+});
+
+describe("version stack", () => {
+  // A card that has only ever had its first render — and every card
+  // written before versions existed — looks exactly like this.
+  const legacy = (): PlanningCanvasSnapshot => {
+    const s = withCards("Atrium");
+    return updateCard(s, s.cards[0]!.id, {
+      status: "complete",
+      imageUrl: "https://cdn/atrium.png",
+    });
+  };
+  const only = (s: PlanningCanvasSnapshot): PlanningCard => s.cards[0]!;
+
+  it("derives an initial version from a legacy card, with a stable id", () => {
+    const card = only(legacy());
+    const versions = cardVersions(card);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      id: initialVersionId(card.id),
+      imageUrl: "https://cdn/atrium.png",
+      prompt: card.prompt,
+      source: "initial",
+    });
+    // Stable across reads — React keys and currentVersionId depend on it.
+    expect(cardVersions(card)[0]!.id).toBe(cardVersions(card)[0]!.id);
+  });
+
+  it("migrateCard materializes the stack and is idempotent", () => {
+    const card = only(legacy());
+    const migrated = migrateCard(card);
+    expect(migrated.versions).toHaveLength(1);
+    expect(migrated.currentVersionId).toBe(initialVersionId(card.id));
+    // Second pass changes nothing (same reference, nothing re-derived).
+    expect(migrateCard(migrated)).toBe(migrated);
+  });
+
+  it("leaves a still-rendering card's stack derived rather than freezing a null image", () => {
+    const s = withCards("Pending");
+    const card = migrateCard(only(s));
+    expect(card.versions).toBeUndefined();
+    // Derived on demand, and correct the moment the image lands.
+    expect(cardVersions(card)[0]!.imageUrl).toBeNull();
+    const done = updateCard(s, card.id, { status: "complete", imageUrl: "https://cdn/late.png" });
+    expect(cardVersions(only(done))[0]!.imageUrl).toBe("https://cdn/late.png");
+  });
+
+  it("normalizeSnapshot migrates legacy cards on read so old boards keep working", () => {
+    const stored = JSON.parse(JSON.stringify(legacy())) as unknown;
+    // Whatever was persisted has no versions key at all.
+    expect((stored as PlanningCanvasSnapshot).cards[0]!.versions).toBeUndefined();
+
+    const restored = normalizeSnapshot(stored);
+    const card = restored.cards[0]!;
+    expect(card.versions).toHaveLength(1);
+    expect(card.currentVersionId).toBe(initialVersionId(card.id));
+    expect(currentVersion(card).imageUrl).toBe("https://cdn/atrium.png");
+    // Everything else about the card survives untouched.
+    expect(card.label).toBe("Atrium");
+    expect(card.imageUrl).toBe("https://cdn/atrium.png");
+  });
+
+  it("addCardVersion appends and makes the new version current, without touching the cover", () => {
+    const s = legacy();
+    const id = only(s).id;
+    const v = makeVersion({
+      imageUrl: "https://cdn/atrium-v2.png",
+      prompt: only(s).prompt,
+      source: "annotated",
+      note: "2 marks · move this",
+      annotations: [{ id: "a1", kind: "pin", x: 0.2, y: 0.8, comment: "move this" }],
+    });
+    const next = addCardVersion(s, id, v);
+    const card = only(next);
+
+    expect(card.versions).toHaveLength(2);
+    expect(card.currentVersionId).toBe(v.id);
+    expect(currentVersion(card).imageUrl).toBe("https://cdn/atrium-v2.png");
+    expect(currentVersion(card).annotations).toHaveLength(1);
+    // The board still shows the original — promotion is a separate act.
+    expect(card.imageUrl).toBe("https://cdn/atrium.png");
+    // Nothing was overwritten.
+    expect(card.versions![0]!.imageUrl).toBe("https://cdn/atrium.png");
+  });
+
+  it("addCardVersion on an unknown card is a no-op", () => {
+    const s = legacy();
+    const v = makeVersion({ imageUrl: "x", prompt: "p", source: "prompt-edit" });
+    expect(addCardVersion(s, "card_nope", v)).toBe(s);
+  });
+
+  it("setCurrentVersion switches without changing the cover", () => {
+    const s = legacy();
+    const id = only(s).id;
+    const v = makeVersion({ imageUrl: "https://cdn/v2.png", prompt: "p2", source: "prompt-edit" });
+    const withV2 = addCardVersion(s, id, v);
+
+    const back = setCurrentVersion(withV2, id, initialVersionId(id));
+    expect(only(back).currentVersionId).toBe(initialVersionId(id));
+    expect(currentVersion(only(back)).imageUrl).toBe("https://cdn/atrium.png");
+    expect(only(back).imageUrl).toBe("https://cdn/atrium.png");
+    expect(only(back).versions).toHaveLength(2);
+  });
+
+  it("setCurrentVersion ignores an unknown version or an unknown card", () => {
+    const s = legacy();
+    const id = only(s).id;
+    expect(setCurrentVersion(s, id, "ver_nope")).toBe(s);
+    expect(setCurrentVersion(s, "card_nope", initialVersionId(id))).toBe(s);
+  });
+
+  it("promoteVersionToCover makes that version the card's image and prompt", () => {
+    const s = legacy();
+    const id = only(s).id;
+    const v = makeVersion({
+      imageUrl: "https://cdn/v2.png",
+      prompt: "# SCENE\nrounder",
+      source: "prompt-edit",
+    });
+    const next = promoteVersionToCover(addCardVersion(s, id, v), id, v.id);
+    const card = only(next);
+
+    expect(card.imageUrl).toBe("https://cdn/v2.png");
+    expect(card.prompt).toBe("# SCENE\nrounder");
+    expect(card.currentVersionId).toBe(v.id);
+    // Still non-destructive: the original version is right where it was.
+    expect(card.versions).toHaveLength(2);
+    expect(card.versions![0]!.imageUrl).toBe("https://cdn/atrium.png");
+  });
+
+  it("currentVersion falls back to the newest when the pointer dangles", () => {
+    const s = legacy();
+    const id = only(s).id;
+    const v = makeVersion({ imageUrl: "https://cdn/v2.png", prompt: "p2", source: "annotated" });
+    const withV2 = addCardVersion(s, id, v);
+    const broken = updateCard(withV2, id, { currentVersionId: "ver_gone" });
+    expect(currentVersion(only(broken)).id).toBe(v.id);
   });
 });
 

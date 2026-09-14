@@ -29,6 +29,46 @@ export interface PlanningMessage {
   createdAt: string;
 }
 
+/** One mark the user drew on a concept image in the focus view.
+ *  Coordinates are NORMALIZED (0..1 on each axis) against the image's own
+ *  box, so a mark survives every resize, zoom and re-render. */
+export interface ConceptAnnotation {
+  id: string;
+  /** A pin is a point; a region is a rectangle (w/h) or a lasso (points). */
+  kind: "pin" | "region";
+  /** Pin: the point itself. Region: the bounding box's top-left corner. */
+  x: number;
+  y: number;
+  /** Region only — bounding-box size. */
+  w?: number;
+  h?: number;
+  /** Freehand lasso outline, when the region wasn't a plain rectangle. */
+  points?: Array<{ x: number; y: number }>;
+  comment: string;
+}
+
+/** How a version came to exist. "initial" is the card's first render,
+ *  "annotated" an edit driven by marks on the image, "prompt-edit" a fresh
+ *  generation from a hand-edited prompt. */
+export type PlanningVersionSource = "initial" | "annotated" | "prompt-edit";
+
+/** One image in a card's version stack. Versions are APPEND-ONLY and
+ *  oldest-first — nothing ever overwrites an earlier one. */
+export interface PlanningCardVersion {
+  id: string;
+  imageUrl: string | null;
+  /** The GENERATIVE prompt this version descends from — an annotated
+   *  version carries its source version's prompt forward so the prompt
+   *  editor always has something runnable. */
+  prompt: string;
+  /** Short human line for the filmstrip ("3 marks · move this"). */
+  note: string;
+  /** The marks that produced an "annotated" version. */
+  annotations?: ConceptAnnotation[];
+  createdAt: string;
+  source: PlanningVersionSource;
+}
+
 export interface PlanningCard {
   id: string;
   /** Board title from the director — never "Concept 1". */
@@ -53,6 +93,15 @@ export interface PlanningCard {
   parentId?: string | null;
   /** angle_id once the user pushes the card into project renders. */
   angleId?: string | null;
+  /**
+   * Version stack, oldest first. ABSENT on legacy cards (and on cards that
+   * have only ever had their first render) — `cardVersions()` derives the
+   * "initial" version from imageUrl/prompt in that case, so nothing here
+   * has to be backfilled eagerly.
+   */
+  versions?: PlanningCardVersion[];
+  /** Which version the focus view is showing. Null/absent → the newest. */
+  currentVersionId?: string | null;
   createdAt: string;
 }
 
@@ -239,6 +288,137 @@ export function sortedCards(cards: PlanningCard[]): PlanningCard[] {
   return [...cards].sort((a, b) => Number(b.pinned) - Number(a.pinned));
 }
 
+// ─── VERSION STACK ───────────────────────────────────────────────────────────
+//
+// A card's image is not a single artifact: the focus view can mark it up,
+// or re-run a hand-edited prompt, and each run lands as a NEW version on
+// the same card. Nothing is replaced — promoting a version only changes
+// which one the board shows as the card's cover.
+//
+// Legacy cards (written before versions existed) carry no `versions` array
+// at all. Rather than rewrite every stored board, `cardVersions()` derives
+// the "initial" version from the card's own imageUrl/prompt, with an id
+// derived from the card id so it is STABLE across reads (React keys and
+// currentVersionId both depend on that).
+
+/** Deterministic id for the derived first version of a card. */
+export const initialVersionId = (cardId: string): string => `${cardId}__v0`;
+
+export interface NewVersionInput {
+  imageUrl: string | null;
+  prompt: string;
+  source: PlanningVersionSource;
+  note?: string;
+  annotations?: ConceptAnnotation[];
+  /** Pre-seed an id so the caller can correlate before persistence. */
+  id?: string;
+}
+
+export function makeVersion(input: NewVersionInput): PlanningCardVersion {
+  return {
+    id: input.id ?? planningId("ver"),
+    imageUrl: input.imageUrl,
+    prompt: input.prompt,
+    note: input.note ?? "",
+    ...(input.annotations && input.annotations.length > 0
+      ? { annotations: input.annotations }
+      : {}),
+    source: input.source,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Every version of a card, oldest first — migrating legacy cards on read.
+ *  Always returns at least one entry. */
+export function cardVersions(card: PlanningCard): PlanningCardVersion[] {
+  if (Array.isArray(card.versions) && card.versions.length > 0) return card.versions;
+  return [
+    {
+      id: initialVersionId(card.id),
+      imageUrl: card.imageUrl,
+      prompt: card.prompt,
+      note: "",
+      source: "initial",
+      createdAt: card.createdAt,
+    },
+  ];
+}
+
+/** The version the focus view should show: `currentVersionId` when it still
+ *  resolves, otherwise the newest one. */
+export function currentVersion(card: PlanningCard): PlanningCardVersion {
+  const versions = cardVersions(card);
+  const found = card.currentVersionId
+    ? versions.find((v) => v.id === card.currentVersionId)
+    : undefined;
+  return found ?? versions[versions.length - 1]!;
+}
+
+/** Materialize the derived version stack onto a card. Idempotent: a card
+ *  that already has versions comes back untouched (same reference). */
+export function migrateCard(card: PlanningCard): PlanningCard {
+  if (Array.isArray(card.versions) && card.versions.length > 0) {
+    return card.currentVersionId ? card : { ...card, currentVersionId: currentVersion(card).id };
+  }
+  // A card whose first image is still in flight has nothing to freeze — its
+  // initial version stays derived until the render lands, so a refetch
+  // mid-render can't bake a null imageUrl into the stack.
+  if (card.status !== "complete") return card;
+  const versions = cardVersions(card);
+  return { ...card, versions, currentVersionId: card.currentVersionId ?? versions[0]!.id };
+}
+
+/** Append a version to a card and make it current. The new version is the
+ *  one the focus view shows immediately; the card's COVER (imageUrl) is
+ *  untouched until the user promotes it. Unknown ids are a no-op. */
+export function addCardVersion(
+  snapshot: PlanningCanvasSnapshot,
+  cardId: string,
+  version: PlanningCardVersion,
+): PlanningCanvasSnapshot {
+  const card = snapshot.cards.find((c) => c.id === cardId);
+  if (!card) return snapshot;
+  const versions = [...cardVersions(card), version];
+  return updateCard(snapshot, cardId, { versions, currentVersionId: version.id });
+}
+
+/** Point the card at an existing version. Non-destructive — the cover and
+ *  every other version stay exactly as they were. Unknown card OR unknown
+ *  version is a no-op. */
+export function setCurrentVersion(
+  snapshot: PlanningCanvasSnapshot,
+  cardId: string,
+  versionId: string,
+): PlanningCanvasSnapshot {
+  const card = snapshot.cards.find((c) => c.id === cardId);
+  if (!card) return snapshot;
+  const versions = cardVersions(card);
+  if (!versions.some((v) => v.id === versionId)) return snapshot;
+  if (card.currentVersionId === versionId && card.versions) return snapshot;
+  return updateCard(snapshot, cardId, { versions, currentVersionId: versionId });
+}
+
+/** "Make hero": the named version becomes the card's cover — what the
+ *  board, the compare view and the prompt dialog all read. Still
+ *  non-destructive: every version stays in the stack. */
+export function promoteVersionToCover(
+  snapshot: PlanningCanvasSnapshot,
+  cardId: string,
+  versionId: string,
+): PlanningCanvasSnapshot {
+  const card = snapshot.cards.find((c) => c.id === cardId);
+  if (!card) return snapshot;
+  const versions = cardVersions(card);
+  const version = versions.find((v) => v.id === versionId);
+  if (!version) return snapshot;
+  return updateCard(snapshot, cardId, {
+    versions,
+    currentVersionId: versionId,
+    imageUrl: version.imageUrl,
+    prompt: version.prompt,
+  });
+}
+
 // ─── COMPARE SELECTION ───────────────────────────────────────────────────────
 
 export const MAX_COMPARE = 4;
@@ -262,13 +442,19 @@ export function clearCompare(snapshot: PlanningCanvasSnapshot): PlanningCanvasSn
 
 /** Coerce whatever came back from jsonb / localStorage into a valid
  *  snapshot. Anything malformed degrades to empty rather than throwing —
- *  a corrupt blob must never brick the page. */
+ *  a corrupt blob must never brick the page.
+ *
+ *  Cards written before the version stack existed are MIGRATED here, on
+ *  read: each gets a single derived "initial" version (stable id) so the
+ *  focus view, the filmstrip and every version reducer can assume the
+ *  stack is there. Nothing is rewritten in the database until the next
+ *  save, and a re-read of an already-migrated board is a no-op. */
 export function normalizeSnapshot(raw: unknown): PlanningCanvasSnapshot {
   if (!raw || typeof raw !== "object") return { ...EMPTY_PLANNING_CANVAS };
   const r = raw as Partial<PlanningCanvasSnapshot>;
   return {
     messages: Array.isArray(r.messages) ? (r.messages as PlanningMessage[]) : [],
-    cards: Array.isArray(r.cards) ? (r.cards as PlanningCard[]) : [],
+    cards: Array.isArray(r.cards) ? (r.cards as PlanningCard[]).map(migrateCard) : [],
     board: r.board && typeof r.board === "object" ? (r.board as PlanningBoard) : {},
   };
 }

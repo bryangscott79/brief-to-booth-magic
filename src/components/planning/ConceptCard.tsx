@@ -6,8 +6,10 @@
 // action that promotes it into project_images via the normal
 // save-render-image path.
 //
-// Clicking the card body TARGETS it for follow-up feedback ("make this one
-// warmer") — the reply comes back as a NEW card, never a replacement.
+// Clicking the IMAGE opens the concept focus view (mark it up, edit the
+// prompt, walk its versions). "Ask about this" TARGETS the card for
+// follow-up feedback ("make this one warmer") — that reply comes back as a
+// NEW card, never a replacement.
 //
 // Flow C: white card r14, hairlines, navy ink, mono for anything measured,
 // pink-deep for the selected/targeted state.
@@ -17,7 +19,9 @@ import {
   AlertTriangle,
   Check,
   FileText,
+  Layers,
   Loader2,
+  MessageSquare,
   Pin,
   Plus,
   Star,
@@ -26,7 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusChip } from "@/components/shell";
-import type { PlanningCard } from "@/lib/planningCanvas";
+import { cardVersions, type PlanningCard } from "@/lib/planningCanvas";
 import { cn } from "@/lib/utils";
 
 export interface ConceptCardProps {
@@ -36,6 +40,8 @@ export interface ConceptCardProps {
   /** This card is in the compare selection. */
   compared: boolean;
   onTarget: () => void;
+  /** Open the full-screen concept focus view on this card. */
+  onOpenFocus: () => void;
   onToggleCompare: () => void;
   onToggleFlag: (flag: "pinned" | "favorite") => void;
   onNotesChange: (notes: string) => void;
@@ -51,6 +57,7 @@ export function ConceptCard({
   targeted,
   compared,
   onTarget,
+  onOpenFocus,
   onToggleCompare,
   onToggleFlag,
   onNotesChange,
@@ -65,6 +72,8 @@ export function ConceptCard({
   useEffect(() => setNotes(card.notes), [card.notes]);
 
   const added = Boolean(card.angleId);
+  const ready = card.status === "complete" && Boolean(card.imageUrl);
+  const versionCount = cardVersions(card).length;
 
   return (
     <article
@@ -76,8 +85,12 @@ export function ConceptCard({
       {/* ── Image ───────────────────────────────────────────────────────── */}
       <button
         type="button"
-        onClick={onTarget}
-        aria-label={`Target follow-up feedback at ${card.label}`}
+        onClick={ready ? onOpenFocus : onTarget}
+        aria-label={
+          ready
+            ? `Open ${card.label} full screen to mark it up`
+            : `Target follow-up feedback at ${card.label}`
+        }
         className="relative block aspect-video w-full overflow-hidden bg-cloud"
       >
         {card.status === "generating" && (
@@ -130,11 +143,19 @@ export function ConceptCard({
           <Check className="h-3 w-3" strokeWidth={2.5} />
         </span>
 
-        {targeted && (
-          <span className="absolute right-2 top-2 rounded-tag bg-pink-deep px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
-            Targeted
-          </span>
-        )}
+        <span className="absolute right-2 top-2 flex items-center gap-1">
+          {versionCount > 1 && (
+            <span className="flex items-center gap-1 rounded-tag bg-navy px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+              <Layers className="h-2.5 w-2.5" strokeWidth={2} />
+              {versionCount}
+            </span>
+          )}
+          {targeted && (
+            <span className="rounded-tag bg-pink-deep px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+              Targeted
+            </span>
+          )}
+        </span>
       </button>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
@@ -190,6 +211,20 @@ export function ConceptCard({
         />
 
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-0.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onTarget}
+            aria-pressed={targeted}
+            className={cn(
+              "h-7 gap-1 px-2 text-[11px]",
+              targeted && "border-pink-deep text-pink-deep",
+            )}
+          >
+            <MessageSquare className="h-3 w-3" strokeWidth={1.5} />
+            {targeted ? "Targeted" : "Ask about this"}
+          </Button>
           <Button
             type="button"
             variant="outline"

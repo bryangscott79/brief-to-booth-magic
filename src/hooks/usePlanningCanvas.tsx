@@ -19,19 +19,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import {
   EMPTY_PLANNING_CANVAS,
+  addCardVersion,
   addCards,
   appendMessage,
   clearCompare,
+  promoteVersionToCover,
   normalizeSnapshot,
   planningLsKey,
   removeCard,
   setCardNotes,
+  setCurrentVersion,
   toggleCardFlag,
   toggleCompare,
   updateCard,
   type PlanningCanvasSnapshot,
   type PlanningCanvasState,
   type PlanningCard,
+  type PlanningCardVersion,
   type PlanningMessage,
 } from "@/lib/planningCanvas";
 
@@ -154,6 +158,12 @@ export interface PlanningCanvasActions {
   addCards: (cards: PlanningCard[]) => void;
   updateCard: (cardId: string, patch: Partial<Omit<PlanningCard, "id">>) => void;
   removeCard: (cardId: string) => void;
+  /** Append a rendered version to a card and make it the current one. */
+  addVersion: (cardId: string, version: PlanningCardVersion) => void;
+  /** Show a different version — never touches the card's cover. */
+  setVersion: (cardId: string, versionId: string) => void;
+  /** "Make hero": that version becomes the card's cover image + prompt. */
+  promoteVersion: (cardId: string, versionId: string) => void;
   toggleFlag: (cardId: string, flag: "pinned" | "favorite") => void;
   setNotes: (cardId: string, notes: string) => void;
   toggleCompare: (cardId: string) => void;
@@ -185,6 +195,20 @@ export function usePlanningCanvasActions(
       [run],
     ),
     removeCard: useCallback((cardId: string) => run((s) => removeCard(s, cardId)), [run]),
+    addVersion: useCallback(
+      (cardId: string, version: PlanningCardVersion) =>
+        run((s) => addCardVersion(s, cardId, version)),
+      [run],
+    ),
+    setVersion: useCallback(
+      (cardId: string, versionId: string) => run((s) => setCurrentVersion(s, cardId, versionId)),
+      [run],
+    ),
+    promoteVersion: useCallback(
+      (cardId: string, versionId: string) =>
+        run((s) => promoteVersionToCover(s, cardId, versionId)),
+      [run],
+    ),
     toggleFlag: useCallback(
       (cardId: string, flag: "pinned" | "favorite") => run((s) => toggleCardFlag(s, cardId, flag)),
       [run],

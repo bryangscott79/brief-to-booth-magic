@@ -15,7 +15,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { createElement } from "react";
 
-const upsert = vi.fn(async () => ({ error: null }));
+const upsert = vi.fn(async (..._args: unknown[]) => ({ error: null }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {

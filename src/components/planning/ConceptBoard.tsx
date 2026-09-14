@@ -17,6 +17,8 @@ export interface ConceptBoardProps {
   compareIds: string[];
   savingCardId: string | null;
   onTarget: (cardId: string) => void;
+  /** Clicking a card's image opens the full-screen concept focus view. */
+  onOpenFocus: (cardId: string) => void;
   onToggleCompare: (cardId: string) => void;
   onClearCompare: () => void;
   onOpenCompare: () => void;
@@ -38,6 +40,7 @@ export function ConceptBoard({
   compareIds,
   savingCardId,
   onTarget,
+  onOpenFocus,
   onToggleCompare,
   onClearCompare,
   onOpenCompare,
@@ -126,6 +129,7 @@ export function ConceptBoard({
             compared={compareIds.includes(card.id)}
             saving={savingCardId === card.id}
             onTarget={() => onTarget(card.id)}
+            onOpenFocus={() => onOpenFocus(card.id)}
             onToggleCompare={() => onToggleCompare(card.id)}
             onToggleFlag={(flag) => onToggleFlag(card.id, flag)}
             onNotesChange={(notes) => onNotesChange(card.id, notes)}

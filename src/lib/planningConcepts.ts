@@ -191,6 +191,81 @@ export async function renderConcept(input: RenderConceptInput): Promise<RenderCo
   };
 }
 
+// ─── generate-hero EDIT MODE (concept focus) ─────────────────────────────────
+
+export interface ReviseConceptInput {
+  /** The version being edited — the authoritative source image. */
+  previousImageUrl: string;
+  /** Composed edit instruction (buildAnnotationEditInstruction). */
+  instruction: string;
+  projectId: string;
+  boothSize?: string;
+  imageModel?: string;
+  /**
+   * Alpha-mask PNG data URL from the marked REGIONS (transparent =
+   * editable, opaque = preserved), as produced by rasterizePolygonMask.
+   * Null/undefined → the whole image is editable per the instruction.
+   */
+  maskDataUrl?: string | null;
+}
+
+/**
+ * Revise ONE concept version in place: generate-hero's EDIT MODE —
+ * `previousImageUrl` + `feedback`, and deliberately NO `composedPrompt`,
+ * because composedPrompt takes the top branch in generate-hero and would
+ * regenerate from scratch instead of editing the source image.
+ *
+ * MASK CAVEAT (verified against supabase/functions/generate-hero/index.ts):
+ * generate-hero only forwards `maskDataUrl` to the image model on the
+ * existing-space branch (`if (existingSpacePhotoUrl) { … maskUrlForOpenAI
+ * = maskDataUrl }`) — on the plain edit-mode branch the mask is dropped.
+ * So when we have a mask we ALSO send the source image as
+ * `existingSpacePhotoUrl`. That is the same image either way: the branch
+ * makes it the sole reference and lets the mask through, while the prompt
+ * branch is still edit mode (previousImageUrl + feedback, no
+ * composedPrompt). Without a mask we take the ordinary edit path, which
+ * also keeps the brand logo in the reference list.
+ */
+export async function reviseConcept(input: ReviseConceptInput): Promise<RenderConceptResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const mask = input.maskDataUrl ?? null;
+
+  const res = await supabase.functions.invoke("generate-hero", {
+    body: {
+      // generate-hero rejects a body whose top-level `prompt` is under 10
+      // chars before it ever looks at the mode — the instruction rides
+      // along there as well as in `feedback`.
+      prompt: input.instruction,
+      feedback: input.instruction,
+      previousImageUrl: input.previousImageUrl,
+      ...(mask ? { existingSpacePhotoUrl: input.previousImageUrl, maskDataUrl: mask } : {}),
+      project_id: input.projectId,
+      boothSize: input.boothSize || undefined,
+      image_model: input.imageModel ?? undefined,
+      imageModel: input.imageModel ? imageModelToProvider(input.imageModel) : undefined,
+    },
+    headers: { Authorization: `Bearer ${session?.access_token}` },
+  });
+
+  if (res.error) throw new Error(await invokeErrorMessage(res.error, "generate-hero"));
+  const data = res.data as
+    | { error?: string; imageUrl?: string; modelUsed?: string; primaryError?: string; promptUsed?: string }
+    | null;
+  if (data?.error) throw new Error(data.error);
+  if (!data?.imageUrl) throw new Error("The image model returned no image");
+
+  return {
+    imageUrl: data.imageUrl,
+    modelUsed: typeof data.modelUsed === "string" ? data.modelUsed : undefined,
+    primaryError: typeof data.primaryError === "string" ? data.primaryError : undefined,
+    promptUsed:
+      typeof data.promptUsed === "string" && data.promptUsed.trim().length > 0
+        ? data.promptUsed
+        : input.instruction,
+    negative: STANDARD_NEGATIVE,
+  };
+}
+
 // ─── PROMPT TRANSPARENCY ─────────────────────────────────────────────────────
 
 /** The prompt_artifacts payload a concept card carries — both for the

@@ -87,3 +87,19 @@ verify_jwt = true
 verify_jwt = true
 # deck-revise: turns free-text deck feedback into structured DeckOps
 # (see src/lib/deckOps.ts) applied client-side to the deterministic deck.
+
+[functions.plan-concepts]
+verify_jwt = true
+# plan-concepts: chat director for the post-brief planning canvas — turns a
+# conversation turn into N complete image prompts in the normalizedBrief grammar.
+
+[functions.blender-build]
+verify_jwt = true
+# blender-build: submits generated Blender python to the hosted headless
+# Blender service (BLENDER_SERVICE_URL / BLENDER_SERVICE_KEY) and polls it,
+# storing .blend / .gltf / stills in the project-images bucket.
+
+[functions.parse-client-feedback]
+verify_jwt = true
+# parse-client-feedback: turns pasted client notes into targeted per-image
+# edit instructions applied through the render pipeline's EDIT MODE.

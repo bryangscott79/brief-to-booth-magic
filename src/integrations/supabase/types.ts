@@ -2354,6 +2354,14 @@ export type Database = {
           unique_users: number
         }[]
       }
+      can_access_company_asset: {
+        Args: { _path: string; _user_id?: string }
+        Returns: boolean
+      }
+      can_manage_brand_asset: {
+        Args: { _path: string; _user_id?: string }
+        Returns: boolean
+      }
       disable_agency: {
         Args: { _agency_id: string; _reason?: string }
         Returns: {
@@ -2424,6 +2432,10 @@ export type Database = {
       is_agency_member:
         | { Args: { _agency_id: string }; Returns: boolean }
         | { Args: { _agency_id: string; _user_id?: string }; Returns: boolean }
+      is_brand_asset_client_member: {
+        Args: { _path: string; _user_id?: string }
+        Returns: boolean
+      }
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }

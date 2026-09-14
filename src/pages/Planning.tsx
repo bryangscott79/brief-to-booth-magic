@@ -34,6 +34,7 @@ import { PlanningChat } from "@/components/planning/PlanningChat";
 import { RenderPromptDialog } from "@/components/common/RenderPromptDialog";
 import { useProjectSync } from "@/hooks/useProjectSync";
 import { useProjectStore } from "@/store/projectStore";
+import { captureToKnowledgeBase, approvedDirectionBody } from "@/lib/knowledgeCapture";
 import { usePlanningCanvas, usePlanningCanvasActions } from "@/hooks/usePlanningCanvas";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
@@ -98,6 +99,41 @@ export default function Planning() {
   // The one direction this project builds on — read by the Generate step.
   const carriedDirectionId = canvas?.board.carriedDirectionId ?? null;
   const schemaReady = canvas?.schemaReady ?? true;
+
+  /**
+   * Carrying a direction forward is the clearest "we chose this" signal the
+   * planning step produces, so it is also the moment worth remembering. The
+   * capture is filed against the CLIENT, not this project — the value is the
+   * next job for the same client, not this one.
+   *
+   * Only on set. Clearing a direction is not a decision worth recording, and
+   * re-carrying the same card replaces that project's entry rather than
+   * adding a second.
+   */
+  const handleCarryForward = useCallback(
+    (cardId: string | null) => {
+      actions.setCarriedDirection(cardId);
+      if (!cardId || cardId === carriedDirectionId || !projectId) return;
+
+      const card = cards.find((c) => c.id === cardId);
+      if (!card) return;
+
+      void captureToKnowledgeBase({
+        kind: "approved_direction",
+        projectId,
+        projectName: currentProject?.name ?? null,
+        title: `Approved direction — ${card.label}`,
+        body: approvedDirectionBody({
+          label: card.label,
+          rationale: card.rationale ?? null,
+          prompt: card.prompt,
+          notes: card.notes || null,
+          rejectedLabels: canvas?.board.rejectedLabels ?? [],
+        }),
+      });
+    },
+    [actions, cards, carriedDirectionId, projectId, currentProject?.name, canvas?.board.rejectedLabels],
+  );
 
   const generatingCount = cards.filter((c) => c.status === "generating").length;
   const targetCard = targetCardId ? cards.find((c) => c.id === targetCardId) ?? null : null;
@@ -475,7 +511,7 @@ export default function Planning() {
               compareIds={compareIds}
               savingCardId={savingCardId}
               carriedDirectionId={carriedDirectionId}
-              onCarryForward={actions.setCarriedDirection}
+              onCarryForward={handleCarryForward}
               onTarget={(id) => setTargetCardId((cur) => (cur === id ? null : id))}
               onOpenFocus={setFocusCardId}
               onToggleCompare={actions.toggleCompare}
@@ -533,7 +569,7 @@ export default function Planning() {
           onMakeHero={(versionId) => actions.promoteVersion(focusCard.id, versionId)}
           onAddToRenders={(versionId) => void handleAddToRenders(focusCard.id, versionId)}
           carried={carriedDirectionId === focusCard.id}
-          onCarryForward={() => actions.setCarriedDirection(focusCard.id)}
+          onCarryForward={() => handleCarryForward(focusCard.id)}
           busy={revisingCardId === focusCard.id}
           savingRender={savingCardId === focusCard.id}
           disabled={!projectId}

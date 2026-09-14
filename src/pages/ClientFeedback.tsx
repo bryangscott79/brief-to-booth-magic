@@ -16,6 +16,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader2, MessageSquareQuote, Sparkles } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { captureToKnowledgeBase, clientFeedbackBody } from "@/lib/knowledgeCapture";
 import {
   EmptyState,
   InkRail,
@@ -278,6 +279,18 @@ export default function ClientFeedback() {
         status: finalProgress.status,
       });
 
+      // What a client actually objects to is the scarcest signal the whole
+      // pipeline produces, and until now it was written down once and then
+      // only ever read by this one project. Filed against the CLIENT so the
+      // next job for them starts already knowing it.
+      void captureToKnowledgeBase({
+        kind: "client_feedback",
+        projectId,
+        projectName: dbProject?.name ?? null,
+        title: `Client feedback — ${dbProject?.name || "project"}`,
+        body: clientFeedbackBody({ summary, rawFeedback, items: final }),
+      });
+
       toast({
         title:
           finalProgress.failed > 0
@@ -307,6 +320,8 @@ export default function ClientFeedback() {
     saveImage,
     updateRound,
     toast,
+    dbProject?.name,
+    rawFeedback,
   ]);
 
   // ── history ───────────────────────────────────────────────────────────────

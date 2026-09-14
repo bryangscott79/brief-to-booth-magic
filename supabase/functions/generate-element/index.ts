@@ -1,7 +1,13 @@
-// generate-element — DEPLOY TOKEN: 2026-05-15-budget-reliability
+// generate-element — DEPLOY TOKEN: 2026-09-14-carried-creative-direction
 //
 // Bump this comment to force Lovable to redeploy. Changes that need
 // this version of the function to be live:
+//   - `creativeDirection` + `rejectedDirections`: the concept the team
+//     carried forward on the Planning board becomes an APPROVED
+//     creative direction with explicit precedence rules (build on it;
+//     card notes outrank model preference; the BRIEF still wins on
+//     every fact; rejected directions stay dead). Additive — a body
+//     without `creativeDirection` behaves exactly as before.
 //   - Per-element temperature tuning (structured-heavy elements drop
 //     to 0.4 to avoid malformed tool-call output)
 //   - budgetLogic schema simplified: only totalPerShow + allocation
@@ -236,6 +242,126 @@ END BRAND INTELLIGENCE
   return block;
 }
 
+// ─── CARRIED CREATIVE DIRECTION ────────────────────────────────────────────────
+//
+// The Planning step (concept board) lets a human pick ONE concept and press
+// "Carry this direction forward". When that happened, the client sends the
+// card here as `creativeDirection`, plus the labels of directions the team
+// threw away as `rejectedDirections`.
+//
+// This is additive: a body WITHOUT `creativeDirection` produces no block and
+// no precedence rules, so generation behaves exactly as it did before.
+
+interface CreativeDirection {
+  label?: string;
+  rationale?: string;
+  prompt?: string;
+  notes?: string;
+  imageUrl?: string | null;
+}
+
+function isCreativeDirection(value: unknown): value is CreativeDirection {
+  if (!value || typeof value !== "object") return false;
+  const v = value as CreativeDirection;
+  const hasLabel = typeof v.label === "string" && v.label.trim().length > 0;
+  const hasPrompt = typeof v.prompt === "string" && v.prompt.trim().length > 0;
+  return hasLabel || hasPrompt;
+}
+
+function normalizeRejected(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    if (trimmed.length > 0) seen.add(trimmed);
+  }
+  return [...seen];
+}
+
+/** Precedence rules, appended to the SYSTEM prompt. Only emitted when a
+ *  direction was actually carried — the order here is the contract. */
+function buildCreativeDirectionRules(): string {
+  return `
+
+═══════════════════════════════════════
+CONTEXT PRECEDENCE — A HUMAN HAS ALREADY CHOSEN THE CREATIVE DIRECTION
+═══════════════════════════════════════
+The user message contains a CARRIED CREATIVE DIRECTION block. Apply these rules
+in this order, highest authority first.
+
+1. THE CARRIED DIRECTION IS APPROVED. It is a creative direction a human on the
+   project team explored, compared against alternatives, and chose. BUILD ON IT.
+   Do NOT propose a different hero concept and do NOT contradict its structural
+   idea. It must drive the \`bigIdea\`, the \`experienceFramework\`, and the hero
+   physical form in \`interactiveMechanics\`. Your job is to develop this
+   direction into a rigorous, presentation-quality answer — not to replace it
+   with one you like better.
+
+2. THE CARD NOTES ARE DIRECT INSTRUCTION. Notes attached to the carried
+   direction are the client's or the team's own words about it. They OUTRANK
+   your own creative preferences. If a note conflicts with a default you would
+   otherwise pick, the note wins.
+
+3. THE BRIEF STILL WINS ON FACTS. Footprint, budget tier, venue, dates,
+   audiences and objectives come from the BRIEF ONLY. NEVER import a dimension,
+   a material cost, a budget figure, or a claim about the client that appears in
+   the concept prompt but not in the brief — a concept prompt is ART DIRECTION
+   for an image model, not a source of truth. Where the concept prompt and the
+   brief disagree on a fact, the brief is correct and the concept's version of
+   that fact must be silently dropped, not reconciled or averaged.
+
+4. REJECTED DIRECTIONS ARE DEAD. Any direction listed as rejected was
+   explicitly thrown away by the team. Do not re-propose it, do not rename it,
+   and do not fold its central idea back in.
+═══════════════════════════════════════`;
+}
+
+/** The block itself, appended to the USER prompt. */
+function buildCreativeDirectionBlock(
+  direction: CreativeDirection,
+  rejected: string[],
+): string {
+  const label = typeof direction.label === "string" ? direction.label.trim() : "";
+  const rationale = typeof direction.rationale === "string" ? direction.rationale.trim() : "";
+  const prompt = typeof direction.prompt === "string" ? direction.prompt.trim() : "";
+  const notes = typeof direction.notes === "string" ? direction.notes.trim() : "";
+  const imageUrl = typeof direction.imageUrl === "string" ? direction.imageUrl.trim() : "";
+
+  let block = `\n\n═══════════════════════════════════════
+CARRIED CREATIVE DIRECTION (approved by the project team)
+═══════════════════════════════════════
+A human on this project reviewed several rendered directions and carried this
+one forward. Build on it. It outranks your own creative instincts, and it does
+NOT outrank the brief on any matter of fact.\n`;
+
+  if (label) block += `\nDirection: ${label}\n`;
+  if (rationale) block += `Why it was chosen: ${rationale}\n`;
+  if (notes) {
+    block += `\n── TEAM NOTES ON THIS DIRECTION (direct instruction) ──\n${notes}\n`;
+  }
+  if (prompt) {
+    block += `\n── CONCEPT ART DIRECTION (visual language ONLY — NOT a source of facts) ──
+The text below was written to drive an image model. Read it for form, material,
+massing, mood and spatial idea. Do NOT treat any number, dimension, cost, or
+client claim inside it as true: those come from the brief.
+${prompt}\n`;
+  }
+  if (imageUrl) {
+    block += `\nApproved concept image (reference only): ${imageUrl}\n`;
+  }
+  if (rejected.length > 0) {
+    block += `\n── REJECTED DIRECTIONS (do NOT re-propose these) ──\n`;
+    for (const r of rejected) block += `• ${r}\n`;
+  }
+
+  block += `\n═══════════════════════════════════════
+END CARRIED CREATIVE DIRECTION
+═══════════════════════════════════════\n`;
+
+  return block;
+}
+
 function buildClientContextBlock(clientData: { name?: string; industry?: string; description?: string; primaryColor?: string; secondaryColor?: string; website?: string }): string {
   if (!clientData || !clientData.name) return "";
 
@@ -257,7 +383,7 @@ serve(async (req) => {
   }
 
   try {
-    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id } = await req.json();
+    const { elementType, briefData, existingData, feedback, knowledgeBaseContent, companyProfile, showCosts, upstreamContext, brandIntelligence, clientData, projectType, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, creativeDirection, rejectedDirections } = await req.json();
 
     const validTypes = ["bigIdea", "experienceFramework", "interactiveMechanics", "digitalStorytelling", "humanConnection", "adjacentActivations", "spatialStrategy", "budgetLogic"];
     if (!elementType || !validTypes.includes(elementType)) {
@@ -268,12 +394,36 @@ serve(async (req) => {
     }
 
     // Build type-aware system prompt (replaces hardcoded booth-only prompts)
-    const systemPrompt = getElementSystemPrompt(elementType, projectType);
-    if (!systemPrompt) throw new Error(`Unknown element type: ${elementType}`);
+    const baseSystemPrompt = getElementSystemPrompt(elementType, projectType);
+    if (!baseSystemPrompt) throw new Error(`Unknown element type: ${elementType}`);
+
+    // A direction carried forward from the Planning board. Purely additive:
+    // no `creativeDirection` in the body → no rules, no block, identical
+    // behaviour to before.
+    const carried = isCreativeDirection(creativeDirection) ? creativeDirection : null;
+    const rejected = carried ? normalizeRejected(rejectedDirections) : [];
+    const systemPrompt = carried
+      ? baseSystemPrompt + buildCreativeDirectionRules()
+      : baseSystemPrompt;
+    if (carried) {
+      console.log(
+        "[generate-element] Carried creative direction:",
+        typeof carried.label === "string" ? carried.label : "(unlabelled)",
+        "| rejected directions:",
+        rejected.length,
+      );
+    }
 
     console.log("Project type:", projectType || "trade_show_booth (default)", "| Brand intelligence entries:", Array.isArray(brandIntelligence) ? brandIntelligence.length : 0);
 
     let userPrompt = `Here is the creative brief data:\n\n${JSON.stringify(briefData, null, 2)}`;
+
+    // Inject the approved creative direction from the Planning board. Placed
+    // directly after the brief so the two highest-authority inputs read
+    // together — and so the "brief wins on facts" rule has the brief in view.
+    if (carried) {
+      userPrompt += buildCreativeDirectionBlock(carried, rejected);
+    }
 
     // Inject brand intelligence (approved entries from client profile)
     if (brandIntelligence && Array.isArray(brandIntelligence) && brandIntelligence.length > 0) {
@@ -354,7 +504,13 @@ END UPSTREAM CONTEXT
     }
 
     if (existingData || feedback) {
-      userPrompt += `\n\nIMPORTANT: This is a REGENERATION request. Create a completely NEW and DIFFERENT concept.`;
+      // A regeneration normally means "throw it out and try something else".
+      // With an approved direction carried forward, that instruction would
+      // invite the model to abandon the very thing a human chose — so the
+      // scope of "new and different" is narrowed to the execution.
+      userPrompt += carried
+        ? `\n\nIMPORTANT: This is a REGENERATION request. Produce a materially DIFFERENT execution — new language, new specifics, a fresh take on the details. The CARRIED CREATIVE DIRECTION above still stands: do NOT swap it for a different hero concept.`
+        : `\n\nIMPORTANT: This is a REGENERATION request. Create a completely NEW and DIFFERENT concept.`;
     }
 
     // Special instructions for spatial strategy

@@ -23,6 +23,7 @@ import {
   addCards,
   appendMessage,
   clearCompare,
+  setCarriedDirection,
   promoteVersionToCover,
   normalizeSnapshot,
   planningLsKey,
@@ -179,6 +180,9 @@ export interface PlanningCanvasActions {
   setNotes: (cardId: string, notes: string) => void;
   toggleCompare: (cardId: string) => void;
   clearCompare: () => void;
+  /** "Carry this direction forward" — one per project. Passing the id
+   *  already carried clears it; null clears it outright. */
+  setCarriedDirection: (cardId: string | null) => void;
   isSaving: boolean;
   saveError: Error | null;
 }
@@ -230,6 +234,10 @@ export function usePlanningCanvasActions(
     ),
     toggleCompare: useCallback((cardId: string) => run((s) => toggleCompare(s, cardId)), [run]),
     clearCompare: useCallback(() => run((s) => clearCompare(s)), [run]),
+    setCarriedDirection: useCallback(
+      (cardId: string | null) => run((s) => setCarriedDirection(s, cardId)),
+      [run],
+    ),
     isSaving: save.isPending,
     saveError: (save.error as Error) ?? null,
   };

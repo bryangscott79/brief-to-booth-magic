@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Crown,
+  Flag,
   Lasso,
   Loader2,
   MapPin,
@@ -64,6 +65,10 @@ export interface ConceptFocusProps {
   onSelectVersion: (versionId: string) => void;
   onMakeHero: (versionId: string) => void;
   onAddToRenders: (versionId: string) => void;
+  /** This card is the direction the Generate step builds on. */
+  carried: boolean;
+  /** Carry this direction forward — or, when already carried, clear it. */
+  onCarryForward: () => void;
   /** A render for this card is in flight. */
   busy: boolean;
   /** A save-render-image call is in flight. */
@@ -97,6 +102,8 @@ export function ConceptFocus({
   onSelectVersion,
   onMakeHero,
   onAddToRenders,
+  carried,
+  onCarryForward,
   busy,
   savingRender,
   disabled = false,
@@ -645,6 +652,11 @@ export function ConceptFocus({
               <h3 className="font-mono text-[10px] uppercase tracking-[0.08em] text-white/45">
                 This version
               </h3>
+              {carried && (
+                <p className="text-[11px] leading-[15px] text-white/55">
+                  This direction is carried forward — the Generate step builds its elements on it.
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -670,6 +682,21 @@ export function ConceptFocus({
                     <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   )}
                   Add to project renders
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onCarryForward}
+                  aria-pressed={carried}
+                  disabled={!card.imageUrl || card.status !== "complete"}
+                  className={cn(
+                    "h-8 gap-1.5 border-white/20 bg-transparent text-[12px] text-white hover:bg-white/10 hover:text-white",
+                    carried && "border-white bg-white text-charcoal hover:bg-white hover:text-charcoal",
+                  )}
+                >
+                  <Flag className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  {carried ? "Carried forward" : "Carry forward"}
                 </Button>
                 <button
                   type="button"

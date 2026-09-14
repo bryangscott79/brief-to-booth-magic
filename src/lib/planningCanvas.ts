@@ -109,6 +109,19 @@ export interface PlanningCard {
 export interface PlanningBoard {
   /** Card ids the user has selected for the compare view. */
   compareIds?: string[];
+  /**
+   * The ONE concept the team decided to build on. Set by "Carry this
+   * direction forward" on a card; read by the Generate step, which sends
+   * it to generate-element as an APPROVED creative direction. Null /
+   * absent → Generate behaves exactly as it did before this existed.
+   */
+  carriedDirectionId?: string | null;
+  /**
+   * Labels of directions the team explicitly threw away (card removal).
+   * Sent alongside the carried direction so the element model doesn't
+   * re-propose something already killed. Bounded and deduped.
+   */
+  rejectedLabels?: string[];
   [key: string]: unknown;
 }
 
@@ -249,20 +262,45 @@ export function updateCard(
   return changed ? { ...snapshot, cards } : snapshot;
 }
 
+/** How many rejected labels the board remembers. The list only exists to
+ *  tell the element model "don't re-propose these", so a long tail of
+ *  ancient throwaways is noise — keep the most recent ones. */
+export const MAX_REJECTED_LABELS = 12;
+
 /** Remove a card and scrub every dangling reference to it (compare
- *  selection, and the cardIds recorded on the turn that produced it). */
+ *  selection, the carried direction, and the cardIds recorded on the turn
+ *  that produced it).
+ *
+ *  Removal is the user saying "not this" out loud, so it is also the one
+ *  place a REJECTED label is recorded: the removed card's label joins
+ *  `board.rejectedLabels` (deduped, most recent MAX_REJECTED_LABELS kept)
+ *  and rides along to element generation as a do-not-propose list. */
 export function removeCard(
   snapshot: PlanningCanvasSnapshot,
   cardId: string,
 ): PlanningCanvasSnapshot {
-  const cards = snapshot.cards.filter((c) => c.id !== cardId);
-  if (cards.length === snapshot.cards.length) return snapshot;
+  const removed = snapshot.cards.find((c) => c.id === cardId);
+  if (!removed) return snapshot;
 
+  const cards = snapshot.cards.filter((c) => c.id !== cardId);
   const compareIds = (snapshot.board.compareIds ?? []).filter((id) => id !== cardId);
   const messages = snapshot.messages.map((m) =>
     m.cardIds?.includes(cardId) ? { ...m, cardIds: m.cardIds.filter((id) => id !== cardId) } : m,
   );
-  return { messages, cards, board: { ...snapshot.board, compareIds } };
+
+  const label = removed.label.trim();
+  const known = snapshot.board.rejectedLabels ?? [];
+  const rejectedLabels =
+    label.length > 0 && !known.includes(label)
+      ? [...known, label].slice(-MAX_REJECTED_LABELS)
+      : known;
+
+  const board: PlanningBoard = { ...snapshot.board, compareIds, rejectedLabels };
+  // Throwing away the carried card un-carries it — Generate must never
+  // build on a direction the board no longer holds.
+  if (board.carriedDirectionId === cardId) board.carriedDirectionId = null;
+
+  return { messages, cards, board };
 }
 
 export function toggleCardFlag(
@@ -436,6 +474,72 @@ export function toggleCompare(
 
 export function clearCompare(snapshot: PlanningCanvasSnapshot): PlanningCanvasSnapshot {
   return { ...snapshot, board: { ...snapshot.board, compareIds: [] } };
+}
+
+// ─── CARRIED DIRECTION ───────────────────────────────────────────────────────
+//
+// Planning used to be a dead end: the team picked a winner on the board and
+// the Generate step then invented a Big Idea from scratch that could
+// contradict it. "Carry this direction forward" closes that loop — ONE card
+// per project becomes strong, explicit context for element generation.
+//
+// The decision lives on the board (not on the card) so there is exactly one
+// of it, and so clearing it never has to touch a card.
+
+/** Carry a card forward, move the selection to a different card, or clear
+ *  it (`null`).
+ *
+ *  Rules:
+ *    • passing the id of the card ALREADY carried clears the selection —
+ *      the board action is a toggle;
+ *    • passing a different card's id moves the selection to it;
+ *    • an unknown card id is a no-op;
+ *    • a change that wouldn't alter anything (clearing when nothing is
+ *      carried) returns the SAME snapshot, so the save path can skip it. */
+export function setCarriedDirection(
+  snapshot: PlanningCanvasSnapshot,
+  cardId: string | null,
+): PlanningCanvasSnapshot {
+  const current = snapshot.board.carriedDirectionId ?? null;
+
+  if (cardId === null) {
+    if (current === null) return snapshot;
+    return { ...snapshot, board: { ...snapshot.board, carriedDirectionId: null } };
+  }
+
+  if (!snapshot.cards.some((c) => c.id === cardId)) return snapshot;
+
+  const next = current === cardId ? null : cardId;
+  return { ...snapshot, board: { ...snapshot.board, carriedDirectionId: next } };
+}
+
+/** The carried card itself, or null when nothing is carried (or the id
+ *  points at a card that's no longer on the board). */
+export function carriedDirection(snapshot: PlanningCanvasSnapshot): PlanningCard | null {
+  const id = snapshot.board.carriedDirectionId;
+  if (!id) return null;
+  return snapshot.cards.find((c) => c.id === id) ?? null;
+}
+
+/** What the Generate step sends to generate-element as `creativeDirection`.
+ *  The prompt is ART DIRECTION, never a source of facts — the edge
+ *  function's system prompt says so explicitly. */
+export interface CreativeDirectionPayload {
+  label: string;
+  rationale: string;
+  prompt: string;
+  notes: string;
+  imageUrl: string | null;
+}
+
+export function creativeDirectionPayload(card: PlanningCard): CreativeDirectionPayload {
+  return {
+    label: card.label,
+    rationale: card.rationale ?? "",
+    prompt: card.prompt,
+    notes: card.notes ?? "",
+    imageUrl: card.imageUrl,
+  };
 }
 
 // ─── SERIALIZATION ───────────────────────────────────────────────────────────

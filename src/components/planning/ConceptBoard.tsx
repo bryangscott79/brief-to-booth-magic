@@ -5,7 +5,7 @@
 // bar. The empty state explains the flow rather than showing a bare grid —
 // the whole point of this step is that the user talks first.
 
-import { Images, LayoutGrid, X } from "lucide-react";
+import { Flag, Images, LayoutGrid, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, SectionLabel } from "@/components/shell";
 import { ConceptCard } from "@/components/planning/ConceptCard";
@@ -15,8 +15,12 @@ export interface ConceptBoardProps {
   cards: PlanningCard[];
   targetCardId: string | null;
   compareIds: string[];
+  /** The one direction the project is building on, if any. */
+  carriedDirectionId: string | null;
   savingCardId: string | null;
   onTarget: (cardId: string) => void;
+  /** Carry a direction forward — or clear it by carrying it again. */
+  onCarryForward: (cardId: string) => void;
   /** Clicking a card's image opens the full-screen concept focus view. */
   onOpenFocus: (cardId: string) => void;
   onToggleCompare: (cardId: string) => void;
@@ -38,8 +42,10 @@ export function ConceptBoard({
   cards,
   targetCardId,
   compareIds,
+  carriedDirectionId,
   savingCardId,
   onTarget,
+  onCarryForward,
   onOpenFocus,
   onToggleCompare,
   onClearCompare,
@@ -84,9 +90,31 @@ export function ConceptBoard({
   }
 
   const ordered = sortedCards(cards);
+  const carried = carriedDirectionId
+    ? cards.find((c) => c.id === carriedDirectionId) ?? null
+    : null;
 
   return (
     <div className="space-y-4">
+      {carried && (
+        <div className="flex flex-wrap items-center gap-2 rounded-square border border-navy/20 bg-navy/[0.04] px-3 py-2">
+          <span className="flex items-center gap-1 rounded-tag bg-navy px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-white">
+            <Flag className="h-2.5 w-2.5" strokeWidth={2} />
+            Carried forward
+          </span>
+          <p className="min-w-0 flex-1 truncate text-[12px] leading-[17px] text-charcoal">
+            Generate will build on <span className="font-semibold text-navy">{carried.label}</span>.
+          </p>
+          <button
+            type="button"
+            onClick={() => onCarryForward(carried.id)}
+            className="rounded-btn px-1.5 py-0.5 text-[11px] text-slate transition-colors hover:text-navy"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SectionLabel accent="violet">
           Concept board · <span className="font-mono">{cards.length}</span>
@@ -127,8 +155,10 @@ export function ConceptBoard({
             card={card}
             targeted={targetCardId === card.id}
             compared={compareIds.includes(card.id)}
+            carried={carriedDirectionId === card.id}
             saving={savingCardId === card.id}
             onTarget={() => onTarget(card.id)}
+            onCarryForward={() => onCarryForward(card.id)}
             onOpenFocus={() => onOpenFocus(card.id)}
             onToggleCompare={() => onToggleCompare(card.id)}
             onToggleFlag={(flag) => onToggleFlag(card.id, flag)}

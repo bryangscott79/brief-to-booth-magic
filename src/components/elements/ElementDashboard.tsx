@@ -24,6 +24,12 @@ import { useCompanyProfile, useShowCosts } from "@/hooks/useCompanyProfile";
 import { useBrandIntelligence, useClient, useBatchCreateIntelligence } from "@/hooks/useClients";
 import { IntelligenceSelector } from "./IntelligenceSelector";
 import { useBrandRAG } from "@/hooks/useBrandRAG";
+import { usePlanningCanvas } from "@/hooks/usePlanningCanvas";
+import {
+  carriedDirection,
+  creativeDirectionPayload,
+  type CreativeDirectionPayload,
+} from "@/lib/planningCanvas";
 
 
 const ELEMENT_ORDER: ElementType[] = [
@@ -168,6 +174,8 @@ async function runGenerationJob(
   projectType?: string,
   brandContext?: string,
   suiteContext?: string,
+  creativeDirection?: CreativeDirectionPayload,
+  rejectedDirections?: string[],
 ): Promise<GenerationJob> {
   // Abort any existing job
   if (activeJob) {
@@ -215,6 +223,9 @@ async function runGenerationJob(
             projectType,
             brandContext: brandContext || undefined,
             suiteContext: suiteContext || undefined,
+            creativeDirection,
+            rejectedDirections:
+              rejectedDirections && rejectedDirections.length > 0 ? rejectedDirections : undefined,
           },
           elementType,
         );
@@ -268,6 +279,17 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
     parentId,
     showName,
   });
+
+  // The concept direction the team carried forward on the Planning board.
+  // React Query dedupes this with the Generate page's own read. When
+  // nothing is carried the payload fields are simply absent and the edge
+  // function behaves exactly as it did before.
+  const { data: planningCanvas } = usePlanningCanvas(projectId);
+  const carriedCard = planningCanvas ? carriedDirection(planningCanvas) : null;
+  const rejectedDirections = useMemo<string[]>(
+    () => planningCanvas?.board.rejectedLabels ?? [],
+    [planningCanvas?.board.rejectedLabels],
+  );
 
   // Approved entries for IntelligenceSelector
   const approvedEntries = useMemo(
@@ -397,14 +419,34 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
     // Project type
     const projectTypeId = currentProject?.projectType ?? undefined;
 
-    return { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext, ragSuiteContext };
+    // Carried creative direction — an APPROVED direction a human picked on
+    // the Planning board. Only present when one is carried; the rejected
+    // list only rides along with it (out of context it's just noise).
+    const creativeDirection: CreativeDirectionPayload | undefined = carriedCard
+      ? creativeDirectionPayload(carriedCard)
+      : undefined;
+    const rejected =
+      creativeDirection && rejectedDirections.length > 0 ? rejectedDirections : undefined;
+
+    return {
+      knowledgeBaseContent,
+      cpPayload,
+      scPayload,
+      biPayload,
+      clientPayload,
+      projectTypeId,
+      ragBrandContext,
+      ragSuiteContext,
+      creativeDirection,
+      rejectedDirections: rejected,
+    };
   };
 
   const generateElement = async (elementType: ElementType, feedback?: string) => {
     setElementStatus(elementType, "generating");
 
     try {
-      const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc } = getContextPayloads();
+      const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc, creativeDirection, rejectedDirections: rejected } = getContextPayloads();
 
       // Same timeout + retry-once wrapper as the batch loop. Without
       // this, a hung edge function leaves the user stuck on
@@ -423,6 +465,8 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           projectType: projectTypeId,
           brandContext: bc || undefined,
           suiteContext: sc || undefined,
+          creativeDirection,
+          rejectedDirections: rejected,
         },
         elementType,
       );
@@ -449,7 +493,7 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
 
     setIsGenerating(true);
 
-    const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc } = getContextPayloads();
+    const { knowledgeBaseContent, cpPayload, scPayload, biPayload, clientPayload, projectTypeId, ragBrandContext: bc, ragSuiteContext: sc, creativeDirection, rejectedDirections: rejected } = getContextPayloads();
 
     const job = await runGenerationJob(
       projectId,
@@ -465,6 +509,8 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
       projectTypeId,
       bc || undefined,
       sc || undefined,
+      creativeDirection,
+      rejected,
     );
 
     // Wait for completion (component may unmount, that's fine — job continues)

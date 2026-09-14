@@ -3,11 +3,14 @@ import {
   EMPTY_PLANNING_CANVAS,
   MAX_COMPARE,
   MAX_PLANNING_MESSAGES,
+  MAX_REJECTED_LABELS,
   addCardVersion,
   addCards,
   appendMessage,
   cardVersions,
+  carriedDirection,
   clearCompare,
+  creativeDirectionPayload,
   currentVersion,
   initialVersionId,
   makeVersion,
@@ -21,6 +24,7 @@ import {
   planningLsKey,
   removeCard,
   setCardNotes,
+  setCarriedDirection,
   sortedCards,
   starterPrompts,
   toggleCardFlag,
@@ -157,6 +161,151 @@ describe("compare selection", () => {
     let s = withCards("A");
     s = toggleCompare(s, s.cards[0]!.id);
     expect(clearCompare(s).board.compareIds).toEqual([]);
+  });
+});
+
+describe("carried direction", () => {
+  it("carries one card forward and reads it back", () => {
+    const s = withCards("Canopy of light", "Monolith");
+    const chosen = s.cards[0]!;
+    const next = setCarriedDirection(s, chosen.id);
+
+    expect(next.board.carriedDirectionId).toBe(chosen.id);
+    expect(carriedDirection(next)!.label).toBe("Canopy of light");
+    // Cards are untouched — the decision lives on the board.
+    expect(next.cards).toBe(s.cards);
+  });
+
+  it("selecting another card MOVES the selection — only one at a time", () => {
+    let s = withCards("A", "B");
+    s = setCarriedDirection(s, s.cards[0]!.id);
+    s = setCarriedDirection(s, s.cards[1]!.id);
+
+    expect(s.board.carriedDirectionId).toBe(s.cards[1]!.id);
+    expect(carriedDirection(s)!.label).toBe("B");
+  });
+
+  it("selecting the carried card again clears it", () => {
+    let s = withCards("A");
+    const id = s.cards[0]!.id;
+    s = setCarriedDirection(s, id);
+    s = setCarriedDirection(s, id);
+
+    expect(s.board.carriedDirectionId).toBeNull();
+    expect(carriedDirection(s)).toBeNull();
+  });
+
+  it("explicitly clearing with null clears it", () => {
+    let s = withCards("A");
+    s = setCarriedDirection(s, s.cards[0]!.id);
+    expect(setCarriedDirection(s, null).board.carriedDirectionId).toBeNull();
+  });
+
+  it("clearing when nothing is carried is a no-op (same snapshot)", () => {
+    const s = withCards("A");
+    expect(setCarriedDirection(s, null)).toBe(s);
+  });
+
+  it("an unknown card id is a no-op and never disturbs the current pick", () => {
+    let s = withCards("A");
+    expect(setCarriedDirection(s, "card_nope")).toBe(s);
+
+    s = setCarriedDirection(s, s.cards[0]!.id);
+    expect(setCarriedDirection(s, "card_nope")).toBe(s);
+    expect(s.board.carriedDirectionId).toBe(s.cards[0]!.id);
+  });
+
+  it("carriedDirection returns null when the id dangles", () => {
+    const s = withCards("A");
+    const dangling: PlanningCanvasSnapshot = {
+      ...s,
+      board: { ...s.board, carriedDirectionId: "card_gone" },
+    };
+    expect(carriedDirection(dangling)).toBeNull();
+    expect(carriedDirection(s)).toBeNull();
+  });
+
+  it("removing the carried card un-carries it", () => {
+    let s = withCards("A", "B");
+    const doomed = s.cards[0]!;
+    s = setCarriedDirection(s, doomed.id);
+    const next = removeCard(s, doomed.id);
+
+    expect(next.board.carriedDirectionId).toBeNull();
+    expect(carriedDirection(next)).toBeNull();
+  });
+
+  it("removing a different card leaves the carried one alone", () => {
+    let s = withCards("A", "B");
+    const kept = s.cards[0]!;
+    s = setCarriedDirection(s, kept.id);
+    const next = removeCard(s, s.cards[1]!.id);
+
+    expect(next.board.carriedDirectionId).toBe(kept.id);
+    expect(carriedDirection(next)!.label).toBe("A");
+  });
+
+  it("creativeDirectionPayload flattens the card, defaulting the optional text", () => {
+    let s = addCards(empty(), [
+      makeCard({ label: "Canopy", prompt: "# SCENE\ncanopy", rationale: "Owns the aisle" }),
+    ]);
+    const id = s.cards[0]!.id;
+    s = setCardNotes(s, id, "keep the ceiling low");
+    s = updateCard(s, id, { status: "complete", imageUrl: "https://x/a.png" });
+
+    expect(creativeDirectionPayload(s.cards[0]!)).toEqual({
+      label: "Canopy",
+      rationale: "Owns the aisle",
+      prompt: "# SCENE\ncanopy",
+      notes: "keep the ceiling low",
+      imageUrl: "https://x/a.png",
+    });
+
+    const bare = makeCard({ label: "Bare", prompt: "p" });
+    expect(creativeDirectionPayload(bare)).toEqual({
+      label: "Bare",
+      rationale: "",
+      prompt: "p",
+      notes: "",
+      imageUrl: null,
+    });
+  });
+});
+
+describe("rejected labels", () => {
+  it("removing a card records its label as rejected", () => {
+    const s = withCards("Canopy of light", "Monolith");
+    const next = removeCard(s, s.cards[1]!.id);
+    expect(next.board.rejectedLabels).toEqual(["Monolith"]);
+  });
+
+  it("dedupes repeats of the same label", () => {
+    let s = withCards("Same", "Same");
+    s = removeCard(s, s.cards[0]!.id);
+    s = removeCard(s, s.cards[0]!.id);
+    expect(s.board.rejectedLabels).toEqual(["Same"]);
+  });
+
+  it("caps the list, keeping the most recent rejections", () => {
+    const labels = Array.from({ length: MAX_REJECTED_LABELS + 3 }, (_, i) => `Dir ${i}`);
+    let s = withCards(...labels);
+    // Always remove the front card — that walks the list in label order.
+    for (let i = 0; i < labels.length; i++) s = removeCard(s, s.cards[0]!.id);
+
+    expect(s.cards).toHaveLength(0);
+    expect(s.board.rejectedLabels).toHaveLength(MAX_REJECTED_LABELS);
+    expect(s.board.rejectedLabels).toEqual(labels.slice(-MAX_REJECTED_LABELS));
+    expect(s.board.rejectedLabels).not.toContain("Dir 0");
+  });
+
+  it("ignores a blank label rather than recording an empty rejection", () => {
+    const s = addCards(empty(), [makeCard({ label: "   ", prompt: "p" })]);
+    expect(removeCard(s, s.cards[0]!.id).board.rejectedLabels).toEqual([]);
+  });
+
+  it("an unknown id records nothing and returns the same snapshot", () => {
+    const s = withCards("A");
+    expect(removeCard(s, "card_nope")).toBe(s);
   });
 });
 

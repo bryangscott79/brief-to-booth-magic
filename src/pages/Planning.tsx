@@ -95,6 +95,8 @@ export default function Planning() {
     () => canvas?.board.compareIds ?? [],
     [canvas?.board.compareIds],
   );
+  // The one direction this project builds on — read by the Generate step.
+  const carriedDirectionId = canvas?.board.carriedDirectionId ?? null;
   const schemaReady = canvas?.schemaReady ?? true;
 
   const generatingCount = cards.filter((c) => c.status === "generating").length;
@@ -471,6 +473,8 @@ export default function Planning() {
               targetCardId={targetCardId}
               compareIds={compareIds}
               savingCardId={savingCardId}
+              carriedDirectionId={carriedDirectionId}
+              onCarryForward={actions.setCarriedDirection}
               onTarget={(id) => setTargetCardId((cur) => (cur === id ? null : id))}
               onOpenFocus={setFocusCardId}
               onToggleCompare={actions.toggleCompare}
@@ -527,6 +531,8 @@ export default function Planning() {
           onSelectVersion={(versionId) => actions.setVersion(focusCard.id, versionId)}
           onMakeHero={(versionId) => actions.promoteVersion(focusCard.id, versionId)}
           onAddToRenders={(versionId) => void handleAddToRenders(focusCard.id, versionId)}
+          carried={carriedDirectionId === focusCard.id}
+          onCarryForward={() => actions.setCarriedDirection(focusCard.id)}
           busy={revisingCardId === focusCard.id}
           savingRender={savingCardId === focusCard.id}
           disabled={!projectId}

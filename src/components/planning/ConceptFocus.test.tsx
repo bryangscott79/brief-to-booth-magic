@@ -42,6 +42,8 @@ const props = () => ({
   onSelectVersion: vi.fn(),
   onMakeHero: vi.fn(),
   onAddToRenders: vi.fn(),
+  carried: false,
+  onCarryForward: vi.fn(),
   busy: false,
   savingRender: false,
 });
@@ -84,6 +86,19 @@ describe("ConceptFocus", () => {
     expect(screen.getByText(/v1 · Original/)).toBeInTheDocument();
     expect(screen.getByText(/v2 · Marked up/)).toBeInTheDocument();
     expect(screen.getByText("1 mark · move this")).toBeInTheDocument();
+  });
+
+  it("carries the direction forward from the version footer, and reads back as carried", () => {
+    const p = props();
+    const { rerender } = render(<ConceptFocus {...p} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^carry forward$/i }));
+    expect(p.onCarryForward).toHaveBeenCalledTimes(1);
+
+    rerender(<ConceptFocus {...p} carried />);
+    const pressed = screen.getByRole("button", { name: /carried forward/i });
+    expect(pressed).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/this direction is carried forward/i)).toBeInTheDocument();
   });
 
   it("a pin click plus a comment runs as one normalized annotation", () => {

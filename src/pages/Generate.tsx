@@ -5,6 +5,9 @@ import { useProjectStore } from "@/store/projectStore";
 import { useBrandIntelligence } from "@/hooks/useClients";
 import { useShowCosts } from "@/hooks/useCompanyProfile";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
+import { usePlanningCanvas, usePlanningCanvasActions } from "@/hooks/usePlanningCanvas";
+import { CarriedDirectionBanner } from "@/components/planning/CarriedDirectionBanner";
+import { carriedDirection } from "@/lib/planningCanvas";
 import { Loader2 } from "lucide-react";
 import {
   WorkSheet,
@@ -89,6 +92,13 @@ export default function GeneratePage() {
   const currentProject = useProjectStore((s) => s.currentProject);
   const clientId = currentProject?.clientId ?? null;
 
+  // The direction the team carried forward on the Planning board, if any.
+  // Nothing carried → no banner, and ElementDashboard sends no
+  // creativeDirection, so Generate behaves exactly as it did before.
+  const { data: canvas } = usePlanningCanvas(projectId);
+  const planningActions = usePlanningCanvasActions(projectId);
+  const carried = canvas ? carriedDirection(canvas) : null;
+
   const elements = currentProject?.elements;
   const completedCount = elements
     ? Object.values(elements).filter((e) => e.status === "complete").length
@@ -124,6 +134,16 @@ export default function GeneratePage() {
               )
             }
           >
+            {carried && (
+              <div className="mb-5">
+                <CarriedDirectionBanner
+                  card={carried}
+                  projectId={projectId}
+                  onClear={() => planningActions.setCarriedDirection(null)}
+                />
+              </div>
+            )}
+
             <ElementDashboard projectId={projectId} />
           </WorkSheet>
 

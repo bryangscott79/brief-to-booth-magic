@@ -113,7 +113,12 @@ import { AttachReference } from "@/components/prompts/AttachReference";
 // Project-wide visual references — inspiration, brand images, etc.
 // Routed into every render call so the model treats them as standing
 // brand context (not just per-view attachments).
-import { useProjectVisualReferences } from "@/hooks/useProjectVisualReferences";
+import {
+  useProjectVisualReferences,
+  MAX_VISUAL_REFERENCES,
+} from "@/hooks/useProjectVisualReferences";
+import { usePlanningCanvas } from "@/hooks/usePlanningCanvas";
+import { carriedDirection } from "@/lib/planningCanvas";
 
 // Pre-flight verification panel — shows the user every input the model
 // is about to receive (brand identity, brief, spatial, references) so
@@ -307,7 +312,22 @@ export function PromptGenerator() {
   // These are sent on EVERY generation call so the model has the user's
   // visual brand context as standing input, not just per-view attachments.
   const projectVisualRefs = useProjectVisualReferences(effectiveProjectId);
-  const projectVisualRefUrls = projectVisualRefs.inspirationUrls;
+
+  // The concept the team carried forward on the Planning board is the
+  // approved look for this project, so it rides along as the FIRST (highest
+  // weight) reference on every render call — same extraReferenceUrls
+  // mechanism as the project's inspiration images, no new plumbing. Nothing
+  // carried → the list is exactly what it was before.
+  const { data: planningCanvasState } = usePlanningCanvas(effectiveProjectId);
+  const carriedConceptUrl = planningCanvasState
+    ? carriedDirection(planningCanvasState)?.imageUrl ?? null
+    : null;
+
+  const projectVisualRefUrls = useMemo<string[]>(() => {
+    const base = projectVisualRefs.inspirationUrls;
+    if (!carriedConceptUrl || base.includes(carriedConceptUrl)) return base;
+    return [carriedConceptUrl, ...base].slice(0, MAX_VISUAL_REFERENCES);
+  }, [projectVisualRefs.inspirationUrls, carriedConceptUrl]);
 
   // Calculate booth dimensions — for the ACTIVE footprint config (was
   // hardcoded to configs[0], i.e. always the largest size).

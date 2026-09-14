@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Check,
   FileText,
+  Flag,
   Layers,
   Loader2,
   MessageSquare,
@@ -39,7 +40,11 @@ export interface ConceptCardProps {
   targeted: boolean;
   /** This card is in the compare selection. */
   compared: boolean;
+  /** This is the direction the project is building on (one per project). */
+  carried: boolean;
   onTarget: () => void;
+  /** Carry this direction into Generate — or, when already carried, clear it. */
+  onCarryForward: () => void;
   /** Open the full-screen concept focus view on this card. */
   onOpenFocus: () => void;
   onToggleCompare: () => void;
@@ -56,7 +61,9 @@ export function ConceptCard({
   card,
   targeted,
   compared,
+  carried,
   onTarget,
+  onCarryForward,
   onOpenFocus,
   onToggleCompare,
   onToggleFlag,
@@ -80,6 +87,9 @@ export function ConceptCard({
       className={cn(
         "flex flex-col overflow-hidden rounded-media border bg-white transition-colors",
         targeted ? "border-pink-deep" : "border-cloud-line hover:border-navy/30",
+        // The carried direction is unmistakable on the board: navy ring
+        // around the whole card, navy badge on the image.
+        carried && "border-navy ring-2 ring-navy ring-offset-2 ring-offset-white",
       )}
     >
       {/* ── Image ───────────────────────────────────────────────────────── */}
@@ -144,6 +154,12 @@ export function ConceptCard({
         </span>
 
         <span className="absolute right-2 top-2 flex items-center gap-1">
+          {carried && (
+            <span className="flex items-center gap-1 rounded-tag bg-navy px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+              <Flag className="h-2.5 w-2.5" strokeWidth={2} />
+              Carried forward
+            </span>
+          )}
           {versionCount > 1 && (
             <span className="flex items-center gap-1 rounded-tag bg-navy px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
               <Layers className="h-2.5 w-2.5" strokeWidth={2} />
@@ -235,6 +251,27 @@ export function ConceptCard({
             <FileText className="h-3 w-3" strokeWidth={1.5} />
             View prompt
           </Button>
+          {ready && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCarryForward}
+              aria-pressed={carried}
+              title={
+                carried
+                  ? "Stop building the concept elements on this direction"
+                  : "Make this the approved direction the Generate step builds on"
+              }
+              className={cn(
+                "h-7 gap-1 px-2 text-[11px]",
+                carried && "border-navy bg-navy text-white hover:bg-navy hover:text-white",
+              )}
+            >
+              <Flag className="h-3 w-3" strokeWidth={1.5} />
+              {carried ? "Carried forward" : "Carry forward"}
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"

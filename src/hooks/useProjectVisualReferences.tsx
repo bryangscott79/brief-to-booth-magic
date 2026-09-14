@@ -29,7 +29,8 @@ import { useSignedUrls } from "@/hooks/useSignedUrls";
  * more, but quality degrades when too many references compete; 5 is a
  * sweet spot from production tests.
  */
-const MAX_REFS = 5;
+export const MAX_VISUAL_REFERENCES = 5;
+const MAX_REFS = MAX_VISUAL_REFERENCES;
 
 export interface VisualReference {
   documentId: string;

@@ -15,7 +15,7 @@
 // replaced: the filmstrip keeps every version, and the card's cover only
 // changes when the user presses "Make hero".
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -41,7 +41,6 @@ import {
 } from "@/lib/conceptAnnotations";
 import {
   cardVersions,
-  currentVersion,
   planningId,
   type ConceptAnnotation,
   type PlanningCard,
@@ -104,7 +103,16 @@ export function ConceptFocus({
   disabledReason,
 }: ConceptFocusProps) {
   const versions = useMemo(() => cardVersions(card), [card]);
-  const version = useMemo(() => currentVersion(card), [card]);
+  // Pick out of `versions` rather than deriving separately: cardVersions()
+  // builds a fresh object for a card whose stack is still computed on read,
+  // so a second derivation is never reference-equal and versions.indexOf()
+  // returns -1 (the header showed "v0 of 1").
+  const version = useMemo(() => {
+    const found = card.currentVersionId
+      ? versions.find((v) => v.id === card.currentVersionId)
+      : undefined;
+    return found ?? versions[versions.length - 1]!;
+  }, [versions, card.currentVersionId]);
 
   const [tool, setTool] = useState<Tool>("pin");
   const [annotations, setAnnotations] = useState<ConceptAnnotation[]>([]);
@@ -120,33 +128,12 @@ export function ConceptFocus({
     setPromptDraft(version.prompt);
   }, [version.id, version.prompt]);
 
-  // ── Stage sizing: fit the image inside whatever the stage has left ──────
-  const stageRef = useRef<HTMLDivElement>(null);
+  // The image sizes itself against the viewport and the wrapper shrink-wraps
+  // it, so nothing depends on measuring an ancestor whose height can collapse
+  // inside the dialog's flex column. The overlay is absolutely positioned over
+  // that wrapper, so it always matches the rendered image exactly, and pointer
+  // maths reads the live rect at event time.
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [stage, setStage] = useState({ w: 0, h: 0 });
-  const [natural, setNatural] = useState({ w: 16, h: 9 });
-
-  useLayoutEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const fit = () => setStage({ w: el.clientWidth, h: el.clientHeight });
-    fit();
-    // ResizeObserver is missing in jsdom and old Safari — the stage still
-    // sizes once, it just stops tracking live resizes.
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", fit);
-      return () => window.removeEventListener("resize", fit);
-    }
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const box = useMemo(() => {
-    if (stage.w <= 0 || stage.h <= 0) return { w: 0, h: 0 };
-    const scale = Math.min(stage.w / natural.w, stage.h / natural.h);
-    return { w: Math.round(natural.w * scale), h: Math.round(natural.h * scale) };
-  }, [stage, natural]);
 
   // ── ← → step CARDS (Esc is the dialog's own) ────────────────────────────
   useEffect(() => {
@@ -335,24 +322,15 @@ export function ConceptFocus({
                 <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
               </button>
 
-              <div ref={stageRef} className="flex h-full w-full items-center justify-center">
-                <div
-                  className="relative overflow-hidden rounded-[6px] bg-[#0B0E12] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
-                  style={box.w > 0 ? { width: box.w, height: box.h } : undefined}
-                >
+              <div className="flex min-h-[55vh] w-full flex-1 items-center justify-center">
+                <div className="relative inline-flex max-w-full overflow-hidden rounded-[6px] bg-[#0B0E12] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
                   {version.imageUrl ? (
                     <img
                       // Re-key on the version so a new render swaps in place.
                       key={version.id}
                       src={version.imageUrl}
                       alt={card.label}
-                      onLoad={(e) => {
-                        const img = e.currentTarget;
-                        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                          setNatural({ w: img.naturalWidth, h: img.naturalHeight });
-                        }
-                      }}
-                      className="absolute inset-0 h-full w-full object-contain"
+                      className="block max-h-[72vh] w-auto max-w-full object-contain"
                       draggable={false}
                     />
                   ) : (

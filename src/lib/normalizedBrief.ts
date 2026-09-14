@@ -1114,6 +1114,29 @@ export function validateBrief(normalized: NormalizedBrief): ValidationResult {
 // composePrompt — produces the 5 output stages from a NormalizedBrief
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * The standard negative list every composed prompt carries, independent of
+ * the brief's own forbidden items. composePrompt prepends
+ * `creative.forbiddenItems` to these; surfaces that compose a prompt
+ * outside the normalizer (the Planning canvas's concept cards, which get
+ * their renderer text from the plan-concepts director) use
+ * STANDARD_NEGATIVE directly so every image call shares one negative
+ * contract.
+ */
+export const BASE_NEGATIVE_ITEMS: readonly string[] = [
+  "no overlaid annotations",
+  "no zone names or room labels on fascia",
+  "no dimension callouts or percentage labels",
+  "no flat horizontal rectangular fascia / generic trade-show truss",
+  "no cartoon, no over-saturation, no obvious AI artifacts",
+  // Environment void-ban — pairs with # ENVIRONMENT: the booth must
+  // never be rendered isolated against nothing.
+  "blank background, white void, studio backdrop, isolated product shot, floating booth with no floor",
+];
+
+/** BASE_NEGATIVE_ITEMS as the comma-joined string the image models take. */
+export const STANDARD_NEGATIVE: string = BASE_NEGATIVE_ITEMS.join(", ");
+
 export interface ComposerOutput {
   briefJson: NormalizedBrief;
   geometrySummary: string;
@@ -1596,17 +1619,7 @@ export function composePrompt(normalized: NormalizedBrief): ComposerOutput {
     ...failures,
     ...normalized.compliance.hardConstraints,
   ];
-  const negative = [
-    ...normalized.creative.forbiddenItems,
-    "no overlaid annotations",
-    "no zone names or room labels on fascia",
-    "no dimension callouts or percentage labels",
-    "no flat horizontal rectangular fascia / generic trade-show truss",
-    "no cartoon, no over-saturation, no obvious AI artifacts",
-    // Environment void-ban — pairs with # ENVIRONMENT: the booth must
-    // never be rendered isolated against nothing.
-    "blank background, white void, studio backdrop, isolated product shot, floating booth with no floor",
-  ]
+  const negative = [...normalized.creative.forbiddenItems, ...BASE_NEGATIVE_ITEMS]
     .filter((s) => typeof s === "string" && s.trim().length > 0)
     .join(", ");
 

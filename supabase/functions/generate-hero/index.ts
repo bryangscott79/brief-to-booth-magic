@@ -1,4 +1,4 @@
-// generate-hero — DEPLOY TOKEN: 2026-07-06-prompt-transparency
+// generate-hero — DEPLOY TOKEN: 2026-09-14-agency-image-model-routing
 //
 // Prompt structure: We assemble a compact markdown prompt with sections
 // in priority order (SCENE → SCALE → HERO → ZONES → BRAND → MATERIALS
@@ -20,12 +20,13 @@
 // (Lovable's pipeline keys deployment off file content hash — bump this
 //  comment to force a redeploy when the function code changes need to
 //  propagate. The ai-gateway changes that matter for this version:
-//   - callOpenAIImage uses model "gpt-image-2"
+//   - the agency's image_model preference now routes (chain-walked)
 //   - callAnthropic falls back across LOVABLE_API_KEY / ANTHROPIC_KEY
 //   - response carries modelUsed for client-side observability)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
+import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
@@ -135,11 +136,17 @@ interface GenerateHeroRequest {
    */
   maskDataUrl?: string;
   /**
-   * Image model. Defaults to "gemini" (gemini-3-pro-image-preview). Set to
-   * "openai" to use gpt-image-1, which is better at logo fidelity and
-   * organic / non-geometric structures but requires OPENAI_API_KEY.
+   * Canonical image-model id to attempt FIRST, e.g.
+   * "openai/gpt-image-2.5". Comes from the requesting agency's
+   * `agencies.image_model` preference. An unknown/retired id degrades
+   * down the fallback chain rather than failing the render.
    */
-  imageModel?: "gemini" | "openai";
+  image_model?: string;
+  /**
+   * LEGACY coarse provider flag, kept so older clients still route to
+   * the right provider. `image_model` wins when both are present.
+   */
+  imageModel?: "gemini" | "openai" | string;
   /**
    * Rich structured design context — populated by the client's
    * buildDesignContext() helper. Every section of the structured
@@ -790,7 +797,7 @@ serve(async (req) => {
 
   return streamingJsonResponse(async () => {
     try {
-      const { prompt, feedback, previousImageUrl, boothSize, boothDimensions, geometryReferences, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, imageModel = "gemini", existingSpacePhotoUrl, maskDataUrl } = body;
+      const { prompt, feedback, previousImageUrl, boothSize, boothDimensions, geometryReferences, projectType, designContext, brandIntelligence, brandContext = "", suiteContext = "", agency_id, client_id, activation_type_id, project_id, brandLogoUrl, extraReferenceUrls, image_model, imageModel, existingSpacePhotoUrl, maskDataUrl } = body;
   
       // Project-type-aware suffix and feedback prefix
       const TYPE_SUFFIX: Record<string, string> = {
@@ -962,21 +969,30 @@ serve(async (req) => {
         maskUrlForOpenAI = undefined;
       }
 
-      void imageModel;
-  
+      // Route to the agency's chosen engine. `image_model` carries the
+      // full id; `imageModel` is the legacy "gemini"/"openai" flag from
+      // clients that predate the full-id contract. resolveImageModelId
+      // normalises both (and anything unknown) into a callable id.
+      const requestedImageModel = image_model ?? imageModel;
+      const { chain: imageModelChain, resolved: resolvedImageModel } =
+        resolveImageModelChain(requestedImageModel);
+
       let generatedImageUrl: string | null = null;
       const responseText = "";
       let modelUsed = "";
       let primaryError: string | undefined = undefined;
   
-      // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
-      // and falls back to Gemini's gemini-3-pro-image-preview (Canopy
-      // Lite / "nano banana pro") on any failure. The caller gets back
-      // which model produced the image so we can surface it in the UI.
-      console.log(`[generate-hero] Calling image gateway (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / gemini-3-pro-image-preview)`);
+      // generateImageWithFallback attempts the requested engine first,
+      // then walks the standing fallback chain. The caller gets back
+      // which model produced the image (plus why it degraded, if it
+      // did) so we can surface both in the UI.
+      console.log(
+        `[generate-hero] Calling image gateway (requested: ${requestedImageModel ?? "unset"}, chain: ${imageModelChain.join(" → ")})`,
+      );
       try {
         const out = await generateImageWithFallback({
           usage: await buildUsageContext(req, "generate-hero").catch(() => undefined),
+          model: resolvedImageModel.id,
           prompt: flattenedPrompt,
           referenceImageUrls: refUrlsForOpenAI,
           maskUrl: maskUrlForOpenAI,
@@ -996,7 +1012,7 @@ serve(async (req) => {
           // it means the Gemini fallback fired and the user should
           // see WHY in the model badge tooltip.
           primaryError = out.primaryError;
-          console.warn(`[generate-hero] Fell back to ${modelUsed}; gpt-image-2 reason: ${out.primaryError}`);
+          console.warn(`[generate-hero] Rendered with ${modelUsed}; reason: ${out.primaryError}`);
         } else {
           console.log(`[generate-hero] Image produced by ${modelUsed}`);
         }
@@ -1005,7 +1021,8 @@ serve(async (req) => {
         const message = e instanceof Error ? e.message : "Unknown error";
         throw new Error(
           `Image generation failed: ${message}. ` +
-          `Verify OPENAI_API_KEY (for gpt-image-2) and GOOGLE_AI_API_KEY or LOVABLE_API_KEY (for nano-banana fallback) in Supabase Edge Function Secrets.`,
+          `Every engine in the fallback chain failed — verify OPENAI_API_KEY and ` +
+          `GOOGLE_AI_API_KEY or LOVABLE_API_KEY in Supabase Edge Function Secrets.`,
         );
       }
   

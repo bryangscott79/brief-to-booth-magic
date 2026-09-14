@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+// Agency-wide render-engine preference — sent as the full model id so the
+// edge function attempts it first and degrades down the fallback chain.
+import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────────
 
@@ -115,6 +118,7 @@ interface PolishRhinoParams {
 export function usePolishRhino() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { modelId: agencyImageModel } = useAgencyImageModel();
 
   return useMutation({
     mutationFn: async ({
@@ -141,6 +145,7 @@ export function usePolishRhino() {
           designContext: designContext || "",
           polishInstructions: polishInstructions || "",
           stylePreset: stylePreset || "photorealistic",
+          image_model: agencyImageModel,
         },
       });
 

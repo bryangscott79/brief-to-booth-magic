@@ -99,10 +99,10 @@ import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
 // real mark renders on signage instead of a hallucinated approximation.
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 
-// Agency-wide image-model preference — controls which provider every
-// render call goes to. End users don't see the model selection; the
-// platform leads with GPT-image-2 by default and super admins can
-// override per agency from settings.
+// Agency-wide image-model preference — the full model id every render
+// call is routed to. End users don't see the model selection; the
+// platform leads with the flagship tier by default and super admins can
+// override per agency from platform settings.
 import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
 import { useAgency } from "@/hooks/useAgency";
 
@@ -282,12 +282,12 @@ export function PromptGenerator() {
   const { activeLogo: brandLogo } = useBrandLogo(effectiveProjectId);
   const brandLogoUrl = brandLogo?.publicUrl;
 
-  // Image model is determined by the agency, not the version. The
-  // platform-level default is GPT-image-2 ("openai"); super admins can
-  // override the agency to a Gemini tier from platform settings. Users
-  // never see model selection. If OPENAI_API_KEY is missing in Supabase
-  // secrets, the edge function falls back to Gemini automatically.
-  const { provider: activeImageModel } = useAgencyImageModel();
+  // Image model is determined by the agency, not the version. We send
+  // the FULL model id (e.g. "openai/gpt-image-2.5") — the edge function
+  // attempts it first and walks the fallback chain if it errors or has
+  // been retired, so a bad preference degrades instead of failing.
+  // Users never see model selection; they see abstract quality tiers.
+  const { modelId: activeImageModel } = useAgencyImageModel();
 
   // Industry slug — resolved from the owning agency's primary_industry.
   // The `projects` table doesn't carry an industry column today, so we

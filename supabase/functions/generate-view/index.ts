@@ -1,4 +1,4 @@
-// generate-view — DEPLOY TOKEN: 2026-07-06-prompt-transparency
+// generate-view — DEPLOY TOKEN: 2026-09-14-agency-image-model-routing
 //
 // Same restructure as generate-hero (see that file for the full
 // rationale). Two relevant changes for view rendering:
@@ -20,6 +20,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createClient as createServiceClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
+import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
 import { buildRagContext } from "../_shared/rag-helper.ts";
 
@@ -105,8 +106,18 @@ interface GenerateViewRequest {
    * in the batch.
    */
   maskDataUrl?: string;
-  /** "gemini" (default) or "openai" gpt-image-2. */
-  imageModel?: "gemini" | "openai";
+  /**
+   * Canonical image-model id to attempt FIRST, e.g.
+   * "openai/gpt-image-2.5". Comes from the requesting agency's
+   * `agencies.image_model` preference. An unknown/retired id degrades
+   * down the fallback chain rather than failing the render.
+   */
+  image_model?: string;
+  /**
+   * LEGACY coarse provider flag, kept so older clients still route to
+   * the right provider. `image_model` wins when both are present.
+   */
+  imageModel?: "gemini" | "openai" | string;
   /** Phase 4: Structured consistency data to enforce cross-view coherence */
   consistencyTokens?: {
     brandColors?: string[];
@@ -793,7 +804,8 @@ serve(async (req) => {
         project_id,
         brandLogoUrl,
         extraReferenceUrls,
-        imageModel = "gemini",
+        image_model,
+        imageModel,
         existingSpacePhotoUrl,
         maskDataUrl,
       } = body;
@@ -921,19 +933,25 @@ serve(async (req) => {
       const extraLabelBlock = "";
       void extraLabelBlock;
 
-      void imageModel;
+      // Route to the agency's chosen engine. `image_model` carries the
+      // full id; `imageModel` is the legacy "gemini"/"openai" flag from
+      // clients that predate the full-id contract. resolveImageModelChain
+      // normalises both (and anything unknown) into a callable chain.
+      const requestedImageModel = image_model ?? imageModel;
+      const { chain: imageModelChain, resolved: resolvedImageModel } =
+        resolveImageModelChain(requestedImageModel);
 
       let generatedImageUrl: string | null = null;
       const responseText = "";
       let modelUsed = "";
       let primaryError: string | undefined = undefined;
 
-      // generateImageWithFallback tries gpt-image-2 (Canopy 2.0) first
-      // and falls back to Gemini's nano-banana pro (Canopy Lite) on
-      // any failure — same safety net as generate-hero. The returned
-      // modelUsed flows back to the client for the per-image badge.
+      // generateImageWithFallback attempts the requested engine first,
+      // then walks the standing fallback chain — same safety net as
+      // generate-hero. The returned modelUsed (and primaryError, when
+      // it degraded) flows back to the client for the per-image badge.
       console.log(
-        `[generate-view] Calling image gateway for ${viewName} (primary: Canopy 2.0 / gpt-image-2, fallback: Canopy Lite / nano-banana pro)`,
+        `[generate-view] Calling image gateway for ${viewName} (requested: ${requestedImageModel ?? "unset"}, chain: ${imageModelChain.join(" → ")})`,
       );
       try {
         // Reference URLs for the OpenAI /v1/images/edits call. Three
@@ -1004,6 +1022,7 @@ serve(async (req) => {
           usage: await buildUsageContext(req, "generate-view").catch(() =>
             undefined
           ),
+          model: resolvedImageModel.id,
           prompt: editPrompt,
           referenceImageUrls,
           maskUrl: maskUrlForOpenAI,
@@ -1020,7 +1039,7 @@ serve(async (req) => {
         modelUsed = out.modelUsed;
         if (out.primaryError) {
           primaryError = out.primaryError;
-          console.warn(`[generate-view] ${viewName} fell back to ${modelUsed}; gpt-image-2 reason: ${out.primaryError}`);
+          console.warn(`[generate-view] ${viewName} rendered with ${modelUsed}; reason: ${out.primaryError}`);
         } else {
           console.log(`[generate-view] ${viewName} produced by ${modelUsed}`);
         }
@@ -1032,7 +1051,8 @@ serve(async (req) => {
         const message = e instanceof Error ? e.message : "Unknown error";
         throw new Error(
           `Image generation failed for ${viewName}: ${message}. ` +
-            `Verify OPENAI_API_KEY (for gpt-image-2) and GOOGLE_AI_API_KEY or LOVABLE_API_KEY (for nano-banana fallback) in Supabase Edge Function Secrets.`,
+            `Every engine in the fallback chain failed — verify OPENAI_API_KEY and ` +
+            `GOOGLE_AI_API_KEY or LOVABLE_API_KEY in Supabase Edge Function Secrets.`,
         );
       }
 

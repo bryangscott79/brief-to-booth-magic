@@ -32,13 +32,13 @@ export interface PromptVersionMeta {
    */
   claimsUnversioned?: boolean;
   /**
-   * Image model to use for renders inside this version. "gemini" is the
-   * default Nano Banana / Gemini 3 Pro Image. "openai" routes to gpt-image-2
-   * which is stronger on logo fidelity and organic structures but requires
-   * OPENAI_API_KEY in Supabase secrets. Per-version choice so users can
-   * compare models on the same project without losing prior renders.
+   * Image model recorded for renders inside this version. Holds a full
+   * model id (e.g. "openai/gpt-image-2.5"); the legacy "gemini" /
+   * "openai" provider flags are still accepted for versions saved
+   * before the full-id contract. Per-version so users can compare
+   * engines on the same project without losing prior renders.
    */
-  imageModel?: "gemini" | "openai";
+  imageModel?: string;
 }
 
 const LOCAL_STORAGE_PREFIX = "canopy:prompt-versions:";

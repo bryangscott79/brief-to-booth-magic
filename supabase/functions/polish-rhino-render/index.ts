@@ -1,14 +1,15 @@
-// polish-rhino-render — DEPLOY TOKEN: 2026-05-12-gpt-image-2-only
+// polish-rhino-render — DEPLOY TOKEN: 2026-09-14-agency-image-model-routing
 //
-// Note on output aspect: gpt-image-2 only supports 1024×1024,
-// 1536×1024, and 1024×1536. Uploaded Rhino renders can be any aspect
+// Note on output aspect: the OpenAI image models only support
+// 1024×1024, 1536×1024, and 1024×1536. Uploaded Rhino renders can be any aspect
 // ratio. We pick the closest of the three to the input — landscape
 // inputs get 1536×1024, portrait inputs get 1024×1536, near-square
 // inputs get 1024×1024. The output may crop or letterbox vs the
 // original; downstream consumers should treat the polish output as
-// "same composition, gpt-image-2 size".
+// "same composition, image-model size".
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
+import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 
 import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
@@ -76,6 +77,8 @@ serve(async (req) => {
       designContext,
       polishInstructions,
       stylePreset,
+      image_model,
+      imageModel,
     } = body as {
       rhinoImageUrl: string;
       projectType?: string;
@@ -83,6 +86,14 @@ serve(async (req) => {
       designContext?: string;
       polishInstructions?: string;
       stylePreset?: string;
+      /**
+       * Canonical image-model id to attempt FIRST (the requesting
+       * agency's `agencies.image_model` preference). Unknown/retired
+       * ids degrade down the fallback chain, never failing the polish.
+       */
+      image_model?: string;
+      /** LEGACY coarse provider flag. `image_model` wins when both are set. */
+      imageModel?: "gemini" | "openai" | string;
     };
 
     if (!rhinoImageUrl) {
@@ -137,11 +148,20 @@ PRESERVE all geometry and spatial relationships exactly as shown. Add realistic 
       userPrompt += `\n\nSPECIFIC INSTRUCTIONS:\n${polishInstructions}`;
     }
 
-    console.log("[polish-rhino-render] Using OpenAI gpt-image-2:", {
+    // Route to the agency's chosen engine, then walk the standing
+    // fallback chain. Previously single-shot against a hardcoded model,
+    // so a retired id was a hard failure with nowhere to degrade to.
+    const requestedImageModel = image_model ?? imageModel;
+    const { chain: imageModelChain, resolved: resolvedImageModel } =
+      resolveImageModelChain(requestedImageModel);
+
+    console.log("[polish-rhino-render] Calling image gateway:", {
       projectType: typeKey,
       stylePreset: stylePreset || "photorealistic",
       hasBrandIntel: !!brandBlock,
       hasCustomInstructions: !!polishInstructions,
+      requested: requestedImageModel ?? "unset",
+      chain: imageModelChain.join(" → "),
     });
 
     // Detect input aspect ratio so we pick the closest gpt-image-2
@@ -155,15 +175,17 @@ PRESERVE all geometry and spatial relationships exactly as shown. Add realistic 
     const outputSize: "1536x1024" | "1024x1024" | "1024x1536" = "1536x1024";
 
     // Combine system instructions + user prompt into a single text
-    // prompt — gpt-image-2's /v1/images/edits doesn't have a
-    // role-separated system field. The full instruction set still
-    // gets through.
+    // prompt — the image-edit endpoints have no role-separated system
+    // field. The full instruction set still gets through.
     const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
     let generatedImageUrl: string;
+    let modelUsed = "";
+    let primaryError: string | undefined;
     try {
-      const out = await callOpenAIImage({
+      const out = await generateImageWithFallback({
         usage: await buildUsageContext(req, "polish-rhino-render").catch(() => undefined),
+        model: resolvedImageModel.id,
         prompt: combinedPrompt,
         // The Rhino render is THE reference — its geometry is what we
         // preserve while the model adds materials, lighting, context.
@@ -171,18 +193,25 @@ PRESERVE all geometry and spatial relationships exactly as shown. Add realistic 
         size: outputSize,
         quality: "high",
       });
-      const img = out[0];
+      const img = out.images[0];
       if (!img) {
         throw new Error(
-          "gpt-image-2 returned no polished render. The prompt may have been filtered or the model is overloaded.",
+          "Image gateway returned no polished render. The prompt may have been filtered or every engine is overloaded.",
         );
       }
       generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+      modelUsed = out.modelUsed;
+      primaryError = out.primaryError;
+      if (primaryError) {
+        console.warn(
+          `[polish-rhino-render] Rendered with ${modelUsed}; reason: ${primaryError}`,
+        );
+      }
     } catch (e) {
-      console.error(`[polish-rhino-render] gpt-image-2 failed:`, e);
+      console.error(`[polish-rhino-render] All engines failed:`, e);
       const message = e instanceof Error ? e.message : "Unknown error";
       throw new Error(
-        `Rhino polish failed via gpt-image-2: ${message}. No fallback is configured.`,
+        `Rhino polish failed: ${message}. Every engine in the fallback chain failed.`,
       );
     }
 
@@ -192,6 +221,8 @@ PRESERVE all geometry and spatial relationships exactly as shown. Add realistic 
       JSON.stringify({
         success: true,
         imageUrl: generatedImageUrl,
+        modelUsed,
+        primaryError,
         message: "",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

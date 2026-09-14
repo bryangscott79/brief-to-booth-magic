@@ -10,6 +10,13 @@
 
 import { logUsageEvent } from "./usage-logger.ts";
 import type { UsageContext } from "./usage-context.ts";
+import {
+  bareModelName,
+  buildImageModelChain,
+  DEFAULT_IMAGE_MODEL_ID,
+  imageModelProviderOf,
+  resolveImageModelId,
+} from "./image-model-chain.ts";
 
 // ─── MODEL MAPPING ──────────────────────────────────────────────────────────
 
@@ -932,7 +939,7 @@ async function _callAnthropicInner(options: AnthropicOptions): Promise<AIRespons
   return parseAnthropicResponse(data);
 }
 
-// ─── OPENAI IMAGE (gpt-image-2) ─────────────────────────────────────────────
+// ─── OPENAI IMAGE (gpt-image-2.5 / gpt-image-2) ──────────────────────────────
 //
 // Gemini's image model ("nano banana" / gemini-3-pro-image-preview) is fast
 // and cheap but struggles with two things our users hit constantly:
@@ -941,14 +948,26 @@ async function _callAnthropicInner(options: AnthropicOptions): Promise<AIRespons
 //   2. Prompt adherence on complex / organic structures — it tends toward
 //      generic geometric shapes when asked for fluid, asymmetric forms.
 //
-// gpt-image-2 (OpenAI) is meaningfully better at both. We expose it as an
-// alternate model the user can pick per render. Direct OpenAI API path is
+// OpenAI's image models are meaningfully better at both. The specific
+// model comes from the requesting agency's preference (see
+// image-model-chain.ts); gpt-image-2.5 is the current flagship. Direct OpenAI API path is
 // simpler than Replicate (no polling) and uses the same secret pattern as
 // ANTHROPIC_API_KEY.
 
 export interface OpenAIImageOptions {
   /** Text prompt. Required. */
   prompt: string;
+  /**
+   * Canonical model id to attempt FIRST, e.g. "openai/gpt-image-2.5" or
+   * "google/gemini-3-pro-image-preview". Comes from the requesting
+   * agency's `agencies.image_model` preference via the render
+   * function's `image_model` body param.
+   *
+   * Omitted / unknown / retired ids never fail the call — they resolve
+   * to the platform default and the reason is reported back on
+   * `primaryError` (see generateImageWithFallback).
+   */
+  model?: string;
   /**
    * Reference images for image-edit mode. When provided, the call goes to
    * /v1/images/edits which uses the references as visual context (logo,
@@ -1043,14 +1062,20 @@ export async function callOpenAIImage(
   options: OpenAIImageOptions,
 ): Promise<OpenAIImageResult[]> {
   const started = Date.now();
-  // OpenAI-only callers. No fallback here — use generateImageWithFallback
-  // for the hero/view pipelines that want a Gemini safety net.
+  // OpenAI-only, single-shot. No fallback here — use
+  // generateImageWithFallback for any pipeline that must never hard-fail.
+  // A non-OpenAI (or unknown) preference resolves to the OpenAI flagship
+  // rather than erroring, since this entry point cannot call Gemini.
+  const resolved = resolveImageModelId(options.model);
+  const modelId = imageModelProviderOf(resolved.id) === "openai"
+    ? resolved.id
+    : DEFAULT_IMAGE_MODEL_ID;
   try {
-    const result = await _callOpenAIImageInner(options, "gpt-image-2");
+    const result = await _callOpenAIImageInner(options, bareModelName(modelId));
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: "openai/gpt-image-2",
+        model: modelId,
         imageCount: result.length,
         durationMs: Date.now() - started,
         status: "success",
@@ -1061,7 +1086,7 @@ export async function callOpenAIImage(
     if (options.usage) {
       logUsageEvent({
         context: options.usage,
-        model: "openai/gpt-image-2",
+        model: modelId,
         durationMs: Date.now() - started,
         status: "error",
         errorMessage: e instanceof Error ? e.message : String(e),
@@ -1076,25 +1101,32 @@ export async function callOpenAIImage(
  * canonical model id that produced the image — callers stash this in
  * the response so the client can render a "which model did this?" badge.
  *
- * Canonical ids: `openai/gpt-image-2` (Canopy 2.0) or
- * `google/gemini-3-pro-image-preview` (Canopy Lite, aka nano-banana pro).
+ * Canonical ids come from KNOWN_IMAGE_MODEL_IDS in image-model-chain.ts
+ * (e.g. `openai/gpt-image-2.5`, `google/gemini-3-pro-image-preview`).
  */
 export interface ImageWithFallbackResult {
   images: OpenAIImageResult[];
-  modelUsed: "openai/gpt-image-2" | "google/gemini-3-pro-image-preview";
   /**
-   * When the fallback fires, the primary (gpt-image-2) error chain
-   * that triggered it. Surfaced to the client so the UI can show
-   * WHY the render fell back — otherwise the user just sees "Canopy
-   * Lite" with no insight into what gpt-image-2 actually returned.
-   * Undefined when gpt-image-2 succeeded.
+   * Canonical id of the model that actually produced the image, e.g.
+   * "openai/gpt-image-2.5" or "google/gemini-3-pro-image-preview".
+   * Callers stash this in the response so the client can render a
+   * "which engine did this?" badge.
+   */
+  modelUsed: string;
+  /**
+   * Set whenever the image did NOT come from the model the caller
+   * asked for: the requested id was unknown/retired, and/or earlier
+   * rungs of the chain failed. Carries the resolution note plus each
+   * failed model's error so the UI (ModelBadge tooltip) and the
+   * operator can see exactly why the render degraded.
+   * Undefined when the requested model produced the image.
    */
   primaryError?: string;
 }
 
 /**
- * Errors from gpt-image-2 that are likely transient — worth retrying
- * the same model before giving up and dropping to the Gemini fallback.
+ * Errors that are likely transient — worth retrying the same model
+ * before giving up and dropping to the next rung of the chain.
  * Includes rate-limit responses, gateway/server errors, network blips,
  * and the model's own "overloaded" string. Excludes anything that
  * looks like a real prompt/account problem (auth, model_not_found,
@@ -1139,125 +1171,134 @@ function isTransientImageError(msg: string): boolean {
 /**
  * Primary image-gen entry point for hero + view renders.
  *
- * Strategy:
- *   1. Try gpt-image-2 (Canopy 2.0). If it succeeds, done.
- *   2. If it fails with a TRANSIENT error (rate limit, timeout,
- *      5xx, overloaded, network), wait briefly and retry once.
- *      OpenAI's image API has bursty rate limiting; the first call
- *      in a serial batch usually succeeds and subsequent ones can
- *      get throttled into queues that exceed our timeout. A second
- *      attempt after a backoff catches most of these without
- *      degrading to a different model.
- *   3. If it still fails (or fails with a HARD error like auth,
- *      model_not_found, content_policy), fall back to Gemini's
- *      gemini-3-pro-image-preview (Canopy Lite) so the user gets
- *      something rather than a hard failure.
+ * Strategy — a single ordered chain, walked top to bottom:
  *
- * User direction was explicit: gpt-image-2 must remain the primary,
- * and the Gemini fallback exists only as a last-resort safety net.
- * Never fall back to gpt-image-1.
+ *   1. `options.model` (the requesting agency's preference, resolved by
+ *      resolveImageModelId) is attempted FIRST.
+ *   2. Then the standing fallback ladder, with the chosen model removed
+ *      so we never call the same engine twice:
+ *        openai/gpt-image-2.5 → openai/gpt-image-2
+ *                             → google/gemini-3-pro-image-preview
+ *      (The Gemini rung retries its own flash variant internally.)
+ *   3. Each rung gets ONE retry on a TRANSIENT error (rate limit,
+ *      timeout, 5xx, overloaded, network). Image APIs are bursty; the
+ *      first call in a serial batch usually succeeds and later ones get
+ *      throttled into queues that exceed our timeout. A second attempt
+ *      after a backoff catches most of those without degrading quality.
+ *      HARD errors (auth, model_not_found/404, content_policy) skip the
+ *      retry and drop straight to the next rung — retrying them is
+ *      wasted budget.
+ *
+ * RESILIENCE CONTRACT: an unknown or retired model id must never fail a
+ * render. Unknown ids are caught before the first call (resolution) and
+ * 404/400 from a since-retired id is caught as a hard error that
+ * advances the chain. Either way the reason lands in `primaryError`,
+ * which the client shows on the model badge. Only exhausting the ENTIRE
+ * chain throws.
  */
 export async function generateImageWithFallback(
   options: OpenAIImageOptions,
 ): Promise<ImageWithFallbackResult> {
-  const started = Date.now();
-  // ── Rung 1: gpt-image-2 (primary), with one retry on transient errors ──
-  let primaryErr: unknown = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const images = await _callOpenAIImageInner(options, "gpt-image-2");
-      if (options.usage) {
-        logUsageEvent({
-          context: options.usage,
-          model: "openai/gpt-image-2",
-          imageCount: images.length,
-          durationMs: Date.now() - started,
-          status: "success",
-        });
+  const resolved = resolveImageModelId(options.model);
+  const chain = buildImageModelChain(resolved.id);
+  const requestedId = resolved.id;
+
+  console.log(
+    `[ai-gateway] Image chain: ${chain.join(" → ")}` +
+      (resolved.note ? ` (note: ${resolved.note})` : ""),
+  );
+
+  // Every rung's failure, in order, so the operator sees the whole story
+  // rather than just the last error.
+  const failures: string[] = [];
+
+  for (const modelId of chain) {
+    const startedRung = Date.now();
+    let rungError: unknown = null;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const images = await _callImageModel(modelId, options);
+        if (options.usage) {
+          logUsageEvent({
+            context: options.usage,
+            model: modelId,
+            imageCount: images.length,
+            durationMs: Date.now() - startedRung,
+            status: "success",
+          });
+        }
+        if (attempt > 1) {
+          console.log(`[ai-gateway] ${modelId} succeeded on attempt ${attempt}`);
+        }
+        // primaryError is set whenever the caller did not get what they
+        // asked for — either the id was rewritten, or earlier rungs failed.
+        const degraded = modelId !== requestedId || !!resolved.note;
+        const primaryError = degraded
+          ? [resolved.note, ...failures].filter(Boolean).join(" | ").slice(0, 480)
+          : undefined;
+        if (primaryError) {
+          console.warn(
+            `[ai-gateway] Rendered with ${modelId} instead of the requested engine. ${primaryError}`,
+          );
+        }
+        return { images, modelUsed: modelId, primaryError };
+      } catch (e) {
+        rungError = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (attempt === 1 && isTransientImageError(msg)) {
+          // Backoff scales with the kind of failure: rate-limit /
+          // overloaded windows are ~10s-class for image models;
+          // everything else (timeout, 5xx, network) clears faster.
+          const backoffMs = msg.toLowerCase().match(/(rate.?limit|429|overloaded)/)
+            ? 8_000
+            : 3_000;
+          console.warn(
+            `[ai-gateway] ${modelId} attempt 1 failed (transient: ${msg.slice(0, 160)}). Retrying in ${backoffMs}ms…`,
+          );
+          await new Promise((r) => setTimeout(r, backoffMs));
+          continue;
+        }
+        break;
       }
-      if (attempt > 1) {
-        console.log(`[ai-gateway] gpt-image-2 succeeded on attempt ${attempt}`);
-      }
-      return { images, modelUsed: "openai/gpt-image-2" };
-    } catch (e) {
-      primaryErr = e;
-      const msg = e instanceof Error ? e.message : String(e);
-      const transient = isTransientImageError(msg);
-      if (attempt === 1 && transient) {
-        // Backoff scales with the kind of failure:
-        //   - Rate-limit / overloaded → 8s (OpenAI's burst windows are
-        //     ~10s-class for image models)
-        //   - Everything else (timeout, 5xx, network) → 3s
-        const backoffMs = msg.toLowerCase().match(/(rate.?limit|429|overloaded)/) ? 8_000 : 3_000;
-        console.warn(
-          `[ai-gateway] gpt-image-2 attempt 1 failed (transient: ${msg.slice(0, 160)}). Retrying in ${backoffMs}ms…`,
-        );
-        await new Promise((r) => setTimeout(r, backoffMs));
-        continue;
-      }
-      // Either non-transient (don't retry) or already on attempt 2 →
-      // drop out of the loop and proceed to the Gemini fallback below.
-      break;
     }
-  }
-  {
-    const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+
+    const msg = rungError instanceof Error ? rungError.message : String(rungError);
+    failures.push(`${modelId}: ${msg.slice(0, 200)}`);
     console.warn(
-      `[ai-gateway] gpt-image-2 exhausted retries — falling back to Gemini nano-banana pro. Reason: ${msg.slice(0, 240)}`,
+      `[ai-gateway] ${modelId} exhausted — advancing image chain. Reason: ${msg.slice(0, 240)}`,
     );
     if (options.usage) {
-      // Log primary failure so observability shows BOTH the failed
-      // attempt and the successful fallback — don't lose the signal
-      // that gpt-image-2 keeps misbehaving.
+      // Log every failed rung so observability shows the whole cascade,
+      // not just the model that eventually worked.
       logUsageEvent({
         context: options.usage,
-        model: "openai/gpt-image-2",
-        durationMs: Date.now() - started,
+        model: modelId,
+        durationMs: Date.now() - startedRung,
         status: "error",
         errorMessage: msg.slice(0, 500),
       });
     }
-    // ── Rung 2: Gemini gemini-3-pro-image-preview (fallback) ──
-    const fallbackStarted = Date.now();
-    try {
-      const images = await _callGeminiImageInner(options);
-      if (options.usage) {
-        logUsageEvent({
-          context: options.usage,
-          model: "google/gemini-3-pro-image-preview",
-          imageCount: images.length,
-          durationMs: Date.now() - fallbackStarted,
-          status: "success",
-        });
-      }
-      return {
-        images,
-        modelUsed: "google/gemini-3-pro-image-preview",
-        // Surface gpt-image-2's actual failure reason so the UI can
-        // show it on hover. Trimmed to a manageable length — the
-        // first ~300 chars usually have the model's actual response.
-        primaryError: msg.slice(0, 320),
-      };
-    } catch (fallbackErr) {
-      const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-      if (options.usage) {
-        logUsageEvent({
-          context: options.usage,
-          model: "google/gemini-3-pro-image-preview",
-          durationMs: Date.now() - fallbackStarted,
-          status: "error",
-          errorMessage: fbMsg.slice(0, 500),
-        });
-      }
-      // Both rungs failed. Surface both error messages so the caller
-      // can show the operator what actually went wrong.
-      throw new Error(
-        `Both image models failed. ` +
-        `gpt-image-2: ${msg.slice(0, 200)} | ` +
-        `gemini-3-pro-image-preview: ${fbMsg.slice(0, 200)}`,
-      );
-    }
   }
+
+  throw new Error(
+    `All image models failed. ${[resolved.note, ...failures].filter(Boolean).join(" | ")}`,
+  );
+}
+
+/**
+ * Dispatch one chain rung to the right provider transport. Google ids
+ * go through the Gemini multimodal path, everything else through the
+ * OpenAI images API.
+ */
+function _callImageModel(
+  modelId: string,
+  options: OpenAIImageOptions,
+): Promise<OpenAIImageResult[]> {
+  if (imageModelProviderOf(modelId) === "google") {
+    return _callGeminiImageInner(options, modelId);
+  }
+  return _callOpenAIImageInner(options, bareModelName(modelId));
 }
 
 /**
@@ -1282,6 +1323,7 @@ const GEMINI_TIMEOUT_MS = 100_000;
 
 async function _callGeminiImageInner(
   options: OpenAIImageOptions,
+  modelId: string = "google/gemini-3-pro-image-preview",
 ): Promise<OpenAIImageResult[]> {
   // Build a Gemini multimodal user message. Reference images go in as
   // image_url parts — Gemini accepts them inline alongside the text
@@ -1315,29 +1357,34 @@ async function _callGeminiImageInner(
     });
   };
 
-  // Primary Gemini model is "nano banana pro" / gemini-3-pro-image-preview.
-  // On empty response (Pro Image can return {} under safety filtering or
-  // load), retry once with the flash variant — proven pattern from the
-  // pre-swap implementation.
+  // `modelId` is the Gemini rung the chain asked for (usually
+  // gemini-3-pro-image-preview, aka "nano banana pro"). On an empty
+  // response (Pro Image can return {} under safety filtering or load)
+  // we retry once with the flash variant — proven pattern from the
+  // pre-swap implementation, and the reason 3.1-flash is not a separate
+  // rung in IMAGE_MODEL_FALLBACK_ORDER.
+  const flashRetryId = modelId === "google/gemini-3.1-flash-image-preview"
+    ? "google/gemini-2.5-flash-image"
+    : "google/gemini-3.1-flash-image-preview";
   let result = await withTimeout(
     callGemini({
       // deno-lint-ignore no-explicit-any
-      model: "google/gemini-3-pro-image-preview" as any,
+      model: modelId as any,
       // deno-lint-ignore no-explicit-any
       messages: messages as any,
       modalities: ["image", "text"],
     }),
     GEMINI_TIMEOUT_MS,
-    "Gemini/gemini-3-pro-image-preview",
+    `Gemini/${bareModelName(modelId)}`,
   );
   let image = result.images?.[0];
   if (!image) {
-    console.warn("[ai-gateway] Gemini pro image returned no image, retrying with flash");
+    console.warn(`[ai-gateway] ${modelId} returned no image, retrying with ${flashRetryId}`);
     try {
       result = await withTimeout(
         callGemini({
           // deno-lint-ignore no-explicit-any
-          model: "google/gemini-3.1-flash-image-preview" as any,
+          model: flashRetryId as any,
           // deno-lint-ignore no-explicit-any
           messages: messages as any,
           modalities: ["image", "text"],
@@ -1345,7 +1392,7 @@ async function _callGeminiImageInner(
         // Tighter budget on the retry — we've already spent time on
         // the primary attempt and the flash variant is faster anyway.
         Math.min(GEMINI_TIMEOUT_MS, 60_000),
-        "Gemini/gemini-3.1-flash-image-preview",
+        `Gemini/${bareModelName(flashRetryId)}`,
       );
       image = result.images?.[0];
     } catch (e) {
@@ -1354,7 +1401,7 @@ async function _callGeminiImageInner(
   }
   if (!image) {
     throw new Error(
-      "Gemini returned no image. The prompt may have been filtered or the model is overloaded.",
+      `${modelId} returned no image. The prompt may have been filtered or the model is overloaded.`,
     );
   }
   return [{
@@ -1434,12 +1481,12 @@ async function fetchMaskBlob(maskUrl: string): Promise<Blob | null> {
 
 async function _callOpenAIImageInner(
   options: OpenAIImageOptions,
-  model: string = "gpt-image-2",
+  model: string = bareModelName(DEFAULT_IMAGE_MODEL_ID),
 ): Promise<OpenAIImageResult[]> {
   const resolved = resolveOpenAIKey();
   if (!resolved) {
     throw new Error(
-      "[ai-gateway] No OpenAI API key configured. Set OPENAI_API_KEY in Supabase Edge Function Secrets to use gpt-image-2.",
+      `[ai-gateway] No OpenAI API key configured. Set OPENAI_API_KEY in Supabase Edge Function Secrets to use ${model}.`,
     );
   }
 

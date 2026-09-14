@@ -8,6 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProjectStore } from "@/store/projectStore";
 import { useRenderStore } from "@/store/renderStore";
 import { useProjectImages } from "@/hooks/useProjectImages";
+// Agency-wide render-engine preference — sent as the full model id so the
+// edge function attempts it first and degrades down the fallback chain.
+import { useAgencyImageModel } from "@/hooks/useAgencyImageModel";
 import { PanoramaViewer, type Hotspot } from "./PanoramaViewer";
 
 export interface PanoramaSpace {
@@ -26,6 +29,7 @@ export function BoothExplorer() {
   const projectId = project?.id ?? null;
   const consistencyTokens = useRenderStore((s) => s.consistencyTokens);
   const { data: images } = useProjectImages(projectId);
+  const { modelId: agencyImageModel } = useAgencyImageModel();
   const [spaces, setSpaces] = useState<PanoramaSpace[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -152,6 +156,7 @@ export function BoothExplorer() {
             boothSize,
             projectType: project.projectType ?? "trade_show_booth",
             consistencyTokens: consistencyTokens ?? undefined,
+            image_model: agencyImageModel,
           },
         }
       );

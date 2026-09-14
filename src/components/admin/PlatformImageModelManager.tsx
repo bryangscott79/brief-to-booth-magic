@@ -3,15 +3,20 @@
 //
 // This is the ONLY place in the product where the underlying model
 // providers are revealed. Regular users see abstract quality tiers in
-// the registry (Signature / Studio / Draft / Typographic); super admins
-// see the registered tier + the underlying provider id so they can
-// reason about cost, latency, and capability tradeoffs across the fleet.
+// the registry (Master / Signature / Studio / Draft / Typographic);
+// super admins see the registered tier + the underlying provider id so
+// they can reason about cost, latency, and capability tradeoffs across
+// the fleet.
 //
 // Storage: each agency's preference lives on `agencies.image_model`
-// (a text column, default "google/gemini-3-pro-image-preview" set at
-// migration time). Updating the column flips every render call from
-// that agency to the new provider on next dispatch — no edge-function
-// redeploy needed.
+// (a text column whose SQL default is still the older
+// "google/gemini-3-pro-image-preview" set at migration time — that is
+// NOT the same as the app-level DEFAULT_IMAGE_MODEL below, so existing
+// agencies keep their stored value until someone flips them here).
+// Updating the column routes every subsequent render from that agency
+// to the new engine — the id is sent to the edge functions as
+// `image_model`, attempted first, and degraded down the fallback chain
+// only if it errors. No edge-function redeploy needed.
 
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -132,7 +137,7 @@ export function PlatformImageModelManager() {
                     )}
                     {isPlatformDefault && (
                       <Badge variant="outline" className="text-[10px]">
-                        Schema default
+                        Platform default
                       </Badge>
                     )}
                     {!m.available && (

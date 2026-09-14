@@ -1,7 +1,7 @@
-// generate-panorama — DEPLOY TOKEN: 2026-05-12-gpt-image-2-only
+// generate-panorama — DEPLOY TOKEN: 2026-09-14-agency-image-model-routing
 //
-// Note on output aspect: gpt-image-2 only supports 1024×1024, 1536×1024,
-// and 1024×1536. A true equirectangular panorama needs 2:1 (e.g.
+// Note on output aspect: the OpenAI image models only support
+// 1024×1024, 1536×1024, and 1024×1536. A true equirectangular panorama needs 2:1 (e.g.
 // 2048×1024) which the model cannot natively produce. We use 1536×1024
 // (3:2 landscape — the widest available) and keep the prompt asking
 // for a wide panoramic-feel composition. Downstream VR viewers that
@@ -9,7 +9,8 @@
 // updated; the function itself returns a valid wide-format render.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callOpenAIImage } from "../_shared/ai-gateway.ts";
+import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
+import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 
 import { buildUsageContext } from "../_shared/usage-context.ts";
 const corsHeaders = {
@@ -32,6 +33,15 @@ interface GeneratePanoramaRequest {
   brandContext?: string;
   /** Suite context string */
   suiteContext?: string;
+  /**
+   * Canonical image-model id to attempt FIRST, e.g.
+   * "openai/gpt-image-2.5". Comes from the requesting agency's
+   * `agencies.image_model` preference. Unknown/retired ids degrade
+   * down the fallback chain instead of failing the render.
+   */
+  image_model?: string;
+  /** LEGACY coarse provider flag. `image_model` wins when both are set. */
+  imageModel?: "gemini" | "openai" | string;
   /** Consistency tokens from render store */
   consistencyTokens?: {
     brandColors?: string[];
@@ -121,6 +131,8 @@ serve(async (req) => {
       brandContext = "",
       suiteContext = "",
       consistencyTokens,
+      image_model,
+      imageModel,
     }: GeneratePanoramaRequest = await req.json();
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 5) {
@@ -184,34 +196,54 @@ ${suiteContext ? `\n## SUITE CONTEXT\n${suiteContext}` : ""}
 
 OUTPUT: A single photorealistic ultra-wide interior photograph showing the immersive environment of "${spaceName}".`;
 
-    console.log("[generate-panorama] Using OpenAI gpt-image-2 for:", spaceName, {
+    // Route to the agency's chosen engine, then walk the standing
+    // fallback chain. This function used to be single-shot against a
+    // hardcoded model, so a retired model id meant a hard failure with
+    // no fallback — exactly the outage this routing work guards against.
+    const requestedImageModel = image_model ?? imageModel;
+    const { chain: imageModelChain, resolved: resolvedImageModel } =
+      resolveImageModelChain(requestedImageModel);
+
+    console.log("[generate-panorama] Calling image gateway for:", spaceName, {
       hasReference: !!referenceImageUrl,
       boothSize,
       projectType,
+      requested: requestedImageModel ?? "unset",
+      chain: imageModelChain.join(" → "),
     });
 
     let generatedImageUrl: string;
+    let modelUsed = "";
+    let primaryError: string | undefined;
     try {
-      const out = await callOpenAIImage({
+      const out = await generateImageWithFallback({
         usage: await buildUsageContext(req, "generate-panorama").catch(() => undefined),
+        model: resolvedImageModel.id,
         prompt: panoramaPrompt,
         referenceImageUrls: referenceImageUrl ? [referenceImageUrl] : [],
-        size: "1536x1024", // 3:2 — widest gpt-image-2 supports
+        size: "1536x1024", // 3:2 — widest the image models support
         quality: "high",
       });
-      const img = out[0];
+      const img = out.images[0];
       if (!img) {
         throw new Error(
-          "gpt-image-2 returned no panorama. The prompt may have been filtered or the model is overloaded.",
+          "Image gateway returned no panorama. The prompt may have been filtered or every engine is overloaded.",
         );
       }
       generatedImageUrl = `data:${img.mimeType};base64,${img.base64Data}`;
+      modelUsed = out.modelUsed;
+      primaryError = out.primaryError;
+      if (primaryError) {
+        console.warn(
+          `[generate-panorama] ${spaceName} rendered with ${modelUsed}; reason: ${primaryError}`,
+        );
+      }
     } catch (e) {
-      console.error(`[generate-panorama] gpt-image-2 failed for ${spaceName}:`, e);
+      console.error(`[generate-panorama] All engines failed for ${spaceName}:`, e);
       const message = e instanceof Error ? e.message : "Unknown error";
       throw new Error(
-        `Panorama generation failed via gpt-image-2: ${message}. ` +
-        `No fallback is configured.`,
+        `Panorama generation failed: ${message}. ` +
+        `Every engine in the fallback chain failed.`,
       );
     }
 
@@ -222,6 +254,8 @@ OUTPUT: A single photorealistic ultra-wide interior photograph showing the immer
         success: true,
         spaceName,
         imageUrl: generatedImageUrl,
+        modelUsed,
+        primaryError,
         message: "",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

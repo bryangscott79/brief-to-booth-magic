@@ -29,6 +29,13 @@ const PRICING: Record<string, ModelPricing> = {
   "openai/gpt-5-nano": { inputPerMtok: 0.05, outputPerMtok: 0.20 },
   "openai/gpt-5.2": { inputPerMtok: 3.0, outputPerMtok: 12.0 },
   "openai/gpt-image-2": { perImage: 0.19 },
+  // gpt-image-2.5: no public per-image rate published at time of writing.
+  // Priced at gpt-image-2's rate so ai_usage_events cost reporting stays
+  // in the right order of magnitude rather than silently reporting $0
+  // (estimateCostUsd returns 0 for an unlisted model). Flagship tiers
+  // historically list at or above the prior generation — revise this
+  // upward as soon as an actual invoice lands.
+  "openai/gpt-image-2.5": { perImage: 0.19 },
   // Anthropic
   "anthropic/claude-sonnet-4": { inputPerMtok: 3.0, outputPerMtok: 15.0 },
   "claude-sonnet-4-20250514": { inputPerMtok: 3.0, outputPerMtok: 15.0 },

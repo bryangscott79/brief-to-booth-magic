@@ -3,6 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { DesignContext } from "@/lib/designContextBuilder";
 import { unwrapInvokeError } from "@/lib/supabaseInvokeError";
 import { buildRenderPromptArtifacts } from "@/lib/renderPromptArtifacts";
+// Agency render-engine preference. The full model id goes to the edge
+// functions as `image_model`; imageModelToProvider only feeds the legacy
+// coarse flag we still emit for older deployments.
+import { type ImageModelId, imageModelToProvider } from "@/lib/imageModels";
 
 /**
  * Metadata that rides along with every onSave callback so
@@ -203,8 +207,13 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
-    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
-    imageModel?: "gemini" | "openai";
+    /**
+     * Full image-model id from the agency preference (e.g.
+     * "openai/gpt-image-2.5"), forwarded to the edge function as
+     * `image_model`. The edge function attempts it first and degrades
+     * down the fallback chain if it errors or is retired.
+     */
+    imageModel?: ImageModelId | string;
     /**
      * Interior-design / existing-space-photo path: when present, the
      * edge function uses THIS as the only reference image for gpt-
@@ -266,8 +275,13 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
-    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
-    imageModel?: "gemini" | "openai";
+    /**
+     * Full image-model id from the agency preference (e.g.
+     * "openai/gpt-image-2.5"), forwarded to the edge function as
+     * `image_model`. The edge function attempts it first and degrades
+     * down the fallback chain if it errors or is retired.
+     */
+    imageModel?: ImageModelId | string;
     /**
      * Interior-design / existing-space-photo path: when present, every
      * view render uses this as its only reference image for gpt-
@@ -312,8 +326,13 @@ interface RenderActions {
     brandLogoUrl?: string;
     /** Optional one-off references attached at regen time. */
     extraReferenceUrls?: string[];
-    /** Which image model to use. Default "gemini". Set to "openai" for gpt-image-2. */
-    imageModel?: "gemini" | "openai";
+    /**
+     * Full image-model id from the agency preference (e.g.
+     * "openai/gpt-image-2.5"), forwarded to the edge function as
+     * `image_model`. The edge function attempts it first and degrades
+     * down the fallback chain if it errors or is retired.
+     */
+    imageModel?: ImageModelId | string;
     /**
      * Interior-design / existing-space-photo path — see
      * generateHeroImage for full semantics. When present, the view
@@ -489,7 +508,12 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         suiteContext: suiteContext || undefined,
         brandLogoUrl: brandLogoUrl || undefined,
         extraReferenceUrls: extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
-        imageModel: imageModel ?? undefined,
+        // Full model id — the contract the edge functions read.
+        image_model: imageModel ?? undefined,
+        // Legacy coarse provider flag, kept only so an edge-function
+        // deployment that predates the full-id contract still routes to
+        // the right provider. Harmless once every function is updated.
+        imageModel: imageModel ? imageModelToProvider(imageModel) : undefined,
         // Interior-design path: existing-space photo + optional mask.
         // When existingSpacePhotoUrl is set, the edge function uses
         // THIS as the only reference image and ignores the
@@ -685,7 +709,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           brandLogoUrl: brandLogoUrl || undefined,
           extraReferenceUrls:
             extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
-          imageModel: imageModel ?? undefined,
+          // Full model id — the contract the edge functions read.
+          image_model: imageModel ?? undefined,
+          // Legacy coarse provider flag for pre-full-id deployments.
+          imageModel: imageModel ? imageModelToProvider(imageModel) : undefined,
           heroPromptText: heroPromptText || undefined,
           // Interior-design path — same semantics as generateHeroImage.
           // When set, the view is rendered as an edit of THIS photo
@@ -841,7 +868,12 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         brandLogoUrl: brandLogoUrl || undefined,
         extraReferenceUrls:
           extraReferenceUrls && extraReferenceUrls.length > 0 ? extraReferenceUrls : undefined,
-        imageModel: imageModel ?? undefined,
+        // Full model id — the contract the edge functions read.
+        image_model: imageModel ?? undefined,
+        // Legacy coarse provider flag, kept only so an edge-function
+        // deployment that predates the full-id contract still routes to
+        // the right provider. Harmless once every function is updated.
+        imageModel: imageModel ? imageModelToProvider(imageModel) : undefined,
         heroPromptText: heroPromptText || undefined,
         // Interior-design path — see generateHeroImage for semantics.
         existingSpacePhotoUrl: existingSpacePhotoUrl || undefined,

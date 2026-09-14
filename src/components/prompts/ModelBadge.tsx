@@ -1,11 +1,13 @@
 // ModelBadge — small chip shown under each rendered image so the user
 // can tell at a glance which engine produced it.
 //
-// Naming is deliberately product-branded, not provider-branded:
-//   - "Canopy 2.0"   → openai/gpt-image-2  (primary, higher fidelity)
-//   - "Canopy Lite"  → google/gemini-3-pro-image-preview  (fallback,
-//                       faster but lower fidelity, kicks in when
-//                       gpt-image-2 errors)
+// Naming is deliberately product-branded, not provider-branded (see the
+// hard rule at the top of src/lib/imageModels.ts — user-facing copy must
+// never name a provider or model):
+//   - "Canopy 2.0"   → the OpenAI image tiers (higher fidelity)
+//   - "Canopy Lite"  → the Gemini image tiers (faster, lower fidelity;
+//                       also where the chain lands when the preferred
+//                       engine errors)
 //
 // Hidden when the model is unknown (legacy renders saved before the
 // edge functions started returning modelUsed). No badge is fine — the
@@ -24,10 +26,10 @@ export interface ModelBadgeProps {
    */
   model?: string | null;
   /**
-   * When the render fell back to Canopy Lite, the gpt-image-2 error
-   * chain that caused it. Shown as the badge's hover-title so the user
-   * can see WHY the primary model didn't run for this render — without
-   * this they'd just see "Canopy Lite" and have no diagnostic path.
+   * When the render did not come from the agency's preferred engine,
+   * the reason chain that caused the degrade. Shown as the badge's
+   * hover-title so the user can see WHY — without this they'd just see
+   * "Canopy Lite" and have no diagnostic path.
    */
   primaryError?: string | null;
   className?: string;
@@ -59,12 +61,12 @@ export function ModelBadge({ model, primaryError, className }: ModelBadgeProps) 
     );
   }
 
-  // Canopy Lite — augment the tooltip with the actual gpt-image-2
-  // failure reason when we have it. Gives the user (or operator) an
-  // immediate diagnostic on hover instead of having to dig into edge-
-  // function logs.
+  // Canopy Lite — augment the tooltip with the actual failure reason
+  // when we have it. Gives the user (or operator) an immediate
+  // diagnostic on hover instead of having to dig into edge-function
+  // logs. Phrased without naming the provider, per the product rule.
   const liteTitle = primaryError
-    ? `Rendered with Canopy Lite — gpt-image-2 said: ${primaryError}`
+    ? `Rendered with Canopy Lite — the preferred engine reported: ${primaryError}`
     : "Rendered with Canopy Lite (fallback engine)";
   return (
     <Badge

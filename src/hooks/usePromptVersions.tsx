@@ -35,7 +35,8 @@ interface UsePromptVersionsResult {
     label: string;
     customEmphasis?: string;
     notes?: string;
-    imageModel?: "gemini" | "openai";
+    /** Full model id, e.g. "openai/gpt-image-2.5" (legacy provider flags accepted). */
+    imageModel?: string;
   }) => PromptVersionMeta;
   /** Tick the updatedAt of the active version. Cheap, debounced-ish. */
   touchActiveVersion: () => void;
@@ -105,7 +106,8 @@ export function usePromptVersions(projectId: string | null | undefined): UseProm
       label: string;
       customEmphasis?: string;
       notes?: string;
-      imageModel?: "gemini" | "openai";
+      /** Full model id, e.g. "openai/gpt-image-2.5" (legacy provider flags accepted). */
+      imageModel?: string;
     }): PromptVersionMeta => {
       const preset = getPresetById(params.preset);
       const id = newVersionId();

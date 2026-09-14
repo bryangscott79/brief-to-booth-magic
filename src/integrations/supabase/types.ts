@@ -378,65 +378,6 @@ export type Database = {
         }
         Relationships: []
       }
-      blender_jobs: {
-        Row: {
-          blend_url: string | null
-          config_key: string | null
-          created_at: string
-          created_by: string
-          error: string | null
-          external_job_id: string | null
-          gltf_url: string | null
-          id: string
-          preview_urls: Json
-          project_id: string
-          script: string | null
-          script_url: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          blend_url?: string | null
-          config_key?: string | null
-          created_at?: string
-          created_by: string
-          error?: string | null
-          external_job_id?: string | null
-          gltf_url?: string | null
-          id?: string
-          preview_urls?: Json
-          project_id: string
-          script?: string | null
-          script_url?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          blend_url?: string | null
-          config_key?: string | null
-          created_at?: string
-          created_by?: string
-          error?: string | null
-          external_job_id?: string | null
-          gltf_url?: string | null
-          id?: string
-          preview_urls?: Json
-          project_id?: string
-          script?: string | null
-          script_url?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blender_jobs_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       brand_guidelines: {
         Row: {
           client_id: string
@@ -537,53 +478,6 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      client_feedback_rounds: {
-        Row: {
-          attachments: Json
-          created_at: string
-          created_by: string
-          id: string
-          items: Json
-          label: string | null
-          project_id: string
-          raw_feedback: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          attachments?: Json
-          created_at?: string
-          created_by: string
-          id?: string
-          items?: Json
-          label?: string | null
-          project_id: string
-          raw_feedback?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          attachments?: Json
-          created_at?: string
-          created_by?: string
-          id?: string
-          items?: Json
-          label?: string | null
-          project_id?: string
-          raw_feedback?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_feedback_rounds_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1267,47 +1161,6 @@ export type Database = {
             foreignKeyName: "plan_items_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      planning_canvas: {
-        Row: {
-          board: Json
-          cards: Json
-          created_at: string
-          created_by: string
-          id: string
-          messages: Json
-          project_id: string
-          updated_at: string
-        }
-        Insert: {
-          board?: Json
-          cards?: Json
-          created_at?: string
-          created_by: string
-          id?: string
-          messages?: Json
-          project_id: string
-          updated_at?: string
-        }
-        Update: {
-          board?: Json
-          cards?: Json
-          created_at?: string
-          created_by?: string
-          id?: string
-          messages?: Json
-          project_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "planning_canvas_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: true
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },

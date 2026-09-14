@@ -19,7 +19,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-const FN_VERSION = 1;
+const FN_VERSION = 2;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as Record<string, unknown>), fn_version: FN_VERSION }), {
     status,

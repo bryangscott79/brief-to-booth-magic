@@ -23,6 +23,7 @@
 // no new prompt version — the round history is the audit trail.
 
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { unwrapInvokeError } from "@/lib/supabaseInvokeError";
 import { buildRenderPromptArtifacts } from "@/lib/renderPromptArtifacts";
 import { parseVersionedAngleId } from "@/lib/promptVersions";
@@ -392,6 +393,10 @@ export const editRenderViaGenerateHero: EditRenderFn = async (input) => {
     boothSize: input.boothSizeLabel || undefined,
   };
 
+  // Scope the agency knowledge base to this call. Without these keys
+  // the edge function skips retrieval and generates with no house
+  // knowledge behind it.
+  Object.assign(body, await resolveKnowledgeScope(input.projectId));
   const { data, error } = await supabase.functions.invoke("generate-hero", { body });
   if (error) throw new Error(await unwrapInvokeError(error));
   if (data?.error) throw new Error(String(data.error));

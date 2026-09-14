@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { saveProjectField, ELEMENT_DB_KEYS } from "@/hooks/useProjectSync";
 import { ElementDetailPanel } from "./ElementDetailPanel";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
@@ -192,6 +193,11 @@ async function runGenerationJob(
   activeJob = job;
 
   job.promise = (async () => {
+    // Resolved once for the whole batch rather than per element — the
+    // lookup is cached, but this also keeps all eight elements reasoning
+    // against the same knowledge scope.
+    const knowledgeScope = await resolveKnowledgeScope(projectId);
+
     for (const elementType of elementsToGenerate) {
       if (job.aborted) break;
 
@@ -226,6 +232,7 @@ async function runGenerationJob(
             creativeDirection,
             rejectedDirections:
               rejectedDirections && rejectedDirections.length > 0 ? rejectedDirections : undefined,
+            ...knowledgeScope,
           },
           elementType,
         );
@@ -467,6 +474,7 @@ export function ElementDashboard({ projectId }: { projectId: string | null }) {
           suiteContext: sc || undefined,
           creativeDirection,
           rejectedDirections: rejected,
+          ...(await resolveKnowledgeScope(projectId)),
         },
         elementType,
       );

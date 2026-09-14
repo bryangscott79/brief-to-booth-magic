@@ -15,7 +15,8 @@
 // Request  { brief: ParsedBrief JSON, history?: Array<{role, content}>,
 //            message: string,
 //            existingCards?: Array<{ id, label, prompt }>,
-//            boothSizeLabel?: string }
+//            boothSizeLabel?: string,
+//            agency_id?, client_id?, activation_type_id?, project_id? }
 // Response { reply: string,
 //            concepts: Array<{ label, prompt, rationale }>,
 //            fn_version: 1 }
@@ -23,13 +24,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
+import { buildRagContext } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const FN_VERSION = 1;
+const FN_VERSION = 2;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as Record<string, unknown>), fn_version: FN_VERSION }), {
@@ -204,11 +206,33 @@ Deno.serve(async (req) => {
           .slice(0, 20_000)
       : "(the board is empty)";
 
+    // Planning is where the direction is chosen, so it is the step that most
+    // benefits from the agency's own past work — what they have built, what
+    // this client has approved before, what this activation type demands.
+    // Retrieval is best-effort and never blocks the turn.
+    const scope = body as Record<string, unknown>;
+    const ragContext = await buildRagContext(userClient, {
+      query: `${message}\n\n${briefText.slice(0, 2_000)}`,
+      agencyId: str(scope.agency_id, 64),
+      clientId: str(scope.client_id, 64) || null,
+      activationTypeId: str(scope.activation_type_id, 64) || null,
+      projectId: str(scope.project_id, 64) || null,
+      topK: 6,
+      source: "plan-concepts",
+      userId: user.id,
+    });
+
     const userTurn = [
       "PARSED BRIEF (the only source of facts):",
       briefText,
       "",
       boothSizeLabel ? `ACTIVE FOOTPRINT: ${boothSizeLabel}` : "",
+      "",
+      // Knowledge is craft, not fact: it informs HOW to build, while the
+      // brief stays the only source of WHAT is being built.
+      ragContext.formatted
+        ? `${ragContext.formatted}\n\nThe retrieved context above is the agency's own knowledge — house standards, past builds, fabrication limits. Let it shape HOW you design. It never overrides the brief on facts (footprint, budget, dates, deliverables).`
+        : "",
       "",
       "CONCEPTS ALREADY ON THE BOARD:",
       cardsText,

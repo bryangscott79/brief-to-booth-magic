@@ -22,7 +22,7 @@ import { createClient as createServiceClient } from "https://esm.sh/@supabase/su
 import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
 import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -827,10 +827,6 @@ serve(async (req) => {
         chunks: [],
       };
       if (agency_id) {
-        const serviceSupabase = createServiceClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        );
         const ragQuery = [
           viewName,
           viewPrompt,
@@ -838,7 +834,7 @@ serve(async (req) => {
           consistencyTokens?.styleKeywords?.join(", "),
           consistencyTokens?.materialKeywords?.join(", "),
         ].filter(Boolean).join(" — ").slice(0, 4000);
-        ragContext = await buildRagContext(serviceSupabase, {
+        ragContext = await buildRagContext(createRagClient(req), {
           query: ragQuery,
           agencyId: agency_id,
           clientId: client_id,

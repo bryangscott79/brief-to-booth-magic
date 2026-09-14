@@ -21,7 +21,39 @@
  *   - Retrieval analytics logging to rag_query_log
  */
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+/**
+ * Builds the client retrieval MUST use: the anon key carrying the caller's
+ * own JWT.
+ *
+ * match_knowledge_chunks guards itself with
+ * `is_agency_member(_agency_id, auth.uid())`, and under a service-role key
+ * auth.uid() is NULL — so every service-role call raises "Not a member of
+ * this agency" and returns nothing. Every generation function used to pass
+ * a service client here, which is the second reason retrieval has never
+ * produced a chunk in production.
+ *
+ * Running as the user is also the only safe option: `agency_id` arrives in
+ * the request body from the browser, so nothing but the caller's own JWT
+ * can establish that they are entitled to that agency's corpus. A service
+ * client would happily retrieve a competitor's knowledge for anyone who
+ * guessed their id.
+ *
+ * Returns null when the request carries no Authorization header, in which
+ * case the caller should skip retrieval rather than fall back to a
+ * service client.
+ */
+export function createRagClient(req: Request): SupabaseClient | null {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } },
+  );
+}
 
 interface RagContextOptions {
   query: string;
@@ -105,7 +137,7 @@ export interface RagContext {
  * Silently returns an empty context on errors (never blocks generation).
  */
 export async function buildRagContext(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient | null,
   opts: RagContextOptions,
 ): Promise<RagContext> {
   const startedAt = Date.now();
@@ -118,6 +150,9 @@ export async function buildRagContext(
   };
 
   try {
+    // No client means the request carried no JWT — retrieve nothing rather
+    // than falling back to a service client that cannot pass the guard.
+    if (!supabase) return empty;
     if (!opts.query?.trim() || !opts.agencyId) return empty;
 
     // 1. Embed the query

@@ -16,6 +16,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { useAuth } from "@/hooks/useAuth";
 import { unwrapInvokeError } from "@/lib/supabaseInvokeError";
 import type {
@@ -354,6 +355,8 @@ export interface ParseClientFeedbackInput {
   images: Array<{ angleId: string; angleName: string; caption?: string }>;
   boothSizeLabel?: string | null;
   brief?: string | null;
+  /** Scopes retrieval to the agency's knowledge base. */
+  projectId?: string;
 }
 
 export interface ParseClientFeedbackResult {
@@ -383,6 +386,7 @@ export function useParseClientFeedback() {
           images: input.images,
           boothSizeLabel: input.boothSizeLabel || undefined,
           brief: input.brief || undefined,
+          ...(await resolveKnowledgeScope(input.projectId)),
         },
       });
       if (error) throw new Error(await unwrapInvokeError(error));

@@ -28,7 +28,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateImageWithFallback } from "../_shared/ai-gateway.ts";
 import { resolveImageModelChain } from "../_shared/image-model-chain.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -831,17 +831,13 @@ serve(async (req) => {
       // it acts as refining context, not the leading instruction.
       let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
       if (agency_id) {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        );
         const ragQuery = [
           prompt,
           designContext?.heroInstallation?.name,
           designContext?.creativeEmbrace?.join(", "),
           designContext?.brandColors?.join(", "),
         ].filter(Boolean).join(" — ").slice(0, 4000);
-        ragContext = await buildRagContext(supabase, {
+        ragContext = await buildRagContext(createRagClient(req), {
           query: ragQuery,
           agencyId: agency_id,
           clientId: client_id,

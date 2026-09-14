@@ -17,6 +17,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { useAuth } from "@/hooks/useAuth";
 import type { ParsedBrief } from "@/types/brief";
 import { ProjectTypeSelector } from "@/components/brief/ProjectTypeSelector";
@@ -148,9 +149,13 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
   const parseBriefWithAI = async (
     text: string,
     fileBase64?: string,
-    fileType?: string
+    fileType?: string,
+    projectId?: string
   ): Promise<ParsedBrief> => {
-    const body: Record<string, any> = {};
+    // parse-brief already knows how to retrieve — it just never received a
+    // scope, so every brief has been read with no knowledge of how this
+    // agency reads briefs.
+    const body: Record<string, any> = { ...(await resolveKnowledgeScope(projectId)) };
     if (fileBase64 && fileType) {
       body.fileBase64 = fileBase64;
       body.fileType = fileType;
@@ -244,7 +249,7 @@ export function BriefUpload({ projectId, hideContinueCTA, onContinueStateChange 
         }
       }
 
-      const parsed = await parseBriefWithAI(text, fileBase64, fileType);
+      const parsed = await parseBriefWithAI(text, fileBase64, fileType, dbProjectId);
 
       // Auto-detect project type
       const inferredType = inferProjectType(parsed);

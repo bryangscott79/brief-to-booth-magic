@@ -201,6 +201,7 @@ export default function ClientFeedback() {
         images: renders.map((r) => ({ angleId: r.baseAngleId, angleName: r.angleName })),
         boothSizeLabel: activeConfigLabel,
         brief: briefText,
+        projectId,
       });
 
       await updateRound.mutateAsync({

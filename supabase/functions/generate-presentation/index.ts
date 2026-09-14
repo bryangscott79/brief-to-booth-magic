@@ -21,7 +21,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
 
 const DEPLOY_TOKEN = "2026-05-07-r6-image2-spec";
 
@@ -355,10 +355,6 @@ async function handleDesignedDeck(body: any, req: Request): Promise<Response> {
 
   let ragFormatted = "";
   if (!isRegenerate && body.agency_id) {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
     const ragQuery = [
       `Pitch deck for ${body.projectName ?? body.parsedBrief?.brand?.name ?? ""}`,
       body.parsedBrief?.brand?.name,
@@ -370,7 +366,7 @@ async function handleDesignedDeck(body: any, req: Request): Promise<Response> {
       .join(" — ")
       .slice(0, 4000);
     try {
-      const ragContext = await buildRagContext(supabase, {
+      const ragContext = await buildRagContext(createRagClient(req), {
         query: ragQuery,
         agencyId: body.agency_id,
         clientId: body.client_id,
@@ -542,10 +538,6 @@ QUALITY BAR:
     chunks: [],
   };
   if (agency_id) {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
     const ragQuery = [
       `Pitch deck for ${projectName || brand.name || "project"}`,
       brand.name,
@@ -558,7 +550,7 @@ QUALITY BAR:
       .join(" — ")
       .slice(0, 4000);
     try {
-      ragContext = await buildRagContext(supabase, {
+      ragContext = await buildRagContext(createRagClient(req), {
         query: ragQuery,
         agencyId: agency_id,
         clientId: client_id,

@@ -3,7 +3,7 @@ import JSZip from "https://esm.sh/jszip@3.10.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -579,15 +579,11 @@ serve(async (req) => {
       // since the PDF text isn't extracted yet.
       let pdfRagContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
       if (agency_id) {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        );
         const ragQuery = [brandContext, suiteContext, "experiential design brief trade show booth activation"]
           .filter(Boolean)
           .join("\n")
           .slice(0, 4000);
-        pdfRagContext = await buildRagContext(supabase, {
+        pdfRagContext = await buildRagContext(createRagClient(req), {
           query: ragQuery,
           agencyId: agency_id,
           clientId: client_id,
@@ -666,11 +662,7 @@ serve(async (req) => {
     // ── RAG: Retrieve knowledge base context for the text path ──
     let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
     if (agency_id) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
-      ragContext = await buildRagContext(supabase, {
+      ragContext = await buildRagContext(createRagClient(req), {
         query: briefText.slice(0, 4000),
         agencyId: agency_id,
         clientId: client_id,

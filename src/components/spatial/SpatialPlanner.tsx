@@ -20,6 +20,7 @@ import {
 import { useProjectNavigate } from "@/hooks/useProjectNavigate";
 import { useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { LayoutMetrics, generateLayoutMetrics } from "./LayoutMetrics";
 import { LayoutVariations, LayoutReasoning, generateLayoutVariations } from "./LayoutVariations";
 // InspirationUpload was removed from this view — visual references are
@@ -321,15 +322,21 @@ ${feedbackBlock}
 Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
 
     try {
+      // generate-view reads `project_id`, never `projectId` — the old key
+      // meant the 2D plan was returned as a multi-MB data URL and never
+      // stored. resolveKnowledgeScope supplies the correct key along with
+      // the retrieval scope.
+      const viewBody: Record<string, unknown> = {
+        viewPrompt: prompt,
+        viewName: "Floor Plan 2D",
+        aspectRatio: boothDimensions.aspectRatio >= 1 ? "4:3" : "3:4",
+        angleId: "floor_plan_2d",
+        boothSize: currentConfig.footprintSize,
+      };
+      Object.assign(viewBody, await resolveKnowledgeScope(projectId));
+
       const { data, error } = await supabase.functions.invoke("generate-view", {
-        body: {
-          viewPrompt: prompt,
-          viewName: "Floor Plan 2D",
-          aspectRatio: boothDimensions.aspectRatio >= 1 ? "4:3" : "3:4",
-          angleId: "floor_plan_2d",
-          projectId,
-          boothSize: currentConfig.footprintSize,
-        },
+        body: viewBody,
       });
 
       if (error) throw error;

@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,10 +36,6 @@ serve(async (req) => {
     let ragBlock = "";
     if (agency_id) {
       try {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        );
         const query = [
           "3D modeling brief, fabrication specs, material finishes, layer structure",
           parsedBrief?.brand?.name,
@@ -47,7 +43,7 @@ serve(async (req) => {
           spatialStrategy?.zones?.map((z: any) => z.name).join(", "),
         ].filter(Boolean).join(" — ");
 
-        const ragContext = await buildRagContext(supabase, {
+        const ragContext = await buildRagContext(createRagClient(req), {
           query,
           agencyId: agency_id,
           clientId: client_id,

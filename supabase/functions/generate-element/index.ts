@@ -19,7 +19,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callGemini } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
-import { buildRagContext } from "../_shared/rag-helper.ts";
+import { buildRagContext, createRagClient } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -534,10 +534,6 @@ END UPSTREAM CONTEXT
     // ── RAG: Retrieve knowledge base context ──
     let ragContext: { formatted: string; chunks: any[]; byScope?: any } = { formatted: "", chunks: [] };
     if (agency_id) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
       // Characterize the generation: element type + brand/brief summary
       const briefSummary = [
         briefData?.brand?.name,
@@ -547,7 +543,7 @@ END UPSTREAM CONTEXT
         Array.isArray(briefData?.creative?.moodKeywords) ? briefData.creative.moodKeywords.join(", ") : "",
       ].filter(Boolean).join(" — ");
       const ragQuery = `${elementType} for ${getStructureNoun(projectType)}: ${briefSummary}`.slice(0, 4000);
-      ragContext = await buildRagContext(supabase, {
+      ragContext = await buildRagContext(createRagClient(req), {
         query: ragQuery,
         agencyId: agency_id,
         clientId: client_id,

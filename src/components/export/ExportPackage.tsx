@@ -20,6 +20,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ImageLightbox, useImageLightbox } from "@/components/common/ImageLightbox";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { DeckStudio } from "./DeckStudio";
 import { FigmaExportPanel } from "./FigmaExportPanel";
 import { SaveLearningsButton } from "./SaveLearningsButton";
@@ -135,8 +136,11 @@ export function ExportPackage() {
   const approvedIntel = brandIntelligence.filter((e: any) => e.is_approved);
   const { profile } = useCompanyProfile();
   const { agency } = useAgency();
-  const agencyId = agency?.id ?? null;
-  const activationTypeId = (currentProject as any)?.activation_type_id ?? (currentProject as any)?.activationTypeId ?? null;
+  // Was reading currentProject.activation_type_id, a field that has never
+  // existed on the project (the column is `activation_type`, and it holds a
+  // slug rather than the id the knowledge layer scopes by) — so the
+  // activation scope was always null here. resolveKnowledgeScope does the
+  // slug lookup and supplies the whole scope.
 
   // Active booth size (footprint config) — same shared selection the
   // Spatial and Prompts steps use, so the export reflects the size the
@@ -221,10 +225,7 @@ export function ExportPackage() {
           spatialStrategy: elements.spatialStrategy?.data,
           budgetLogic: elements.budgetLogic?.data,
           boothSize: activeBoothSize,
-          agency_id: agencyId,
-          client_id: clientId,
-          activation_type_id: activationTypeId,
-          project_id: projectId,
+          ...(await resolveKnowledgeScope(projectId)),
         },
       });
       if (error) throw error;
@@ -254,10 +255,7 @@ export function ExportPackage() {
           renderPrompts: currentProject?.renderPrompts,
           imageUrls,
           boothSize: activeBoothSize,
-          agency_id: agencyId,
-          client_id: clientId,
-          activation_type_id: activationTypeId,
-          project_id: projectId,
+          ...(await resolveKnowledgeScope(projectId)),
         },
       });
       if (error) throw error;

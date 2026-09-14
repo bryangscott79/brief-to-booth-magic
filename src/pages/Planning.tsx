@@ -148,6 +148,7 @@ export default function Planning() {
           message: directorMessage,
           existingCards: cards.map((c) => ({ id: c.id, label: c.label, prompt: c.prompt })),
           boothSizeLabel,
+          projectId,
         });
 
         created = result.concepts.map((concept) =>

@@ -15,6 +15,7 @@
 // save-render-image path (see ConceptCard / Planning.tsx).
 
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { STANDARD_NEGATIVE } from "@/lib/normalizedBrief";
 import type { ParsedBrief } from "@/types/brief";
 import { imageModelToProvider } from "@/lib/imageModels";
@@ -64,10 +65,16 @@ export interface PlanConceptsInput {
   /** Cards already on the board, so follow-ups can build on their prompts. */
   existingCards: Array<{ id: string; label: string; prompt: string }>;
   boothSizeLabel?: string;
+  /** Scopes retrieval to the agency's knowledge base. */
+  projectId?: string;
 }
 
 export async function planConcepts(input: PlanConceptsInput): Promise<PlanConceptsResult> {
   const { data: { session } } = await supabase.auth.getSession();
+
+  // Planning is where the direction is actually decided, so it is the step
+  // that most needs the agency's own past work in front of it.
+  const scope = await resolveKnowledgeScope(input.projectId);
 
   const res = await supabase.functions.invoke("plan-concepts", {
     body: {
@@ -76,6 +83,7 @@ export async function planConcepts(input: PlanConceptsInput): Promise<PlanConcep
       message: input.message,
       existingCards: input.existingCards,
       boothSizeLabel: input.boothSizeLabel,
+      ...scope,
     },
     headers: { Authorization: `Bearer ${session?.access_token}` },
   });
@@ -159,7 +167,7 @@ export async function renderConcept(input: RenderConceptInput): Promise<RenderCo
           compliance: [],
         },
       },
-      project_id: input.projectId,
+      ...(await resolveKnowledgeScope(input.projectId)),
       boothSize: input.boothSize || undefined,
       // Full model id — the contract generate-hero reads.
       image_model: input.imageModel ?? undefined,
@@ -239,7 +247,7 @@ export async function reviseConcept(input: ReviseConceptInput): Promise<RenderCo
       feedback: input.instruction,
       previousImageUrl: input.previousImageUrl,
       ...(mask ? { existingSpacePhotoUrl: input.previousImageUrl, maskDataUrl: mask } : {}),
-      project_id: input.projectId,
+      ...(await resolveKnowledgeScope(input.projectId)),
       boothSize: input.boothSize || undefined,
       image_model: input.imageModel ?? undefined,
       imageModel: input.imageModel ? imageModelToProvider(input.imageModel) : undefined,

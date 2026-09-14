@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import type { DesignContext } from "@/lib/designContextBuilder";
 import { unwrapInvokeError } from "@/lib/supabaseInvokeError";
 import { buildRenderPromptArtifacts } from "@/lib/renderPromptArtifacts";
@@ -536,6 +537,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         };
       }
 
+      // Scope the agency knowledge base to this project. Without these
+      // keys the edge function skips retrieval entirely and the render
+      // is composed with no house knowledge behind it.
+      Object.assign(body, await resolveKnowledgeScope(projectId));
       const { data, error } = await supabase.functions.invoke("generate-hero", { body });
 
       // supabase-js wraps non-2xx with a generic "non-2xx status code"
@@ -737,6 +742,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         // clears it without user impact.
         let data: any, error: any;
         for (let attempt = 0; attempt < 2; attempt++) {
+          // Scope the agency knowledge base to this project. Without these
+          // keys the edge function skips retrieval entirely and the render
+          // is composed with no house knowledge behind it.
+          Object.assign(viewBody, await resolveKnowledgeScope(projectId));
           ({ data, error } = await supabase.functions.invoke("generate-view", { body: viewBody }));
           if (!error) break;
           const msg = await unwrapInvokeError(error);
@@ -890,6 +899,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
         };
       }
 
+      // Scope the agency knowledge base to this project. Without these
+      // keys the edge function skips retrieval entirely and the render
+      // is composed with no house knowledge behind it.
+      Object.assign(viewBody, await resolveKnowledgeScope(projectId));
       const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
       if (error) {
@@ -1007,6 +1020,10 @@ export const useRenderStore = create<RenderStore>((set, get) => ({
           };
         }
 
+        // Scope the agency knowledge base to this project. Without these
+        // keys the edge function skips retrieval entirely and the render
+        // is composed with no house knowledge behind it.
+        Object.assign(viewBody, await resolveKnowledgeScope(projectId));
         const { data, error } = await supabase.functions.invoke("generate-view", { body: viewBody });
 
         if (error) {

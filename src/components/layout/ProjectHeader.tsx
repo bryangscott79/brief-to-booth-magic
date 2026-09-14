@@ -1,5 +1,6 @@
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
+  Box,
   Lightbulb,
   MessageSquareQuote,
   Upload,
@@ -39,6 +40,7 @@ const PROJECT_STEPS = [
   { path: "/planning", label: "Plan",     shortLabel: "Plan",     icon: Lightbulb },
   { path: "/generate", label: "Generate", shortLabel: "Generate", icon: Sparkles },
   { path: "/spatial",  label: "Spatial",  shortLabel: "Spatial",  icon: Grid3X3 },
+  { path: "/model",    label: "Model",    shortLabel: "Model",    icon: Box },
   { path: "/prompts",  label: "Prompts",  shortLabel: "Prompts",  icon: FileText },
   { path: "/files",    label: "Files",    shortLabel: "Files",    icon: ImageIcon },
   // { path: "/explore",  label: "360°",     shortLabel: "360°",     icon: Compass }, // Hidden — low value for now

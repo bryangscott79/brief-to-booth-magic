@@ -30,6 +30,8 @@ const GENERATION_FUNCTIONS = [
   "generate-3d-brief",
   "generate-presentation",
   "parse-client-feedback",
+  "synthesize-brief",
+  "enrich-spatial",
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

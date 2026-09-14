@@ -25,6 +25,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callGemini } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
+import { buildRagContext, createRagClient, knowledgeSummary } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +45,10 @@ serve(async (req) => {
       heroInstallation,
       spatialStrategy,
       boothDimensions,
+      agency_id,
+      client_id,
+      activation_type_id,
+      project_id,
     } = await req.json();
 
     if (!spatialStrategy || typeof spatialStrategy !== "object") {
@@ -111,6 +116,24 @@ serve(async (req) => {
           .join("\n")
       : "(No hero installation defined yet.)";
 
+    // Zone programmes are the most house-specific thing an exhibit shop
+    // does — aisle behaviour, meeting-room ratios, what their fabrication
+    // shop can actually build. That knowledge lives in the corpus.
+    const ragContext = await buildRagContext(createRagClient(req), {
+      query: [
+        "booth zone program, structural forms, materials, fabrication limits",
+        brandName,
+        headline,
+        heroInstallation?.name,
+      ].filter(Boolean).join(" — "),
+      agencyId: String(agency_id ?? ""),
+      clientId: client_id ?? null,
+      activationTypeId: activation_type_id ?? null,
+      projectId: project_id ?? null,
+      topK: 6,
+      source: "enrich-spatial",
+    });
+
     const prompt = `You are a senior trade-show exhibit designer enriching a SPATIAL LAYOUT with structural identity. The zones already exist. The footprint is fixed. Your job is to assign every zone a STRUCTURAL FORM, write a VISUAL BRIEF and an INTENT for each, bind MATERIALS from the brand's catalog, and propose 3–6 sculptural FEATURES that bring the booth to life.
 
 BRAND: ${brandName}
@@ -175,6 +198,7 @@ Each feature must be:
 
 Avoid generic "feature wall" suggestions. Lean into what makes THIS brand distinct. Place features where they'd actually drive flow — totems flanking welcome, sculptures at hero zones, ribbons connecting zones visually.
 
+${ragContext.formatted ? `\n${ragContext.formatted}\n\nThe retrieved context is this agency's own house knowledge — build standards, fabrication limits, what they have done before. Prefer it over generic exhibit convention. It never overrides the fixed footprint or the existing zones.\n` : ""}
 Return STRICT JSON via the spatial_enrichment tool call. No prose.`;
 
     const result = await callGemini({
@@ -378,6 +402,7 @@ Return STRICT JSON via the spatial_enrichment tool call. No prose.`;
           zones: enrichment.zones ?? [],
           features,
         },
+        knowledge: knowledgeSummary(ragContext),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

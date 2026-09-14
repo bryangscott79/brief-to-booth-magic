@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callGemini } from "../_shared/ai-gateway.ts";
 
 import { buildUsageContext } from "../_shared/usage-context.ts";
+import { buildRagContext, createRagClient, knowledgeSummary } from "../_shared/rag-helper.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -275,10 +276,26 @@ serve(async (req) => {
     push("Success criteria / KPIs", answers.successCriteria);
     push("Additional notes", answers.additionalNotes);
 
+    // The guided builder is where a brief gets INVENTED rather than read,
+    // so house knowledge matters more here than anywhere: this is the one
+    // step with no source document to be faithful to.
+    const ragContext = await buildRagContext(createRagClient(req), {
+      query: [answers.brandName, answers.showName, answers.primaryObjective, answers.creativeDirection]
+        .filter(Boolean)
+        .join(" — ")
+        .slice(0, 4_000),
+      agencyId: String(body.agency_id ?? ""),
+      clientId: body.client_id ?? null,
+      activationTypeId: body.activation_type_id ?? null,
+      projectId: body.project_id ?? null,
+      topK: 6,
+      source: "synthesize-brief",
+    });
+
     const userMessage = `Synthesize a complete experiential design brief from these wizard answers:
 
 ${lines.join("\n\n")}
-
+${ragContext.formatted ? `\n${ragContext.formatted}\n\nThe retrieved context is this agency's own knowledge. Use it to write in their voice and to their standards. Never invent facts from it — anything the wizard answers did not state stays unstated.\n` : ""}
 Produce the structured brief AND a polished narrative briefText.`;
 
     const result = await callGemini({
@@ -302,7 +319,7 @@ Produce the structured brief AND a polished narrative briefText.`;
     const { briefText, ...parsed } = args as Record<string, unknown> & { briefText: string };
 
     return new Response(
-      JSON.stringify({ success: true, data: { parsed, briefText } }),
+      JSON.stringify({ success: true, data: { parsed, briefText }, knowledge: knowledgeSummary(ragContext) }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

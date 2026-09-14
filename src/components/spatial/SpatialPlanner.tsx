@@ -747,6 +747,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
             heroInstallation,
             spatialStrategy: spatialData,
             boothDimensions,
+            ...(await resolveKnowledgeScope(projectId)),
           },
         },
       );
@@ -829,6 +830,7 @@ Aspect ratio: ${boothDimensions.aspectRatio >= 1 ? '4:3' : '3:4'}`;
     canvasGeometry,
     handleCanvasGeometryChange,
     toast,
+    projectId,
   ]);
 
   // Annotation handlers

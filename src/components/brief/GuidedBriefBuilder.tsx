@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveKnowledgeScope } from "@/lib/knowledgeScope";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectStore } from "@/store/projectStore";
 import { useClients, useUpsertClient, useBatchCreateIntelligence } from "@/hooks/useClients";
@@ -313,9 +314,12 @@ export function GuidedBriefBuilder({ projectId, onCancel }: GuidedBriefBuilderPr
 
     try {
       // 1. Synthesize
+      // The project does not exist yet, so this resolves to the user's own
+      // agency — which is the right scope for a brief being invented rather
+      // than read.
       const { data: synth, error: synthErr } = await supabase.functions.invoke(
         "synthesize-brief",
-        { body: { answers } },
+        { body: { answers, ...(await resolveKnowledgeScope(null)) } },
       );
       if (synthErr) throw synthErr;
       if (!synth?.success) throw new Error(synth?.error ?? "Synthesis failed");

@@ -23,6 +23,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callAnthropic } from "../_shared/ai-gateway.ts";
 import { buildUsageContext } from "../_shared/usage-context.ts";
+import { buildRagContext, createRagClient, knowledgeSummary } from "../_shared/rag-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const FN_VERSION = 1;
+const FN_VERSION = 2;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as Record<string, unknown>), fn_version: FN_VERSION }), {
@@ -155,11 +156,30 @@ Deno.serve(async (req) => {
       )
       .join("\n");
 
+    // This client has almost certainly objected to things before. Their past
+    // rounds are filed against the client scope by knowledgeCapture, so the
+    // same complaint arriving a second time can be read against how it was
+    // resolved the first time.
+    const ragContext = await buildRagContext(createRagClient(req), {
+      query: feedback.slice(0, 4_000),
+      agencyId: String(body?.agency_id ?? ""),
+      clientId: String(body?.client_id ?? "") || null,
+      activationTypeId: String(body?.activation_type_id ?? "") || null,
+      projectId: String(body?.project_id ?? "") || null,
+      topK: 5,
+      source: "parse-client-feedback",
+    });
+
     const userTurn = [
       boothSizeLabel ? `BOOTH SIZE: ${boothSizeLabel}` : "",
       brief ? `PROJECT CONTEXT (background only — never quote numbers back that the client did not raise):\n${brief}` : "",
       `AVAILABLE RENDERS (use these angleId values verbatim, or "all"):\n${renderList}`,
       `CLIENT FEEDBACK (verbatim — may be an email, notes, or a transcript):\n${feedback}`,
+      // Craft context only. The client's words are the instruction; house
+      // knowledge may inform HOW to execute a change, never WHETHER to.
+      ragContext.formatted
+        ? `${ragContext.formatted}\n\nUse the retrieved context only to execute the client's asks well — never to add, soften, or overrule anything they did not say.`
+        : "",
       "Plan the revisions.",
     ]
       .filter(Boolean)
@@ -204,6 +224,7 @@ Deno.serve(async (req) => {
     return json({
       summary: typeof args.summary === "string" ? args.summary : "",
       items,
+      knowledge: knowledgeSummary(ragContext),
     });
   } catch (err) {
     console.error("[parse-client-feedback]", err);

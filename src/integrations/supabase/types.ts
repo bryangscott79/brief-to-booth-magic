@@ -1691,6 +1691,7 @@ export type Database = {
         Row: {
           activation_type: string | null
           adjacent_activations: Json | null
+          agency_id: string | null
           big_idea: Json | null
           brand_website_url: string | null
           brief_file_name: string | null
@@ -1725,6 +1726,7 @@ export type Database = {
         Insert: {
           activation_type?: string | null
           adjacent_activations?: Json | null
+          agency_id?: string | null
           big_idea?: Json | null
           brand_website_url?: string | null
           brief_file_name?: string | null
@@ -1759,6 +1761,7 @@ export type Database = {
         Update: {
           activation_type?: string | null
           adjacent_activations?: Json | null
+          agency_id?: string | null
           big_idea?: Json | null
           brand_website_url?: string | null
           brief_file_name?: string | null
@@ -1791,6 +1794,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "projects_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "projects_client_id_fkey"
             columns: ["client_id"]
@@ -2426,12 +2436,14 @@ export type Database = {
         Returns: boolean
       }
       industry_uuid: { Args: { _slug: string }; Returns: string }
-      is_agency_admin:
-        | { Args: { _agency_id: string }; Returns: boolean }
-        | { Args: { _agency_id: string; _user_id?: string }; Returns: boolean }
-      is_agency_member:
-        | { Args: { _agency_id: string }; Returns: boolean }
-        | { Args: { _agency_id: string; _user_id?: string }; Returns: boolean }
+      is_agency_admin: {
+        Args: { _agency_id: string; _user_id?: string }
+        Returns: boolean
+      }
+      is_agency_member: {
+        Args: { _agency_id: string; _user_id?: string }
+        Returns: boolean
+      }
       is_brand_asset_client_member: {
         Args: { _path: string; _user_id?: string }
         Returns: boolean

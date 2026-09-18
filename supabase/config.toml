@@ -99,6 +99,11 @@ verify_jwt = true
 # Blender service (BLENDER_SERVICE_URL / BLENDER_SERVICE_KEY) and polls it,
 # storing .blend / .gltf / stills in the project-images bucket.
 
+[functions.export-storage-manifest]
+verify_jwt = false
+# export-storage-manifest: read-only storage inventory for migrating assets
+# out of Lovable. Guarded by the EXPORT_TOKEN shared secret header, not JWT.
+
 [functions.parse-client-feedback]
 verify_jwt = true
 # parse-client-feedback: turns pasted client notes into targeted per-image

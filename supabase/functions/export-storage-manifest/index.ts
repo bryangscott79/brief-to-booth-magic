@@ -23,7 +23,7 @@ const json = (body: unknown, status = 200) =>
   });
 
 const SIGN_SECONDS = 6 * 60 * 60;
-const PAGE = 100;
+const PAGE = 1000;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
